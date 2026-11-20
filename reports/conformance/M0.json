@@ -171,5 +171,12 @@
     "CODEOWNERS only requests the owner's review automatically; by the owner's decision it does not block the merge."
   ],
   "plan": "reports/plans/M0-cycle-2.md",
-  "docs_brought_from_orchestrator": "commit 'M0: bring ponytail skills and updated plan' (.claude/skills, docs/implementation-plan-v1.md from claude/admiring-planck-vzys0x, unchanged)"
+  "docs_brought_from_orchestrator": "commit 'M0: bring ponytail skills and updated plan' (.claude/skills, docs/implementation-plan-v1.md from claude/admiring-planck-vzys0x, unchanged)",
+  "head_commit": {
+    "sha": "77662aff782cab6b07ef556bbe20c9b57ff1fdb1",
+    "note": "Docs/plan/skills on top of the tested code commit; code unchanged since 5a92948",
+    "ci_run_id": 44785675116,
+    "ci_run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44785675116",
+    "ci_conclusion": "success (all 6 jobs)"
+  }
 }
