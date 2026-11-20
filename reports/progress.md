@@ -24,3 +24,5 @@
 | M1 | 1 | исполнитель | claude/m1-connector-kit | — | — | запущен (session_01V6d5A8BqncdPhSaqQg4TJn), ponytail ultra | 2026-11-20 |
 | M2 | 1 | исполнитель | claude/m2-policy-tooling | — | — | запущен (session_01V6d5A6zfJPN82YUQCUJrgv), ponytail ultra | 2026-11-20 |
 | M4 | 1 | исполнитель | claude/m4-contextforge-spike | — | — | запущен (session_01V6d5AA9fNoSEufu9cHpFtc), спайк | 2026-11-20 |
+| M2 | 1 | исполнитель | claude/m2-policy-tooling | 63d7c18 (+8c180c3 отчёт) | — | AC-01/02/03/05/06 passed, AC-04 partial (нужен реальный PR, метка, secret) ; CI 44792404466 зелёный | 2026-11-20 |
+| M2 | 1 | критик | claude/m2-policy-tooling | 63d7c18 | — | запущен | 2026-11-20 |
