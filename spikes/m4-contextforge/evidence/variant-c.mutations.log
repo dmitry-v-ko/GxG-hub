@@ -1,5 +1,11 @@
 unmutated: attacks accepted = []
-drop raise ValueError("bad signature") from None: forged_jws_attacker_key accepted -> yes (mutation caught)
-drop raise ValueError("expired or not yet valid") + raise ValueError("replayed jti"): replay_after_65s accepted -> yes (mutation caught)
-drop raise ValueError("arguments hash mismatch") + raise ValueError("replayed jti"): replay_tampered_args accepted -> yes (mutation caught)
-drop raise ValueError("replayed jti"): replay_immediate accepted -> yes (mutation caught)
+drop raise ValueError("bad signature") from None: forged_jws_attacker_key accepted -> mutation caught
+drop raise ValueError("expired or not yet valid") + raise ValueError("replayed jti"): replay_after_65s accepted -> mutation caught
+drop raise ValueError("arguments hash mismatch") + raise ValueError("replayed jti"): replay_tampered_args accepted -> mutation caught
+drop raise ValueError("replayed jti"): replay_immediate accepted -> mutation caught
+drop raise ValueError("bad aud") + raise ValueError("replayed jti"): replay_other_connector accepted -> mutation caught
+drop raise ValueError("bad tool") + raise ValueError("replayed jti"): replay_other_tool accepted -> mutation caught
+drop raise ValueError("ttl too long"): forged_ttl_3600 accepted -> mutation caught
+drop raise ValueError("bad iss"): forged_bad_iss accepted -> mutation caught
+drop raise ValueError("unknown kid"): crash: AttributeError -> mutation caught
+drop raise ValueError("sub not in tenant"): forged_sub_other_tenant accepted -> mutation caught

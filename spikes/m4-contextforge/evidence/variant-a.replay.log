@@ -1,5 +1,7 @@
-{"at": "2026-11-20T18:47:48Z", "kind": "bypass_no_identity", "status": 200}
-{"at": "2026-11-20T18:47:48Z", "captured_at": "2026-11-20T18:47:48.717143+00:00", "kind": "replay_immediate", "status": 200}
-{"at": "2026-11-20T18:47:48Z", "kind": "replay_tampered_args", "status": 200}
+{"at": "2026-11-20T19:53:23Z", "kind": "bypass_no_identity", "status": 200}
+{"at": "2026-11-20T19:53:23Z", "captured_at": "2026-11-20T19:53:23.406853+00:00", "kind": "replay_immediate", "status": 200}
+{"at": "2026-11-20T19:53:23Z", "kind": "replay_tampered_args", "status": 200}
+{"at": "2026-11-20T19:53:23Z", "kind": "replay_other_connector", "path": "/mcp/t-beta", "status": 200}
+{"at": "2026-11-20T19:53:23Z", "kind": "replay_other_tool", "status": 200}
 waiting 65s before delayed replay ...
-{"at": "2026-11-20T18:48:53Z", "captured_at": "2026-11-20T18:47:48.717143+00:00", "delay_s": 65, "kind": "replay_delayed", "status": 200}
+{"at": "2026-11-20T19:54:28Z", "captured_at": "2026-11-20T19:53:23.406853+00:00", "delay_s": 65, "kind": "replay_delayed", "status": 200}

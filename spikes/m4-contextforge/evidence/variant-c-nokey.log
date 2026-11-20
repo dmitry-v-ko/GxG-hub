@@ -1,0 +1,3 @@
+PLUGINS_FAIL_ON_PLUGIN_ERROR=true healthy=no {"rpc_status": 0, "reached_connector": false, "with_x_gxg_identity": false} log="Plugin initialization failed
+Plugin initialization failed"
+PLUGINS_FAIL_ON_PLUGIN_ERROR=false healthy=yes {"rpc_status": 200, "reached_connector": true, "with_x_gxg_identity": false} log="Skipping plugin GxgIdentity because fail_on_plugin_error is disabled"
