@@ -2,6 +2,8 @@
 
 Статус: **согласованная целевая архитектура, не состояние реализации**. Дата: 2026-11-20.
 
+**Актуальные нормативные решения (security):** [Security & Action Gate](security-and-action-gate-v1.md), [Approval State Machine](approval-state-machine-v1.md), [Conformance Matrix](conformance-matrix-v1.md). Эти документы детализируют разделение ContextForge/Action Gate/Approval Service и являются обязательными до внешних действий.
+
 ## Назначение
 
 Мультитенантный SaaS для предоставления возможностей (capabilities) разным ИИ-агентам с централизованным доступом, независимыми коннекторами и общей системой проверки прав. Не разрабатывать собственный MCP-протокол или новый бизнес-оркестратор.
@@ -43,6 +45,10 @@
 
 Это **новая архитектура GxG Hub**, не перенос старого Human Inbox. ContextForge выполняет обычную MCP-авторизацию, а **GxG Action Gate** проверяет policy для эффектных tool calls. Если требуется человек, вызов не исполняется: Action Gate создаёт запрос в отдельном **GxG Approval Service**. UI показывает человеку конкретного адресата/содержание/сферу действия. После решения внешний оркестратор возобновляет задачу, но перед эффектом снова проверяются grants, неизменность запроса, срок и ограничение числа использований. Исполняющий коннектор не должен допускать прямого обхода gate. **Action Gate и Approval Service не предполагаются штатными возможностями ContextForge** и пока не реализованы. Пока это не проверено end-to-end, эффекты не включаются. Подробнее: [APPROVALS.md](../APPROVALS.md).
 
+## Защита от посторонних и обхода эффектов
+
+Согласованный security contract требует, чтобы **каждый** вызов эффекта прошёл проверку аутентичного principal/tenant, tool+resource grants, risk/approval policy и атомарное резервирование intent. Первым вариантом Action Gate рассматривается `tool_pre_invoke` hook ContextForge в fail-closed режиме. Проверяем охват всех путей вызова, включая virtual server и прямой вызов коннектора; без этого разрешать эффекты нельзя. Подробности — [Security v1](security-and-action-gate-v1.md).
+
 ## Протоколы и эволюция
 
 1. **MCP-first** на v1, предпочтительно Streamable HTTP для удалённых коннекторов, но транспорт определяется совместимостью и сетевой безопасностью.
@@ -54,7 +60,7 @@
 
 `docs/specs/` — нормативные тексты; `templates/`, `scripts/`, `tests/contract/` — **предлагаемые**, пока не реализованные пакеты; `connectors/` — независимые серверы и интеграции; `policies/` — настройки доступа; `compose.yaml` — **только dev scaffold**, не развернутый ContextForge.
 
-**P0 security block:** существующий образ `1.0.0-RC-3` в Compose не одобрен. IBM сообщает о проблемах авторизации в релизах 1.0.0–1.1.0 и об исправлении в 1.1.1. Перед запуском подобрать и закрепить актуальный исправленный образ/digest, проверить последние advisories и прохождение auth/tenant contract tests. Даже версия 1.1.1 не является гарантией безусловной безопасности.
+**P0 security block:** prerelease `1.0.0-RC-3` удалён из dev Compose. `.env.example` предлагает `1.1.1` только как локальный кандидат, не immutable digest. Убедиться в наличии этого образа, проверить все актуальные security advisories, закрепить digest до общего окружения и провести auth/tenant/approval contract tests. В dev Compose identity propagation и plugins по умолчанию отключены. Даже 1.1.1 не гарантирует безопасность всех конфигураций.
 
 **GO/NO-GO:** сверить agent identity propagation и server-side tenant isolation, запрет forged headers, scopes в downstream, секреты, аудит, отказ в чужих ресурсах. Если это нельзя реализовать безопасно без правки upstream, вновь сравнить agentgateway и минимальный внешний access adapter. Не переносить production до успешного PoC.
 
