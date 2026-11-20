@@ -1,0 +1,21 @@
+# Secrets, tokens, sessions and local data
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.sqlite
+*.db
+data/
+secrets/
+
+# Editor/OS/local artifacts
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+.pytest_cache/
+node_modules/
+dist/
+.venv/
