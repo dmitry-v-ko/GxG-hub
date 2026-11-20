@@ -1,0 +1,214 @@
+{
+  "milestone": "M4",
+  "cycle": 1,
+  "branch": "claude/m4-contextforge-spike",
+  "base": "claude/m0-foundation @ 6b3fe48",
+  "commit": "0130d781babd14483acc4e97bd21fa5d28add765",
+  "commit_note": "Tested commit (spike code + evidence). This report is added by the next commit, which changes only reports/.",
+  "run_at": "2026-11-20T18:54:17Z",
+  "author": "Claude Code (executor, M4 cycle 1)",
+  "plan": "reports/plans/M4-cycle-1.md",
+  "environment": {
+    "where": "Claude Code cloud container, linux x86_64; dockerd 29.10.0 started manually inside the session; docker compose v5.7.1",
+    "network": "ghcr.io and docker.io pulls OK; github.com/IBM pages read via web fetch; api.github.com and curl to github.com advisory pages: 403 from the egress proxy (not needed after web fetch)",
+    "reproduce": "cd spikes/m4-contextforge && ./run_spike.sh && python3 -I mutate_verify_jws.py && python3 -I spike.py visibility",
+    "live": true
+  },
+  "contextforge_image_digest": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
+  "other_images": {
+    "postgres": "postgres:18@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a",
+    "echo_runtime": "python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
+    "upgrade_from": "ghcr.io/ibm/mcp-context-forge:v1.1.0@sha256:7eb21fb9a8070df59435c03c76c40d8c71230c55ba89f884f2482d2cc81cff1c"
+  },
+  "contextforge_source_commit": "dbc643befb6f412e62584179c8f0ebb0207d44fb (tag v1.1.1, image label org.opencontainers.image.revision)",
+  "sdk_versions": {
+    "mcp": null,
+    "fastmcp": null,
+    "note": "echo server is stdlib JSON-RPC over streamable HTTP; plugin uses cpex.framework and cryptography 50.0.2 shipped in the v1.1.1 image"
+  },
+  "policy_version": null,
+  "bundle_version": null,
+  "fixture_identity": "synthetic: teams t-alpha, t-beta; agents hermes@/analyst@<tenant>.spike.example.com (role member, team-scoped API tokens, 1 day); platform admin admin@spike.example.com. Secrets generated per run into git-ignored .env / secrets/.",
+  "advisories_checked_at": "2026-11-20",
+  "advisories": {
+    "ibm_bulletin": {
+      "url": "https://www.ibm.com/support/pages/node/7296490",
+      "cve": "CVE-2026-110279",
+      "affected": "v1.0.0 - v1.1.0",
+      "fixed": "v1.1.1"
+    },
+    "github": {
+      "url": "https://github.com/IBM/mcp-context-forge/security/advisories",
+      "count": 19,
+      "max_patched_version": "v1.0.8",
+      "affects_v1.1.1": false
+    },
+    "osv": {
+      "query": "PyPI mcp-contextforge-gateway==1.1.1",
+      "vulns": 0
+    },
+    "caveat": "affected ranges are the maintainers' statements; not re-verified against code. GHSA-c7vv gateway/A2A part is 'source-evident'; GHSA-x6gc is a separate UI package."
+  },
+  "adr_criteria": {
+    "variant_A_contextforge_hmac": [
+      {
+        "id": 1,
+        "status": "failed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-a.verify_hmac.json (signature_still_valid_after_changing_teams_and_admin: true); spikes/m4-contextforge/evidence/variant-a.observations.jsonl (admin_call reaches the tenant tool with Admin=true, no Teams)"
+      },
+      {
+        "id": 2,
+        "status": "failed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-a.echo-received.jsonl (replay_immediate / replay_tampered_args sent straight to echo carry a valid signature; distinct_signatures_per_user = 1)"
+      },
+      {
+        "id": 3,
+        "status": "failed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-a.replay.log + variant-a.echo-received.jsonl (replay_after_65s, same valid signature)"
+      },
+      {
+        "id": 4,
+        "status": "passed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-a.observations.jsonl (headers on /rpc, virtual server, alias)"
+      },
+      {
+        "id": 5,
+        "status": "passed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-c-upgrade.echo-received.jsonl (X-Forwarded-User-* present before and after v1.1.0 -> v1.1.1); rehearsal, not MC-05"
+      }
+    ],
+    "variant_C_gxg_identity_plugin": [
+      {
+        "id": 1,
+        "status": "passed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.observations.jsonl (attack_forge: sub/tenant_id in JWS are the real agent; forged X-GxG-Identity overwritten); admin_call refused GXG_IDENTITY_DENIED"
+      },
+      {
+        "id": 2,
+        "status": "passed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (bypass_no_identity: missing X-GxG-Identity; forged_jws_attacker_key: bad signature; replay_immediate: replayed jti; replay_tampered_args: arguments hash mismatch)"
+      },
+      {
+        "id": 3,
+        "status": "passed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (replay_after_65s: expired or not yet valid)"
+      },
+      {
+        "id": 4,
+        "status": "passed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (10/10 calls via ContextForge accepted: /rpc, /servers/{id}/mcp, alias via /rpc and virtual server; 4 agents). Global /mcp/ refuses team members with tools.execute RBAC: no call reaches the connector."
+      },
+      {
+        "id": 5,
+        "status": "passed",
+        "evidence": "spikes/m4-contextforge/evidence/variant-c-upgrade.verify_jws.jsonl (16/16 accepted, 8 on v1.1.0 then 8 after upgrade), variant-c-upgrade.migrations.log (3 alembic migrations); rehearsal of MC-05, the automated MC-05 belongs to stage C"
+      }
+    ]
+  },
+  "acceptance": [
+    {
+      "id": "AC-M4-01",
+      "status": "passed",
+      "expected": "ADR-0001 records passed/failed with evidence for each of the 5 criteria",
+      "actual": "ADR-0001 'Результаты по критериям': table for A and C plus per-criterion evidence (captured headers, logs, commands); run_spike.sh reproduces",
+      "evidence": [
+        "docs/adr/0001-identity-propagation.md",
+        "spikes/m4-contextforge/evidence/",
+        "spikes/m4-contextforge/run_spike.sh"
+      ]
+    },
+    {
+      "id": "AC-M4-02",
+      "status": "passed",
+      "expected": "ADR status Accepted with variant A/B/C, or NO-GO",
+      "actual": "Accepted — variant C; A rejected (criteria 1-3 failed)",
+      "evidence": [
+        "docs/adr/0001-identity-propagation.md"
+      ]
+    },
+    {
+      "id": "AC-M4-03",
+      "status": "passed",
+      "expected": "ContextForge digest pinned in compose.yaml/.env.example; IBM advisories checked on the spike date, links in ADR",
+      "actual": ".env.example CONTEXTFORGE_IMAGE=ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a898...; compose.yaml requires it; spike compose pins the same; ADR lists the IBM bulletin, all 19 GHSA and OSV with links",
+      "evidence": [
+        ".env.example",
+        "compose.yaml",
+        "spikes/m4-contextforge/compose.yaml",
+        "docs/adr/0001-identity-propagation.md#security-advisories-ibm-на-2026-11-20"
+      ]
+    },
+    {
+      "id": "AC-M4-04",
+      "status": "passed",
+      "expected": "VERIFY in SEC-02, SEC-03, TEN-01 and the GR example replaced with spike results",
+      "actual": "one commit per marker: d486da5 SEC-02, a552e26 SEC-03, a1354c3 TEN-01, 7784dcc GR example",
+      "evidence": [
+        "docs/specs/security-v1.md",
+        "docs/specs/target-platform-v1.md",
+        "docs/specs/resource-grants-v1.md"
+      ]
+    }
+  ],
+  "go_no_go_preliminary": {
+    "verdict": "GO for ContextForge v1.1.1 with variant C (preliminary; the final decision is at the end of stage B)",
+    "roadmap_criteria": {
+      "1_team_isolation_of_tools_and_servers": "observed: each agent lists only its team's tools/servers; cross-team calls refused on all paths (evidence/teams-claims-and-visibility.json, attack_cross_team)",
+      "2_verifiable_identity_to_connector": "passed with variant C; failed with built-in A",
+      "3_hidden_tools_cannot_be_called": "observed for cross-team tools only (Tool not found / Access denied / 403); dedicated hidden-tool tests are M5 (SC-*)",
+      "4_unified_pdp_deny_by_default_all_paths": "not_run — out of M4 scope (M5)"
+    }
+  },
+  "dod": [
+    {
+      "id": "DoD-1",
+      "status": "pending",
+      "note": "Merge into main via PR with green CI is done by a human after critic review."
+    },
+    {
+      "id": "DoD-2",
+      "status": "passed",
+      "note": "Spike AC are recorded results; the live runs are scripted (run_spike.sh) and the verifier has a mutation self-check. They are not pytest tests: they need Docker and registry access, which the CI policy (no network in pytest) forbids."
+    },
+    {
+      "id": "DoD-3",
+      "status": "passed",
+      "note": "This file."
+    },
+    {
+      "id": "DoD-4",
+      "status": "passed",
+      "note": "mutate_verify_jws.py: dropping each of signature / exp / ahs / jti checks makes the matching attack accepted (exit 0 only if all are caught)."
+    },
+    {
+      "id": "DoD-5",
+      "status": "passed",
+      "note": "No skipped tests; repo check-all OK (ruff covers spikes/)."
+    }
+  ],
+  "tests": [
+    {
+      "id": "spikes/m4-contextforge/run_spike.sh (variants A, C, upgrade, passthrough misconfig)",
+      "status": "passed",
+      "note": "exit 0; final run recorded in evidence/"
+    },
+    {
+      "id": "spikes/m4-contextforge/mutate_verify_jws.py",
+      "status": "passed"
+    },
+    {
+      "id": "scripts/ci/check-all.sh",
+      "status": "passed"
+    }
+  ],
+  "known_limitations": [
+    "Global /mcp/ endpoint: v1.1.1 refuses team-scoped member tokens with 'Streamable HTTP RBAC denied: permission=tools.execute' while /rpc allows the same call. Fail closed, but agents must use /rpc or /servers/{id}/mcp. Not investigated further (M5).",
+    "Passthrough misconfig run (ENABLE_HEADER_PASSTHROUGH=true, identity headers allowlisted) forwarded no agent header at all, not even X-Tenant-Id; cause not isolated within the timebox. Safety of C rests on the code order (plugin runs after passthrough) and on signature verification, not on this run.",
+    "Variant C is a prototype: key from a file, tenant/connector maps in YAML, in-memory jti cache in the verifier. Production needs secret store + kid rotation, platform registry, shared jti store (M1/M5).",
+    "Criterion 5 is a live upgrade rehearsal (v1.1.0 -> v1.1.1); MC-05 as an automated test is stage C.",
+    "Arguments and non-identity _meta keys from the agent reach the connector unchanged; the connector must read identity only from the verified JWS (SEC-01).",
+    "docs/specs/security-v1.md SEC-22 still says 'Тег 1.1.1 в .env.example — кандидат'. It is now a pinned digest, but this line is outside the VERIFY markers M4 may change: needs an owner decision.",
+    "target-platform-v1.md has one more VERIFY (tool_pre_invoke cannot pause for a human) outside AC-M4-04; not changed.",
+    "ContextForge docs (identity-propagation.md) claim the HMAC covers canonical JSON of all claims and adds claims_signature to _meta; the v1.1.1 code does neither. Worth reporting upstream; not done."
+  ]
+}
