@@ -1,17 +1,17 @@
 {
   "milestone": "M4",
-  "cycle": 1,
+  "cycle": 2,
   "branch": "claude/m4-contextforge-spike",
   "base": "claude/m0-foundation @ 6b3fe48",
-  "commit": "0130d781babd14483acc4e97bd21fa5d28add765",
-  "commit_note": "Tested commit (spike code + evidence). This report is added by the next commit, which changes only reports/.",
-  "run_at": "2026-11-20T18:54:17Z",
-  "author": "Claude Code (executor, M4 cycle 1)",
-  "plan": "reports/plans/M4-cycle-1.md",
+  "commit": "d2b62b06911f6c265fdfbc63ad5845b4deb65d15",
+  "commit_note": "Tested commit (spike code + docs 98f7ce1, re-run evidence d2b62b0). This report is added by the next commit, which changes only reports/.",
+  "run_at": "2026-11-20T20:02:08Z",
+  "author": "Claude Code (executor, M4 cycle 2)",
+  "plan": "reports/plans/M4-cycle-2.md",
   "environment": {
     "where": "Claude Code cloud container, linux x86_64; dockerd 29.10.0 started manually inside the session; docker compose v5.7.1",
     "network": "ghcr.io and docker.io pulls OK; github.com/IBM pages read via web fetch; api.github.com and curl to github.com advisory pages: 403 from the egress proxy (not needed after web fetch)",
-    "reproduce": "cd spikes/m4-contextforge && ./run_spike.sh && python3 -I mutate_verify_jws.py && python3 -I spike.py visibility",
+    "reproduce": "cd spikes/m4-contextforge && ./run_spike.sh && python3 -I spike.py visibility",
     "live": true
   },
   "contextforge_image_digest": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
@@ -81,12 +81,12 @@
       {
         "id": 1,
         "status": "passed",
-        "evidence": "spikes/m4-contextforge/evidence/variant-c.observations.jsonl (attack_forge: sub/tenant_id in JWS are the real agent; forged X-GxG-Identity overwritten); admin_call refused GXG_IDENTITY_DENIED"
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.observations.jsonl (attack_forge: sub/tenant_id in JWS are the real agent; the agent's forged X-GxG-Identity never reaches the connector on v1.1.1, the signature is the guard); admin_call refused GXG_IDENTITY_DENIED"
       },
       {
         "id": 2,
         "status": "passed",
-        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (bypass_no_identity: missing X-GxG-Identity; forged_jws_attacker_key: bad signature; replay_immediate: replayed jti; replay_tampered_args: arguments hash mismatch)"
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (bypass_no_identity: missing X-GxG-Identity; forged_jws_attacker_key: bad signature; replay_immediate: replayed jti; replay_tampered_args: arguments hash mismatch; replay_other_connector: bad aud; replay_other_tool: bad tool)"
       },
       {
         "id": 3,
@@ -96,7 +96,7 @@
       {
         "id": 4,
         "status": "passed",
-        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (10/10 calls via ContextForge accepted: /rpc, /servers/{id}/mcp, alias via /rpc and virtual server; 4 agents). Global /mcp/ refuses team members with tools.execute RBAC: no call reaches the connector."
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (10/10 calls via ContextForge accepted, tool claim = upstream 'echo' on alias paths too: /rpc, /servers/{id}/mcp, alias via /rpc and virtual server; 4 agents). Global /mcp/ refuses team members (RBAC tools.execute), not isolation evidence. Not covered by tool_pre_invoke (code reading, not run): direct_proxy gateways (MCPGATEWAY_DIRECT_PROXY_ENABLED=false), resources/read, prompts/get (connector refuses without identity)."
       },
       {
         "id": 5,
@@ -142,7 +142,7 @@
       "id": "AC-M4-04",
       "status": "passed",
       "expected": "VERIFY in SEC-02, SEC-03, TEN-01 and the GR example replaced with spike results",
-      "actual": "one commit per marker: d486da5 SEC-02, a552e26 SEC-03, a1354c3 TEN-01, 7784dcc GR example",
+      "actual": "cycle 1: d486da5 SEC-02, a552e26 SEC-03, a1354c3 TEN-01, 7784dcc GR example. Cycle 2: SEC-02/SEC-03 re-applied over the orchestrator's security-v1.md (8bb6efe); SEC-03 extended (tool binding, shared jti store, canonical JSON, fail closed env, paths without the hook), TEN-01 /mcp wording fixed (98f7ce1)",
       "evidence": [
         "docs/specs/security-v1.md",
         "docs/specs/target-platform-v1.md",
@@ -151,12 +151,12 @@
     }
   ],
   "go_no_go_preliminary": {
-    "verdict": "GO for ContextForge v1.1.1 with variant C (preliminary; the final decision is at the end of stage B)",
+    "verdict": "NO-GO-триггеров не найдено: условия 1 и 2 подтверждены, 3 — частично, 4 не проверялось (M5). Решение GO/NO-GO — в конце этапа B.",
     "roadmap_criteria": {
-      "1_team_isolation_of_tools_and_servers": "observed: each agent lists only its team's tools/servers; cross-team calls refused on all paths (evidence/teams-claims-and-visibility.json, attack_cross_team)",
-      "2_verifiable_identity_to_connector": "passed with variant C; failed with built-in A",
-      "3_hidden_tools_cannot_be_called": "observed for cross-team tools only (Tool not found / Access denied / 403); dedicated hidden-tool tests are M5 (SC-*)",
-      "4_unified_pdp_deny_by_default_all_paths": "not_run — out of M4 scope (M5)"
+      "1_team_isolation_of_tools_and_servers": "confirmed: each agent lists only its team's tools/servers; cross-team calls refused on /rpc and /servers/{id}/mcp (evidence/teams-claims-and-visibility.json, attack_cross_team). Global /mcp refuses every team-scoped call (RBAC), so it is not isolation evidence",
+      "2_verifiable_identity_to_connector": "confirmed with variant C; failed with built-in A",
+      "3_hidden_tools_cannot_be_called": "partial: observed for cross-team tools only (Tool not found / Access denied / 403); hidden-tool tests are M5 (SC-*)",
+      "4_unified_pdp_deny_by_default_all_paths": "not_run — M5"
     }
   },
   "dod": [
@@ -178,7 +178,7 @@
     {
       "id": "DoD-4",
       "status": "passed",
-      "note": "mutate_verify_jws.py: dropping each of signature / exp / ahs / jti checks makes the matching attack accepted (exit 0 only if all are caught)."
+      "note": "mutate_verify_jws.py (evidence/variant-c.mutations.log, exit 0): dropping each check makes its attack accepted. Covered: signature (forged_jws_attacker_key), exp (replay_after_65s), ahs (replay_tampered_args), jti (replay_immediate), aud (replay_other_connector), tool (replay_other_tool), exp-iat<=60 (forged_ttl_3600), iss (forged_bad_iss), kid (forged_unknown_kid: mutant crashes with AttributeError, counted red), sub in tenant (forged_sub_other_tenant). The last four use requests signed with the real adapter key, since no live attack reaches them. Not covered: alg (equivalent mutant, Ed25519 verify rejects anything else). Fail closed in ContextForge: run_spike.sh stage 'missing adapter key' with a control run PLUGINS_FAIL_ON_PLUGIN_ERROR=false (healthy, call reaches connector without identity), evidence/variant-c-nokey.log; the script exits 1 if either result differs."
     },
     {
       "id": "DoD-5",
@@ -188,13 +188,14 @@
   ],
   "tests": [
     {
-      "id": "spikes/m4-contextforge/run_spike.sh (variants A, C, upgrade, passthrough misconfig)",
+      "id": "spikes/m4-contextforge/run_spike.sh (variants A, C, fail closed without key + control, upgrade)",
       "status": "passed",
-      "note": "exit 0; final run recorded in evidence/"
+      "note": "exit 0, 2026-11-20 19:52-20:03 UTC; evidence/ committed in d2b62b0"
     },
     {
       "id": "spikes/m4-contextforge/mutate_verify_jws.py",
-      "status": "passed"
+      "status": "passed",
+      "note": "10/10 mutations caught, run by run_spike.sh"
     },
     {
       "id": "scripts/ci/check-all.sh",
@@ -203,12 +204,16 @@
   ],
   "known_limitations": [
     "Global /mcp/ endpoint: v1.1.1 refuses team-scoped member tokens with 'Streamable HTTP RBAC denied: permission=tools.execute' while /rpc allows the same call. Fail closed, but agents must use /rpc or /servers/{id}/mcp. Not investigated further (M5).",
-    "Passthrough misconfig run (ENABLE_HEADER_PASSTHROUGH=true, identity headers allowlisted) forwarded no agent header at all, not even X-Tenant-Id; cause not isolated within the timebox. Safety of C rests on the code order (plugin runs after passthrough) and on signature verification, not on this run.",
-    "Variant C is a prototype: key from a file, tenant/connector maps in YAML, in-memory jti cache in the verifier. Production needs secret store + kid rotation, platform registry, shared jti store (M1/M5).",
     "Criterion 5 is a live upgrade rehearsal (v1.1.0 -> v1.1.1); MC-05 as an automated test is stage C.",
     "Arguments and non-identity _meta keys from the agent reach the connector unchanged; the connector must read identity only from the verified JWS (SEC-01).",
-    "docs/specs/security-v1.md SEC-22 still says 'Тег 1.1.1 в .env.example — кандидат'. It is now a pinned digest, but this line is outside the VERIFY markers M4 may change: needs an owner decision.",
     "target-platform-v1.md has one more VERIFY (tool_pre_invoke cannot pause for a human) outside AC-M4-04; not changed.",
-    "ContextForge docs (identity-propagation.md) claim the HMAC covers canonical JSON of all claims and adds claims_signature to _meta; the v1.1.1 code does neither. Worth reporting upstream; not done."
+    "ContextForge docs (identity-propagation.md) claim the HMAC covers canonical JSON of all claims and adds claims_signature to _meta; the v1.1.1 code does neither. Worth reporting upstream; not done.",
+    "The agent's own headers (X-Tenant-Id, X-GxG-Identity, ...) do not reach the connector on the v1.1.1 MCP path even with passthrough allowlisted (critic, cycle 1). The 'plugin overwrites a forged X-GxG-Identity' claim was removed; the signature is the guard. The passthrough-misconfig stage was removed.",
+    "Variant C is a prototype: key from a file (chmod 644 on the stand for the image's non-root user), tenant/connector maps in YAML, in-process jti set in the verifier. SEC-03 requires a jti store shared by all connector replicas until exp + skew (M1).",
+    "The adapter runs inside the ContextForge process: code execution in ContextForge gives the signing key and lets an attacker mint a JWS for any tenant (built-in A is no better). Production: secret store, short kid rotation, alert on unknown kid.",
+    "principal = local part of the ContextForge user email (the plugin sees email, not the user UUID). Recreating an agent with the same email gives the same principal and its grants; agent emails must never be reused (registry tombstone). Written in the ADR.",
+    "Paths without tool_pre_invoke were read in code, not run: direct_proxy gateways (off by default, set false explicitly), resources/read and prompts/get (arrive without identity, connector refuses).",
+    "Canonical JSON is Python json.dumps(sort_keys, compact separators, ensure_ascii=False), not RFC 8785; floats serialize differently from JCS. Both sides must use the same function (SEC-03).",
+    "Commit 8bb6efe (re-apply SEC-02/SEC-03) also carries the deletion of compose.passthrough-misconfig.yaml and its two evidence files, staged earlier; history not rewritten."
   ]
 }
