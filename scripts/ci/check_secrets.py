@@ -9,9 +9,9 @@ Checks, for every file it is asked to look at:
 * content: ANY occurrence of a PEM private key header
   (five dashes, ``BEGIN``, optional words, ``PRIVATE KEY``) anywhere in the file: at the start of a
   line, inline after ``KEY=``, inside quotes, in source code, in prose.
-  The only exceptions are the paths listed in ``CONTENT_ALLOWLIST`` (normative
-  documents that must quote the header literally); the same text anywhere else
-  is reported.
+  The only exception: in the paths listed in ``CONTENT_ALLOWLIST`` one quoted
+  header (backtick, header, backtick) is removed once before the scan; any other
+  header in those files, and the same quote anywhere else, is reported.
 
 Modes (combinable):
 
@@ -50,11 +50,13 @@ FORBIDDEN_NAME_PATTERNS: tuple[str, ...] = (
 )
 ALLOWED_NAMES: frozenset[str] = frozenset({".env.example"})
 
-# Exact repository paths whose content may contain the PEM header text.
-# Keep this list minimal; every entry needs a reason. File-name rules still apply.
+# Exact repository paths that may contain ALLOWED_QUOTE once. The rest of the file is
+# scanned as usual. Keep this list minimal; every entry needs a reason.
 CONTENT_ALLOWLIST: dict[str, str] = {
-    "docs/implementation-plan-v1.md": "AC-M0-04 quotes the header literally; the plan must not be edited",
+    "docs/implementation-plan-v1.md": "AC-M0-04 in the plan quotes the header as an inline code span",
 }
+# Backtick + header + backtick, built from parts so this file never spells the header.
+ALLOWED_QUOTE = ("`-----" + "BEGIN PRIVATE" + " KEY-----`").encode()
 
 # Exact historical file versions (path + Git blob SHA-1) that quote the header in prose.
 # They are already in the pushed history of this branch, which must not be rewritten,
@@ -106,8 +108,10 @@ def git_blob_sha(data: bytes) -> str:
 
 
 def content_rule(data: bytes, path: str = "") -> str | None:
-    if path in CONTENT_ALLOWLIST or (path, git_blob_sha(data)) in HISTORICAL_BLOB_ALLOWLIST:
+    if (path, git_blob_sha(data)) in HISTORICAL_BLOB_ALLOWLIST:
         return None
+    if path in CONTENT_ALLOWLIST:
+        data = data.replace(ALLOWED_QUOTE, b"", 1)
     # UTF-16/32 text would hide the ASCII header; scan the common encodings.
     texts = [data.decode("utf-8", errors="replace")]
     if b"\0" in data:

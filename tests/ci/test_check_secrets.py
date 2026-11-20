@@ -148,13 +148,42 @@ def test_private_key_header_in_any_file_type_fails(repo: Path, path: str, conten
     assert f"{path}: PEM private key header" in res.stderr
 
 
+PLAN = "docs/implementation-plan-v1.md"
+PLAN_QUOTE = f"| AC-M0-04 | ... строка `{PEM_HEADER}` |\n"
+
+
+def test_plan_with_the_quote_passes(repo: Path) -> None:
+    commit(repo, {PLAN: "# Plan\n" + PLAN_QUOTE + "more text\n"}, "plan")
+    assert run(repo, "--tree").returncode == 0
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        f"`{PEM_HEADER}`\n",  # the same quote a second time
+        f"{PEM_HEADER}\n{KEY_BODY}\n-----END PRIVATE KEY-----\n",  # header with a key body
+        f"{RSA_HEADER}\n{KEY_BODY}\n",
+        f"KEY={PEM_HEADER}{KEY_BODY}\n",
+    ],
+    ids=["second-quote", "header-with-body", "rsa-header-with-body", "inline-key"],
+)
+def test_key_material_in_the_plan_fails(repo: Path, extra: str) -> None:
+    """Only the one quote is exempt; key material elsewhere in the plan is reported (critic M0 cycle 2)."""
+    commit(repo, {PLAN: PLAN_QUOTE + extra}, "plan with key")
+    res = run(repo, "--tree")
+    assert res.returncode == 1, res.stderr
+    assert f"{PLAN}: PEM private key header" in res.stderr
+
+
+def test_header_with_body_without_the_quote_in_the_plan_fails(repo: Path) -> None:
+    commit(repo, {PLAN: f"{PEM_HEADER}\n{KEY_BODY}\n"}, "plan with key, no quote")
+    assert run(repo, "--tree").returncode == 1
+
+
 def test_content_allowlist_is_exact_path(repo: Path) -> None:
-    text = f"| AC-M0-04 | ... строка `{PEM_HEADER}` |\n"
-    commit(repo, {"docs/implementation-plan-v1.md": text}, "plan")
-    assert run(repo, "--tree").returncode == 0  # the allowlisted normative plan
-    # The same text at any other path is reported.
+    # The same quote at any other path is reported.
     for other in ("docs/implementation-plan-v2.md", "docs/sub/implementation-plan-v1.md", "implementation-plan-v1.md"):
-        commit(repo, {other: text}, f"copy to {other}")
+        commit(repo, {other: PLAN_QUOTE}, f"copy to {other}")
         res = run(repo, "--tree")
         assert res.returncode == 1, other
         assert f"{other}: PEM private key header" in res.stderr
@@ -164,14 +193,17 @@ def test_content_allowlist_is_exact_path(repo: Path) -> None:
 
 def test_content_allowlist_is_minimal_and_path_exact() -> None:
     mod = load_scanner()
-    assert set(mod.CONTENT_ALLOWLIST) == {"docs/implementation-plan-v1.md"}, "allowlist must stay minimal"
+    assert set(mod.CONTENT_ALLOWLIST) == {PLAN}, "allowlist must stay minimal"
+    assert f"`{PEM_HEADER}`".encode() == mod.ALLOWED_QUOTE
     assert {p for p, _ in mod.HISTORICAL_BLOB_ALLOWLIST} == {
         "reports/conformance/M0.json",
         "reports/critic/M0-cycle-1.json",
     }
-    assert mod.name_rule("docs/implementation-plan-v1.md") is None
-    assert mod.content_rule(PEM_HEADER.encode(), "docs/implementation-plan-v1.md") is None
-    assert mod.content_rule(PEM_HEADER.encode(), "docs/other.md") is not None
+    assert mod.name_rule(PLAN) is None
+    assert mod.content_rule(mod.ALLOWED_QUOTE, PLAN) is None
+    assert mod.content_rule(PEM_HEADER.encode(), PLAN) is not None  # bare header, no quote
+    assert mod.content_rule(mod.ALLOWED_QUOTE * 2, PLAN) is not None
+    assert mod.content_rule(mod.ALLOWED_QUOTE, "docs/other.md") is not None
 
 
 def test_historical_blob_allowlist_pins_exact_content(repo: Path) -> None:

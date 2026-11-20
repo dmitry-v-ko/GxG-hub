@@ -1,6 +1,6 @@
-# Code owners (AC-M0-02, AC-M0-03). With "Require review from Code Owners"
-# enabled in the `main` ruleset, a PR touching these paths needs the owner's
-# approval. See docs/setup/branch-protection.md.
+# Code owners (AC-M0-02, AC-M0-03). By the owner's decision review is not required,
+# and GitHub never requests review from the PR author, so for the owner's own PRs
+# this file only marks the files as owned. See docs/setup/branch-protection.md.
 
 # Normative schemas and their guards: weakening a schema needs a security review.
 /schemas/                @dmitry-v-ko
