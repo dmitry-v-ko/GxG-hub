@@ -32,9 +32,11 @@
 
 **MCC-07 Effects.** `send_message`, `publish`, CRM write MUST иметь effect classification, необходимые проверки/approval, идемпотентность или reconciliation, журнал операции и защиту от повторной отправки при `outcome_unknown`. Обычный read tool MUST не менять состояние провайдера.
 
+**MCC-10 Human approval and enforcement (new target).** Для MCP-инструмента с эффектом policy MUST определять необходимость человеческого подтверждения **серверно**, не по аргументу агента. **GxG Action Gate** MUST не исполнять действие в состоянии `approval_required`, а создавать запрос в [GxG Approval Service](../APPROVALS.md). Approval MUST быть проверенным решением авторизованного человека, ограниченным tenant, caller, tool, connection/resource, canonical argument hash, expiry и одноразовым использованием. Исполняющий connector MUST fail-closed без действительного разрешения и без возможности обхода прямым вызовом. Agent-provided `approved: true` или произвольный approval ID никогда не авторизация. Исход `outcome_unknown` требует reconciliation, а не повторной отправки.
+
 **MCC-08 Reliability and audit.** Каждый tool MUST иметь finite timeout, ограничение результата и batch, лимит скорости/стоимости, безопасную обработку секретов, trace/correlation ID, минимально необходимый audit. Telegram flood waits соблюдаются. Сырые сообщения не сохранять в общем audit по умолчанию. События/хуки (если реализованы) имеют подписку, scope, retry-safe dedupe и не становятся новым source of truth.
 
-**MCC-09 Publication gate.** До публикации коннектор MUST пройти тесты: MCP handshake, discovery, схемы; разные principals/tenants; forged identities/resources; права на точные chats/docs; типовые ошибки; cost/fallback; эффекты/идемпотентность; redaction; интеграцию и audit через **закреплённую ContextForge версию**. При отсутствии теста/доказательства статус **unverified**, не «готово».
+**MCC-09 Publication gate.** До публикации коннектор MUST пройти тесты: MCP handshake, discovery, схемы; разные principals/tenants; forged identities/resources; права на точные chats/docs; типовые ошибки; cost/fallback; эффекты/идемпотентность/approval с обходом gate; redaction; интеграцию и audit через **закреплённую ContextForge версию**. При отсутствии теста/доказательства статус **unverified**, не «готово».
 
 ## Результат аудита старых сервисов
 
