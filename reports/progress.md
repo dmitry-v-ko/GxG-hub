@@ -31,3 +31,8 @@
 | M2 | 1 | критик | claude/m2-policy-tooling | 63d7c18 (отчёт 409bf08) | **5.0** | < 9: AC-M2-04 failed — critical (зелёный ci-ok на head SHA через push-run), 3× major → цикл 2 (+GR-13a) | 2026-11-20 |
 | M2 | 2 | исполнитель | claude/m2-policy-tooling | — | — | запущен | 2026-11-20 |
 | M4 | 1 | исполнитель (live, Mac) | claude/m4-live | — | — | работает локально (session_01V6d5A8g3vkdYrkBpSzDJLf), под наблюдением оркестратора | 2026-11-20 |
+| M1 | 1 | критик | claude/m1-connector-kit | 52874f5 | **6.0** | < 9: 3× major (jti TTL, граница AS-11, built_at из будущего) + DoD-4 → цикл 2 | 2026-11-20 |
+| M1 | 2 | исполнитель | claude/m1-connector-kit | — | — | запущен (session_01V6d5A8zZAMeDeTHEvThebc) | 2026-11-20 |
+| M4 | 1 | исполнитель | claude/m4-contextforge-spike | 0130d78 (+9df9cde отчёт) | — | живой стенд в облаке: вариант A провалил 1–3, C прошёл 1–5; ADR Accepted (C), предварительно GO; digest закреплён | 2026-11-20 |
+| M4 | 1 | критик | claude/m4-contextforge-spike | 0130d78 | — | запущен (session_01V6d5A7XEpKRJstUuqRhWW5) | 2026-11-20 |
+| — | — | процесс | — | — | — | Сессия оркестратора повышена (доверенные устройства): дочерние треды больше не могут слать send_message → оркестратор опрашивает треды каждые 20 мин | 2026-11-20 |
