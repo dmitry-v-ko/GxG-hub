@@ -1,0 +1,92 @@
+{
+  "milestone": "M0",
+  "cycle": 1,
+  "branch": "claude/m0-foundation",
+  "commit": "f5cf832eda2c190089c02dfb0de3be154ac7ade8",
+  "commit_note": "Tested code commit. This report is added by the next commit on the same branch (a commit cannot contain its own SHA); that commit changes only reports/.",
+  "run_at": "2026-11-20T18:30:00Z",
+  "author": "Claude Code (executor, M0 cycle 1)",
+  "environment": {
+    "local": {"os": "linux x86_64", "python": "3.13.18", "uv": "0.11.32"},
+    "ci": {"runner": "ubuntu-latest", "python": "3.12", "workflow": ".github/workflows/ci.yml"},
+    "not_run_on_ci_yet": "CI has not run yet: the workflow first runs on this push. Local results below come from scripts/ci/check-all.sh and a clean clone."
+  },
+  "contextforge_image_digest": null,
+  "sdk_versions": {"mcp": null, "fastmcp": null, "note": "M0 does not use MCP SDKs"},
+  "tool_versions": {"pytest": "9.2.0", "ruff": "0.17.6", "mypy": "2.4.1", "jsonschema": "4.26.0", "openapi-spec-validator": "0.9.0"},
+  "policy_version": null,
+  "bundle_version": null,
+  "fixture_identity": "none (M0 has no identity fixtures)",
+  "acceptance": [
+    {
+      "id": "AC-M0-01",
+      "status": "passed",
+      "expected": "`uv sync && uv run pytest` in a clean clone passes without network except the package registry",
+      "actual": "Fresh `git clone`, empty UV_CACHE_DIR: uv sync installed 38 packages from PyPI; pytest: 52 passed, 73 subtests passed, 0 skipped.",
+      "evidence": [
+        "conftest.py blocks every non-AF_UNIX socket connect during tests; proven by tests/ci/test_pytest_policy.py::test_internet_socket_is_blocked",
+        "CI job `tests` runs `uv sync && uv run pytest` on a fresh checkout with UV_LOCKED=1"
+      ]
+    },
+    {
+      "id": "AC-M0-02",
+      "status": "passed",
+      "expected": "A PR that breaks any JSON Schema (e.g. removes `required` from effect-intent) gets red CI and cannot be merged",
+      "actual": "Removing `required` from schemas/effect-intent.schema.json: `uv run pytest` -> 3 failed (test_schema_lock + test_envelopes). scripts/ci/prove_schema_guard.py: 51/51 mutations caught (one field dropped from every `required` array of all 16 schemas, `required` deleted, additionalProperties relaxed, pattern loosened, enum widened, invalid JSON, meta-schema violation, deleted schema, edited OpenAPI); unmutated baseline green.",
+      "evidence": [
+        "tests/contract/test_schema_lock.py + tests/contract/schema-lock.json",
+        "tests/ci/test_schema_guard.py (subset in every pytest run)",
+        "CI job `schema-guard` (full mutation set)"
+      ],
+      "note": "The 'cannot be merged' half depends on the required status check `ci-ok` in branch protection (AC-M0-03, manual)."
+    },
+    {
+      "id": "AC-M0-03",
+      "status": "manual_pending",
+      "expected": "A PR without an approving review cannot be merged into `main` (checked by trying)",
+      "actual": "Not configured: needs a repository admin in GitHub settings. Exact steps and the probe procedure: docs/setup/branch-protection.md.",
+      "evidence": []
+    },
+    {
+      "id": "AC-M0-04",
+      "status": "passed",
+      "expected": "CI rejects a commit with a file matching secret patterns (`*.pem`, `.env`, the string `-----BEGIN PRIVATE KEY-----`)",
+      "actual": "Clean clone + commit with probe.pem: `check_secrets.py --range f5cf832..HEAD` -> exit 1, `SECRET: ...:probe.pem: forbidden file name pattern '*.pem'`. tests/ci/test_check_secrets.py: 20 cases pass (*.pem, .env, .env.*, *.key, *.p12, id_ed25519, PEM header as a line / in JSON / in YAML, secret added and removed inside the range, clean tree, .env.example allowed, error on a bad revision); the scanner never prints key material.",
+      "evidence": [
+        "scripts/ci/check_secrets.py",
+        "tests/ci/test_check_secrets.py",
+        "CI job `secrets` (tree of HEAD + every commit of the PR / push)"
+      ]
+    }
+  ],
+  "dod": [
+    {"id": "DoD-1", "status": "not_run", "note": "Merge into `main` via PR with green CI is done by a human after critic review; CI has not run yet."},
+    {"id": "DoD-2", "status": "passed", "note": "AC-M0-01/02/04 are automated; AC-M0-03 is [manual check]."},
+    {"id": "DoD-3", "status": "passed", "note": "This file."},
+    {"id": "DoD-4", "status": "passed", "note": "Mutations: schema (51/51 caught), secret files (tests/ci/test_check_secrets.py), skip/xfail policy and network guard (tests/ci/test_pytest_policy.py)."},
+    {"id": "DoD-5", "status": "passed", "note": "conftest.py turns any skip/xfail into a failed run; tests/ci/test_pytest_policy.py proves it."}
+  ],
+  "tests": [
+    {"id": "tests/contract (existing, 13 tests)", "status": "passed"},
+    {"id": "tests/contract/test_schema_lock.py (6 tests)", "status": "passed"},
+    {"id": "tests/ci/test_check_secrets.py (20 tests)", "status": "passed"},
+    {"id": "tests/ci/test_schema_guard.py (2 tests)", "status": "passed"},
+    {"id": "tests/ci/test_pytest_policy.py (5 tests)", "status": "passed"},
+    {"id": "packages/gxg-connector-kit/tests/test_kit_import.py", "status": "passed"},
+    {"id": "approval/tests/test_approval_import.py", "status": "passed"},
+    {"id": "tools/gxg-policy/tests/test_policy_import.py", "status": "passed"},
+    {"id": "connectors/demo/tests/test_demo_import.py", "status": "passed"},
+    {"id": "ruff check / ruff format --check", "status": "passed"},
+    {"id": "mypy --strict (gxg-connector-kit, approval, scripts, conftest, tests/ci)", "status": "passed"},
+    {"id": "mypy (gxg-policy, demo, tests/contract)", "status": "passed"},
+    {"id": "scripts/ci/prove_schema_guard.py (51 mutations)", "status": "passed"},
+    {"id": "scripts/ci/check_secrets.py --tree HEAD", "status": "passed"}
+  ],
+  "known_limitations": [
+    "CI has not run on GitHub yet; the first run is triggered by this push. Action SHAs are pinned from `git ls-remote` (checkout v7.0.1, setup-uv v10.4.0, setup-python v6.3.0).",
+    "Lockfiles: the root uv.lock pins the workspace (kit, approval, gxg-policy). connectors/demo has its own uv.lock per demo-connector-v1.md / mcp-toolkit-v1.md ('lockfile of every connector') and is pulled into the root by path only to run its tests. CI checks both lockfiles with `uv lock --check`. When demo starts depending on gxg-connector-kit (M3), it needs a path source to ../../packages/gxg-connector-kit.",
+    "Any normative schema change needs `uv run python scripts/ci/schema_lock.py --write` in the same PR. This is deliberate: weakening becomes visible in review.",
+    "The secret scanner is local and pattern-based (names + PEM private keys). It does not detect arbitrary API tokens; a full scanner (e.g. gitleaks) can be added later.",
+    "Existing tests/contract files were reformatted by ruff format (quotes kept), imports sorted and one type annotation added; behaviour unchanged."
+  ]
+}
