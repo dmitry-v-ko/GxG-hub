@@ -9,6 +9,7 @@
 *.db
 data/
 secrets/
+!/tests/secrets/
 
 # Editor/OS/local artifacts
 .DS_Store
