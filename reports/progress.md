@@ -26,3 +26,4 @@
 | M4 | 1 | исполнитель | claude/m4-contextforge-spike | — | — | запущен (session_01V6d5AA9fNoSEufu9cHpFtc), спайк | 2026-11-20 |
 | M2 | 1 | исполнитель | claude/m2-policy-tooling | 63d7c18 (+8c180c3 отчёт) | — | AC-01/02/03/05/06 passed, AC-04 partial (нужен реальный PR, метка, secret) ; CI 44792404466 зелёный | 2026-11-20 |
 | M2 | 1 | критик | claude/m2-policy-tooling | 63d7c18 | — | запущен | 2026-11-20 |
+| M1 | 1 | исполнитель | claude/m1-connector-kit | 52874f5 (+672f4ba отчёт) | — | AC-M1-01…09 passed, CI 44793665616 зелёный; спеки уточнены оркестратором: AS-06a (kid service JWT), GR-13a (переподпись bundle ≤ 12 ч, анти-откат) | 2026-11-20 |
