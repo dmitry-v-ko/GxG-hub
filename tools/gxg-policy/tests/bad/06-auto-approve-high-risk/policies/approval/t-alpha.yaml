@@ -1,0 +1,8 @@
+tenant: t-alpha
+schema_version: 1
+rules:
+  - id: wire-auto
+    match:
+      tools: [demo.wire.propose]
+    decision: auto_approve
+    limits: { max_per_hour: 1 }

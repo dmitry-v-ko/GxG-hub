@@ -1,0 +1,6 @@
+{
+  "description": "дубль id",
+  "code": "duplicate-id",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[1].id"
+}

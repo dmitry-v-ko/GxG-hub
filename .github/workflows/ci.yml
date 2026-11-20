@@ -1,9 +1,11 @@
-# GxG Hub CI (milestone M0). Required status check for `main`: "ci-ok"
-# (see docs/setup/branch-protection.md).
+# GxG Hub CI. Required status check for `main`: "ci-ok" (see docs/setup/branch-protection.md).
+# `ci-ok` includes `grants-widening` (AC-M2-04, docs/setup/widening-approval.md), so label
+# changes re-run the workflow.
 name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main, "claude/**"]
   workflow_dispatch:
@@ -128,10 +130,58 @@ jobs:
             python scripts/ci/check_secrets.py --range "0000000000000000000000000000000000000000..HEAD"
           fi
 
+  policy:
+    # AC-M2-01, AC-M2-05, AC-M2-06 on the repository policies.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: uv run gxg-policy validate policies/
+      - run: uv run gxg-policy lint policies/
+      - name: Build twice with a throw-away key, compare, verify
+        run: bash scripts/ci/bundle_smoke.sh
+
+  grants-widening:
+    # AC-M2-04 / GR-10: red while the policy diff has widening and no code owner added the
+    # `widening-approved` label. Posts the diff report to the PR. docs/setup/widening-approval.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write         # labels and the report comment
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - name: Policy diff and approval gate
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
+          uv run gxg-policy diff "$RUNNER_TEMP/base/policies" policies \
+            --json "$RUNNER_TEMP/diff.json" --md "$RUNNER_TEMP/diff.md"
+          # Owners come from the base commit: a PR cannot make its author a code owner.
+          git show "$BASE:.github/CODEOWNERS" > "$RUNNER_TEMP/CODEOWNERS" || : > "$RUNNER_TEMP/CODEOWNERS"
+          uv run python scripts/ci/widening_gate.py --report "$RUNNER_TEMP/diff.json" \
+            --markdown "$RUNNER_TEMP/diff.md" --codeowners "$RUNNER_TEMP/CODEOWNERS"
+      - name: Not a pull request
+        if: github.event_name != 'pull_request'
+        run: echo "grants-widening applies to pull requests only"
+
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
     if: always()
-    needs: [lint, types, tests, schema-guard, secrets]
+    needs: [lint, types, tests, schema-guard, secrets, policy, grants-widening]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -141,3 +191,34 @@ jobs:
         run: |
           echo "results: $RESULTS"
           for r in $RESULTS; do [ "$r" = "success" ] || exit 1; done
+
+  bundle:
+    # GR-11: signed grants-bundle.json after a merge into main. Key from secrets, never in the repo.
+    # Not part of ci-ok. Setup: docs/setup/bundle-signing.md
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci-ok]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - name: Build, sign, verify against the published public key
+        env:
+          GXG_BUNDLE_SIGNING_KEY: ${{ secrets.GXG_BUNDLE_SIGNING_KEY }}
+          GXG_BUNDLE_KID: ${{ vars.GXG_BUNDLE_KID }}
+          GXG_BUNDLE_PUBLIC_KEY: ${{ vars.GXG_BUNDLE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$GXG_BUNDLE_SIGNING_KEY" ] || [ -z "$GXG_BUNDLE_KID" ] || [ -z "$GXG_BUNDLE_PUBLIC_KEY" ]; then
+            echo "::error::secret GXG_BUNDLE_SIGNING_KEY and variables GXG_BUNDLE_KID, GXG_BUNDLE_PUBLIC_KEY are required"
+            exit 1
+          fi
+          uv run gxg-policy build policies/ --out dist --bundle-version "$GITHUB_SHA"
+          uv run gxg-policy verify dist --kid "$GXG_BUNDLE_KID" --public-key "$GXG_BUNDLE_PUBLIC_KEY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: grants-bundle
+          path: dist/
+          if-no-files-found: error

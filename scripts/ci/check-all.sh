@@ -16,4 +16,7 @@ uv run python scripts/ci/schema_lock.py
 (cd connectors/demo && uv sync --locked && uv run pytest -q)
 uv run python scripts/ci/prove_schema_guard.py
 uv run python scripts/ci/check_secrets.py --tree HEAD
+uv run gxg-policy validate policies/
+uv run gxg-policy lint policies/
+bash scripts/ci/bundle_smoke.sh
 echo "check-all: OK"

@@ -1,0 +1,28 @@
+{
+  "widening": [
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "msg-auto",
+      "change": "limits",
+      "field": "max_per_hour",
+      "base": 5,
+      "head": 20
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "board-auto",
+      "change": "added",
+      "decision": "auto_approve"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "no-wire",
+      "change": "removed",
+      "decision": "deny"
+    }
+  ],
+  "narrowing": []
+}

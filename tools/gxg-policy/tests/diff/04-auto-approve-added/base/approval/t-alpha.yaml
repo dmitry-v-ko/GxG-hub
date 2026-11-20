@@ -1,0 +1,18 @@
+tenant: t-alpha
+schema_version: 1
+rules:
+  - id: msg
+    match:
+      tools: [demo.message.propose]
+    decision: require_approval
+    approvers: ['oidc:https://idp.example.invalid:1']
+  - id: msg-auto
+    match:
+      tools: [demo.message.propose]
+      requesters: [group:researchers]
+    decision: auto_approve
+    limits: { max_per_hour: 5 }
+  - id: no-wire
+    match:
+      tools: [demo.wire.propose]
+    decision: deny

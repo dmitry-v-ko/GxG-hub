@@ -12,6 +12,10 @@
 /.github/                @dmitry-v-ko
 /conftest.py             @dmitry-v-ko
 
+# Policies and the tooling that gates them (AC-M2-04: owners here may add `widening-approved`).
+/policies/               @dmitry-v-ko
+/tools/gxg-policy/       @dmitry-v-ko
+
 # Specs and the plan (acceptance criteria).
 /docs/specs/             @dmitry-v-ko
 /docs/implementation-plan-v1.md @dmitry-v-ko

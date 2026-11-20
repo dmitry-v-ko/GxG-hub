@@ -1,0 +1,6 @@
+{
+  "description": "висячий subject",
+  "code": "dangling-subject",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].subjects[0]"
+}

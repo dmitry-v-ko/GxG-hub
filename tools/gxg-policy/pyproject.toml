@@ -1,9 +1,13 @@
 [project]
 name = "gxg-policy"
 version = "0.0.0"
-description = "GxG Hub policy tooling (M0 skeleton; implementation in M2)."
+description = "GxG Hub policy tooling : validate, lint, diff, build, verify (M2)."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "cryptography>=44,<47",
+    "jsonschema>=4.23,<5",
+    "pyyaml>=6,<7",
+]
 
 [build-system]
 requires = ["uv_build>=0.11,<0.14"]
@@ -11,3 +15,6 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "gxg_policy"
+
+[project.scripts]
+gxg-policy = "gxg_policy.cli:main"
