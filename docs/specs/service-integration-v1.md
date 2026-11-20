@@ -1,6 +1,6 @@
 # Контракты подключения существующих сервисов к GxG Hub — v1
 
-**Статус:** целевой migration contract, не развернут и не реализован. 2026-11-20.
+**Статус:** целевой migration contract, не развернут и не реализован. 2026-11-20. Для каждой интеграции обязательны [Security & Action Gate](security-and-action-gate-v1.md), [Approval State Machine](approval-state-machine-v1.md) и [Conformance Matrix](conformance-matrix-v1.md).
 
 Общий принцип: сохраняем действующие источники правды и оркестраторы. ContextForge предоставляет доступ к инструментам. Логика маршрутизации внутри одной возможности — в доменном MCP-коннекторе. Каждый опубликованный инструмент соответствует [MCP Connector Contract v1](mcp-connector-contract-v1.md).
 
@@ -61,7 +61,7 @@ Realtime голос остаётся своим сервисом (low latency, s
 
 ## Общий механизм approval для доменных действий
 
-В новой платформе Telegram, CRM, публикации и действия Signals используют **один** [GxG Approval Service](../APPROVALS.md) и отдельный Action Gate. Это не зависимость от старого Human Inbox. Для effect tool: ContextForge проверяет grants → Action Gate определяет по policy, нужен ли человек → Approval Service сохраняет и маршрутизирует запрос → оркестратор возобновляет выполнение → коннектор проверяет неизменность параметров, scopes, срок, replay, idempotency и права на ресурс. Прямой вызов коннектора без gate не должен позволять effect. Реализация этой цепочки пока только целевая.
+В новой платформе Telegram, CRM, публикации и действия Signals используют **один** [GxG Approval Service](approval-state-machine-v1.md) и проверяемый Action Gate. Это не зависимость от старого Human Inbox. Для effect tool: ContextForge проверяет grants → Action Gate определяет по policy, нужен ли человек → Approval Service сохраняет и маршрутизирует запрос → оркестратор возобновляет выполнение → коннектор проверяет неизменность параметров, scopes, срок, replay, idempotency и права на ресурс. Прямой вызов коннектора без gate не должен позволять effect. Также запрещены поддельные agent/tenant headers, чужие чаты, повтор одобрения, повтор отправки после таймаута и провайдерские credentials другого tenant. Реализация этой цепочки пока только целевая.
 
 ## Migration acceptance
 
