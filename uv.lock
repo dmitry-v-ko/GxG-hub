@@ -276,6 +276,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "cryptography" },
     { name = "jsonschema" },
     { name = "mypy" },
     { name = "openapi-spec-validator" },
@@ -296,6 +297,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "cryptography", specifier = ">=44,<51" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mypy", specifier = "==2.4.1" },
     { name = "openapi-spec-validator", specifier = ">=0.7,<1" },

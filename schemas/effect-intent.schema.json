@@ -24,7 +24,7 @@
   "properties": {
     "intent_id": {
       "type": "string",
-      "minLength": 1
+      "format": "uuid"
     },
     "tenant_id": {
       "type": "string",

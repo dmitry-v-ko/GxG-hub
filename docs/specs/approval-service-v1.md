@@ -55,7 +55,7 @@ CREATE TABLE intents (
   preview_ciphertext   bytea,
   idempotency_key      text NOT NULL,
   policy_version       text NOT NULL,
-  rule_id              text,
+  rule_ids             text[] NOT NULL DEFAULT '{}',  -- все совпавшие правила, отсортированы
   approval_mode        text NOT NULL CHECK (approval_mode IN ('human','auto','not_required')),
   required_approvals   smallint NOT NULL CHECK (required_approvals BETWEEN 0 AND 2),
   step_up_required     boolean NOT NULL,
@@ -142,7 +142,7 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 
 | # | Из | Событие | В | Кто | Условия | Побочные эффекты |
 | --- | --- | --- | --- | --- | --- | --- |
-| T1 | — | propose | `pending_approval` / `approved` | Коннектор | Service JWT; requester есть в tenant'е; коннектор обслуживает tenant; квоты (AP-05); нет kill switch; хеш совпадает; политика ≠ deny | Outbox: уведомление approver'ам или задача executor'у |
+| T1 | — | propose | `pending_approval` / `approved` | Коннектор | Service JWT; requester есть в tenant'е; коннектор обслуживает tenant; tool найден в bundle по `(iss, tool_key, tool_version)` (AS-26), иначе 403; квоты (AP-05); нет kill switch; хеш совпадает; политика ≠ deny | Outbox: уведомление approver'ам или задача executor'у |
 | T2 | `pending_approval` | approve, кворум набран | `approved` | Человек (UI) | Роль `approver` в tenant'е по bundle; в `allowed_approvers`; ≠ requester; step-up, если нужен; `version` и `args_hash` совпадают; `now < expires_at` | `execution_deadline = now + window`; outbox: executor, webhook |
 | T3 | `pending_approval` | approve, кворум не набран | `pending_approval` | Человек | Как T2 | Запись решения; `version++` |
 | T4 | `pending_approval` | reject | `rejected` | Человек | Как T2, кроме step-up | Webhook |
@@ -154,6 +154,7 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 | T10 | `executing` (exec `reserved`) | lease истёк без dispatch | `approved` | Sweeper | `now ≥ reserve_lease_until` | exec → `released`; `attempts` не меняется (провайдер не вызывался) |
 | T11 | `executing` (exec `dispatching`) | complete: succeeded | `succeeded` | Executor | Ответ коннектора по effect-result | Webhook |
 | T12 | `executing` (exec `dispatching`) | complete: failed_before_effect | `approved` / `failed` | Executor | `approved`, если `attempts < max_attempts` и до deadline, иначе `failed` | Webhook при `failed` |
+| T12a | `executing` (exec `reserved`) | complete: отказ `execute` до dispatch (401/409/422/423, AS-12) | `approved` / `failed` | Executor | Как T12; попытка **засчитывается** (`attempts++`), exec → `failed_before_effect` | Webhook при `failed` |
 | T13 | `executing` (exec `dispatching`) | complete: outcome_unknown, обрыв, таймаут HTTP | `outcome_unknown` | Executor | — | Outbox: reconcile |
 | T14 | `executing` (exec `dispatching`) | dispatch lease истёк | `outcome_unknown` | Sweeper | `now ≥ dispatch_lease_until` | Outbox: reconcile |
 | T15 | `outcome_unknown` | reconcile: executed | `reconciled_succeeded` | Executor | — | Webhook |
@@ -167,7 +168,13 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 
 ## Аутентификация сервисов
 
-- **AS-06. Service JWT.** Каждый сервис (коннектор, executor, ContextForge-фасад) имеет свою пару Ed25519. Каждый внутренний вызов несёт `Authorization: Bearer <jwt>` с `typ: gxg-svc+jwt`, `iss` = ID сервиса, `aud` = ID получателя, `iat`, `exp ≤ iat + 60 с`, `jti`. Получатель проверяет подпись по реестру публичных ключей сервисов и allowlist «сервис → endpoint → tenant'ы» (см. «Реестр платформы»).
+- **AS-06. Service JWT.** Каждый сервис (коннектор, executor, ContextForge-фасад) имеет свою пару Ed25519. Каждый внутренний вызов несёт `Authorization: Bearer <jwt>` с `typ: gxg-svc+jwt`, `iss` = ID сервиса, `aud` = ID получателя, `iat`, `exp ≤ iat + 60 с`, `jti`. Получатель проверяет подпись по реестру платформы: у сервиса 1–2 активных ключа (`public_keys`), принимается `kid` любого из них, подписывает сервис новейшим (ротация без простоя: новый ключ добавляется в bundle, затем старый удаляется). Доступ к endpoint'ам определяется видом сервиса (`kind`) по таблице ниже и списком его tenant'ов.
+
+| `kind` | Разрешённые endpoint'ы |
+| --- | --- |
+| `connector` | `POST /v1/intents`, `POST /v1/executions/{id}/dispatch`, JWKS |
+| `executor` | внутренние вызовы БД/outbox; `execute`/`reconcile` коннекторов |
+| `approval_mcp` | `GET /v1/intents/{id}`, `POST /v1/intents/{id}/cancel` |
 - **AS-06a.** Заголовок service JWT содержит `kid` = JWK thumbprint (RFC 7638, SHA-256, base64url) публичного ключа сервиса `iss` из реестра платформы. Получатель вычисляет thumbprint ключа из реестра и отклоняет токен, если `kid` не совпадает.
 - **AS-07.** Транспорт — TLS во внутренней сети. mTLS — SHOULD, когда хостинг это поддерживает (не заменяет service JWT).
 - **AS-08. Identity requester'а при propose.** Коннектор передаёт `requester.principal`, `requester.tenant_id` и, если механизм из [ADR-0001](../adr/0001-identity-propagation.md) даёт проверяемую assertion, саму `requester.assertion`. Approval Service:
@@ -182,6 +189,7 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 - `services` — ID сервиса, тип (`connector`, `executor`, `approval_api`, `approval_mcp`), публичный ключ service JWT, обслуживаемые tenant'ы, для коннекторов — внутренний base URL;
 - `webhooks` — подписчики событий по tenant'ам (AS-21).
 
+- **AS-26.** `effect_class`, `executes_via` (→ `execute_tool`) и `dispatch_timeout_s` Approval Service берёт **только** из bundle (`platform.services[].tools`, GR-11a), а не из тела запроса коннектора. Неизвестный tool → 403 `permission_denied`.
 - **AS-25.** Коннектор, не указанный в реестре для tenant'а, не может создать intent этого tenant'а (T1) и не получит execution token на его intents.
 
 ## Ключи
@@ -197,8 +205,8 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 | Метод и путь | Вызывает | Тело → ответ | Переходы |
 | --- | --- | --- | --- |
 | `POST /v1/intents` | Коннектор | [intent-create](../../schemas/intent-create.schema.json) → 201 (новый) / 200 (существующий) [intent-status](../../schemas/intent-status.schema.json) | T1 |
-| `GET /v1/intents/{id}` | MCP-фасад, UI | → intent-status | — |
-| `POST /v1/intents/{id}/cancel` | MCP-фасад от имени requester'а | `{on_behalf_of}` → intent-status | T6 |
+| `GET /v1/intents/{id}?tenant_id=&principal=` | MCP-фасад | → intent-status | — |
+| `POST /v1/intents/{id}/cancel` | MCP-фасад от имени requester'а | `{on_behalf_of: {principal, tenant_id}, expected_version}` → intent-status | T6 |
 | `POST /v1/executions/{id}/dispatch` | Коннектор | `{execution_token}` → `{dispatch_deadline}` | T9 |
 | `GET /.well-known/gxg-exec-jwks.json` | Коннекторы | → JWKS | — |
 
@@ -211,7 +219,8 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 | `POST /internal/v1/execute/{execute_tool}` | Service JWT executor'а + [execute-request](../../schemas/execute-request.schema.json) → 200 [effect-result](../../schemas/effect-result.schema.json) |
 | `POST /internal/v1/reconcile/{execute_tool}` | Service JWT executor'а + `{intent_id, execution_id, idempotency_key, provider_operation_id?}` → 200 [reconcile-result](../../schemas/reconcile-result.schema.json) |
 
-- **AS-12.** Ответы `execute` до `dispatch`: 401 (токен), 409 (`dispatch` отклонён), 422 (хеш args не совпал), 423 (kill switch). Это `failed_before_effect` без вызова провайдера. Любая ошибка **после** успешного `dispatch`, включая исключение коннектора, — `outcome_unknown`.
+- **AS-11a.** Для вызывающего вида `approval_mcp` `on_behalf_of` = `{principal, tenant_id}` **обязателен** на чтении и отмене (берётся из проверенной identity агента, SEC-03). Сервис фильтрует `WHERE tenant_id = $t AND requester_principal = $p`; чужой или несуществующий intent → 404, ответы побайтно одинаковы. UI работает в процессе сервиса и в этот API не ходит.
+- **AS-12.** Ответы `execute` до `dispatch`: 401 (токен), 409 (`dispatch` отклонён), 422 (хеш args не совпал), 423 (kill switch). Это `failed_before_effect` без вызова провайдера, переход T12a: попытка засчитывается, поэтому повторяющийся отказ упирается в `max_attempts` и даёт `failed`, а не цикл до `expired`. Любая ошибка **после** успешного `dispatch`, включая исключение коннектора, — `outcome_unknown`.
 - **AS-13.** HTTP-таймаут executor'а на `execute` = `dispatch_timeout_s` tool'а (по умолчанию 60 с). По таймауту — T13.
 - **AS-14.** Executor не повторяет `execute` с тем же `execution_id`. Повтор после `failed_before_effect` — это новая попытка (T12 → T7).
 
@@ -288,7 +297,7 @@ Identity проверяется так же, как в любом коннект
 | `gxg_token_verify_failures_total{reason}` | > 0 (на стороне коннекторов) |
 | `gxg_quota_rejections_total{tenant,requester}` | AP-07 |
 | `gxg_switch_blocked{scope}` | Любое изменение |
-| `gxg_bundle_age_seconds` | > 1 ч |
+| `gxg_bundle_age_seconds` | > 13 ч (пропущена плановая переподпись) |
 
 ## Развёртывание
 

@@ -17,16 +17,14 @@
   "properties": {
     "event_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "type": {
       "const": "intent.status_changed"
     },
     "intent_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "tenant_id": {
       "type": "string",

@@ -25,7 +25,7 @@
 
 - **EFF-01.** Effect class задаётся в manifest tool'а ([MCC-01](mcp-connector-contract-v1.md#требования)), а не аргументом. При сомнении выбирается более строгий класс.
 - **EFF-02.** Для `external_effect` и `high_risk` в каталоге ContextForge публикуется только `propose`. Tool `execute` не регистрируется в ContextForge, а правило `unified_pdp` дополнительно запрещает агентам любые `*.execute`.
-- **EFF-03.** Авто-одобрение по правилу записывается как решение с `decided_by = policy:<rule_id>@<policy_version>`. Путь исполнения тот же, через Executor и токен.
+- **EFF-03.** Авто-одобрение по правилу записывается как решение с `decided_by = policy:<первый rule_id из rule_ids>@<bundle_version>`. Путь исполнения тот же, через Executor и токен.
 
 ## Поток
 
@@ -78,7 +78,7 @@ sequenceDiagram
 - **EFF-05.** Канонизация: нормализованный JSON (строки в Unicode NFC, без float для денежных сумм — целые минорные единицы или строки, вложения как SHA-256), сериализация по [RFC 8785 (JCS)](https://www.rfc-editor.org/rfc/rfc8785). Хешируется SHA-256 от `{tool_key, tool_version, tenant_id, connection_id, resource_id, args}`. Float запрещены, целые — в диапазоне ±(2⁵³−1). Реализации MUST воспроизводить [тестовые векторы](../../schemas/test-vectors/canonical-hash.json).
 - **EFF-06.** Коннектор формирует `preview` — человекочитаемое представление эффекта для UI (получатель, полный текст, изменяемые поля CRM с diff). Preview строится из канонических args, а не из текста агента.
 - **EFF-07.** Intent неизменяем. Любое изменение параметров — новый intent и новое согласование.
-- **EFF-08.** Идемпотентность propose: уникальность по `(tenant_id, idempotency_key)`. Повтор с тем же хешем возвращает существующий intent, повтор с другим хешем — ошибку `conflict`. `idempotency_key` не даёт полномочий, это только ключ дедупликации. Signals передаёт `action_candidate_id:version`. Если ключ не передан, коннектор генерирует его сам, и тогда дедупликации между повторами propose нет.
+- **EFF-08.** Идемпотентность propose: уникальность по `(tenant_id, idempotency_key)`. Повтор с тем же хешем возвращает существующий intent, повтор с другим хешем — ошибку `conflict`. `idempotency_key` не даёт полномочий, это только ключ дедупликации. Ключ — 8–256 символов. Signals передаёт `signals:<action_candidate_id>:v<version>`. Если агент ключ не передал, коннектор **обязан** сгенерировать его сам (в `intent-create` поле обязательно), и тогда дедупликации между повторами propose нет.
 
 Intent соответствует [effect-intent.schema.json](../../schemas/effect-intent.schema.json). Полные args хранятся в защищённом хранилище Approval Service (`args_ref`), в аудит попадает только хеш.
 
