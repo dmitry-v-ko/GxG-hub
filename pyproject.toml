@@ -22,6 +22,7 @@ dev = [
     "jsonschema>=4.23,<5",
     "PyYAML>=6,<7",
     "openapi-spec-validator>=0.7,<1",
+    "cryptography>=44,<51",
 ]
 
 [tool.uv]

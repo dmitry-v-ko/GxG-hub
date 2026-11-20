@@ -17,8 +17,7 @@
   "properties": {
     "intent_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "tenant_id": {
       "type": "string",
@@ -80,10 +79,13 @@
           "minimum": 0,
           "maximum": 2
         },
-        "rule_id": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256
+        "rule_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "uniqueItems": true
         }
       }
     },

@@ -38,10 +38,15 @@ paths:
       summary: Intent status, scoped to the caller's tenant and on-behalf principal
       parameters:
         - $ref: '#/components/parameters/IntentId'
-        - name: on_behalf_of
+        - name: tenant_id
           in: query
-          required: false
-          description: Agent principal when called by the MCP facade; only own intents are visible
+          required: true
+          description: Verified tenant of the agent (AS-11a); required for callers of kind approval_mcp
+          schema: { type: string, maxLength: 64 }
+        - name: principal
+          in: query
+          required: true
+          description: Verified agent principal (AS-11a); only own intents are visible, others are 404
           schema: { type: string, maxLength: 256 }
       responses:
         '200': { $ref: '#/components/responses/IntentStatus' }
@@ -62,7 +67,13 @@ paths:
               additionalProperties: false
               required: [on_behalf_of, expected_version]
               properties:
-                on_behalf_of: { type: string, maxLength: 256 }
+                on_behalf_of:
+                  type: object
+                  additionalProperties: false
+                  required: [principal, tenant_id]
+                  properties:
+                    principal: { type: string, maxLength: 256 }
+                    tenant_id: { type: string, maxLength: 64 }
                 expected_version: { type: integer, minimum: 1 }
       responses:
         '200': { $ref: '#/components/responses/IntentStatus' }
@@ -103,6 +114,7 @@ paths:
                   execution_id: { type: string, format: uuid }
                   dispatch_deadline: { type: string, format: date-time }
         '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '423': { $ref: '#/components/responses/Error' }
   /.well-known/gxg-exec-jwks.json:

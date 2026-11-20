@@ -27,6 +27,7 @@ connectors/demo/
 ```
 
 - Python ≥ 3.12, FastMCP (версия закреплена), транспорт Streamable HTTP.
+- Зависимость от `gxg-connector-kit`: `[tool.uv.sources] gxg-connector-kit = { path = "../../packages/gxg-connector-kit" }`; образ собирается из корня репозитория: `docker build -f connectors/demo/Dockerfile .`.
 - Два порта: **публичный MCP** (8080, только для ContextForge) и **внутренний HTTP** (8081, только для Executor'а) ([SEC-14](security-v1.md#сеть)).
 - Состояние fake provider хранится в SQLite в volume: счётчики должны переживать рестарт для теста OPS-01.
 
