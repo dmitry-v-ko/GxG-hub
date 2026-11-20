@@ -69,6 +69,8 @@ ignore = [
 "**/tests/**" = ["S101", "S603", "S607", "PLC0415"]
 "conftest.py" = ["S101"]
 "scripts/ci/**" = ["S603", "S607"]
+# Local spike stands: loopback HTTP clients and a container-bound echo server.
+"spikes/**" = ["S104", "S310", "PLR0917"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector"]

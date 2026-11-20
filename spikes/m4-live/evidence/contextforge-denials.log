@@ -1,0 +1,5 @@
+2026-11-20T18:54:27.256178Z ERROR mcpgateway Tool not found: echo
+2026-11-20T18:54:31.906747Z ERROR mcpgateway Tool not found: echo-direct-t-beta-echo
+2026-11-20T18:54:35.025935Z WARNING mcpgateway.middleware.token_scoping Access denied: Server 49322226f68f403e96bfae7ea75294d2 is team-scoped to '454723a0ba264146a1f88fa14a181758', token is scoped to teams ['91afa9dd9e6c46eda7d2742330f240b0']
+2026-11-20T18:54:35.026245Z WARNING mcpgateway.middleware.token_scoping Access denied: Resource does not belong to token's teams ['91afa9dd9e6c46eda7d2742330f240b0']
+2026-11-20T18:54:38.261468Z ERROR mcpgateway Tool not found: echo-alias-t-beta-t-beta-alias

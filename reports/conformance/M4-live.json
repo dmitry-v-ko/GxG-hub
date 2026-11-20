@@ -1,0 +1,150 @@
+{
+  "milestone": "M4",
+  "part": "live spike (local Docker), ADR-0001 protocol, option A",
+  "branch": "claude/m4-live",
+  "base": "origin/claude/m0-foundation",
+  "commit_note": "Tested stand and scripts are in the same commit as this report (spikes/m4-live/). SHA is reported in the commit/PR, a commit cannot contain its own SHA.",
+  "run_at": "2026-11-20T18:53:44Z",
+  "author": "Claude Code (local executor, M4 live part)",
+  "adr_and_specs_changed": false,
+  "environment": {
+    "host": "macOS (darwin 25.5.0), arm64, Docker Engine 29.1.3 (Docker Desktop)",
+    "contextforge_image": "ghcr.io/ibm/mcp-context-forge@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
+    "contextforge_version": "v1.1.1 (GitHub release 2026-11-10, latest non-prerelease on 2026-11-20); digest is the linux/arm64 image",
+    "postgres_image": "postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94 (17.6-alpine)",
+    "echo_image": "python@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b (3.12-slim), code spikes/m4-live/echo/echo_server.py",
+    "contextforge_config_under_test": {
+      "IDENTITY_PROPAGATION_ENABLED": "true",
+      "IDENTITY_PROPAGATION_MODE": "both",
+      "IDENTITY_SIGN_CLAIMS": "true",
+      "IDENTITY_CLAIMS_SECRET": "random 32 bytes in .env, separate from JWT_SECRET_KEY",
+      "PLUGINS_ENABLED": "false",
+      "DATABASE_URL": "postgresql (container)",
+      "gateway passthrough_headers": "not set (default)"
+    },
+    "topology": "2 teams (t-alpha, t-beta) x 2 agents (users with team-scoped API tokens, expires 1 day). Per team: gateway echo-direct-<team> (tool not renamed), gateway echo-alias-<team> (tool renamed via custom_name = alias), virtual server vs-<team> with both tools. All visibility=team."
+  },
+  "advisories": {
+    "checked_at": "2026-11-20",
+    "source": "gh api repos/IBM/mcp-context-forge/security-advisories (19 published GHSA)",
+    "affecting_v1.1.1": [],
+    "latest_patched_floor": "GHSA-w8vq-gj3v-h664 (medium, < v1.0.8, patched v1.0.8); all other GHSA patched at <= v1.0.7",
+    "release_notes_security_items_v1.1.1": "token exchange delegation, CEL tool validation, webhook HMAC replay protection (PSIRT ADV0369535, opt-in, webhook plugin only - not identity propagation)",
+    "links": [
+      "https://github.com/IBM/mcp-context-forge/security/advisories",
+      "https://github.com/IBM/mcp-context-forge/releases/tag/v1.1.1"
+    ]
+  },
+  "mechanism_observed": {
+    "source_file": "/app/mcpgateway/utils/identity_propagation.py in the pinned image (sha256 of file 5482d2d4..., identical to git tag v1.1.1)",
+    "headers_sent_on_tools_call": [
+      "x-forwarded-user-id: <email>",
+      "x-forwarded-user-email: <email>",
+      "x-forwarded-user-full-name",
+      "x-forwarded-user-teams: <team uuid>",
+      "x-forwarded-user-admin: false",
+      "x-forwarded-user-auth-method: api_token",
+      "x-forwarded-user-claims-signature: hex HMAC-SHA256"
+    ],
+    "signed_payload": "f\"{user_id}:{email}\" only. NOT signed: teams, admin, roles, method, path, body, time, nonce, audience.",
+    "meta_mode": "_meta.user = {id, email, full_name, teams, is_admin, auth_method}; carries NO claims_signature (docs say it should; code does not add it)",
+    "secret": "IDENTITY_CLAIMS_SECRET, falls back to JWT_SECRET_KEY when unset (config.py: 'uses JWT_SECRET_KEY if unset'); symmetric, shared by every upstream that verifies",
+    "principal_value": "user email (mutable attribute). The token's immutable sub (UUID) is not propagated.",
+    "team_header_missing": "documented X-Forwarded-User-Team-Id is not sent; only the teams list",
+    "signature_stability": "identical signature for every request of the same user (R-fresh-vs-old-signature.signature_identical_to_captured = true)",
+    "service_auth_contextforge_to_upstream": "none: echo receives no Authorization header from ContextForge (gateway auth_type not set); upstream can only tell ContextForge from others by network",
+    "agent_jwt": "HS256, iss=mcpgateway, aud=mcpgateway-api, sub=user UUID, teams=[<team uuid>], token_use=api, jti, exp present (decoded locally, signature not shown)"
+  },
+  "criteria": [
+    {
+      "id": "ADR-0001-1",
+      "text": "Agent cannot influence tenant_id and principal via arguments, headers or _meta",
+      "status": "passed",
+      "scope": "calls that go through ContextForge (/rpc and virtual server)",
+      "evidence": [
+        "F-headers-rpc, F-headers-vs: agent sent X-Forwarded-User-Id/Email/Teams/Team-Id/Admin/Claims-Signature of t-beta-a1; echo received only ContextForge values for t-alpha-a1 (teams=t-alpha uuid, admin=false, real signature); forged Team-Id/Admin absent",
+        "F-meta-rpc, F-meta-vs: agent sent _meta.user of t-beta-a1 with is_admin=true; echo received _meta.user replaced by ContextForge (t-alpha-a1, is_admin=false)",
+        "F-args-rpc, F-args-vs: tenant_id/agent_id/principal in arguments reach the upstream unchanged as data; identity headers/_meta stay t-alpha-a1",
+        "spikes/m4-live/evidence/results.json"
+      ],
+      "caveat": "Holds only with default passthrough_headers. Not tested: gateway passthrough_headers containing X-Forwarded-User-*. Tenant (teams) is not covered by the signature, so this protection ends at ContextForge (see criterion 2)."
+    },
+    {
+      "id": "ADR-0001-2",
+      "text": "A request that bypasses ContextForge does not get an identity",
+      "status": "failed",
+      "evidence": [
+        "B-direct-noid: direct POST to echo without identity -> verifier rejects (no identity headers) - OK",
+        "B-direct-forged: direct POST with forged headers and zero signature -> verifier rejects (bad signature) - OK",
+        "B-direct-teamswap: direct POST with captured t-alpha-a1 headers and x-forwarded-user-teams swapped to t-beta uuid -> verifier ACCEPTS principal t-alpha-a1, tenant t-beta (team is not signed)",
+        "R-replay-direct-66s: direct POST with captured headers -> verifier ACCEPTS",
+        "No service authentication from ContextForge to upstream: echo log shows no Authorization header on any ContextForge call (peer 172.22.0.4) vs attacker calls (peer 172.22.0.1) - only network position differs"
+      ],
+      "reason": "Any party that sees one request (log, proxy, compromised neighbour upstream sharing the HMAC secret) gets a permanent bearer identity, and can choose its tenant."
+    },
+    {
+      "id": "ADR-0001-3",
+      "text": "Replay of intercepted identity after > 60 s is rejected",
+      "status": "failed",
+      "evidence": [
+        "R-replay-direct-66s: headers captured from P-direct-rpc-t-alpha-a1, replayed 66.0 s later directly to echo -> accepted by the verifier",
+        "R-fresh-vs-old-signature: a legitimate call 66 s later carries a byte-identical signature",
+        "signed payload has no iat/exp/jti/nonce/aud (identity_propagation.py build_identity_headers)"
+      ],
+      "reason": "Replay protection cannot be built on the connector side: nothing time- or request-bound is signed."
+    },
+    {
+      "id": "ADR-0001-4",
+      "text": "Identity works on all paths: direct tools, virtual servers, aliases",
+      "status": "passed",
+      "evidence": [
+        "16/16 delivered with correct principal and team for 4 agents x {direct tool via /rpc, alias via /rpc, virtual server + plain tool, virtual server + aliased tool}: P-direct-rpc-*, P-alias-rpc-*, P-vs-direct-*, P-vs-alias-*",
+        "headers and _meta identical in shape on all four paths; tools/list and initialize to the upstream also carry identity headers"
+      ],
+      "caveat": "Global /mcp streamable endpoint: tools/call with a team-scoped API token -> 'Access denied' (RBAC tools.execute without server scope; streamablehttp_transport.py:2213), never reaches upstream - identity there not observed (P-direct-mcp-*). Alias replaces the tool name: the original name is not callable (P-alias-origname: Tool not found). direct_proxy gateway mode and resources/prompts paths not tested."
+    },
+    {
+      "id": "ADR-0001-5",
+      "text": "Mechanism survives a ContextForge upgrade (MC-05)",
+      "status": "not_run",
+      "reason": "Only v1.1.1 was run; no live upgrade from an older pinned version. MC-05 belongs to stage C.",
+      "static_evidence": "identity_propagation.py at v1.0.11 and v1.1.0 is byte-identical (sha256 e7f7aa54...); v1.1.1 only adds a per-gateway config parameter; the signed payload f\"{user_id}:{email}\" is unchanged across these versions."
+    }
+  ],
+  "tenant_isolation_informational": [
+    "X-rpc-beta-tool, X-rpc-beta-alias: t-alpha-a1 calls t-beta tools by name via /rpc -> 'Tool not found', not delivered",
+    "X-vs-beta: t-alpha-a1 to t-beta virtual server -> HTTP 403; ContextForge log: 'Server ... is team-scoped to <beta>, token is scoped to teams [<alpha>]'",
+    "X-vs-mismatch: t-beta tool via t-alpha virtual server -> not delivered",
+    "tools/list via /rpc: each agent sees only its team's tools (checked during setup debugging, not in results.json)"
+  ],
+  "verify_items_for_cloud_executor": {
+    "SEC-02": "JWT has a 'teams' claim (list of team uuids) and aud=mcpgateway-api; tokens are HS256 with JWT_SECRET_KEY",
+    "SEC-03": "Propagation and signing are both off by default (config.py defaults false). Signed claims: user_id:email only, HMAC-SHA256, no iss/aud/iat/exp/jti/tenant.",
+    "TEN-01": "team-scoped visibility of tools and virtual servers confirmed on /rpc and /servers/{id}/mcp (above)",
+    "GR-example principal": "ContextForge propagates the email as id; an immutable id would have to be the JWT sub (UUID), which is not propagated"
+  },
+  "preliminary_decision": {
+    "option_A": "NO-GO: fails criteria 2 and 3; tenant not signed; symmetric secret (falls back to JWT_SECRET_KEY); principal is a mutable email.",
+    "next": "Option C (own adapter: plugin or sidecar issuing Ed25519 JWS with aud, exp 60 s, jti, body hash) per ADR preference. Not tested live here: whether a ContextForge plugin hook on v1.1.1 sees UserContext on every path and can add a header to the upstream request.",
+    "overall_M4": "conditional - GO only after option C is proven on the same stand; otherwise roadmap NO-GO alternative"
+  },
+  "not_run_or_not_checked": [
+    "criterion 5 live upgrade (MC-05)",
+    "option C and option B prototypes",
+    "gateway passthrough_headers misconfiguration (agent-controlled X-Forwarded-User-*)",
+    "direct_proxy gateway mode, resources/read, prompts/get paths",
+    "global /mcp path for tools/call (blocked by RBAC for team-scoped API tokens)",
+    "multi-worker / Redis setup, session pooling identity isolation",
+    "amd64 image digest"
+  ],
+  "artifacts": [
+    "spikes/m4-live/compose.yaml",
+    "spikes/m4-live/.env.example",
+    "spikes/m4-live/echo/echo_server.py",
+    "spikes/m4-live/scripts/{gen-env.sh,cf.py,setup.py,attacks.py}",
+    "spikes/m4-live/evidence/echo.jsonl (raw upstream view, Authorization/Cookie redacted; HMAC values are from a throwaway local secret)",
+    "spikes/m4-live/evidence/results.json (per case: CF status, delivered, identity headers, _meta, arguments, verifier verdict)",
+    "spikes/m4-live/evidence/contextforge-denials.log"
+  ],
+  "secrets_scan": "evidence/* grepped for every .env value and 'eyJ' (JWT prefix): no matches"
+}

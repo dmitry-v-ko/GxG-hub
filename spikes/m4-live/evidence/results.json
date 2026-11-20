@@ -1,0 +1,1171 @@
+[
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool echo-direct-t-alpha-echo via /rpc",
+    "echo_arguments": {
+      "text": "P-direct-rpc-t-alpha-a1-6f641367"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/direct/mcp",
+    "expect": "identity of caller",
+    "id": "P-direct-rpc-t-alpha-a1",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp streamable HTTP",
+    "expect": "identity of caller",
+    "id": "P-direct-mcp-t-alpha-a1"
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias echo-alias-t-alpha-t-alpha-alias via /rpc",
+    "echo_arguments": {
+      "text": "P-alias-rpc-t-alpha-a1-a50b1958"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "identity of caller",
+    "id": "P-alias-rpc-t-alpha-a1",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, non-aliased tool",
+    "echo_arguments": {
+      "text": "P-vs-direct-t-alpha-a1-87c563cb"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/direct/mcp",
+    "expect": "identity of caller",
+    "id": "P-vs-direct-t-alpha-a1",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "P-vs-alias-t-alpha-a1-66aa8e98"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "identity of caller",
+    "id": "P-vs-alias-t-alpha-a1",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool echo-direct-t-alpha-echo via /rpc",
+    "echo_arguments": {
+      "text": "P-direct-rpc-t-alpha-a2-69645845"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "8448461fe4d1fd4d9b9f4c7e4797e6483dd0074cf6d68bcfb64f44da54991731",
+      "x-forwarded-user-email": "t-alpha-a2@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a2",
+      "x-forwarded-user-id": "t-alpha-a2@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a2@example.com",
+        "full_name": "t-alpha-a2",
+        "id": "t-alpha-a2@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/direct/mcp",
+    "expect": "identity of caller",
+    "id": "P-direct-rpc-t-alpha-a2",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a2@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a2",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp streamable HTTP",
+    "expect": "identity of caller",
+    "id": "P-direct-mcp-t-alpha-a2"
+  },
+  {
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias echo-alias-t-alpha-t-alpha-alias via /rpc",
+    "echo_arguments": {
+      "text": "P-alias-rpc-t-alpha-a2-7ce2a615"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "8448461fe4d1fd4d9b9f4c7e4797e6483dd0074cf6d68bcfb64f44da54991731",
+      "x-forwarded-user-email": "t-alpha-a2@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a2",
+      "x-forwarded-user-id": "t-alpha-a2@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a2@example.com",
+        "full_name": "t-alpha-a2",
+        "id": "t-alpha-a2@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "identity of caller",
+    "id": "P-alias-rpc-t-alpha-a2",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a2@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, non-aliased tool",
+    "echo_arguments": {
+      "text": "P-vs-direct-t-alpha-a2-82509de6"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "8448461fe4d1fd4d9b9f4c7e4797e6483dd0074cf6d68bcfb64f44da54991731",
+      "x-forwarded-user-email": "t-alpha-a2@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a2",
+      "x-forwarded-user-id": "t-alpha-a2@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a2@example.com",
+        "full_name": "t-alpha-a2",
+        "id": "t-alpha-a2@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/direct/mcp",
+    "expect": "identity of caller",
+    "id": "P-vs-direct-t-alpha-a2",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a2@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "P-vs-alias-t-alpha-a2-4e569435"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "8448461fe4d1fd4d9b9f4c7e4797e6483dd0074cf6d68bcfb64f44da54991731",
+      "x-forwarded-user-email": "t-alpha-a2@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a2",
+      "x-forwarded-user-id": "t-alpha-a2@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a2@example.com",
+        "full_name": "t-alpha-a2",
+        "id": "t-alpha-a2@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "identity of caller",
+    "id": "P-vs-alias-t-alpha-a2",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a2@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool echo-direct-t-beta-echo via /rpc",
+    "echo_arguments": {
+      "text": "P-direct-rpc-t-beta-a1-fbc238f3"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "1b99462ab3e484b83054c9f55c4233826fd865468cef1b3ad7fe34c00abe56b4",
+      "x-forwarded-user-email": "t-beta-a1@example.com",
+      "x-forwarded-user-full-name": "t-beta-a1",
+      "x-forwarded-user-id": "t-beta-a1@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-beta-a1@example.com",
+        "full_name": "t-beta-a1",
+        "id": "t-beta-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "454723a0ba264146a1f88fa14a181758"
+        ]
+      }
+    },
+    "echo_path": "/t-beta/direct/mcp",
+    "expect": "identity of caller",
+    "id": "P-direct-rpc-t-beta-a1",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-beta-a1@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "t-beta-a1",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp streamable HTTP",
+    "expect": "identity of caller",
+    "id": "P-direct-mcp-t-beta-a1"
+  },
+  {
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias echo-alias-t-beta-t-beta-alias via /rpc",
+    "echo_arguments": {
+      "text": "P-alias-rpc-t-beta-a1-44c1af11"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "1b99462ab3e484b83054c9f55c4233826fd865468cef1b3ad7fe34c00abe56b4",
+      "x-forwarded-user-email": "t-beta-a1@example.com",
+      "x-forwarded-user-full-name": "t-beta-a1",
+      "x-forwarded-user-id": "t-beta-a1@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-beta-a1@example.com",
+        "full_name": "t-beta-a1",
+        "id": "t-beta-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "454723a0ba264146a1f88fa14a181758"
+        ]
+      }
+    },
+    "echo_path": "/t-beta/alias/mcp",
+    "expect": "identity of caller",
+    "id": "P-alias-rpc-t-beta-a1",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-beta-a1@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, non-aliased tool",
+    "echo_arguments": {
+      "text": "P-vs-direct-t-beta-a1-27c89e5d"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "1b99462ab3e484b83054c9f55c4233826fd865468cef1b3ad7fe34c00abe56b4",
+      "x-forwarded-user-email": "t-beta-a1@example.com",
+      "x-forwarded-user-full-name": "t-beta-a1",
+      "x-forwarded-user-id": "t-beta-a1@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-beta-a1@example.com",
+        "full_name": "t-beta-a1",
+        "id": "t-beta-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "454723a0ba264146a1f88fa14a181758"
+        ]
+      }
+    },
+    "echo_path": "/t-beta/direct/mcp",
+    "expect": "identity of caller",
+    "id": "P-vs-direct-t-beta-a1",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-beta-a1@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "P-vs-alias-t-beta-a1-924f2854"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "1b99462ab3e484b83054c9f55c4233826fd865468cef1b3ad7fe34c00abe56b4",
+      "x-forwarded-user-email": "t-beta-a1@example.com",
+      "x-forwarded-user-full-name": "t-beta-a1",
+      "x-forwarded-user-id": "t-beta-a1@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-beta-a1@example.com",
+        "full_name": "t-beta-a1",
+        "id": "t-beta-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "454723a0ba264146a1f88fa14a181758"
+        ]
+      }
+    },
+    "echo_path": "/t-beta/alias/mcp",
+    "expect": "identity of caller",
+    "id": "P-vs-alias-t-beta-a1",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-beta-a1@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool echo-direct-t-beta-echo via /rpc",
+    "echo_arguments": {
+      "text": "P-direct-rpc-t-beta-a2-bf0a2416"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "c5d03b9ab25f242c91b76e4f7c58c54541c7377a3bbf3df015f7042767f58733",
+      "x-forwarded-user-email": "t-beta-a2@example.com",
+      "x-forwarded-user-full-name": "t-beta-a2",
+      "x-forwarded-user-id": "t-beta-a2@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-beta-a2@example.com",
+        "full_name": "t-beta-a2",
+        "id": "t-beta-a2@example.com",
+        "is_admin": false,
+        "teams": [
+          "454723a0ba264146a1f88fa14a181758"
+        ]
+      }
+    },
+    "echo_path": "/t-beta/direct/mcp",
+    "expect": "identity of caller",
+    "id": "P-direct-rpc-t-beta-a2",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-beta-a2@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "t-beta-a2",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp streamable HTTP",
+    "expect": "identity of caller",
+    "id": "P-direct-mcp-t-beta-a2"
+  },
+  {
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias echo-alias-t-beta-t-beta-alias via /rpc",
+    "echo_arguments": {
+      "text": "P-alias-rpc-t-beta-a2-2e74bb1c"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "c5d03b9ab25f242c91b76e4f7c58c54541c7377a3bbf3df015f7042767f58733",
+      "x-forwarded-user-email": "t-beta-a2@example.com",
+      "x-forwarded-user-full-name": "t-beta-a2",
+      "x-forwarded-user-id": "t-beta-a2@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-beta-a2@example.com",
+        "full_name": "t-beta-a2",
+        "id": "t-beta-a2@example.com",
+        "is_admin": false,
+        "teams": [
+          "454723a0ba264146a1f88fa14a181758"
+        ]
+      }
+    },
+    "echo_path": "/t-beta/alias/mcp",
+    "expect": "identity of caller",
+    "id": "P-alias-rpc-t-beta-a2",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-beta-a2@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, non-aliased tool",
+    "echo_arguments": {
+      "text": "P-vs-direct-t-beta-a2-144daabe"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "c5d03b9ab25f242c91b76e4f7c58c54541c7377a3bbf3df015f7042767f58733",
+      "x-forwarded-user-email": "t-beta-a2@example.com",
+      "x-forwarded-user-full-name": "t-beta-a2",
+      "x-forwarded-user-id": "t-beta-a2@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-beta-a2@example.com",
+        "full_name": "t-beta-a2",
+        "id": "t-beta-a2@example.com",
+        "is_admin": false,
+        "teams": [
+          "454723a0ba264146a1f88fa14a181758"
+        ]
+      }
+    },
+    "echo_path": "/t-beta/direct/mcp",
+    "expect": "identity of caller",
+    "id": "P-vs-direct-t-beta-a2",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-beta-a2@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "P-vs-alias-t-beta-a2-2b0c7803"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "c5d03b9ab25f242c91b76e4f7c58c54541c7377a3bbf3df015f7042767f58733",
+      "x-forwarded-user-email": "t-beta-a2@example.com",
+      "x-forwarded-user-full-name": "t-beta-a2",
+      "x-forwarded-user-id": "t-beta-a2@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-beta-a2@example.com",
+        "full_name": "t-beta-a2",
+        "id": "t-beta-a2@example.com",
+        "is_admin": false,
+        "teams": [
+          "454723a0ba264146a1f88fa14a181758"
+        ]
+      }
+    },
+    "echo_path": "/t-beta/alias/mcp",
+    "expect": "identity of caller",
+    "id": "P-vs-alias-t-beta-a2",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-beta-a2@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": {
+      "code": -32601,
+      "message": "Tool not found: echo"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "alias: call by original name echo",
+    "expect": "routes with identity, or not found",
+    "id": "P-alias-origname-t-alpha-a1"
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends forged X-Forwarded-User-* headers (rpc)",
+    "echo_arguments": {
+      "text": "F-headers-rpc-6688430f"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "forged headers dropped/overwritten",
+    "id": "F-headers-rpc",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends forged _meta.user (rpc)",
+    "echo_arguments": {
+      "text": "F-meta-rpc-81d504e3"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "forged _meta.user overwritten",
+    "id": "F-meta-rpc",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent puts tenant_id/agent_id into arguments (rpc)",
+    "echo_arguments": {
+      "agent_id": "t-beta-a1",
+      "principal": "agent:t-beta:a1",
+      "tenant_id": "t-beta",
+      "text": "F-args-rpc-7040987a"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "args are data, identity unchanged",
+    "id": "F-args-rpc",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends forged X-Forwarded-User-* headers (vs)",
+    "echo_arguments": {
+      "text": "F-headers-vs-83c34316"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "forged headers dropped/overwritten",
+    "id": "F-headers-vs",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends forged _meta.user (vs)",
+    "echo_arguments": {
+      "text": "F-meta-vs-d62607aa"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "forged _meta.user overwritten",
+    "id": "F-meta-vs",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent puts tenant_id/agent_id into arguments (vs)",
+    "echo_arguments": {
+      "agent_id": "t-beta-a1",
+      "principal": "agent:t-beta:a1",
+      "tenant_id": "t-beta",
+      "text": "F-args-vs-37fc98f5"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "progressToken": 3,
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "args are data, identity unchanged",
+    "id": "F-args-vs",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": {
+      "code": -32601,
+      "message": "Tool not found: echo-direct-t-beta-echo"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "t-alpha-a1 calls t-beta tool by name via /rpc",
+    "expect": "denied, not delivered",
+    "id": "X-rpc-beta-tool"
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 403,
+    "delivered_to_echo": false,
+    "desc": "t-alpha-a1 calls t-beta virtual server",
+    "expect": "denied, not delivered",
+    "id": "X-vs-beta"
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": {
+      "code": -32601,
+      "message": "Tool not found: echo-alias-t-beta-t-beta-alias"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "t-alpha-a1 calls t-beta alias by name via /rpc",
+    "expect": "denied, not delivered",
+    "id": "X-rpc-beta-alias"
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "t-alpha-a1 calls t-beta tool via t-alpha virtual server",
+    "expect": "denied, not delivered",
+    "id": "X-vs-mismatch"
+  },
+  {
+    "agent": "attacker",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct call to echo, no identity",
+    "echo_arguments": {
+      "text": "B-direct-noid-89437e88"
+    },
+    "echo_identity_headers": {},
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "expect": "verifier rejects",
+    "id": "B-direct-noid",
+    "verifier": {
+      "accepted": false,
+      "result": "no identity headers"
+    }
+  },
+  {
+    "agent": "attacker",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct call to echo, forged headers without secret",
+    "echo_arguments": {
+      "text": "B-direct-forged-7a04a4b3"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "true",
+      "x-forwarded-user-claims-signature": "0000000000000000000000000000000000000000000000000000000000000000",
+      "x-forwarded-user-email": "t-beta-a1@example.com",
+      "x-forwarded-user-id": "t-beta-a1@example.com",
+      "x-forwarded-user-team-id": "454723a0ba264146a1f88fa14a181758",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "expect": "verifier rejects",
+    "id": "B-direct-forged",
+    "verifier": {
+      "accepted": false,
+      "result": "bad signature"
+    }
+  },
+  {
+    "agent": "attacker",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct call to echo, captured signed headers of t-alpha-a1 with teams swapped to t-beta",
+    "echo_arguments": {
+      "text": "B-direct-teamswap-9fda762d"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/direct/mcp",
+    "expect": "verifier rejects (team must be signed)",
+    "id": "B-direct-teamswap",
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-beta"
+      }
+    }
+  },
+  {
+    "agent": "attacker",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "replay captured t-alpha-a1 identity headers directly to echo after >60 s",
+    "echo_arguments": {
+      "text": "R-replay-direct-66s-8fc95aaa"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "expect": "verifier rejects",
+    "id": "R-replay-direct-66s",
+    "replay_age_s": 66.0,
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  },
+  {
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "new legit call 66 s later: compare signature with the captured one",
+    "echo_arguments": {
+      "text": "R-fresh-vs-old-signature-5e94a760"
+    },
+    "echo_identity_headers": {
+      "x-forwarded-user-admin": "false",
+      "x-forwarded-user-auth-method": "api_token",
+      "x-forwarded-user-claims-signature": "dcb5f8941b0f55778c90ca5f631c536d0f1411229b3531c08ecfa087ced3080a",
+      "x-forwarded-user-email": "t-alpha-a1@example.com",
+      "x-forwarded-user-full-name": "t-alpha-a1",
+      "x-forwarded-user-id": "t-alpha-a1@example.com",
+      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+    },
+    "echo_meta": {
+      "user": {
+        "auth_method": "api_token",
+        "email": "t-alpha-a1@example.com",
+        "full_name": "t-alpha-a1",
+        "id": "t-alpha-a1@example.com",
+        "is_admin": false,
+        "teams": [
+          "91afa9dd9e6c46eda7d2742330f240b0"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "expect": "signature changes per request",
+    "id": "R-fresh-vs-old-signature",
+    "signature_identical_to_captured": true,
+    "verifier": {
+      "accepted": true,
+      "result": {
+        "principal": "t-alpha-a1@example.com",
+        "tenant_id": "t-alpha"
+      }
+    }
+  }
+]

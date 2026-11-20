@@ -1,0 +1,52 @@
+# M4 live spike stand (ADR-0001). Local only, loopback ports. Not production.
+name: gxg-m4-live
+services:
+  postgres:
+    image: postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94 # postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: mcp
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U mcp"], interval: 2s, retries: 30}
+    networks: [backend]
+
+  contextforge:
+    # ghcr.io/ibm/mcp-context-forge:v1.1.1 (released 2026-11-10), linux/arm64 digest
+    image: ${CONTEXTFORGE_IMAGE:-ghcr.io/ibm/mcp-context-forge@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5}
+    depends_on: {postgres: {condition: service_healthy}}
+    ports: ["127.0.0.1:4444:4444"]
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "4444"
+      APP_DOMAIN: "http://localhost:4444"
+      DATABASE_URL: "postgresql+psycopg://mcp:${POSTGRES_PASSWORD}@postgres:5432/mcp"
+      AUTH_REQUIRED: "true"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
+      AUTH_ENCRYPTION_SECRET: ${AUTH_ENCRYPTION_SECRET:?set in .env}
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL:?set in .env}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?set in .env}
+      DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD:?set in .env}
+      MCPGATEWAY_UI_ENABLED: "false"
+      MCPGATEWAY_ADMIN_API_ENABLED: "true"
+      PLUGINS_ENABLED: "false"
+      # Option A under test: signed identity propagation
+      IDENTITY_PROPAGATION_ENABLED: "true"
+      IDENTITY_PROPAGATION_MODE: "both"
+      IDENTITY_SIGN_CLAIMS: "true"
+      IDENTITY_CLAIMS_SECRET: ${IDENTITY_CLAIMS_SECRET:?set in .env}
+      # echo server lives on a private docker network
+      SSRF_PROTECTION_ENABLED: "false"
+      LOG_LEVEL: "INFO"
+    networks: [backend, edge]
+
+  echo:
+    image: python@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b # python:3.12-slim
+    command: ["python", "-u", "/srv/echo_server.py"]
+    volumes: ["./echo:/srv:ro", "./evidence:/evidence"]
+    # Published on loopback ONLY to run the "direct call bypassing ContextForge" attack.
+    ports: ["127.0.0.1:9100:9100"]
+    networks: [backend]
+
+networks:
+  backend: {}
+  edge: {}
