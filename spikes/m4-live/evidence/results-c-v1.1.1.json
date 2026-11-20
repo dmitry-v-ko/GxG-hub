@@ -1,0 +1,1471 @@
+[
+  {
+    "accepted_identity": {
+      "exp": 1795202264,
+      "iat": 1795202204,
+      "jti": "9581a78d335a41298c30146539d117ed",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-direct-t-alpha-echo"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool via /rpc",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-direct-rpc-t-alpha-a1-b5a45e56"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-direct-rpc-t-alpha-a1",
+    "identity_headers_seen": [
+      "<jws sha256=e967e67359dfffd8>"
+    ],
+    "nonce": "c-v1.1.1-P-direct-rpc-t-alpha-a1-b5a45e56",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202264,
+        "iat": 1795202204,
+        "jti": "9581a78d335a41298c30146539d117ed",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-direct-t-alpha-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a1",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp",
+    "expect": "accepted, sub/tenant = caller",
+    "id": "P-direct-mcp-t-alpha-a1",
+    "nonce": "c-v1.1.1-P-direct-mcp-t-alpha-a1-5be2a129"
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202269,
+      "iat": 1795202209,
+      "jti": "f03c685a1cba4fa9bbfaaafe656576c6",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias via /rpc",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-alias-rpc-t-alpha-a1-17ce4d3c"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-alias-rpc-t-alpha-a1",
+    "identity_headers_seen": [
+      "<jws sha256=218d33f328592b0e>"
+    ],
+    "nonce": "c-v1.1.1-P-alias-rpc-t-alpha-a1-17ce4d3c",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202269,
+        "iat": 1795202209,
+        "jti": "f03c685a1cba4fa9bbfaaafe656576c6",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202270,
+      "iat": 1795202210,
+      "jti": "f3b8c76210dd416f8c62b44f1a0cb62c",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-direct-t-alpha-echo"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, plain tool",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-vs-direct-t-alpha-a1-851ae459"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-direct-t-alpha-a1",
+    "identity_headers_seen": [
+      "<jws sha256=53c383dbdb79a6ee>"
+    ],
+    "nonce": "c-v1.1.1-P-vs-direct-t-alpha-a1-851ae459",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202270,
+        "iat": 1795202210,
+        "jti": "f3b8c76210dd416f8c62b44f1a0cb62c",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-direct-t-alpha-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202271,
+      "iat": 1795202211,
+      "jti": "2ddb678bb26840aab34dc2620d35ea4a",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-vs-alias-t-alpha-a1-0ce25145"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-alias-t-alpha-a1",
+    "identity_headers_seen": [
+      "<jws sha256=7450a578edd5f929>"
+    ],
+    "nonce": "c-v1.1.1-P-vs-alias-t-alpha-a1-0ce25145",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202271,
+        "iat": 1795202211,
+        "jti": "2ddb678bb26840aab34dc2620d35ea4a",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202271,
+      "iat": 1795202211,
+      "jti": "3034b067ad844f8d87c9333d60d8dbe9",
+      "sub": "t-alpha-a2@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-direct-t-alpha-echo"
+    },
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool via /rpc",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-direct-rpc-t-alpha-a2-aabd3338"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-direct-rpc-t-alpha-a2",
+    "identity_headers_seen": [
+      "<jws sha256=95855912cc457901>"
+    ],
+    "nonce": "c-v1.1.1-P-direct-rpc-t-alpha-a2-aabd3338",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202271,
+        "iat": 1795202211,
+        "jti": "3034b067ad844f8d87c9333d60d8dbe9",
+        "sub": "t-alpha-a2@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-direct-t-alpha-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a2",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp",
+    "expect": "accepted, sub/tenant = caller",
+    "id": "P-direct-mcp-t-alpha-a2",
+    "nonce": "c-v1.1.1-P-direct-mcp-t-alpha-a2-370619ad"
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202277,
+      "iat": 1795202217,
+      "jti": "da864a6ea709499884c8cd76026d1eae",
+      "sub": "t-alpha-a2@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias via /rpc",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-alias-rpc-t-alpha-a2-1a31b782"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-alias-rpc-t-alpha-a2",
+    "identity_headers_seen": [
+      "<jws sha256=fc77c89b70292d47>"
+    ],
+    "nonce": "c-v1.1.1-P-alias-rpc-t-alpha-a2-1a31b782",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202277,
+        "iat": 1795202217,
+        "jti": "da864a6ea709499884c8cd76026d1eae",
+        "sub": "t-alpha-a2@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202278,
+      "iat": 1795202218,
+      "jti": "86b37a6930b5441aa3c71e6905ed645d",
+      "sub": "t-alpha-a2@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-direct-t-alpha-echo"
+    },
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, plain tool",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-vs-direct-t-alpha-a2-3238bb81"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-direct-t-alpha-a2",
+    "identity_headers_seen": [
+      "<jws sha256=aa8ff1983e5b0691>"
+    ],
+    "nonce": "c-v1.1.1-P-vs-direct-t-alpha-a2-3238bb81",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202278,
+        "iat": 1795202218,
+        "jti": "86b37a6930b5441aa3c71e6905ed645d",
+        "sub": "t-alpha-a2@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-direct-t-alpha-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202278,
+      "iat": 1795202218,
+      "jti": "e84f8334e96b4bf5b7926ac83cb0e6d3",
+      "sub": "t-alpha-a2@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-vs-alias-t-alpha-a2-b80bb76e"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-alias-t-alpha-a2",
+    "identity_headers_seen": [
+      "<jws sha256=dbfab0482f39f1f8>"
+    ],
+    "nonce": "c-v1.1.1-P-vs-alias-t-alpha-a2-b80bb76e",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202278,
+        "iat": 1795202218,
+        "jti": "e84f8334e96b4bf5b7926ac83cb0e6d3",
+        "sub": "t-alpha-a2@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202279,
+      "iat": 1795202219,
+      "jti": "e0c451fc5cbf43d69bc1b6477545611c",
+      "sub": "t-beta-a1@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "tool": "echo-direct-t-beta-echo"
+    },
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool via /rpc",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-direct-rpc-t-beta-a1-18c367b0"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-direct-rpc-t-beta-a1",
+    "identity_headers_seen": [
+      "<jws sha256=c2e72a8a6352befa>"
+    ],
+    "nonce": "c-v1.1.1-P-direct-rpc-t-beta-a1-18c367b0",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202279,
+        "iat": 1795202219,
+        "jti": "e0c451fc5cbf43d69bc1b6477545611c",
+        "sub": "t-beta-a1@example.com",
+        "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+        "tool": "echo-direct-t-beta-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a1",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp",
+    "expect": "accepted, sub/tenant = caller",
+    "id": "P-direct-mcp-t-beta-a1",
+    "nonce": "c-v1.1.1-P-direct-mcp-t-beta-a1-d7cbeda6"
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202282,
+      "iat": 1795202222,
+      "jti": "85c619f94e31426ca5103e2770a88916",
+      "sub": "t-beta-a1@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "tool": "echo-alias-t-beta-t-beta-alias"
+    },
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias via /rpc",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-alias-rpc-t-beta-a1-b31b3079"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-alias-rpc-t-beta-a1",
+    "identity_headers_seen": [
+      "<jws sha256=fded6c496d7517af>"
+    ],
+    "nonce": "c-v1.1.1-P-alias-rpc-t-beta-a1-b31b3079",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202282,
+        "iat": 1795202222,
+        "jti": "85c619f94e31426ca5103e2770a88916",
+        "sub": "t-beta-a1@example.com",
+        "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+        "tool": "echo-alias-t-beta-t-beta-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202283,
+      "iat": 1795202223,
+      "jti": "1079c7e0171d45208b67f4fdebcbd7f2",
+      "sub": "t-beta-a1@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "tool": "echo-direct-t-beta-echo"
+    },
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, plain tool",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-vs-direct-t-beta-a1-f146de95"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-direct-t-beta-a1",
+    "identity_headers_seen": [
+      "<jws sha256=c5a6923c2d32bcd2>"
+    ],
+    "nonce": "c-v1.1.1-P-vs-direct-t-beta-a1-f146de95",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202283,
+        "iat": 1795202223,
+        "jti": "1079c7e0171d45208b67f4fdebcbd7f2",
+        "sub": "t-beta-a1@example.com",
+        "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+        "tool": "echo-direct-t-beta-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202284,
+      "iat": 1795202224,
+      "jti": "0c4b513d82dd4f88bac60d516f4be595",
+      "sub": "t-beta-a1@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "tool": "echo-alias-t-beta-t-beta-alias"
+    },
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-vs-alias-t-beta-a1-1cfa9842"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-beta/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-alias-t-beta-a1",
+    "identity_headers_seen": [
+      "<jws sha256=8b4227b2de4eff63>"
+    ],
+    "nonce": "c-v1.1.1-P-vs-alias-t-beta-a1-1cfa9842",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202284,
+        "iat": 1795202224,
+        "jti": "0c4b513d82dd4f88bac60d516f4be595",
+        "sub": "t-beta-a1@example.com",
+        "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+        "tool": "echo-alias-t-beta-t-beta-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202284,
+      "iat": 1795202224,
+      "jti": "278828e7752640c8bd0f1e39dceaddf7",
+      "sub": "t-beta-a2@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "tool": "echo-direct-t-beta-echo"
+    },
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool via /rpc",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-direct-rpc-t-beta-a2-f24e2d89"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-direct-rpc-t-beta-a2",
+    "identity_headers_seen": [
+      "<jws sha256=0981f4eca3a90ff4>"
+    ],
+    "nonce": "c-v1.1.1-P-direct-rpc-t-beta-a2-f24e2d89",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202284,
+        "iat": 1795202224,
+        "jti": "278828e7752640c8bd0f1e39dceaddf7",
+        "sub": "t-beta-a2@example.com",
+        "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+        "tool": "echo-direct-t-beta-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a2",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp",
+    "expect": "accepted, sub/tenant = caller",
+    "id": "P-direct-mcp-t-beta-a2",
+    "nonce": "c-v1.1.1-P-direct-mcp-t-beta-a2-cf455152"
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202288,
+      "iat": 1795202228,
+      "jti": "03b83a7e16cd407a827bc2493ff7fa54",
+      "sub": "t-beta-a2@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "tool": "echo-alias-t-beta-t-beta-alias"
+    },
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias via /rpc",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-alias-rpc-t-beta-a2-64f3aae9"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-alias-rpc-t-beta-a2",
+    "identity_headers_seen": [
+      "<jws sha256=2dedf78debfd9816>"
+    ],
+    "nonce": "c-v1.1.1-P-alias-rpc-t-beta-a2-64f3aae9",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202288,
+        "iat": 1795202228,
+        "jti": "03b83a7e16cd407a827bc2493ff7fa54",
+        "sub": "t-beta-a2@example.com",
+        "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+        "tool": "echo-alias-t-beta-t-beta-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202288,
+      "iat": 1795202228,
+      "jti": "002fee6034014899a83653e3faf5a8d7",
+      "sub": "t-beta-a2@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "tool": "echo-direct-t-beta-echo"
+    },
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, plain tool",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-vs-direct-t-beta-a2-c0777076"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-direct-t-beta-a2",
+    "identity_headers_seen": [
+      "<jws sha256=33c2afc7a2d157db>"
+    ],
+    "nonce": "c-v1.1.1-P-vs-direct-t-beta-a2-c0777076",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202288,
+        "iat": 1795202228,
+        "jti": "002fee6034014899a83653e3faf5a8d7",
+        "sub": "t-beta-a2@example.com",
+        "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+        "tool": "echo-direct-t-beta-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202289,
+      "iat": 1795202229,
+      "jti": "ddbe178a2fb8435191a8ef68b185e251",
+      "sub": "t-beta-a2@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "tool": "echo-alias-t-beta-t-beta-alias"
+    },
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "c-v1.1.1-P-vs-alias-t-beta-a2-6d3cd05b"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-beta/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-alias-t-beta-a2",
+    "identity_headers_seen": [
+      "<jws sha256=9a4ef69e96971abc>"
+    ],
+    "nonce": "c-v1.1.1-P-vs-alias-t-beta-a2-6d3cd05b",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202289,
+        "iat": 1795202229,
+        "jti": "ddbe178a2fb8435191a8ef68b185e251",
+        "sub": "t-beta-a2@example.com",
+        "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+        "tool": "echo-alias-t-beta-t-beta-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202289,
+      "iat": 1795202229,
+      "jti": "0c5b7c8739904e19b22e3c67bac2b3f6",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends a valid captured X-GXG-Identity of t-beta-a1 (rpc)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-F-own-jws-rpc-fc7f062f"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "dropped; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-own-jws-rpc",
+    "identity_headers_seen": [
+      "<jws sha256=57264bcc46872b1e>"
+    ],
+    "nonce": "c-v1.1.1-F-own-jws-rpc-fc7f062f",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202289,
+        "iat": 1795202229,
+        "jti": "0c5b7c8739904e19b22e3c67bac2b3f6",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202289,
+      "iat": 1795202229,
+      "jti": "1a5f452cf9d8443b8c9a784e1ecf7052",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends garbage X-GXG-Identity (rpc)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-F-garbage-jws-rpc-2177880e"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "dropped; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-garbage-jws-rpc",
+    "identity_headers_seen": [
+      "<jws sha256=3ca2bc88cbebfcca>"
+    ],
+    "nonce": "c-v1.1.1-F-garbage-jws-rpc-2177880e",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202289,
+        "iat": 1795202229,
+        "jti": "1a5f452cf9d8443b8c9a784e1ecf7052",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202290,
+      "iat": 1795202230,
+      "jti": "f182bf82f83d4548adf649809c0cad77",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends X-Forwarded-User-* (rpc)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-F-fwd-headers-rpc-7487cd9d"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "ignored; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-fwd-headers-rpc",
+    "identity_headers_seen": [
+      "<jws sha256=12d22130a3b08ab8>"
+    ],
+    "nonce": "c-v1.1.1-F-fwd-headers-rpc-7487cd9d",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202290,
+        "iat": 1795202230,
+        "jti": "f182bf82f83d4548adf649809c0cad77",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202290,
+      "iat": 1795202230,
+      "jti": "b5e17944994d444899f8e54272f400ce",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends forged _meta.user and _meta.gxg_identity (rpc)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-F-meta-rpc-5844fac4"
+    },
+    "echo_meta": {
+      "gxg_identity": "<jws sha256=c2e72a8a6352befa>",
+      "user": {
+        "id": "t-beta-a1@example.com",
+        "teams": [
+          "0b4d045ecf6642b388b1f741e69adede"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "ignored; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-meta-rpc",
+    "identity_headers_seen": [
+      "<jws sha256=6b366d53a5b5e8cf>"
+    ],
+    "nonce": "c-v1.1.1-F-meta-rpc-5844fac4",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202290,
+        "iat": 1795202230,
+        "jti": "b5e17944994d444899f8e54272f400ce",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202290,
+      "iat": 1795202230,
+      "jti": "fb9293e65c9c4a11a02b3bafeec6e0f1",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent puts tenant_id/agent_id into arguments (rpc)",
+    "echo_arguments": {
+      "agent_id": "t-beta-a1",
+      "sub": "t-beta-a1@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "text": "c-v1.1.1-F-args-rpc-7542d472"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "args are data; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-args-rpc",
+    "identity_headers_seen": [
+      "<jws sha256=20615c875290f933>"
+    ],
+    "nonce": "c-v1.1.1-F-args-rpc-7542d472",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202290,
+        "iat": 1795202230,
+        "jti": "fb9293e65c9c4a11a02b3bafeec6e0f1",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202290,
+      "iat": 1795202230,
+      "jti": "29e6f1be74924eaf859c008ec7a98afd",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends a valid captured X-GXG-Identity of t-beta-a1 (vs)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-F-own-jws-vs-6f1543ec"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "dropped; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-own-jws-vs",
+    "identity_headers_seen": [
+      "<jws sha256=4003dc9b9c276c4f>"
+    ],
+    "nonce": "c-v1.1.1-F-own-jws-vs-6f1543ec",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202290,
+        "iat": 1795202230,
+        "jti": "29e6f1be74924eaf859c008ec7a98afd",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202290,
+      "iat": 1795202230,
+      "jti": "626727f836b44e2999c04d047d444e6e",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends garbage X-GXG-Identity (vs)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-F-garbage-jws-vs-4d86c1e7"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "dropped; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-garbage-jws-vs",
+    "identity_headers_seen": [
+      "<jws sha256=10a580c481b79e1f>"
+    ],
+    "nonce": "c-v1.1.1-F-garbage-jws-vs-4d86c1e7",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202290,
+        "iat": 1795202230,
+        "jti": "626727f836b44e2999c04d047d444e6e",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202291,
+      "iat": 1795202231,
+      "jti": "49a3bcf4bc3c41bf8f211469b412ba27",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends X-Forwarded-User-* (vs)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-F-fwd-headers-vs-ee03e8e7"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "ignored; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-fwd-headers-vs",
+    "identity_headers_seen": [
+      "<jws sha256=7f82358324f17427>"
+    ],
+    "nonce": "c-v1.1.1-F-fwd-headers-vs-ee03e8e7",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202291,
+        "iat": 1795202231,
+        "jti": "49a3bcf4bc3c41bf8f211469b412ba27",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202291,
+      "iat": 1795202231,
+      "jti": "452a27a61c94462ab85c56f5e4439706",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent sends forged _meta.user and _meta.gxg_identity (vs)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-F-meta-vs-b27e8f90"
+    },
+    "echo_meta": {
+      "gxg_identity": "<jws sha256=c2e72a8a6352befa>",
+      "progressToken": 3,
+      "user": {
+        "id": "t-beta-a1@example.com",
+        "teams": [
+          "0b4d045ecf6642b388b1f741e69adede"
+        ]
+      }
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "ignored; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-meta-vs",
+    "identity_headers_seen": [
+      "<jws sha256=7155eb92961a74c8>"
+    ],
+    "nonce": "c-v1.1.1-F-meta-vs-b27e8f90",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202291,
+        "iat": 1795202231,
+        "jti": "452a27a61c94462ab85c56f5e4439706",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202292,
+      "iat": 1795202232,
+      "jti": "f7611c0ae3c343bab9aefc74c356003a",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-alias-t-alpha-t-alpha-alias"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "agent puts tenant_id/agent_id into arguments (vs)",
+    "echo_arguments": {
+      "agent_id": "t-beta-a1",
+      "sub": "t-beta-a1@example.com",
+      "tenant_id": "0b4d045ecf6642b388b1f741e69adede",
+      "text": "c-v1.1.1-F-args-vs-3d6a2e14"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "args are data; identity = t-alpha-a1",
+    "forwarded_user_headers_seen": {},
+    "id": "F-args-vs",
+    "identity_headers_seen": [
+      "<jws sha256=5047c4f8007eace6>"
+    ],
+    "nonce": "c-v1.1.1-F-args-vs-3d6a2e14",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202292,
+        "iat": 1795202232,
+        "jti": "f7611c0ae3c343bab9aefc74c356003a",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-alias-t-alpha-t-alpha-alias"
+      }
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a1",
+    "cf_error": {
+      "code": -32601,
+      "message": "Tool not found: echo-direct-t-beta-echo"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "t-alpha-a1 calls t-beta tool via /rpc",
+    "expect": "not delivered",
+    "id": "X-rpc-beta-tool",
+    "nonce": "c-v1.1.1-X-rpc-beta-tool-c552db55"
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 403,
+    "delivered_to_echo": false,
+    "desc": "t-alpha-a1 calls t-beta virtual server",
+    "expect": "not delivered",
+    "id": "X-vs-beta",
+    "nonce": "c-v1.1.1-X-vs-beta-7841faae"
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202298,
+      "iat": 1795202238,
+      "jti": "99ffa3aa778e47b5b37f4850e5453740",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-direct-t-alpha-echo"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "legit t-alpha-a1 call whose token the attacker captures",
+    "echo_arguments": {
+      "text": "c-v1.1.1-C-legit-capture-e3a7fc93"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted",
+    "forwarded_user_headers_seen": {},
+    "id": "C-legit-capture",
+    "identity_headers_seen": [
+      "<jws sha256=705ce46fe6cbeb54>"
+    ],
+    "nonce": "c-v1.1.1-C-legit-capture-e3a7fc93",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202298,
+        "iat": 1795202238,
+        "jti": "99ffa3aa778e47b5b37f4850e5453740",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-direct-t-alpha-echo"
+      }
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "attacker",
+    "cf_error": {
+      "code": -32001,
+      "data": {
+        "reason": "missing identity"
+      },
+      "message": "unauthenticated"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct call, no identity",
+    "echo_arguments": {
+      "text": "c-v1.1.1-B-noid-4765a111"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.1",
+    "expect": "rejected",
+    "forwarded_user_headers_seen": {},
+    "id": "B-noid",
+    "identity_headers_seen": null,
+    "nonce": "c-v1.1.1-B-noid-4765a111",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "attacker",
+    "cf_error": {
+      "code": -32001,
+      "data": {
+        "reason": "missing identity"
+      },
+      "message": "unauthenticated"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct call with X-Forwarded-User-* only",
+    "echo_arguments": {
+      "text": "c-v1.1.1-B-fwd-only-8a6124c4"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.1",
+    "expect": "rejected",
+    "forwarded_user_headers_seen": {
+      "x-forwarded-user-id": "t-beta-a1@example.com",
+      "x-forwarded-user-teams": "0b4d045ecf6642b388b1f741e69adede"
+    },
+    "id": "B-fwd-only",
+    "identity_headers_seen": null,
+    "nonce": "c-v1.1.1-B-fwd-only-8a6124c4",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "attacker",
+    "cf_error": {
+      "code": -32001,
+      "data": {
+        "reason": "bad header {'alg': 'none', 'typ': 'gxg-id+jwt'}"
+      },
+      "message": "unauthenticated"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct call, unsigned token (alg=none) with t-alpha-a1 claims",
+    "echo_arguments": {
+      "text": "c-v1.1.1-B-alg-none-e7139764"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.1",
+    "expect": "rejected",
+    "forwarded_user_headers_seen": {},
+    "id": "B-alg-none",
+    "identity_headers_seen": [
+      "<jws sha256=91f349e48b28f7af>"
+    ],
+    "nonce": "c-v1.1.1-B-alg-none-e7139764",
+    "verdict": {
+      "accepted": false,
+      "result": "bad header {'alg': 'none', 'typ': 'gxg-id+jwt'}"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "attacker",
+    "cf_error": {
+      "code": -32001,
+      "data": {
+        "reason": "InvalidSignatureError: Signature verification failed"
+      },
+      "message": "unauthenticated"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "captured token with tenant_id changed to t-beta (signature kept)",
+    "echo_arguments": {
+      "text": "c-v1.1.1-B-tenant-swap-f41ae83a"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.1",
+    "expect": "rejected: signature",
+    "forwarded_user_headers_seen": {},
+    "id": "B-tenant-swap",
+    "identity_headers_seen": [
+      "<jws sha256=ad7804323be1eaa8>"
+    ],
+    "nonce": "c-v1.1.1-B-tenant-swap-f41ae83a",
+    "verdict": {
+      "accepted": false,
+      "result": "InvalidSignatureError: Signature verification failed"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "attacker",
+    "cf_error": {
+      "code": -32001,
+      "data": {
+        "reason": "InvalidAudienceError: Audience doesn't match"
+      },
+      "message": "unauthenticated"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "captured token sent to the t-beta connector URL",
+    "echo_arguments": {
+      "text": "c-v1.1.1-B-other-aud-3780da46"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.1",
+    "expect": "rejected: audience",
+    "forwarded_user_headers_seen": {},
+    "id": "B-other-aud",
+    "identity_headers_seen": [
+      "<jws sha256=705ce46fe6cbeb54>"
+    ],
+    "nonce": "c-v1.1.1-B-other-aud-3780da46",
+    "verdict": {
+      "accepted": false,
+      "result": "InvalidAudienceError: Audience doesn't match"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "attacker",
+    "cf_error": {
+      "code": -32001,
+      "data": {
+        "reason": "arguments hash mismatch"
+      },
+      "message": "unauthenticated"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "captured token with different arguments",
+    "echo_arguments": {
+      "text": "c-v1.1.1-B-other-args-cf7bc999"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.1",
+    "expect": "rejected: ahs or jti",
+    "forwarded_user_headers_seen": {},
+    "id": "B-other-args",
+    "identity_headers_seen": [
+      "<jws sha256=705ce46fe6cbeb54>"
+    ],
+    "nonce": "c-v1.1.1-B-other-args-cf7bc999",
+    "verdict": {
+      "accepted": false,
+      "result": "arguments hash mismatch"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "attacker",
+    "cf_error": {
+      "code": -32001,
+      "data": {
+        "reason": "replayed jti"
+      },
+      "message": "unauthenticated"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "replay captured token with the same arguments after 0s",
+    "echo_arguments": {
+      "text": "c-v1.1.1-C-legit-capture-e3a7fc93"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.1",
+    "expect": "rejected: replayed jti",
+    "forwarded_user_headers_seen": {},
+    "id": "R-replay-fast",
+    "identity_headers_seen": [
+      "<jws sha256=705ce46fe6cbeb54>"
+    ],
+    "nonce": "c-v1.1.1-R-replay-fast-2e62ece2",
+    "verdict": {
+      "accepted": false,
+      "result": "replayed jti"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "attacker",
+    "cf_error": {
+      "code": -32001,
+      "data": {
+        "reason": "ExpiredSignatureError: Signature has expired"
+      },
+      "message": "unauthenticated"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "replay captured token, same arguments, >60 s later",
+    "echo_arguments": {
+      "text": "c-v1.1.1-C-legit-capture-e3a7fc93"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.1",
+    "expect": "rejected: expired",
+    "forwarded_user_headers_seen": {},
+    "id": "R-replay-66s",
+    "identity_headers_seen": [
+      "<jws sha256=705ce46fe6cbeb54>"
+    ],
+    "nonce": "c-v1.1.1-R-replay-66s-fd0e23d6",
+    "replay_age_s": 66.0,
+    "verdict": {
+      "accepted": false,
+      "result": "ExpiredSignatureError: Signature has expired"
+    }
+  },
+  {
+    "accepted_identity": {
+      "exp": 1795202364,
+      "iat": 1795202304,
+      "jti": "632fb170755a4977ad0c5aeb0e774a53",
+      "sub": "t-alpha-a1@example.com",
+      "tenant_id": "31f09faddbff492b998aaa29cd322902",
+      "tool": "echo-direct-t-alpha-echo"
+    },
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "new legit call after the wait",
+    "echo_arguments": {
+      "text": "c-v1.1.1-R-fresh-after-8a2708b2"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, new jti",
+    "forwarded_user_headers_seen": {},
+    "id": "R-fresh-after",
+    "identity_headers_seen": [
+      "<jws sha256=b3a930e9a701271a>"
+    ],
+    "jti_differs_from_captured": true,
+    "nonce": "c-v1.1.1-R-fresh-after-8a2708b2",
+    "verdict": {
+      "accepted": true,
+      "result": {
+        "exp": 1795202364,
+        "iat": 1795202304,
+        "jti": "632fb170755a4977ad0c5aeb0e774a53",
+        "sub": "t-alpha-a1@example.com",
+        "tenant_id": "31f09faddbff492b998aaa29cd322902",
+        "tool": "echo-direct-t-alpha-echo"
+      }
+    }
+  }
+]

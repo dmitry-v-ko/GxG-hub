@@ -57,3 +57,36 @@ def save_state(s):
     STATE.parent.mkdir(exist_ok=True)
     STATE.write_text(json.dumps(s, indent=2))
     os.chmod(STATE, 0o600)
+
+
+def rpc(token, name, args, meta=None, headers=None, endpoint="/rpc"):
+    params = {"name": name, "arguments": args}
+    if meta is not None:
+        params["_meta"] = meta
+    return http("POST", endpoint, {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}, token, headers)
+
+
+def mcp(token, endpoint, name, args, meta=None, headers=None):
+    """Streamable HTTP: initialize -> notifications/initialized -> tools/call."""
+    init = {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "m4-spike", "version": "0"},
+        },
+    }
+    code, d, rh = http("POST", endpoint, init, token, headers)
+    sid = {k.lower(): v for k, v in rh.items()}.get("mcp-session-id")
+    h = dict(headers or {})
+    if sid:
+        h["Mcp-Session-Id"] = sid
+    if code != 200:
+        return code, d, rh
+    http("POST", endpoint, {"jsonrpc": "2.0", "method": "notifications/initialized"}, token, h)
+    params = {"name": name, "arguments": args}
+    if meta is not None:
+        params["_meta"] = meta
+    return http("POST", endpoint, {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}, token, h)

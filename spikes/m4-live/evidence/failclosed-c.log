@@ -1,0 +1,19 @@
+## adapter broken, PLUGINS_FAIL_ON_PLUGIN_ERROR=false (ContextForge default)
+gateway started: yes
+{"asctime": "2026-11-20T19:22:10", "name": "cpex.framework.manager", "levelname": "WARNING", "message": "Skipping plugin GxgIdentityAdapter because fail_on_plugin_error is disabled", "@timestamp": "2026-11-20T19:22:10.879771Z", "hostname": "b789d7cec3dd", "pro
+{"asctime": "2026-11-20T19:22:10", "name": "cpex.framework.manager", "levelname": "INFO", "message": "Plugin manager initialized with 0 plugins", "@timestamp": "2026-11-20T19:22:10.879851Z", "hostname": "b789d7cec3dd", "process_id": 1}
+{"asctime": "2026-11-20T19:22:10", "name": "mcpgateway", "levelname": "INFO", "message": "Plugin manager initialized with 0 plugins", "@timestamp": "2026-11-20T19:22:10.880026Z", "hostname": "b789d7cec3dd", "process_id": 1}
+P-direct-rpc-t-alpha-a1 200 delivered False missing identity
+P-vs-direct-t-alpha-a1 200 delivered False missing identity
+P-direct-rpc-t-alpha-a2 200 delivered False missing identity
+P-vs-direct-t-alpha-a2 200 delivered False missing identity
+P-direct-rpc-t-beta-a1 200 delivered False missing identity
+P-vs-direct-t-beta-a1 200 delivered False missing identity
+P-direct-rpc-t-beta-a2 200 delivered False missing identity
+P-vs-direct-t-beta-a2 200 delivered False missing identity
+## adapter broken, PLUGINS_FAIL_ON_PLUGIN_ERROR=true
+gateway started: no (health not reached in 180 s)
+contextforge exited Exited (1) 2 minutes ago
+{"asctime": "2026-11-20T19:23:03", "name": "mcpgateway.plugins.gateway_plugin_manager", "levelname": "ERROR", "message": "Manager build failed for context_id=__global__", "exc_info": "Traceback (most recent call last):\n  File \"/app/.venv/lib64/python3.12/sit
+{"asctime": "2026-11-20T19:23:03", "name": "mcpgateway", "levelname": "ERROR", "message": "Plugin manager initialization failed: Plugin initialization failed: GxgIdentityAdapter - [Errno 2] No such file or directory: '/run/gxg/missing.pem'", "exc_info": "Trace
+{"asctime": "2026-11-20T19:23:03", "name": "mcpgateway", "levelname": "ERROR", "message": "Error during startup: Plugin initialization failed: GxgIdentityAdapter - [Errno 2] No such file or directory: '/run/gxg/missing.pem'", "@timestamp": "2026-11-20T19:23:03

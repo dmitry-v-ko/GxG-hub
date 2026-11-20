@@ -6,7 +6,7 @@
     "delivered_to_echo": true,
     "desc": "direct tool echo-direct-t-alpha-echo via /rpc",
     "echo_arguments": {
-      "text": "P-direct-rpc-t-alpha-a1-6f641367"
+      "text": "P-direct-rpc-t-alpha-a1-007f0b58"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -15,7 +15,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "user": {
@@ -25,7 +25,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -59,7 +59,7 @@
     "delivered_to_echo": true,
     "desc": "alias echo-alias-t-alpha-t-alpha-alias via /rpc",
     "echo_arguments": {
-      "text": "P-alias-rpc-t-alpha-a1-a50b1958"
+      "text": "P-alias-rpc-t-alpha-a1-f5293fa2"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -68,7 +68,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "user": {
@@ -78,7 +78,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -100,7 +100,7 @@
     "delivered_to_echo": true,
     "desc": "virtual server, non-aliased tool",
     "echo_arguments": {
-      "text": "P-vs-direct-t-alpha-a1-87c563cb"
+      "text": "P-vs-direct-t-alpha-a1-8d9724b5"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -109,7 +109,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -120,7 +120,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -142,7 +142,7 @@
     "delivered_to_echo": true,
     "desc": "virtual server, aliased tool",
     "echo_arguments": {
-      "text": "P-vs-alias-t-alpha-a1-66aa8e98"
+      "text": "P-vs-alias-t-alpha-a1-b9fd3722"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -151,7 +151,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -162,7 +162,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -184,7 +184,7 @@
     "delivered_to_echo": true,
     "desc": "direct tool echo-direct-t-alpha-echo via /rpc",
     "echo_arguments": {
-      "text": "P-direct-rpc-t-alpha-a2-69645845"
+      "text": "P-direct-rpc-t-alpha-a2-b85ef812"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -193,7 +193,7 @@
       "x-forwarded-user-email": "t-alpha-a2@example.com",
       "x-forwarded-user-full-name": "t-alpha-a2",
       "x-forwarded-user-id": "t-alpha-a2@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "user": {
@@ -203,7 +203,7 @@
         "id": "t-alpha-a2@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -237,7 +237,7 @@
     "delivered_to_echo": true,
     "desc": "alias echo-alias-t-alpha-t-alpha-alias via /rpc",
     "echo_arguments": {
-      "text": "P-alias-rpc-t-alpha-a2-7ce2a615"
+      "text": "P-alias-rpc-t-alpha-a2-77d88387"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -246,7 +246,7 @@
       "x-forwarded-user-email": "t-alpha-a2@example.com",
       "x-forwarded-user-full-name": "t-alpha-a2",
       "x-forwarded-user-id": "t-alpha-a2@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "user": {
@@ -256,7 +256,7 @@
         "id": "t-alpha-a2@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -278,7 +278,7 @@
     "delivered_to_echo": true,
     "desc": "virtual server, non-aliased tool",
     "echo_arguments": {
-      "text": "P-vs-direct-t-alpha-a2-82509de6"
+      "text": "P-vs-direct-t-alpha-a2-a9b4511b"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -287,7 +287,7 @@
       "x-forwarded-user-email": "t-alpha-a2@example.com",
       "x-forwarded-user-full-name": "t-alpha-a2",
       "x-forwarded-user-id": "t-alpha-a2@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -298,7 +298,7 @@
         "id": "t-alpha-a2@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -320,7 +320,7 @@
     "delivered_to_echo": true,
     "desc": "virtual server, aliased tool",
     "echo_arguments": {
-      "text": "P-vs-alias-t-alpha-a2-4e569435"
+      "text": "P-vs-alias-t-alpha-a2-bb8656ce"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -329,7 +329,7 @@
       "x-forwarded-user-email": "t-alpha-a2@example.com",
       "x-forwarded-user-full-name": "t-alpha-a2",
       "x-forwarded-user-id": "t-alpha-a2@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -340,7 +340,7 @@
         "id": "t-alpha-a2@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -362,7 +362,7 @@
     "delivered_to_echo": true,
     "desc": "direct tool echo-direct-t-beta-echo via /rpc",
     "echo_arguments": {
-      "text": "P-direct-rpc-t-beta-a1-fbc238f3"
+      "text": "P-direct-rpc-t-beta-a1-6ca92b27"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -371,7 +371,7 @@
       "x-forwarded-user-email": "t-beta-a1@example.com",
       "x-forwarded-user-full-name": "t-beta-a1",
       "x-forwarded-user-id": "t-beta-a1@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": {
       "user": {
@@ -381,7 +381,7 @@
         "id": "t-beta-a1@example.com",
         "is_admin": false,
         "teams": [
-          "454723a0ba264146a1f88fa14a181758"
+          "5cad37c230bc423ca7b17712f277887d"
         ]
       }
     },
@@ -415,7 +415,7 @@
     "delivered_to_echo": true,
     "desc": "alias echo-alias-t-beta-t-beta-alias via /rpc",
     "echo_arguments": {
-      "text": "P-alias-rpc-t-beta-a1-44c1af11"
+      "text": "P-alias-rpc-t-beta-a1-d2b5c2fe"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -424,7 +424,7 @@
       "x-forwarded-user-email": "t-beta-a1@example.com",
       "x-forwarded-user-full-name": "t-beta-a1",
       "x-forwarded-user-id": "t-beta-a1@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": {
       "user": {
@@ -434,7 +434,7 @@
         "id": "t-beta-a1@example.com",
         "is_admin": false,
         "teams": [
-          "454723a0ba264146a1f88fa14a181758"
+          "5cad37c230bc423ca7b17712f277887d"
         ]
       }
     },
@@ -456,7 +456,7 @@
     "delivered_to_echo": true,
     "desc": "virtual server, non-aliased tool",
     "echo_arguments": {
-      "text": "P-vs-direct-t-beta-a1-27c89e5d"
+      "text": "P-vs-direct-t-beta-a1-b06a69c9"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -465,7 +465,7 @@
       "x-forwarded-user-email": "t-beta-a1@example.com",
       "x-forwarded-user-full-name": "t-beta-a1",
       "x-forwarded-user-id": "t-beta-a1@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -476,7 +476,7 @@
         "id": "t-beta-a1@example.com",
         "is_admin": false,
         "teams": [
-          "454723a0ba264146a1f88fa14a181758"
+          "5cad37c230bc423ca7b17712f277887d"
         ]
       }
     },
@@ -498,7 +498,7 @@
     "delivered_to_echo": true,
     "desc": "virtual server, aliased tool",
     "echo_arguments": {
-      "text": "P-vs-alias-t-beta-a1-924f2854"
+      "text": "P-vs-alias-t-beta-a1-8972bb63"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -507,7 +507,7 @@
       "x-forwarded-user-email": "t-beta-a1@example.com",
       "x-forwarded-user-full-name": "t-beta-a1",
       "x-forwarded-user-id": "t-beta-a1@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -518,7 +518,7 @@
         "id": "t-beta-a1@example.com",
         "is_admin": false,
         "teams": [
-          "454723a0ba264146a1f88fa14a181758"
+          "5cad37c230bc423ca7b17712f277887d"
         ]
       }
     },
@@ -540,7 +540,7 @@
     "delivered_to_echo": true,
     "desc": "direct tool echo-direct-t-beta-echo via /rpc",
     "echo_arguments": {
-      "text": "P-direct-rpc-t-beta-a2-bf0a2416"
+      "text": "P-direct-rpc-t-beta-a2-44efa99e"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -549,7 +549,7 @@
       "x-forwarded-user-email": "t-beta-a2@example.com",
       "x-forwarded-user-full-name": "t-beta-a2",
       "x-forwarded-user-id": "t-beta-a2@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": {
       "user": {
@@ -559,7 +559,7 @@
         "id": "t-beta-a2@example.com",
         "is_admin": false,
         "teams": [
-          "454723a0ba264146a1f88fa14a181758"
+          "5cad37c230bc423ca7b17712f277887d"
         ]
       }
     },
@@ -593,7 +593,7 @@
     "delivered_to_echo": true,
     "desc": "alias echo-alias-t-beta-t-beta-alias via /rpc",
     "echo_arguments": {
-      "text": "P-alias-rpc-t-beta-a2-2e74bb1c"
+      "text": "P-alias-rpc-t-beta-a2-097f890f"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -602,7 +602,7 @@
       "x-forwarded-user-email": "t-beta-a2@example.com",
       "x-forwarded-user-full-name": "t-beta-a2",
       "x-forwarded-user-id": "t-beta-a2@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": {
       "user": {
@@ -612,7 +612,7 @@
         "id": "t-beta-a2@example.com",
         "is_admin": false,
         "teams": [
-          "454723a0ba264146a1f88fa14a181758"
+          "5cad37c230bc423ca7b17712f277887d"
         ]
       }
     },
@@ -634,7 +634,7 @@
     "delivered_to_echo": true,
     "desc": "virtual server, non-aliased tool",
     "echo_arguments": {
-      "text": "P-vs-direct-t-beta-a2-144daabe"
+      "text": "P-vs-direct-t-beta-a2-4c095c48"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -643,7 +643,7 @@
       "x-forwarded-user-email": "t-beta-a2@example.com",
       "x-forwarded-user-full-name": "t-beta-a2",
       "x-forwarded-user-id": "t-beta-a2@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -654,7 +654,7 @@
         "id": "t-beta-a2@example.com",
         "is_admin": false,
         "teams": [
-          "454723a0ba264146a1f88fa14a181758"
+          "5cad37c230bc423ca7b17712f277887d"
         ]
       }
     },
@@ -676,7 +676,7 @@
     "delivered_to_echo": true,
     "desc": "virtual server, aliased tool",
     "echo_arguments": {
-      "text": "P-vs-alias-t-beta-a2-2b0c7803"
+      "text": "P-vs-alias-t-beta-a2-ebd409e6"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -685,7 +685,7 @@
       "x-forwarded-user-email": "t-beta-a2@example.com",
       "x-forwarded-user-full-name": "t-beta-a2",
       "x-forwarded-user-id": "t-beta-a2@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -696,7 +696,7 @@
         "id": "t-beta-a2@example.com",
         "is_admin": false,
         "teams": [
-          "454723a0ba264146a1f88fa14a181758"
+          "5cad37c230bc423ca7b17712f277887d"
         ]
       }
     },
@@ -730,7 +730,7 @@
     "delivered_to_echo": true,
     "desc": "agent sends forged X-Forwarded-User-* headers (rpc)",
     "echo_arguments": {
-      "text": "F-headers-rpc-6688430f"
+      "text": "F-headers-rpc-0bc124df"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -739,7 +739,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "user": {
@@ -749,7 +749,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -771,7 +771,7 @@
     "delivered_to_echo": true,
     "desc": "agent sends forged _meta.user (rpc)",
     "echo_arguments": {
-      "text": "F-meta-rpc-81d504e3"
+      "text": "F-meta-rpc-a2164b0a"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -780,7 +780,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "user": {
@@ -790,7 +790,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -815,7 +815,7 @@
       "agent_id": "t-beta-a1",
       "principal": "agent:t-beta:a1",
       "tenant_id": "t-beta",
-      "text": "F-args-rpc-7040987a"
+      "text": "F-args-rpc-8988954a"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -824,7 +824,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "user": {
@@ -834,7 +834,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -856,7 +856,7 @@
     "delivered_to_echo": true,
     "desc": "agent sends forged X-Forwarded-User-* headers (vs)",
     "echo_arguments": {
-      "text": "F-headers-vs-83c34316"
+      "text": "F-headers-vs-3972a366"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -865,7 +865,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -876,7 +876,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -898,7 +898,7 @@
     "delivered_to_echo": true,
     "desc": "agent sends forged _meta.user (vs)",
     "echo_arguments": {
-      "text": "F-meta-vs-d62607aa"
+      "text": "F-meta-vs-586384c0"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -907,7 +907,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -918,7 +918,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -943,7 +943,7 @@
       "agent_id": "t-beta-a1",
       "principal": "agent:t-beta:a1",
       "tenant_id": "t-beta",
-      "text": "F-args-vs-37fc98f5"
+      "text": "F-args-vs-9b053d4e"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -952,7 +952,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "progressToken": 3,
@@ -963,7 +963,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },
@@ -1027,7 +1027,7 @@
     "delivered_to_echo": true,
     "desc": "direct call to echo, no identity",
     "echo_arguments": {
-      "text": "B-direct-noid-89437e88"
+      "text": "B-direct-noid-4cd24052"
     },
     "echo_identity_headers": {},
     "echo_meta": null,
@@ -1046,15 +1046,15 @@
     "delivered_to_echo": true,
     "desc": "direct call to echo, forged headers without secret",
     "echo_arguments": {
-      "text": "B-direct-forged-7a04a4b3"
+      "text": "B-direct-forged-0757f31d"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "true",
       "x-forwarded-user-claims-signature": "0000000000000000000000000000000000000000000000000000000000000000",
       "x-forwarded-user-email": "t-beta-a1@example.com",
       "x-forwarded-user-id": "t-beta-a1@example.com",
-      "x-forwarded-user-team-id": "454723a0ba264146a1f88fa14a181758",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-team-id": "5cad37c230bc423ca7b17712f277887d",
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": null,
     "echo_path": "/t-alpha/direct/mcp",
@@ -1072,7 +1072,7 @@
     "delivered_to_echo": true,
     "desc": "direct call to echo, captured signed headers of t-alpha-a1 with teams swapped to t-beta",
     "echo_arguments": {
-      "text": "B-direct-teamswap-9fda762d"
+      "text": "B-direct-teamswap-e9b1fc9e"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -1081,7 +1081,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "454723a0ba264146a1f88fa14a181758"
+      "x-forwarded-user-teams": "5cad37c230bc423ca7b17712f277887d"
     },
     "echo_meta": null,
     "echo_path": "/t-beta/direct/mcp",
@@ -1102,7 +1102,7 @@
     "delivered_to_echo": true,
     "desc": "replay captured t-alpha-a1 identity headers directly to echo after >60 s",
     "echo_arguments": {
-      "text": "R-replay-direct-66s-8fc95aaa"
+      "text": "R-replay-direct-66s-a6660da6"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -1111,7 +1111,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": null,
     "echo_path": "/t-alpha/direct/mcp",
@@ -1133,7 +1133,7 @@
     "delivered_to_echo": true,
     "desc": "new legit call 66 s later: compare signature with the captured one",
     "echo_arguments": {
-      "text": "R-fresh-vs-old-signature-5e94a760"
+      "text": "R-fresh-vs-old-signature-c7457f00"
     },
     "echo_identity_headers": {
       "x-forwarded-user-admin": "false",
@@ -1142,7 +1142,7 @@
       "x-forwarded-user-email": "t-alpha-a1@example.com",
       "x-forwarded-user-full-name": "t-alpha-a1",
       "x-forwarded-user-id": "t-alpha-a1@example.com",
-      "x-forwarded-user-teams": "91afa9dd9e6c46eda7d2742330f240b0"
+      "x-forwarded-user-teams": "bc18fb5831094ca0bedd9d020026e018"
     },
     "echo_meta": {
       "user": {
@@ -1152,7 +1152,7 @@
         "id": "t-alpha-a1@example.com",
         "is_admin": false,
         "teams": [
-          "91afa9dd9e6c46eda7d2742330f240b0"
+          "bc18fb5831094ca0bedd9d020026e018"
         ]
       }
     },

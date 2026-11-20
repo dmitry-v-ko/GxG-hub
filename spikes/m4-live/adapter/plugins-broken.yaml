@@ -1,0 +1,26 @@
+# ContextForge plugin config for the M4 option C prototype. Only the GxG adapter is loaded.
+plugin_settings:
+  parallel_execution_within_band: false
+  plugin_timeout: 10
+  fail_on_plugin_error: true   # NOTE: v1.1.1 reads this from env PLUGINS_FAIL_ON_PLUGIN_ERROR, not from here
+  enable_plugin_api: false
+  plugin_health_check_interval: 120
+  include_user_info: true
+
+plugin_dirs: []
+
+plugins:
+  - name: "GxgIdentityAdapter"
+    kind: "plugins.gxg_identity.adapter.GxgIdentityAdapter"
+    description: "Adds an Ed25519 JWS with caller identity to every upstream tool call"
+    version: "0.1.0"
+    author: "GxG Hub"
+    hooks: ["tool_pre_invoke"]
+    mode: "enforce"
+    priority: 1000   # runs last among tool_pre_invoke plugins
+    conditions: []
+    config:
+      private_key_path: "/run/gxg/missing.pem"   # deliberately broken: adapter cannot load
+      kid: "gxg-adapter-1"
+      issuer: "gxg-identity-adapter"
+      ttl_seconds: 60

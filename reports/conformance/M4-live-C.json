@@ -1,0 +1,147 @@
+{
+  "milestone": "M4",
+  "part": "live spike (local Docker), ADR-0001 protocol, option C prototype",
+  "branch": "claude/m4-live",
+  "previous": "reports/conformance/M4-live.json (option A: NO-GO, criteria 2 and 3 failed)",
+  "commit_note": "Stand, adapter, verifier, scripts and evidence are in the same commit as this report. A commit cannot contain its own SHA.",
+  "run_at": "2026-11-20T19:16:44Z/2026-11-20T19:23:03Z (scripts/run_c.sh, one uninterrupted run)",
+  "post_run_code_changes": "ruff format only (whitespace/line wrapping) on adapter.py, gxg_verify.py, attacks_c.py; redact_jws.py applied to evidence after the run",
+  "author": "Claude Code (local executor, M4 live part)",
+  "adr_and_specs_changed": false,
+  "environment": {
+    "host": "macOS (darwin 25.5.0), arm64, Docker Engine 29.1.3",
+    "contextforge_images": {
+      "v1.1.1": "ghcr.io/ibm/mcp-context-forge@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
+      "v1.1.0": "ghcr.io/ibm/mcp-context-forge@sha256:7eb21fb9a8070df59435c03c76c40d8c71230c55ba89f884f2482d2cc81cff1c"
+    },
+    "postgres_image": "postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94",
+    "echo_runtime": "v1.1.1 image Python (PyJWT 2.15.1, cryptography 50.0.2), code echo/echo_server.py + echo/gxg_verify.py",
+    "contextforge_config": {
+      "IDENTITY_PROPAGATION_ENABLED": "false (option A off, C stands alone)",
+      "PLUGINS_ENABLED": "true",
+      "PLUGINS_CONFIG_FILE": "/app/gxg/plugins.yaml (adapter only)",
+      "PLUGINS_FAIL_ON_PLUGIN_ERROR": "true"
+    },
+    "topology": "same as option A run: 2 teams x 2 agents, per team a plain and an aliased echo gateway, one virtual server with both tools"
+  },
+  "mechanism": {
+    "adapter": "spikes/m4-live/adapter/adapter.py, ContextForge tool_pre_invoke plugin, mode enforce, priority 1000",
+    "inputs": "global_context.user_context (user_id, teams), global_context.metadata['gateway'] (url, team_id), payload.args, payload.name; all set by ContextForge after authentication, not by the agent",
+    "output": "header X-GXG-Identity: compact JWS, alg EdDSA (Ed25519), typ gxg-id+jwt, kid gxg-adapter-1",
+    "claims": {
+      "iss": "gxg-identity-adapter",
+      "aud": "upstream gateway URL as registered in ContextForge",
+      "sub": "ContextForge user_id (email)",
+      "tenant_id": "team_id of the gateway; issued only if the caller token teams == [gateway team]",
+      "iat": "now",
+      "exp": "iat + 60",
+      "jti": "uuid4 hex",
+      "ahs": "sha256 of canonical JSON arguments (sort_keys, separators (',',':'), UTF-8)",
+      "tool": "ContextForge tool name (informational)"
+    },
+    "fail_closed_in_adapter": "no user / no team-owned gateway / team mismatch -> PluginViolation, request not sent; caller-supplied X-GXG-Identity removed before signing",
+    "keys": "private key only mounted into ContextForge (secrets/adapter_ed25519.pem, gitignored); connector has only the public key",
+    "verifier": "spikes/m4-live/echo/gxg_verify.py: exactly one header; alg/typ/kid; signature; iss; aud == own URL; required claims; exp-iat <= 60; leeway 5 s; iat not in future; ahs == hash(received arguments); jti not seen (in-memory until exp). On reject the echo returns JSON-RPC -32001 unauthenticated and does not execute"
+  },
+  "criteria": [
+    {
+      "id": "ADR-0001-1",
+      "text": "Agent cannot influence tenant_id and principal via arguments, headers or _meta",
+      "status": "passed",
+      "evidence": [
+        "results-c-v1.1.1.json and results-c-upgraded.json: 10/10 F-* cases accepted with sub=t-alpha-a1, tenant=t-alpha team, exactly one X-GXG-Identity value at the upstream",
+        "F-own-jws-rpc/-vs: agent sends a real, captured X-GXG-Identity of t-beta-a1 -> upstream sees only the adapter's token for t-alpha-a1",
+        "F-garbage-jws-*: garbage X-GXG-Identity from the agent -> dropped",
+        "F-fwd-headers-*: X-Forwarded-User-* from the agent -> not forwarded (forwarded_user_headers_seen empty)",
+        "F-meta-*: _meta.user and _meta.gxg_identity (a real JWS) from the agent reach the upstream as data inside _meta, the verifier ignores _meta",
+        "F-args-*: tenant_id/agent_id/sub in arguments reach the upstream as data and are covered by ahs; identity unchanged"
+      ]
+    },
+    {
+      "id": "ADR-0001-2",
+      "text": "A request that bypasses ContextForge does not get an identity",
+      "status": "passed",
+      "evidence": [
+        "B-noid -> missing identity",
+        "B-fwd-only (X-Forwarded-User-* only) -> missing identity",
+        "B-alg-none (unsigned token with real claims) -> rejected, bad header",
+        "B-tenant-swap (captured token, tenant_id changed to t-beta, signature kept) -> InvalidSignatureError",
+        "B-other-aud (captured token sent to the t-beta connector URL) -> InvalidAudienceError",
+        "B-other-args (captured token, different arguments) -> arguments hash mismatch"
+      ],
+      "caveat": "Not tested: an attacker who captures a token in flight before it reaches the connector and delivers the same arguments first (race). Within <= 60 s that token is usable exactly once. Mitigation is TLS + network isolation of connectors (SEC-04), not checked here."
+    },
+    {
+      "id": "ADR-0001-3",
+      "text": "Replay of intercepted identity after > 60 s is rejected",
+      "status": "passed",
+      "evidence": [
+        "R-replay-fast: same token and same arguments a few seconds later -> replayed jti",
+        "R-replay-66s: same token and arguments after 66 s -> ExpiredSignatureError",
+        "R-fresh-after: a new legitimate call gets a new jti (jti_differs_from_captured = true)"
+      ],
+      "caveat": "jti cache is in-memory per connector process: a restarted or second replica would accept a token replayed within its 60 s window. Production needs a shared cache (or per-replica aud)."
+    },
+    {
+      "id": "ADR-0001-4",
+      "text": "Identity works on all paths: direct tools, virtual servers, aliases",
+      "status": "passed",
+      "evidence": [
+        "16/16 accepted with the caller's sub and tenant on v1.1.1 fresh, v1.1.0 fresh, and after upgrade: 4 agents x {direct tool /rpc, alias /rpc, virtual server + plain tool, virtual server + aliased tool}"
+      ],
+      "caveat": "Same as option A: global /mcp tools/call with a team-scoped API token is refused by ContextForge RBAC ('Access denied') before plugins run, so not observed. resources/read, prompts/get, direct_proxy mode, A2A not covered by the adapter (only tool_pre_invoke)."
+    },
+    {
+      "id": "ADR-0001-5",
+      "text": "Mechanism survives a ContextForge upgrade (MC-05)",
+      "status": "passed",
+      "scope": "one minor upgrade v1.1.0 -> v1.1.1 in place, same PostgreSQL data, same adapter code and keys",
+      "evidence": [
+        "results-c-v1.1.0.json: paths 16/16 on v1.1.0",
+        "results-c-upgraded.json: after replacing the ContextForge container with v1.1.1 (__version__ = 1.1.1, DB kept) all P/F/B/R cases repeat with the same verdicts"
+      ],
+      "caveat": "Only one upgrade step. The adapter depends on cpex internals (HttpHeaderPayload, GATEWAY_METADATA, ToolPreInvokePayload.headers, which v1.1.1 marks deprecated in favour of extensions.http.headers). Must be re-run on every pinned upgrade; the headers field removal is a known future break."
+    }
+  ],
+  "fail_closed": {
+    "evidence_file": "spikes/m4-live/evidence/failclosed-c.log",
+    "adapter_broken_default_flag": "PLUGINS_FAIL_ON_PLUGIN_ERROR unset/false (ContextForge default): gateway STARTS with 0 plugins ('Skipping plugin GxgIdentityAdapter because fail_on_plugin_error is disabled'); every call reaches the connector without identity and is rejected (8/8 missing identity, results-c-broken-default.json)",
+    "adapter_broken_flag_true": "PLUGINS_FAIL_ON_PLUGIN_ERROR=true: gateway does not start (exit 1, 'Plugin initialization failed: GxgIdentityAdapter')",
+    "plugin_yaml_setting_ignored": "plugin_settings.fail_on_plugin_error in the YAML did not take effect on v1.1.1; only the env var did (observed while building the stand)",
+    "adapter_runtime_error": "observed during development, not in committed evidence: an exception inside the adapter returned 'Plugin Error' to the agent and the call was not sent upstream"
+  },
+  "tenant_isolation_informational": [
+    "X-rpc-beta-tool: Tool not found, not delivered",
+    "X-vs-beta: HTTP 403, not delivered"
+  ],
+  "preliminary_decision": {
+    "option_C": "GO (prototype): all 5 criteria passed on the stand, with the caveats above",
+    "remaining_before_accepting": [
+      "shared jti cache across connector replicas",
+      "cover resources/read and prompts/get (resource_pre_fetch / prompt hooks) or forbid them for connectors",
+      "move to extensions.http.headers before ToolPreInvokePayload.headers is removed",
+      "key rotation (kid set on the connector side), key storage outside the ContextForge container filesystem",
+      "principal: email is mutable; ContextForge does not expose the token sub (UUID) in UserContext.user_id - decide principal format (SEC-01)",
+      "PLUGINS_FAIL_ON_PLUGIN_ERROR=true mandatory in deployment config",
+      "implement IdentityVerifier in gxg-connector-kit from gxg_verify.py, with tests"
+    ]
+  },
+  "not_run_or_not_checked": [
+    "option B",
+    "upgrade across more than one minor version; downgrade",
+    "multi-worker ContextForge / Redis; several connector replicas",
+    "TLS between ContextForge and connector, network isolation",
+    "global /mcp tools/call (RBAC denies team-scoped API tokens)",
+    "resources, prompts, A2A, direct_proxy gateway mode",
+    "duplicate X-GXG-Identity headers on the wire (verifier rejects them, but urllib cannot send two headers; not exercised live)",
+    "performance cost of signing per call"
+  ],
+  "artifacts": [
+    "spikes/m4-live/adapter/{adapter.py,plugins.yaml,plugins-broken.yaml}",
+    "spikes/m4-live/compose.c.yaml, compose.c-broken.yaml",
+    "spikes/m4-live/echo/{echo_server.py,gxg_verify.py}",
+    "spikes/m4-live/scripts/{gen-keys.sh,attacks_c.py,run_c.sh,redact_jws.py}",
+    "spikes/m4-live/evidence/{results-c-v1.1.1.json,results-c-v1.1.0.json,results-c-upgraded.json,results-c-broken-default.json,echo-c.jsonl,failclosed-c.log}"
+  ],
+  "secrets_scan": "evidence/* grepped for every .env value and 'PRIVATE KEY': no matches. JWS values in evidence replaced by <jws sha256=...>; raw tokens only in evidence/raw/ (gitignored)"
+}

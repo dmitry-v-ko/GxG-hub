@@ -1,0 +1,8 @@
+# Fail-closed check only (scripts/run_c.sh): adapter config points at a missing key.
+services:
+  contextforge:
+    environment:
+      PLUGINS_CONFIG_FILE: ${PLUGINS_CONFIG:-/app/gxg/plugins-broken.yaml}
+      PLUGINS_FAIL_ON_PLUGIN_ERROR: ${FAIL_FLAG:-false}
+    volumes:
+      - ./adapter/plugins-broken.yaml:/app/gxg/plugins-broken.yaml:ro

@@ -1,17 +1,27 @@
-"""Echo MCP server (streamable HTTP, JSON responses, stdlib only).
+"""Echo MCP server (streamable HTTP, JSON responses).
 
-Logs every request's headers and JSON-RPC body (incl. params._meta) to
-/evidence/echo.jsonl. Authorization/Cookie values are redacted. It trusts
-nothing and verifies nothing: verification is done offline by verify.py.
+Logs every request's headers and JSON-RPC body (incl. params._meta) to $ECHO_LOG.
+Authorization/Cookie values are redacted. Option A is verified offline by attacks.py.
+With GXG_PUBKEY set, tools/call also runs the option C verifier (gxg_verify.py) online,
+logs its verdict, and keeps raw X-GXG-Identity values only in $ECHO_RAW (gitignored).
 """
 
+import hashlib
 import json
 import os
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = os.environ.get("ECHO_LOG", "/evidence/echo.jsonl")
+RAW = os.environ.get("ECHO_RAW", "/evidence/raw/jws.jsonl")
 REDACT = {"authorization", "cookie", "proxy-authorization"}
+ID_HEADER = "x-gxg-identity"
+VERIFIER = None
+if os.environ.get("GXG_PUBKEY"):
+    from gxg_verify import Verifier
+
+    with open(os.environ["GXG_PUBKEY"], "rb") as f:
+        VERIFIER = Verifier(f.read())
 TOOLS = [
     {
         "name": "echo",
@@ -21,9 +31,13 @@ TOOLS = [
 ]
 
 
-def log(entry):
-    with open(LOG, "a") as f:
+def log(entry, path=LOG):
+    with open(path, "a") as f:
         f.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def short(token):
+    return f"<jws sha256={hashlib.sha256(token.encode()).hexdigest()[:16]}>"
 
 
 class H(BaseHTTPRequestHandler):
@@ -49,11 +63,21 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
         headers = {k.lower(): ("<redacted>" if k.lower() in REDACT else v) for k, v in self.headers.items()}
+        id_values = self.headers.get_all(ID_HEADER) or []
+        if id_values:
+            headers[ID_HEADER] = [short(v) for v in id_values]
         try:
             msg = json.loads(raw or b"{}")
         except ValueError:
             msg = {"_unparsed": raw.decode(errors="replace")}
-        log({"ts": time.time(), "peer": self.client_address[0], "path": self.path, "headers": headers, "body": msg})
+        entry = {"ts": time.time(), "peer": self.client_address[0], "path": self.path, "headers": headers, "body": msg}
+        if VERIFIER and isinstance(msg, dict) and msg.get("method") == "tools/call":
+            args = (msg.get("params") or {}).get("arguments")
+            ok, res = VERIFIER.verify(id_values, args, audience=f"http://echo:9100{self.path}")
+            entry["gxg_verdict"] = {"accepted": ok, "result": res}
+            if id_values:
+                log({"ts": entry["ts"], "path": self.path, "arguments": args, "values": id_values}, RAW)
+        log(entry)
         if isinstance(msg, list) or "id" not in msg:  # notifications / batches
             return self._send(202)
         method, params, rid = msg.get("method"), msg.get("params") or {}, msg["id"]
@@ -66,8 +90,13 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"jsonrpc": "2.0", "id": rid, "result": result}, {"Mcp-Session-Id": "echo-session"})
         if method == "tools/list":
             return self._send(200, {"jsonrpc": "2.0", "id": rid, "result": {"tools": TOOLS}})
+        if method == "tools/call" and VERIFIER and not entry["gxg_verdict"]["accepted"]:
+            # what a real connector does: unauthenticated, no tool execution
+            err = {"code": -32001, "message": "unauthenticated", "data": {"reason": entry["gxg_verdict"]["result"]}}
+            return self._send(200, {"jsonrpc": "2.0", "id": rid, "error": err})
         if method == "tools/call":
             seen = {
+                "gxg_verdict": entry.get("gxg_verdict"),
                 "x_forwarded_user": {k: v for k, v in headers.items() if k.startswith("x-forwarded-user")},
                 "meta": params.get("_meta"),
                 "arguments": params.get("arguments"),

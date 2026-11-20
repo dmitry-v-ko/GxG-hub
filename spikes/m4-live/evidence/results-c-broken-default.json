@@ -1,0 +1,442 @@
+[
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool via /rpc",
+    "echo_arguments": {
+      "text": "c-broken-default-P-direct-rpc-t-alpha-a1-84fddb8b"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-direct-rpc-t-alpha-a1",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-direct-rpc-t-alpha-a1-84fddb8b",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a1",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp",
+    "expect": "accepted, sub/tenant = caller",
+    "id": "P-direct-mcp-t-alpha-a1",
+    "nonce": "c-broken-default-P-direct-mcp-t-alpha-a1-6fcae1c8"
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias via /rpc",
+    "echo_arguments": {
+      "text": "c-broken-default-P-alias-rpc-t-alpha-a1-92be3e85"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-alias-rpc-t-alpha-a1",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-alias-rpc-t-alpha-a1-92be3e85",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, plain tool",
+    "echo_arguments": {
+      "text": "c-broken-default-P-vs-direct-t-alpha-a1-dd33923e"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-direct-t-alpha-a1",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-vs-direct-t-alpha-a1-dd33923e",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "c-broken-default-P-vs-alias-t-alpha-a1-ca635e72"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-alias-t-alpha-a1",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-vs-alias-t-alpha-a1-ca635e72",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool via /rpc",
+    "echo_arguments": {
+      "text": "c-broken-default-P-direct-rpc-t-alpha-a2-9242fdaf"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-direct-rpc-t-alpha-a2",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-direct-rpc-t-alpha-a2-9242fdaf",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a2",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp",
+    "expect": "accepted, sub/tenant = caller",
+    "id": "P-direct-mcp-t-alpha-a2",
+    "nonce": "c-broken-default-P-direct-mcp-t-alpha-a2-3f002ddb"
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias via /rpc",
+    "echo_arguments": {
+      "text": "c-broken-default-P-alias-rpc-t-alpha-a2-03faeeac"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-alias-rpc-t-alpha-a2",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-alias-rpc-t-alpha-a2-03faeeac",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, plain tool",
+    "echo_arguments": {
+      "text": "c-broken-default-P-vs-direct-t-alpha-a2-aebd3dbd"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-direct-t-alpha-a2",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-vs-direct-t-alpha-a2-aebd3dbd",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-alpha-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "c-broken-default-P-vs-alias-t-alpha-a2-f7b2ebb8"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-alpha/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-alias-t-alpha-a2",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-vs-alias-t-alpha-a2-f7b2ebb8",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool via /rpc",
+    "echo_arguments": {
+      "text": "c-broken-default-P-direct-rpc-t-beta-a1-cadfbf6a"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-direct-rpc-t-beta-a1",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-direct-rpc-t-beta-a1-cadfbf6a",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a1",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp",
+    "expect": "accepted, sub/tenant = caller",
+    "id": "P-direct-mcp-t-beta-a1",
+    "nonce": "c-broken-default-P-direct-mcp-t-beta-a1-7f13024c"
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias via /rpc",
+    "echo_arguments": {
+      "text": "c-broken-default-P-alias-rpc-t-beta-a1-7d524555"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-alias-rpc-t-beta-a1",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-alias-rpc-t-beta-a1-7d524555",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, plain tool",
+    "echo_arguments": {
+      "text": "c-broken-default-P-vs-direct-t-beta-a1-13a1489a"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-direct-t-beta-a1",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-vs-direct-t-beta-a1-13a1489a",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a1",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "c-broken-default-P-vs-alias-t-beta-a1-6485da0b"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-beta/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-alias-t-beta-a1",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-vs-alias-t-beta-a1-6485da0b",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "direct tool via /rpc",
+    "echo_arguments": {
+      "text": "c-broken-default-P-direct-rpc-t-beta-a2-ca857270"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-direct-rpc-t-beta-a2",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-direct-rpc-t-beta-a2-ca857270",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a2",
+    "cf_error": {
+      "code": 0,
+      "message": "Access denied"
+    },
+    "cf_status": 200,
+    "delivered_to_echo": false,
+    "desc": "direct tool via global /mcp",
+    "expect": "accepted, sub/tenant = caller",
+    "id": "P-direct-mcp-t-beta-a2",
+    "nonce": "c-broken-default-P-direct-mcp-t-beta-a2-937e5ed6"
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "alias via /rpc",
+    "echo_arguments": {
+      "text": "c-broken-default-P-alias-rpc-t-beta-a2-eb77bc2c"
+    },
+    "echo_meta": null,
+    "echo_path": "/t-beta/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-alias-rpc-t-beta-a2",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-alias-rpc-t-beta-a2-eb77bc2c",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, plain tool",
+    "echo_arguments": {
+      "text": "c-broken-default-P-vs-direct-t-beta-a2-3a581c36"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-beta/direct/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-direct-t-beta-a2",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-vs-direct-t-beta-a2-3a581c36",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  },
+  {
+    "accepted_identity": null,
+    "agent": "t-beta-a2",
+    "cf_error": null,
+    "cf_status": 200,
+    "delivered_to_echo": true,
+    "desc": "virtual server, aliased tool",
+    "echo_arguments": {
+      "text": "c-broken-default-P-vs-alias-t-beta-a2-56d46b22"
+    },
+    "echo_meta": {
+      "progressToken": 3
+    },
+    "echo_path": "/t-beta/alias/mcp",
+    "echo_peer": "172.22.0.4",
+    "expect": "accepted, sub/tenant = caller",
+    "forwarded_user_headers_seen": {},
+    "id": "P-vs-alias-t-beta-a2",
+    "identity_headers_seen": null,
+    "nonce": "c-broken-default-P-vs-alias-t-beta-a2-56d46b22",
+    "verdict": {
+      "accepted": false,
+      "result": "missing identity"
+    }
+  }
+]

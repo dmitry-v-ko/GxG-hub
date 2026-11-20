@@ -1,0 +1,27 @@
+# Option C overlay: docker compose -f compose.yaml -f compose.c.yaml up -d
+# Turns option A off and loads the GxG identity adapter plugin; echo verifies the JWS online.
+services:
+  contextforge:
+    environment:
+      IDENTITY_PROPAGATION_ENABLED: "false"
+      IDENTITY_SIGN_CLAIMS: "false"
+      PLUGINS_ENABLED: "true"
+      PLUGINS_CONFIG_FILE: "/app/gxg/plugins.yaml"
+      # Fail closed if the adapter cannot load. Default false = gateway starts without it (observed).
+      PLUGINS_FAIL_ON_PLUGIN_ERROR: "true"
+    volumes:
+      - ./adapter:/app/plugins/gxg_identity:ro
+      - ./adapter/plugins.yaml:/app/gxg/plugins.yaml:ro
+      - ./secrets/adapter_ed25519.pem:/run/gxg/adapter_ed25519.pem:ro   # private key: ContextForge only
+
+  echo:
+    # v1.1.1 image used only for its Python + PyJWT + cryptography; fixed so CONTEXTFORGE_IMAGE upgrades don't touch it
+    image: ghcr.io/ibm/mcp-context-forge@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5
+    entrypoint: ["/app/.venv/bin/python", "-u", "/srv/echo_server.py"]
+    command: []
+    environment:
+      GXG_PUBKEY: /run/gxg/adapter_ed25519.pub.pem
+      ECHO_LOG: /evidence/echo-c.jsonl
+      ECHO_RAW: /evidence/raw/jws.jsonl
+    volumes:
+      - ./secrets/adapter_ed25519.pub.pem:/run/gxg/adapter_ed25519.pub.pem:ro

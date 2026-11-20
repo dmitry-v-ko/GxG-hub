@@ -4,7 +4,7 @@
   "branch": "claude/m4-live",
   "base": "origin/claude/m0-foundation",
   "commit_note": "Tested stand and scripts are in the same commit as this report (spikes/m4-live/). SHA is reported in the commit/PR, a commit cannot contain its own SHA.",
-  "run_at": "2026-11-20T18:53:44Z",
+  "run_at": "2026-11-20T19:27:19Z",
   "author": "Claude Code (local executor, M4 live part)",
   "adr_and_specs_changed": false,
   "environment": {

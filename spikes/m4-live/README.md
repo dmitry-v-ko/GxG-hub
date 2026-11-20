@@ -27,3 +27,22 @@ docker compose down
 | `scripts/setup.py` | creates teams, agents (users + team-scoped API tokens), gateways, alias (`custom_name`), virtual servers |
 | `scripts/attacks.py` | runs every case, correlates by nonce with the echo log, applies the best option-A verifier (`HMAC(id:email)` + single team) |
 | `evidence/` | raw echo log, per-case results, ContextForge denial log lines |
+
+## Option C prototype (identity adapter plugin)
+
+Results: [`reports/conformance/M4-live-C.json`](../../reports/conformance/M4-live-C.json).
+
+```bash
+cd spikes/m4-live
+./scripts/gen-env.sh && ./scripts/gen-keys.sh   # Ed25519 pair -> secrets/ (gitignored)
+./scripts/run_c.sh                              # fresh v1.1.1, fresh v1.1.0 -> upgrade, fail-closed checks
+```
+
+| Path | What |
+| --- | --- |
+| `compose.c.yaml` | overlay: option A off, adapter plugin on (`PLUGINS_FAIL_ON_PLUGIN_ERROR=true`), echo verifies online |
+| `adapter/adapter.py` | `tool_pre_invoke` plugin: adds `X-GXG-Identity` (EdDSA JWS: iss, aud, sub, tenant_id, iat, exp 60 s, jti, ahs) |
+| `echo/gxg_verify.py` | connector-side verifier (prototype of `IdentityVerifier`) |
+| `scripts/attacks_c.py` | paths, forgery, bypass, replay against option C; `evidence/results-c-<label>.json` |
+| `compose.c-broken.yaml`, `adapter/plugins-broken.yaml` | adapter that cannot load, for the fail-closed check |
+| `scripts/redact_jws.py` | replaces JWS values in committed evidence; raw tokens stay in `evidence/raw/` (gitignored) |
