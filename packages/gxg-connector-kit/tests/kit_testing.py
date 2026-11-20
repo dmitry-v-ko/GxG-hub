@@ -17,6 +17,11 @@ T0 = 1_800_000_000  # 2027-01-15T08:00:00Z, before the example grant expires (20
 BUNDLE_KID = "ci-2026-11"
 
 
+def format_public_key(key: Ed25519PublicKey) -> str:
+    """Platform registry format `ed25519:<base64url>` (the registry is built by M2, not by the kit)."""
+    return "ed25519:" + _jwt.b64url_encode(_jwt.raw_public_key(key))
+
+
 class Clock:
     def __init__(self, t: float = T0) -> None:
         self.t = t
@@ -48,7 +53,7 @@ class BundleKit:
         registry = load_yaml("policies/platform/registry.example.yaml")
         for s in registry["services"]:  # replace synthetic keys with real ones we can sign with
             self.service_keys[s["id"]] = Ed25519PrivateKey.generate()
-            s["public_key"] = _jwt.format_public_key(self.service_keys[s["id"]].public_key())
+            s["public_key"] = format_public_key(self.service_keys[s["id"]].public_key())
         self.platform: dict[str, Any] = registry
         self.tenants: dict[str, Any] = {
             "t-alpha": {

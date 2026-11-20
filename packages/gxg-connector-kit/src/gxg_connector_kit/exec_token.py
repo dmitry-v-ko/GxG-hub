@@ -20,6 +20,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from . import _jwt
 from ._jwt import Clock, JtiCache, TokenError
+from .readiness import Readiness
 
 TYP = "gxg-exec+jwt"
 ISSUER = "gxg-executor"
@@ -70,7 +71,7 @@ class ExecutorJwks:
         self._fetched_at: float | None = None
         self._lock = threading.Lock()
 
-    def key(self, kid: str) -> Ed25519PublicKey:
+    def _current(self) -> dict[str, Ed25519PublicKey]:
         with self._lock:
             t = self._now()
             if self._fetched_at is None or t - self._fetched_at >= self._max_age_s:
@@ -80,10 +81,19 @@ class ExecutorJwks:
                 except Exception:  # transport or format error: drop the stale keys
                     self._keys = {}
                     self._fetched_at = None
-            found = self._keys.get(kid)
+            return self._keys
+
+    def key(self, kid: str) -> Ed25519PublicKey:
+        found = self._current().get(kid)
         if found is None:
             raise TokenError("kid")
         return found
+
+    def readiness(self) -> Readiness:
+        """MCC-09: not ready while no executor key can be loaded. Refetches only when the cache is stale."""
+        if not self._current():
+            return Readiness(False, ("executor JWKS is unreachable or has no Ed25519 key",))
+        return Readiness(True)
 
 
 class ExecTokenVerifier:

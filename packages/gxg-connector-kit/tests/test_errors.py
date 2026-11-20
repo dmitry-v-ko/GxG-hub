@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import jsonschema
 import pytest
@@ -56,3 +57,28 @@ def test_outcome_unknown_is_never_retryable() -> None:
 def test_unknown_code_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown error code"):
         GxgError("forbidden", "x")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"retry_after_s": -1},
+        {"retry_after_s": 86401},
+        {"retry_after_s": 1.5},
+        {"retry_after_s": True},
+        {"request_id": ""},
+        {"request_id": "r" * 257},
+        {"details": {f"k{i}": i for i in range(21)}},
+    ],
+)
+def test_values_outside_the_schema_are_rejected(kw: dict[str, Any]) -> None:
+    with pytest.raises(ValueError):
+        GxgError("rate_limited", "x", **kw)
+
+
+def test_schema_bounds_are_accepted() -> None:
+    for kw in (
+        {"retry_after_s": 0, "request_id": "r"},
+        {"retry_after_s": 86400, "request_id": "r" * 256, "details": {f"k{i}": i for i in range(20)}},
+    ):
+        jsonschema.validate(GxgError("rate_limited", "x", **kw).to_dict(), SCHEMA)  # type: ignore[arg-type]

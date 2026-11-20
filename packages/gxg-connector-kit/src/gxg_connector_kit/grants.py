@@ -30,8 +30,8 @@ from .svc_jwt import Service, parse_registry
 Action = Literal["read", "collect", "write", "propose"]
 MAX_BUNDLE_AGE_S = 24 * 3600  # GR-13
 
-_RID = re.compile(r"^([a-z][a-z0-9_]*):([a-z0-9][a-z0-9_-]*)/([a-z][a-z0-9_]*)/([^/*\s]+)$")
-_MASK = re.compile(r"^([a-z][a-z0-9_]*):([a-z0-9][a-z0-9_-]*)/([a-z][a-z0-9_]*)/\*$")
+_RID = re.compile(r"([a-z][a-z0-9_]*):([a-z0-9][a-z0-9_-]*)/([a-z][a-z0-9_]*)/([^/*\s]+)")
+_MASK = re.compile(r"([a-z][a-z0-9_]*):([a-z0-9][a-z0-9_-]*)/([a-z][a-z0-9_]*)/\*")
 
 
 @dataclass(frozen=True)
@@ -116,9 +116,9 @@ def parse_tenant(doc: Mapping[str, Any]) -> TenantGrants:
             subjects.update(groups.get(s[len("group:") :], []) if s.startswith("group:") else [s])
         exact, masks = set(), set()
         for r in g["resources"]:
-            if _RID.match(r):
+            if _RID.fullmatch(r):
                 exact.add(r)
-            elif m := _MASK.match(r):
+            elif m := _MASK.fullmatch(r):
                 masks.add((m[1], m[2], m[3]))
             else:
                 raise ValueError(f"grant {g['id']!r}: resource is neither a RID nor a type mask (GR-04)")
@@ -220,6 +220,10 @@ class BundleStore:
         except BundleError as exc:
             self._last_error = str(exc)
             raise
+        if bundle.built_at.timestamp() > self._now() + _jwt.SKEW_S:
+            # A future built_at would block every later bundle as a rollback and never go stale.
+            self._last_error = "bundle: built_at is in the future"
+            raise BundleError(self._last_error)
         with self._lock:
             if self._bundle is not None and bundle.built_at < self._bundle.built_at:
                 self._last_error = "bundle: older than the loaded bundle (rollback)"
@@ -269,7 +273,7 @@ class BundleStore:
 
     def check(self, tenant: str, principal: str, action: Action, rid: str) -> Decision:
         found = self._candidates(tenant, principal, action)
-        m = _RID.match(rid)
+        m = _RID.fullmatch(rid)
         if found is None or m is None:
             return DENY
         t, live = found

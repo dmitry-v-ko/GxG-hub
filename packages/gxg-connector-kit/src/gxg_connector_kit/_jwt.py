@@ -82,10 +82,6 @@ def parse_public_key(value: str) -> Ed25519PublicKey:
     return Ed25519PublicKey.from_public_bytes(raw)
 
 
-def format_public_key(key: Ed25519PublicKey) -> str:
-    return "ed25519:" + b64url_encode(raw_public_key(key))
-
-
 def thumbprint(key: Ed25519PublicKey) -> str:
     """RFC 7638 JWK thumbprint (SHA-256, base64url) of an Ed25519 key."""
     jwk = json.dumps({"crv": "Ed25519", "kty": "OKP", "x": b64url_encode(raw_public_key(key))}, separators=(",", ":"))

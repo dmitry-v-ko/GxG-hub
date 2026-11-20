@@ -25,6 +25,9 @@ ERROR_CODES: frozenset[str] = frozenset(get_args(ErrorCode))
 # `read` and only in a limited way, so the caller opts in explicitly.
 _RETRYABLE_BY_DEFAULT: frozenset[str] = frozenset({"rate_limited", "temporarily_unavailable", "timeout_before_start"})
 _MESSAGE_MAX = 500
+_RETRY_AFTER_MAX_S = 86400
+_DETAILS_MAX_KEYS = 20
+_REQUEST_ID_MAX = 256
 
 
 class GxgError(Exception):
@@ -46,6 +49,17 @@ class GxgError(Exception):
             retryable = code in _RETRYABLE_BY_DEFAULT
         if code == "outcome_unknown" and retryable:
             raise ValueError("outcome_unknown is never retryable (MCC-05)")
+        # Bounds of error.schema.json, so to_dict() is always a valid body.
+        if retry_after_s is not None and (
+            not isinstance(retry_after_s, int)
+            or isinstance(retry_after_s, bool)
+            or not 0 <= retry_after_s <= _RETRY_AFTER_MAX_S
+        ):
+            raise ValueError("retry_after_s must be an integer in [0, 86400]")
+        if request_id is not None and not 1 <= len(request_id) <= _REQUEST_ID_MAX:
+            raise ValueError("request_id must be 1..256 characters")
+        if details is not None and len(details) > _DETAILS_MAX_KEYS:
+            raise ValueError("details may have at most 20 keys")
         super().__init__(message)
         self.code: ErrorCode = code
         self.message = message[:_MESSAGE_MAX]

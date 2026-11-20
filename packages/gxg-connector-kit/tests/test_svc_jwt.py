@@ -61,8 +61,17 @@ def test_executor_serves_every_tenant(registry: dict[str, Service]) -> None:
     assert registry["executor"].serves("t-anything")
 
 
-@pytest.mark.parametrize("over", [{"iat": T0 - 64, "exp": T0 - 4}, {"iat": T0 + 4, "exp": T0 + 64}])
-def test_clock_skew_of_4s_is_accepted(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier, over: Any) -> None:
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"iat": T0 - 64, "exp": T0 - 4},
+        {"iat": T0 + 4, "exp": T0 + 64},
+        {"iat": T0 - 65, "exp": T0 - 5},  # AS-11 boundary: exactly 5 s
+        {"iat": T0 + 5, "exp": T0 + 65},
+    ],
+    ids=["exp_4s_past", "iat_4s_future", "exp_5s_past", "iat_5s_future"],
+)
+def test_clock_skew_up_to_5s_is_accepted(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier, over: Any) -> None:
     assert verifier.verify(jws(demo_key, header(demo_key), claims(**over)), allowed_issuers=CALLERS).id == "demo"
 
 
@@ -119,6 +128,29 @@ def test_replayed_jti(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier) -> 
     token = jws(demo_key, header(demo_key), claims())
     verifier.verify(token, allowed_issuers=CALLERS)
     assert reason(verifier, token) == "replay"
+
+
+@pytest.mark.parametrize("later", [30, 55], ids=["T0+30", "exp+5"])
+def test_replayed_jti_later_while_token_is_valid(
+    demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier, clock: Clock, later: int
+) -> None:
+    # exp = T0 + 50: at exp + 5 the token still passes every other check, only the cache rejects it.
+    token = jws(demo_key, header(demo_key), claims())
+    verifier.verify(token, allowed_issuers=CALLERS)
+    clock.t = T0 + later
+    assert reason(verifier, token) == "replay"
+
+
+def test_same_jti_from_two_issuers_is_not_a_replay(bundle_kit: BundleKit, verifier: SvcJwtVerifier) -> None:
+    # jti is unique per issuer; another service's token must not burn it.
+    other = bundle_kit.service_keys["approval-mcp"]
+    callers = frozenset({"demo", "approval-mcp"})
+    demo = bundle_kit.service_keys["demo"]
+    assert verifier.verify(jws(demo, header(demo), claims()), allowed_issuers=callers).id == "demo"
+    assert (
+        verifier.verify(jws(other, header(other), claims(iss="approval-mcp")), allowed_issuers=callers).id
+        == "approval-mcp"
+    )
 
 
 def test_wrong_typ(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier) -> None:

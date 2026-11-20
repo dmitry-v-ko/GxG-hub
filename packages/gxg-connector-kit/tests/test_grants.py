@@ -79,6 +79,8 @@ TABLE: list[tuple[str, str, str, str, str | None]] = [
     ("t-beta", SPY, "write", "kb:kb-b/collection/w", "b-lint-bypass"),
     ("t-beta", SPY, "write", "kb:kb-ghost/collection/x", None),  # undeclared connection (GR-02)
     ("t-beta", SPY, "write", "telegram:kb-b/collection/x", None),  # domain ≠ connection domain
+    ("t-beta", SPY, "read", "kb:kb-b/collection/x\n", None),  # trailing newline is not a RID
+    ("t-alpha", HERMES, "read", "kb:kb-main/collection/public\n", None),
 ]
 
 
@@ -279,6 +281,25 @@ def test_loaded_bundle_goes_stale(store: BundleStore, clock: Clock) -> None:
 
 
 # --- reload ------------------------------------------------------------------------------
+
+
+def test_bundle_from_the_future_is_rejected_and_does_not_block_the_next(kit: BundleKit, clock: Clock) -> None:
+    store = BundleStore(kit.keys, now=clock)
+    with pytest.raises(BundleError, match="future"):
+        store.load(*kit.signed(built_at=T0 + 6, version="f" * 40))
+    assert not store.readiness().ready
+    assert "future" in store.readiness().reasons[0]
+    store.load(*kit.signed(built_at=T0 + 5))  # AS-11 skew is tolerated
+    clock.t = T0 + 10
+    store.load(*kit.signed(built_at=T0 + 10, version="b" * 40))
+    assert store.version == "b" * 40
+    assert store.readiness().ready
+
+
+def test_reload_with_the_same_built_at_is_accepted(kit: BundleKit, store: BundleStore) -> None:
+    # GR-13a rejects only an older built_at; a restart or poll may load the same bundle again.
+    store.load(*kit.signed(version="c" * 40))
+    assert store.version == "c" * 40
 
 
 def test_failed_reload_keeps_previous_bundle(kit: BundleKit, store: BundleStore) -> None:

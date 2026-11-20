@@ -90,10 +90,15 @@ def test_valid_token_is_accepted(executor: Executor, verifier: ExecTokenVerifier
 
 @pytest.mark.parametrize(
     ("over", "t"),
-    [({"iat": T0 - 64, "exp": T0 - 4}, T0), ({"iat": T0 + 4, "exp": T0 + 64}, T0)],
-    ids=["exp_4s_past", "iat_4s_future"],
+    [
+        ({"iat": T0 - 64, "exp": T0 - 4}, T0),
+        ({"iat": T0 + 4, "exp": T0 + 64}, T0),
+        ({"iat": T0 - 65, "exp": T0 - 5}, T0),  # AS-11 boundary: exactly 5 s
+        ({"iat": T0 + 5, "exp": T0 + 65}, T0),
+    ],
+    ids=["exp_4s_past", "iat_4s_future", "exp_5s_past", "iat_5s_future"],
 )
-def test_clock_skew_of_4s_is_accepted(
+def test_clock_skew_up_to_5s_is_accepted(
     executor: Executor, verifier: ExecTokenVerifier, clock: Clock, over: dict[str, int], t: int
 ) -> None:
     clock.t = t
@@ -177,6 +182,17 @@ def test_replayed_jti(executor: Executor, verifier: ExecTokenVerifier) -> None:
     assert reason(verifier, jws(executor.key, HEADER, claims(iat=T0 - 9))) == "replay"
 
 
+@pytest.mark.parametrize("later", [30, 55], ids=["T0+30", "exp+5"])
+def test_replayed_jti_later_while_token_is_valid(
+    executor: Executor, verifier: ExecTokenVerifier, clock: Clock, later: int
+) -> None:
+    # exp = T0 + 50: at exp + 5 the token still passes every other check, only the cache rejects it.
+    token = jws(executor.key, HEADER, claims())
+    verifier.verify(token)
+    clock.t = T0 + later
+    assert reason(verifier, token) == "replay"
+
+
 def test_rejected_token_does_not_burn_its_jti(executor: Executor, verifier: ExecTokenVerifier) -> None:
     reason(verifier, jws(executor.key, HEADER, claims(aud="other")))
     assert verifier.verify(jws(executor.key, HEADER, claims()))["jti"] == "exe_01"
@@ -194,6 +210,10 @@ def test_lifetime_over_60s_or_not_positive(executor: Executor, verifier: ExecTok
 @pytest.mark.parametrize("token", ["", "abc", "a.b.c", "x" * 9000])
 def test_malformed(verifier: ExecTokenVerifier, token: str) -> None:
     assert reason(verifier, token) == "malformed"
+
+
+def test_oversized_signed_token_is_malformed(executor: Executor, verifier: ExecTokenVerifier) -> None:
+    assert reason(verifier, jws(executor.key, HEADER, claims(pad="x" * 8192))) == "malformed"
 
 
 # --- JWKS cache (AS-09, AS-10) ------------------------------------------------------------
@@ -244,7 +264,8 @@ def test_failed_refresh_trusts_no_key(executor: Executor, verifier: ExecTokenVer
 
 def test_parse_jwks_ignores_other_key_types_and_rejects_malformed_ed25519() -> None:
     key = Ed25519PrivateKey.generate()
-    doc = {"keys": [{"kty": "RSA", "kid": "r", "n": "x", "e": "AQAB"}, jwk("ok", key)]}
+    x25519 = {**jwk("x", key), "crv": "X25519"}  # OKP, but not a signing key
+    doc = {"keys": [{"kty": "RSA", "kid": "r", "n": "x", "e": "AQAB"}, x25519, jwk("ok", key)]}
     assert set(parse_jwks(json.dumps(doc).encode())) == {"ok"}
     for bad in ({**jwk("b", key), "x": "AAAA"}, {**jwk("b", key), "kid": ""}, {**jwk("b", key), "x": "a+b/"}):
         with pytest.raises(ValueError):
@@ -254,6 +275,24 @@ def test_parse_jwks_ignores_other_key_types_and_rejects_malformed_ed25519() -> N
 def test_malformed_jwks_means_no_keys(executor: Executor, clock: Clock) -> None:
     v = ExecTokenVerifier(CONNECTOR, ExecutorJwks(lambda: b"not json", now=clock), now=clock)
     assert reason(v, jws(executor.key, HEADER, claims())) == "kid"
+
+
+def test_jwks_readiness(executor: Executor, clock: Clock) -> None:
+    jwks = ExecutorJwks(executor.fetch, now=clock)
+    assert jwks.readiness().ready
+    executor.fail = True
+    clock.t = T0 + 599  # cached keys still fresh
+    assert jwks.readiness().ready
+    clock.t = T0 + 600
+    r = jwks.readiness()
+    assert not r.ready
+    assert "JWKS" in r.reasons[0]
+    executor.fail = False
+    executor.jwks = []  # reachable but no Ed25519 key
+    assert not jwks.readiness().ready
+    executor.jwks = [jwk(KID, executor.key)]
+    clock.t = T0 + 1200  # the empty JWKS is cached like any other
+    assert jwks.readiness().ready
 
 
 def test_jti_cache_forgets_expired_entries() -> None:
