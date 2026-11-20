@@ -64,7 +64,7 @@
       "ref": "AC-M2-04, GR-10 (cycle-1 F2)",
       "where": "scripts/ci/widening_gate.py:126-150 (head_arrival uses the earliest run; stale compares only with the latest force-push)",
       "problem": "PR head B (widening) runs at 09:00; force-push to A at 09:30; owner labels A at 10:00; agent fast-forwards A -> B at 11:00 (no force-push event). Earliest run for B = 09:00 < label, last force-push 09:30 < label -> not stale, gate green on B with a label set on A. Reproduced with tests/ci FakeApi. Also: fork PR runs have empty pull_requests and pass the 'this PR' filter by branch name only.",
-      "required_improvement": "Arrival = earliest run for head SHA created after the latest head_ref_force_pushed event; also require head_repository.id == pr.head.repo.id; add the A/B/A/B test (must be red) and a mutation for it."
+      "required_improvement": "Arrival = earliest run for head SHA created after the latest head_ref_force_pushed event; also require head_repository.id == pr.head.repo.id; add the A/B/A/B test (must be red) and make sure mutmut kills mutants of stale()."
     },
     {
       "severity": "major",
@@ -90,7 +90,7 @@
   ],
   "required_improvements": [
     "Base change: pull_request diff is against main (merge-base of refs/remotes/origin/main and the PR head), not the event base; `edited` added to pull_request types; test with a non-main base -> red.",
-    "F2 remainder: head arrival counts only runs created after the latest force-push; runs from another head repository ignored; A/B/A/B fast-forward test red; mutation added to mutate_m2.py.",
+    "F2 remainder: head arrival counts only runs created after the latest force-push; runs from another head repository ignored; A/B/A/B fast-forward test red; the case killed under mutmut.",
     "Tag shadowing: refs/remotes/origin/main in grants_widening.sh; test with a tag named origin/main -> red.",
     "DoD-4 (new): replace the Python part of mutate_m2.py with mutmut on gxg_policy diff/lint/bundle/load and widening_gate.py; mutmut report attached, no surviving non-equivalent mutants; custom mutation check kept only for grants_widening.sh/ci.yml with the reason in the plan.",
     "docs/setup/widening-approval.md: remove the false claim or make it true; owner checklist extended with the three cases and both orders of same-name ci-ok; conformance report lists them under owner_pending/proven_by_tests."
@@ -99,7 +99,7 @@
   "lean_lines": 0,
   "notes": [
     "Closed from cycle 1: F1 (plain push/dispatch red), F3, F4 (39/39 mutations reproduced), --built-at, MARKER, GR-13a (schedule 41 */6, bundle on schedule on main, docs, tests). F2 closed for the named cases, open for finding 2. F5 done but see the docs finding.",
-    "ci-ok on fbd522a (run 44797618586, push) is red by design: widening vs main outside a PR. Not counted as a separate DoD cap; DoD-1 (main via PR, CI green) is owner-pending. The score cap comes from ac_failed/critical.",
+    "ci-ok on fbd522a (run 44797618586, push) is red by design: widening vs main outside a PR; not counted as a DoD violation (DoD-1, main via PR, is owner-pending). The `dod` cap comes from the new DoD-4 (mutmut) finding.",
     "Re-run: clean clone, UV_CACHE_DIR empty, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1, uv 0.11.32: pytest 202 passed, 136 subtests, 0 skipped; check-all OK.",
     "Not checked: which of two same-name ci-ok checks on one SHA branch protection counts (needs a real PR).",
     "Owner decisions relayed by the orchestrator after the first version of this report (existing-solutions check, mutmut as DoD-4) were checked against docs/implementation-plan-v1.md on claude/admiring-planck-vzys0x (892d570, ae5902e) and applied here. Score unchanged 5.0. mutmut itself was not run in this review."
