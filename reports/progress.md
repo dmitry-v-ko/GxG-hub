@@ -45,3 +45,7 @@
 | — | — | решение владельца | — | — | — | gitleaks вместо своего сканера, mutmut вместо самописных мутаций; критики явно проверяют «есть ли готовое решение» (поле existing_solutions); добавлена веха M0.1 | 2026-11-20 |
 | M0.1 | 1 | исполнитель | claude/m0.1-standard-tools | — | — | запущен (session_01V6d5A9JGmeLGTTTU3Ebz2D): gitleaks + mutmut; M1/M4/критику M2 отправлены новые правила | 2026-11-20 |
 | A | — | ponytail-audit | claude/audit-stage-a | fdae40b | — | Must fix 1–5 и Should fix 6–16, Nice 17 закрыты оркестратором в спеках/схемах (T12a, AS-26 tools из bundle, AS-11a on_behalf_of, MCC-09, схемы bundle + вектор подписи, uuid, rule_ids, public_keys, preview в manifest, JCS UTF-16); остаток → backlog | 2026-11-20 |
+| M1 | 2 | исполнитель | claude/m1-connector-kit | c64693a (+5379d42) | — | пункты критика 1 сделаны; мутации — свой скрипт (mutmut не применён) | 2026-11-20 |
+| M1 | 2 | критик | claude/m1-connector-kit | c64693a | — | запущен | 2026-11-20 |
+| M4 | 2 | исполнитель | claude/m4-contextforge-spike | 98f7ce1/d2b62b0 (+e90d7ea) | — | 8 пунктов критика; 10/10 мутантов (свой скрипт); вердикт «NO-GO-триггеров не найдено» | 2026-11-20 |
+| M4 | 2 | критик | claude/m4-contextforge-spike | d2b62b0 | — | запущен | 2026-11-20 |
