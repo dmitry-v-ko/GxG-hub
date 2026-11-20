@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/effect-intent.schema.json",
+  "title": "GxG immutable Effect Intent v1",
+  "description": "Trusted backend-owned intent; validation is NOT proof of authentication or approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent_id",
+    "tenant_id",
+    "requester_principal",
+    "tool_key",
+    "tool_version",
+    "connection_id",
+    "resource_id",
+    "canonical_args_hash",
+    "args_ref",
+    "effect_class",
+    "idempotency_key",
+    "policy_version",
+    "created_at",
+    "expires_at"
+  ],
+  "properties": {
+    "intent_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requester_principal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "business_task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tool_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tool_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "connection_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resource_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonical_args_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "args_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Protected server-side reference, not public payload"
+    },
+    "effect_class": {
+      "type": "string",
+      "enum": [
+        "write_reversible",
+        "external_effect",
+        "high_risk"
+      ]
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 256
+    },
+    "policy_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
