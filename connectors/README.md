@@ -1,13 +1,14 @@
-# Доменные MCP-коннекторы (план)
+# MCP-коннекторы: каталог и статус
 
-Эта папка — место для **самостоятельных MCP-серверов**, а не копии инструментов внутри ContextForge.
+Нормативные документы: [Connector Contract v1](../docs/specs/mcp-connector-contract-v1.md), [Toolkit v1](../docs/specs/mcp-toolkit-v1.md), [Service Integration](../docs/specs/service-integration-v1.md).
 
-Планируемые адаптеры:
-- `knowledge-mcp/`: семантический поиск и получение разрешённых фрагментов существующей KB.
-- `telegram-mcp/`: поиск в разрешённых чатах, контекст, позже — отправка с отдельным approval; `search` может маршрутизировать между быстрым архивом и дорогим запросом.
-- `signals-mcp/`: чтение и запуск ограниченных функций существующего Signal Intelligence, при сохранении его workflow.
-- `agent-delegation/` (позже): мост MCP → A2A для Hermes / специальных агентов.
+| Интеграция | Целевой путь | Факт в GxG Hub |
+| --- | --- | --- |
+| Knowledge Base | Existing KB Access Layer MCP, возможно thin wrapper после аудита прав | **Не подключено** |
+| Telegram | Новый MCP facade к существующему Telegram session/archive; сначала read-only | **Не реализован** |
+| Signal Intelligence | Существующий Mastra процесс, два порта ContextForge: сбор и внешние actions | **Не интегрирован** |
+| Signals facade для других агентов | Опциональные read-only `signals.search/get` | **Не реализован** |
+| Voice/Oscar | Независимый realtime-сервис, потребляет разрешённые tools | **Не интегрирован** |
+| MCP→A2A | Позже, для специализированных агентов-исполнителей | **Future** |
 
-Ни одного коннектора в этом начальном коммите ещё нет. Сперва проверяются готовые MCP-обёртки, потом пишется минимальный адаптер.
-
-Важное: передавать tenant/agent identity от gateway до коннектора **только по проверенному механизму**. Параметр `agent_id` в вызове инструмента не является удостоверенной идентичностью. Без подтверждённого end-to-end механизма ресурсные действия запрещены.
+Новым Python-серверам — FastMCP; существующим TypeScript-серверам — официальный MCP SDK. `templates/`, `scripts/new-connector` и `tests/contract/` **ещё предстоит создать**. Не разрабатывать отдельную GxG MCP-runtime библиотеку. Внутренняя маршрутизация между дешёвым и дорогим методами и безопасный fallback принадлежат коннектору. Не доверять полю `agent_id` из аргументов; нужны проверенные tenant/agent/scopes в downstream.
