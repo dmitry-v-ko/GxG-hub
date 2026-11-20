@@ -125,7 +125,7 @@ NAMES = [
     # paths the default gitleaks allowlist skips
     "node_modules/pkg/server.pem",
     "venv/lib/.env",
-    "docs/key.pem.png",
+    "vendor/github.com/x/server.key",
 ]
 
 
@@ -217,9 +217,9 @@ def test_key_in_a_merge_commit_fails(repo: Path, keys: dict[str, str]) -> None:
     assert_red(scan(repo, "range", f"{base}..HEAD"), "merged.txt", body(keys["ec"]))
 
 
-PLAN_ROW = (
-    "| AC-M0-04 | CI отклоняет коммит с файлом, совпадающим с шаблонами секретов "
-    "(`*.pem`, `.env`, строка `" + header() + "`) |"
+# The one quote of the header the repository keeps: the AC-M0-04 row of the plan.
+PLAN_ROW = next(
+    line for line in (ROOT / PLAN).read_text(encoding="utf-8").splitlines() if line.startswith("| AC-M0-04 |")
 )
 
 
@@ -230,8 +230,8 @@ def test_the_plan_quote_passes(repo: Path) -> None:
     assert scan(repo, "range", f"{base}..HEAD").returncode == 0
 
 
-def test_the_quote_in_this_repository_is_the_plan_row() -> None:
-    assert PLAN_ROW in (ROOT / PLAN).read_text(encoding="utf-8").splitlines()
+def test_the_plan_row_quotes_the_header() -> None:
+    assert "`" + header() + "`" in PLAN_ROW
 
 
 @pytest.mark.parametrize(
