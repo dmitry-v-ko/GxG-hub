@@ -27,3 +27,9 @@
 **Go/no-go:** если ContextForge не позволяет безопасно реализовать передачу идентичности, политики ресурсов или изоляцию tenant без правки upstream, вернуться к сравнению с agentgateway и минимальным custom control-plane. Ничего не мигрировать до успешного теста.
 
 Никакие пункты выше пока не выполнены: это план проверки.
+
+## Contract-first gate (2026-11-20)
+
+До интеграции KB и Telegram сначала принять [MCP Connector Contract v1](specs/mcp-connector-contract-v1.md), реализовать тестовый read-only FastMCP server и conformance-набор из [Toolkit v1](specs/mcp-toolkit-v1.md). Уже работающий KB MCP не переписывать: сначала gap-audit. Доказать два отдельных вызова от Signals (collection и action) через Gateway, сохранив SourceInbox / ActionCandidate / Outcome в Signals. **Ни один пункт не закрыт этим документальным изменением.**
+
+**Блокер:** старый prerelease-образ ContextForge в Compose не допускается к тестам защищённого доступа; обновить и закрепить проверенную исправленную версию перед запуском.
