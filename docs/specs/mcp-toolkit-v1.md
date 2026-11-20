@@ -21,6 +21,7 @@ scripts/check-connectors     # прогон contract suite (TODO)
 tests/contract/              # общий набор тестов (TODO)
 connectors/                  # независимые MCP-серверы/подключения
 policies/                    # правила доступа, без секретов
+approvals/                   # отдельный Approval Service + Action Gate (TODO)
 docs/specs/                  # нормативные требования
 ```
 
@@ -40,7 +41,7 @@ docs/specs/                  # нормативные требования
 3. Защита от forged identity headers/arguments и чужих chat/document refs; отсутствие backend вызова до admission.
 4. Bounded output, error categories, sensitive redaction.
 5. Valid empty result vs safe technical fallback, no fallback at `outcome_unknown`.
-6. Effects: согласование, idempotency, журнал результата, отсутствие повторной отправки.
+6. Effects: GxG Action Gate, Approval Service, неизменный payload, проверка approver, deny/expire/replay, защита от прямого обхода коннектора, idempotency, журнал результата, отсутствие повторной отправки.
 7. ContextForge integration по pinned image: identity propagation, audit, scope, reload, denial.
 8. Обновления FastMCP/ContextForge проходят upgrade-compatibility tests до смены pin.
 
@@ -53,6 +54,6 @@ P1. Создать минимальный read-only reference на FastMCP.
 P2. Создать conformance tests и CLI-генератор.
 P3. Аудит/возможный wrapper готового GxG KB MCP.
 P4. Telegram read-only, Signals collection + action port.
-P5. Эффекты с approval, затем A2A.
+P5. Встроить Action Gate / отдельный Approval Service и UI, доказать end-to-end enforcement; только после этого эффекты, затем A2A.
 
 Подробный стандарт: [MCP Connector Contract](mcp-connector-contract-v1.md).
