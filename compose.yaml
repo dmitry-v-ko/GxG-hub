@@ -2,7 +2,7 @@
 # ContextForge is used as an external OCI dependency, not forked.
 # Default image removed deliberately: no accidental fallback to insecure prerelease.
 # DEV-ONLY: a release tag in .env is NOT an immutable digest or production approval.
-# Effects are NOT enabled by this Compose; Action Gate/identity PoC is separate.
+# Effects are NOT enabled by this Compose; effect execution path / identity PoC is separate.
 services:
   contextforge:
     image: ${CONTEXTFORGE_IMAGE:?Set CONTEXTFORGE_IMAGE to an audited, patched release in .env}
