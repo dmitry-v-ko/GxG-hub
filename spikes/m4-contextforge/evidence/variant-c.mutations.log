@@ -1,0 +1,5 @@
+unmutated: attacks accepted = []
+drop raise ValueError("bad signature") from None: forged_jws_attacker_key accepted -> yes (mutation caught)
+drop raise ValueError("expired or not yet valid") + raise ValueError("replayed jti"): replay_after_65s accepted -> yes (mutation caught)
+drop raise ValueError("arguments hash mismatch") + raise ValueError("replayed jti"): replay_tampered_args accepted -> yes (mutation caught)
+drop raise ValueError("replayed jti"): replay_immediate accepted -> yes (mutation caught)

@@ -26,7 +26,9 @@ echo "== variant C: our tool_pre_invoke plugin (JWS Ed25519) =="
 fresh; docker compose $A up -d; wait_up; s setup >/dev/null; s plugin_config
 docker compose $C up -d contextforge; wait_up
 s calls >/dev/null; s attacks >/dev/null; s admin_call >/dev/null; s replay > secrets/replay-c.out
+cp secrets/raw/echo.jsonl secrets/echo.variant-c.jsonl   # raw (signed) log, for mutation checks
 python3 -I verify_jws.py | tee evidence/variant-c.verify_jws.jsonl; cp secrets/replay-c.out evidence/variant-c.replay.log; python3 -I redact.py c
+python3 -I mutate_verify_jws.py | tee evidence/variant-c.mutations.log
 
 echo "== criterion 5: upgrade v1.1.0 -> pinned v1.1.1 with the plugin, same PostgreSQL =="
 fresh; docker compose $OLD up -d; wait_up; s setup >/dev/null; s plugin_config

@@ -3,12 +3,13 @@
 It is what gxg-connector-kit's IdentityVerifier must do: Ed25519 signature by the adapter key (kid),
 alg pinned to EdDSA, iss, aud = this connector, iat/exp with 5 s skew and exp - iat <= 60, jti never seen,
 ahs = sha256(canonical arguments). "now" = the moment echo received the request.
-Usage: python3 -I verify_jws.py  -> one line per tools/call: accepted identity or the rejection reason.
+Usage: python3 -I verify_jws.py [echo.jsonl]  -> one line per tools/call: accepted identity or the rejection reason.
 """
 
 import base64
 import hashlib
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -68,7 +69,8 @@ def verify(token: str | None, aud: str, args: dict, now: float, seen_jti: set) -
 
 if __name__ == "__main__":
     seen: set = set()
-    rows = [json.loads(x) for x in (HERE / "secrets" / "raw" / "echo.jsonl").read_text().splitlines()]
+    log = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "secrets" / "raw" / "echo.jsonl"
+    rows = [json.loads(x) for x in log.read_text().splitlines()]
     for r in rows:
         if r["body"].get("method") != "tools/call":
             continue
