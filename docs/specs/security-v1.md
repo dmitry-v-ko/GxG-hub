@@ -35,7 +35,7 @@
 ## Identity
 
 - **SEC-01.** Principal — неизменяемый ID от identity-провайдера: токен агента в ContextForge, OIDC-пользователь для людей. Display name, email из аргументов, `agent_id`/`tenant_id` в аргументах tool не являются identity.
-- **SEC-02.** У каждого агента свой credential. Общий токен на несколько агентов запрещён. Токен агента выпускается с audience ContextForge и scope'ом его team (VERIFY: `teams` claim в JWT ContextForge).
+- **SEC-02.** У каждого агента свой credential. Общий токен на несколько агентов запрещён. Токен агента — API-токен ContextForge, выпущенный с `team_id` его team (`POST /v1/tokens`). На v1.1.1 такой JWT (HS256, ключ `JWT_SECRET_KEY` ContextForge) несёт `iss` = `mcpgateway`, `aud` = `mcpgateway-api`, `token_use` = `api`, `teams` = [`<team_id>`], `exp` ([проверено в M4](../adr/0001-identity-propagation.md#результаты-по-критериям), [claims](../../spikes/m4-contextforge/evidence/teams-claims-and-visibility.json)). Агенту выдаётся только токен ровно с одной team. Токен без team или с несколькими teams адаптер identity отклоняет.
 - **SEC-03.** Коннектор получает identity вызывающего только доверенным каналом от ContextForge: подписанное identity propagation (VERIFY: в ContextForge оно и HMAC-подпись выключены по умолчанию) или эквивалентный проверяемый механизм. Минимальный набор claims: `iss`, `aud` = коннектор, `sub` = principal, `tenant_id`, `iat`, `exp`, `jti`. Без валидных claims коннектор отказывает (fail closed).
 - **SEC-04.** Коннектор принимает MCP-вызовы только от ContextForge: сеть плюс аутентификация сервиса. Неподписанные заголовки и `_meta` не дают полномочий.
 - **SEC-05.** Нет token passthrough. Токен агента не уходит к провайдеру, у провайдера отдельные credentials tenant'а.
