@@ -1,26 +1,26 @@
 {
   "milestone": "M0",
-  "cycle": 2,
+  "cycle": 3,
   "branch": "claude/m0-foundation",
-  "commit": "5a929486354c77e598df1ec57f57b70ce83f5635",
+  "commit": "0678a5ffabff849f86d7a6ac51e9c6fc687b26fc",
   "commit_note": "Tested code commit. This report is added by the next commit on the same branch (a commit cannot contain its own SHA); that commit changes only reports/.",
-  "run_at": "2026-11-20T17:45:00Z",
-  "author": "Claude Code (executor, M0 cycle 2)",
-  "addresses": "reports/critic/M0-cycle-1.json (score 5.0): all required_improvements, the critical and all major findings, all minor findings",
+  "run_at": "2026-11-20T17:55:00Z",
+  "author": "Claude Code (executor, M0 cycle 3)",
+  "addresses": "reports/critic/M0-cycle-2.json (score 8.0): all required_improvements (2 major, 1 minor)",
   "environment": {
     "local": {
       "os": "linux x86_64",
       "python": "3.12.3",
       "uv": "0.11.32",
-      "command": "UV_PYTHON=3.12 UV_LOCKED=1 bash scripts/ci/check-all.sh -> check-all: OK"
+      "command": "UV_PYTHON=3.12 UV_LOCKED=1 bash scripts/ci/check-all.sh -> check-all: OK; uv run pytest -> 100 passed, 136 subtests passed, 0 skipped"
     },
     "ci": {
       "runner": "ubuntu-latest",
       "python": "3.12",
       "workflow": ".github/workflows/ci.yml",
-      "run_id": 44785143490,
-      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44785143490",
-      "run_commit": "5a929486354c77e598df1ec57f57b70ce83f5635",
+      "run_id": 44787408919,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44787408919",
+      "run_commit": "0678a5ffabff849f86d7a6ac51e9c6fc687b26fc",
       "run_conclusion": "success (all 6 jobs: lint, types, tests, schema-guard, secrets, ci-ok)"
     }
   },
@@ -45,10 +45,10 @@
       "id": "AC-M0-01",
       "status": "passed",
       "expected": "`uv sync && uv run pytest` in a clean clone passes without network except the package registry",
-      "actual": "Python 3.12.3, UV_LOCKED=1: uv sync && uv run pytest -> 94 passed, 136 subtests passed, 0 skipped. connectors/demo standalone (own uv.lock, dev group): 1 passed.",
+      "actual": "Python 3.12.3, UV_LOCKED=1: uv sync && uv run pytest -> 100 passed, 136 subtests passed, 0 skipped. connectors/demo standalone (own uv.lock, dev group): 1 passed.",
       "evidence": [
         "conftest.py blocks every non-AF_UNIX socket connect; tests/ci/test_pytest_policy.py::test_internet_socket_is_blocked",
-        "CI job `tests` (run 44785143490)"
+        "CI job `tests` (run 44787408919)"
       ]
     },
     {
@@ -68,17 +68,22 @@
       "id": "AC-M0-03",
       "status": "manual_pending",
       "expected": "Updated AC (plan, owner decision 2026-11-20): a PR with red or unfinished `ci-ok` cannot be merged into `main`, direct push is impossible; changes to CODEOWNERS paths automatically request the owner's review. No mandatory approval. Checked by trying.",
-      "actual": "Not configured yet: needs the repository owner. docs/setup/branch-protection.md: owner's variant as the main step-by-step setup (ruleset: block force push/deletion, PR required with 0 approvals, Code Owners review off, required check `ci-ok` strict, empty bypass list); preconditions (GitHub Free does not enforce rules on a private personal repo -> Pro / public / organization); probe incl. `gh pr merge --admin`, pending ci-ok, force-push and the expected error texts; other variants briefly under 'Alternatives'.",
+      "actual": "Not configured yet: needs the repository owner. docs/setup/branch-protection.md: owner's variant as the main step-by-step setup (ruleset: block force push/deletion, PR required with 0 approvals, Code Owners review off, required check `ci-ok` strict, empty bypass list); preconditions (GitHub Free does not enforce rules on a private personal repo -> Pro / public / organization); probe incl. `gh pr merge --admin`, pending ci-ok, force-push and the expected error texts; other variants briefly under 'Alternatives'. Cycle 3: the doc now states that GitHub never requests review from the PR author, so with the single code owner opening the PRs no review request appears; probe step 5 checks instead that GitHub shows no errors for .github/CODEOWNERS and that files under schemas/ are marked 'Owned by you' in the PR's Files changed.",
       "evidence": [
         "docs/setup/branch-protection.md"
       ],
-      "owner_decision": "2026-11-20: ci-ok + CODEOWNERS (auto-requested review), no required approval; direct push and force-push forbidden"
+      "owner_decision": "2026-11-20: ci-ok + CODEOWNERS (auto-requested review), no required approval; direct push and force-push forbidden",
+      "escalation": {
+        "to": "owner, via the orchestrator",
+        "issue": "AC-M0-03 says changes to CODEOWNERS paths 'automatically request the owner's review'. The only code owner (@dmitry-v-ko) opens the PRs himself, and GitHub never requests review from the PR author, so this part cannot be observed in the chosen setup. The AC text is not changed by the executor.",
+        "proposal": "Reword to an observable check, e.g. 'files under CODEOWNERS paths are shown as owned by the owner in the PR; GitHub reports no CODEOWNERS errors', or keep the wording and accept that the request only appears for PRs from another account."
+      }
     },
     {
       "id": "AC-M0-04",
       "status": "passed",
       "expected": "CI rejects a commit with a file matching secret patterns (`*.pem`, `.env`, the PEM private key header string from the plan)",
-      "actual": "check_secrets.py reports ANY occurrence of a PEM private key header (five dashes, BEGIN, optional words, PRIVATE KEY; case-insensitive, no trailing dashes needed) anywhere in any file, including UTF-16 and binary. File-name patterns are matched case-insensitively. Exceptions: only the exact path docs/implementation-plan-v1.md (quotes the AC; the plan must not be edited) plus two pinned historical (path, Git blob SHA) pairs for cycle-1 reports already in the pushed branch history (needed so the PR range scan is not permanently red without rewriting history); any other content at those paths is scanned. tests/ci/test_check_secrets.py: 43 tests incl. the critic's cases (one-line key after KEY=, PRIVATE_KEY=<header>, k = '<header>' in .py, KEY.PEM, server.Pem, .ENV, Server.Key) and an allowlist test proving the same text at any other path is caught. Branch scan origin/main..HEAD and tree HEAD: clean.",
+      "actual": "check_secrets.py reports ANY occurrence of a PEM private key header (five dashes, BEGIN, optional words, PRIVATE KEY; case-insensitive, no trailing dashes needed) anywhere in any file, including UTF-16 and binary. File-name patterns are matched case-insensitively. Exceptions: in the exact path docs/implementation-plan-v1.md only ONE quoted fragment (backtick + header + backtick, built in code) is removed once before the scan, because AC-M0-04 in the plan quotes the header; the rest of the plan is scanned as usual (cycle 3; before, the whole file was exempt). Plus two pinned historical (path, Git blob SHA) pairs for cycle-1 reports already in the pushed branch history; any other content at those paths is scanned. tests/ci/test_check_secrets.py: 49 tests, incl. new: plan with the quote passes; plan with the quote plus a second quote / header with key body / RSA header with body / inline key fails; plan with a header and body but no quote fails. Mutations: whole-file exemption back -> 6 tests red; removing every quote instead of one -> 2 tests red. Branch scan origin/main..HEAD and tree HEAD: clean.",
       "evidence": [
         "scripts/ci/check_secrets.py (CONTENT_ALLOWLIST, HISTORICAL_BLOB_ALLOWLIST)",
         "tests/ci/test_check_secrets.py",
@@ -115,7 +120,7 @@
   ],
   "tests": [
     {
-      "id": "tests/ci/test_check_secrets.py (43 tests, 22 new)",
+      "id": "tests/ci/test_check_secrets.py (49 tests, 6 new in cycle 3: test_plan_with_the_quote_passes, test_key_material_in_the_plan_fails x4, test_header_with_body_without_the_quote_in_the_plan_fails)",
       "status": "passed"
     },
     {
@@ -168,15 +173,15 @@
     "HISTORICAL_BLOB_ALLOWLIST pins two cycle-1 report blobs (reports/conformance/M0.json fcc7ad0, reports/critic/M0-cycle-1.json 8bcef75) that quote the AC header. Without it the PR scan of this branch would be red forever, and fixing it would require rewriting pushed history, which the process forbids. Reports from now on must not spell the header out.",
     "The secret scanner is pattern-based (names + PEM private key headers); it does not detect arbitrary API tokens. A full scanner (e.g. gitleaks) can be added later.",
     "connectors/demo tests run standalone without the root conftest policy (network guard, skip ban); the root run applies it. Stated in connectors/demo/pyproject.toml.",
-    "CODEOWNERS only requests the owner's review automatically; by the owner's decision it does not block the merge."
+    "CODEOWNERS does not block the merge (owner's decision), and for the owner's own PRs GitHub requests no review at all (the author is never asked); see AC-M0-03 escalation.",
+    "The secret scanner does not look inside compressed files: a gzip/zip of a PEM key passes (not required by AC-M0-04)."
   ],
-  "plan": "reports/plans/M0-cycle-2.md",
-  "docs_brought_from_orchestrator": "commit 'M0: bring ponytail skills and updated plan' (.claude/skills, docs/implementation-plan-v1.md from claude/admiring-planck-vzys0x, unchanged)",
+  "plan": "reports/plans/M0-cycle-3.md",
   "head_commit": {
-    "sha": "77662aff782cab6b07ef556bbe20c9b57ff1fdb1",
-    "note": "Docs/plan/skills on top of the tested code commit; code unchanged since 5a92948",
-    "ci_run_id": 44785675116,
-    "ci_run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44785675116",
+    "sha": "0678a5ffabff849f86d7a6ac51e9c6fc687b26fc",
+    "note": "Tested code commit; this report is added by the next commit, which changes only reports/.",
+    "ci_run_id": 44787408919,
+    "ci_run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44787408919",
     "ci_conclusion": "success (all 6 jobs)"
   }
 }
