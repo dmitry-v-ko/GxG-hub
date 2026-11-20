@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
+import urllib.error
+import urllib.request
+from email.message import Message
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -100,6 +104,7 @@ class FakeApi:
         self.calls: list[tuple[str, str, Any]] = []
 
     def __call__(self, method: str, path: str, body: Any) -> Any:
+        assert path.startswith("/repos/o/r/"), path
         self.calls.append((method, path, body))
         base = path.split("?", 1)[0]
         if method == "GET" and base.endswith("/labels"):
@@ -239,3 +244,271 @@ def test_main_reports_missing_environment(tmp_path: Path, monkeypatch: pytest.Mo
     owners.write_text("* @dmitry-v-ko\n")
     monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
     assert gate.main(["--report", str(report), "--markdown", str(md), "--codeowners", str(owners)]) == 2
+
+
+# Exact outputs and I/O (DoD-4: mutmut kills message, pagination and wiring mutants).
+@pytest.mark.parametrize(
+    ("report", "labels", "event", "owners", "msg"),
+    [
+        (NARROW, set(), None, OWNERS, "no widening in the policy diff"),
+        (WIDE, set(), None, OWNERS, "1 widening change(s): a code owner must add the `widening-approved` label"),
+        (
+            WIDE,
+            {"widening-approved"},
+            None,
+            OWNERS,
+            "`widening-approved` is on the PR but its `labeled` event was not found",
+        ),
+        (
+            WIDE,
+            {"widening-approved"},
+            labeled("x", app={"slug": "claude"}),
+            OWNERS,
+            "`widening-approved` was added via the GitHub App 'claude'; the owner must add it by hand",
+        ),
+        (
+            WIDE,
+            {"widening-approved"},
+            labeled("Mallory"),
+            OWNERS,
+            "`widening-approved` was added by @mallory, who is not in CODEOWNERS (['dmitry-v-ko'])",
+        ),
+        (
+            WIDE,
+            {"widening-approved"},
+            labeled("Dmitry-V-Ko"),
+            OWNERS,
+            "1 widening change(s) approved by @dmitry-v-ko (`widening-approved`)",
+        ),
+        # An event without an actor login is nobody, whatever the owners are called.
+        (
+            WIDE,
+            {"widening-approved"},
+            {**labeled("x"), "actor": {}},
+            {"none", "xxxx"},
+            "`widening-approved` was added by @, who is not in CODEOWNERS (['none', 'xxxx'])",
+        ),
+    ],
+)
+def test_decide_messages(report: dict[str, Any], labels: set[str], event: Any, owners: set[str], msg: str) -> None:
+    assert gate.decide(report, labels, event, owners)[1] == msg
+
+
+def test_codeowners_comment_starts_at_the_first_hash() -> None:
+    assert gate.codeowners("/x @a # @b # @c\n") == {"a"}
+
+
+def test_paged_reads_until_a_short_page_and_stops_after_99() -> None:
+    calls: list[str] = []
+
+    def api(method: str, path: str, body: Any) -> Any:
+        calls.append(path)
+        return [{"n": len(calls)}] * (100 if len(calls) == 1 else 3)
+
+    assert gate.paged(api, "/x") == [{"n": 1}] * 100 + [{"n": 2}] * 3
+    assert calls == ["/x?per_page=100&page=1", "/x?per_page=100&page=2"]
+    calls.clear()
+
+    def full(method: str, path: str, body: Any) -> Any:
+        calls.append(path)
+        return [{}] * 100
+
+    assert len(gate.paged(full, "/y")) == 9900
+    assert calls[-1] == "/y?per_page=100&page=99"
+
+
+def test_comments_without_user_or_body_are_skipped() -> None:
+    api = FakeApi([], [], [{"id": 1}, {"id": 2, "user": {"login": "github-actions[bot]"}}])
+    gate.upsert_comment(api, "/repos/o/r/issues/7", "new", "<!-- m -->")
+    assert api.calls[-1] == ("POST", "/repos/o/r/issues/7/comments", {"body": "new"})
+
+
+def test_comment_marker_is_the_first_markdown_line_only() -> None:
+    mine = {"id": 5, "user": {"login": "github-actions[bot]"}, "body": "<!-- gxg-policy-diff -->\nold"}
+    other = {"id": 4, "user": {"login": "github-actions[bot]"}, "body": "<!-- other -->\nx"}
+    api = FakeApi([], [], [other, mine])
+    event = {"action": "opened", "pull_request": {"number": 7, "head": HEAD}}
+    gate.run(api, "o/r", event, NARROW, markdown="<!-- gxg-policy-diff -->\nline 2\nline 3", owners=OWNERS)
+    assert api.calls[-1][:2] == ("PATCH", "/repos/o/r/issues/comments/5")
+    assert api.calls[-1][2]["body"] == (
+        "<!-- gxg-policy-diff -->\nline 2\nline 3\n**grants-widening: pass** — no widening in the policy diff\n"
+    )
+
+
+def test_missing_workflow_runs_fails_closed() -> None:
+    assert gate.head_arrival(lambda m, p, b: {}, "o/r", {"number": 7, "head": HEAD}, []) is None
+
+
+def test_run_at_the_force_push_instant_does_not_date_the_head() -> None:
+    forced = {"event": "head_ref_force_pushed", "created_at": T_PUSH}
+    api = FakeApi([], [], [], [pr_run(T_PUSH)])
+    assert gate.head_arrival(api, "o/r", {"number": 7, "head": HEAD}, [forced]) is None
+    assert api.calls[0][1] == f"/repos/o/r/actions/runs?event=pull_request&head_sha={SHA}&per_page=100"
+
+
+def test_label_at_the_arrival_instant_is_stale() -> None:
+    why = gate.stale(labeled("dmitry-v-ko", at=T_PUSH), gate._ts(T_PUSH))
+    assert why == f"the label ({T_PUSH}) is older than the head commit on the PR (2026-11-20T10:00:00+00:00)"
+    assert gate.stale(labeled("dmitry-v-ko"), None) == "the arrival time of the head commit is unknown"
+
+
+def test_removed_label_note_and_step_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+    summary = tmp_path / "summary.md"
+    summary.write_text("before\n", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at=T_BEFORE)], [])
+    assert run(api, "synchronize", WIDE) == 1
+    note = (
+        f"`widening-approved` was removed: the label ({T_BEFORE}) is older than the head commit on the PR"
+        " (2026-11-20T10:00:00+00:00). Review the new commits and approve again.\n\n"
+    )
+    msg = "1 widening change(s): a code owner must add the `widening-approved` label"
+    body = f"<!-- gxg-policy-diff -->\nreport\n**grants-widening: FAIL** — {note}{msg}\n"
+    assert api.calls[-1][2]["body"] == body
+    assert summary.read_text(encoding="utf-8") == "before\n" + body
+    assert capsys.readouterr().out == f"::error::{note}{msg}\n"
+
+
+def test_passing_run_prints_without_error_prefix(capsys: Any) -> None:
+    api = FakeApi([], [], [])
+    assert run(api, "opened", NARROW) == 0
+    assert capsys.readouterr().out == "no widening in the policy diff\n"
+
+
+def test_comment_failure_is_a_warning_not_a_decision(capsys: Any) -> None:
+    def api(method: str, path: str, body: Any) -> Any:
+        if path.endswith("/comments") or "/comments?" in path:
+            raise urllib.error.HTTPError(path, 403, "forbidden", Message(), None)
+        return []
+
+    event = {"action": "opened", "pull_request": {"number": 7, "head": HEAD}}
+    assert gate.run(api, "o/r", event, NARROW, markdown="m", owners=OWNERS) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("::warning::could not post the diff comment: HTTP Error 403: forbidden\n")
+
+
+@pytest.mark.parametrize(
+    ("report", "code", "out"),
+    [
+        (NARROW, 0, "no widening against the merge-base with main\n"),
+        (
+            WIDE,
+            1,
+            "::error::1 widening change(s) outside a pull request: widening is approved only on a PR"
+            " with the `widening-approved` label from a code owner\n",
+        ),
+    ],
+)
+def test_no_pr_output(  # noqa: PLR0917 - pytest fixtures and parameters
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any, report: dict[str, Any], code: int, out: str
+) -> None:
+    summary = tmp_path / "s.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    r, md = tmp_path / "r.json", tmp_path / "r.md"
+    r.write_text(json.dumps(report), encoding="utf-8")
+    md.write_text("<!-- m -->\nёжик\n", encoding="utf-8")
+    assert gate.main(["--report", str(r), "--markdown", str(md), "--no-pr"]) == code
+    assert capsys.readouterr().out == out
+    verdict = "pass" if code == 0 else "FAIL"
+    assert (
+        summary.read_text(encoding="utf-8")
+        == f"<!-- m -->\nёжик\n\n**grants-widening: {verdict}** — {out.removeprefix('::error::')}"
+    )
+
+
+def test_main_pr_mode_wires_environment_files_and_api(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    files = {"r.json": json.dumps(WIDE), "r.md": "<!-- m -->\nёж", "CODEOWNERS": "* @Owner-Ü\n"}
+    for name, text in files.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    event = {"action": "opened", "pull_request": {"number": 7, "head": HEAD}, "note": "ё"}
+    (tmp_path / "event.json").write_text(json.dumps(event, ensure_ascii=False), encoding="utf-8")
+    seen: dict[str, Any] = {}
+
+    the_api = FakeApi([], [], [])
+
+    def fake_api(token: str, base: str) -> Any:
+        seen["api"] = (token, base)
+        return the_api
+
+    def fake_run(api: Any, repo: str, ev: Any, report: Any, *, markdown: str, owners: set[str]) -> int:
+        assert api is the_api
+        seen["run"] = (repo, ev, report, markdown, owners)
+        return 5
+
+    monkeypatch.setattr(gate, "github_api", fake_api)
+    monkeypatch.setattr(gate, "run", fake_run)
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(tmp_path / "event.json"))
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.delenv("GITHUB_API_URL", raising=False)
+    args = ["--report", str(tmp_path / "r.json"), "--markdown", str(tmp_path / "r.md")]
+    assert gate.main([*args, "--codeowners", str(tmp_path / "CODEOWNERS")]) == 5
+    assert seen["api"] == ("tok", "https://api.github.com")
+    assert seen["run"] == ("o/r", event, WIDE, "<!-- m -->\nёж", {"owner-ü"})
+    monkeypatch.setenv("GITHUB_API_URL", "https://ghe.example.invalid/api/v3")
+    gate.main([*args, "--codeowners", str(tmp_path / "CODEOWNERS")])
+    assert seen["api"] == ("tok", "https://ghe.example.invalid/api/v3")
+    # Without --codeowners and without --no-pr: usage error.
+    with pytest.raises(SystemExit) as exc:
+        gate.main(args)
+    assert exc.value.code == 2
+    assert "error: --codeowners is required without --no-pr" in capsys.readouterr().err
+    for missing in ("--report", "--markdown"):
+        i = args.index(missing)
+        with pytest.raises(SystemExit):
+            gate.main(args[:i] + args[i + 2 :] + ["--no-pr"])
+
+
+def test_main_decision_error_is_exit_2(tmp_path: Path, capsys: Any) -> None:
+    assert gate.main(["--report", str(tmp_path / "absent.json"), "--markdown", str(tmp_path / "x"), "--no-pr"]) == 2
+    assert capsys.readouterr().out.startswith("::error::grants-widening could not decide: FileNotFoundError(")
+
+
+def test_help_lists_modes(capsys: Any) -> None:
+    with pytest.raises(SystemExit):
+        gate.main(["--help"])
+    out = capsys.readouterr().out
+    assert re.search(r"  CODEOWNERS of the PR base commit \(PR mode\)\n", out)
+    assert re.search(r"  not a pull_request event: any widening fails\n", out)
+    # The module docstring is the description, kept verbatim (RawDescriptionHelpFormatter).
+    assert "Usage:\n  widening_gate.py --report diff.json" in out
+
+
+class FakeResponse:
+    def __init__(self, raw: bytes) -> None:
+        self.raw = raw
+
+    def __enter__(self) -> FakeResponse:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self.raw
+
+
+def test_github_api_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[tuple[urllib.request.Request, Any]] = []
+
+    def urlopen(req: urllib.request.Request, timeout: Any = None) -> FakeResponse:
+        sent.append((req, timeout))
+        return FakeResponse(b'{"ok": 1}' if req.get_method() == "GET" else b"")
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    api = gate.github_api("tok", "https://api.example.invalid")
+    assert api("GET", "/repos/o/r", None) == {"ok": 1}
+    assert api("POST", "/repos/o/r/issues/7/comments", {"body": "ё"}) is None
+    (get, t1), (post, t2) = sent
+    assert (get.full_url, get.get_method(), get.data, t1) == ("https://api.example.invalid/repos/o/r", "GET", None, 30)
+    assert dict(get.header_items()) == {
+        "Authorization": "Bearer tok",
+        "Accept": "application/vnd.github+json",
+        "X-github-api-version": "2022-11-28",
+    }
+    assert (post.get_method(), post.data, t2) == ("POST", json.dumps({"body": "ё"}).encode(), 30)
+    api("PATCH", "/x", {"a": 1})
+    api("DELETE", "/y", None)
+    assert [r.get_method() for r, _ in sent[2:]] == ["PATCH", "DELETE"]

@@ -440,6 +440,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "jsonschema" },
     { name = "pyyaml" },
+    { name = "rfc3339-validator" },
 ]
 
 [package.metadata]
@@ -447,6 +448,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=44,<47" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyyaml", specifier = ">=6,<7" },
+    { name = "rfc3339-validator", specifier = ">=0.1.4,<0.2" },
 ]
 
 [[package]]

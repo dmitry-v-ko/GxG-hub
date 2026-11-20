@@ -141,3 +141,18 @@ def test_pull_request_diff_uses_the_head_commit_not_the_checkout(repo: Path, tmp
     runner = tmp_path / "runner-pr"
     job(repo, "pull_request", "refs/pull/7/merge", pr_head=head, runner=runner)
     assert len(json.loads((runner / "diff.json").read_text())["widening"]) == 1
+
+
+def test_code_owners_come_from_main_not_from_the_pr(repo: Path, tmp_path: Path) -> None:
+    git(repo, "checkout", "-q", "main")
+    (repo / ".github").mkdir()
+    (repo / ".github/CODEOWNERS").write_text("* @owner\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "owners")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(repo, "checkout", "-qb", "claude/own")
+    (repo / ".github/CODEOWNERS").write_text("* @agent\n")
+    commit_policies(repo, CASE / "head", "widen and own")
+    runner = tmp_path / "runner-pr"
+    job(repo, "pull_request", "refs/pull/7/merge", pr_head=git(repo, "rev-parse", "HEAD"), runner=runner)
+    assert (runner / "CODEOWNERS").read_text() == "* @owner\n"

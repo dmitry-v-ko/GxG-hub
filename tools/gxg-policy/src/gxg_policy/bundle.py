@@ -43,7 +43,7 @@ def _sorted(value: Any) -> Any:
 
 def jcs(value: Any) -> bytes:
     """RFC 8785 for float-free JSON: Python's json escaping already matches JCS for strings and ints."""
-    return json.dumps(_sorted(value), ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
+    return json.dumps(_sorted(value), ensure_ascii=False, separators=(",", ":")).encode()  # _sorted rejects NaN
 
 
 def b64url(data: bytes) -> str:

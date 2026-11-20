@@ -1,0 +1,427 @@
+{
+  "widening": [
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "read",
+      "resource": "kb:kb-main/collection/b",
+      "change": "expiry_extended",
+      "base": "2027-01-01T00:00:00Z",
+      "head": null
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:scout",
+      "action": "read",
+      "resource": "kb:kb-main/collection/g",
+      "change": "added",
+      "expires_at": "2027-05-01T00:00:00Z"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:scout",
+      "action": "read",
+      "resource": "kb:kb-main/collection/f",
+      "change": "added",
+      "expires_at": null
+    },
+    {
+      "tenant": "t-new",
+      "kind": "grant",
+      "subject": "agent:t-new:bot",
+      "action": "read",
+      "resource": "kb:kb-main/collection/x",
+      "change": "added",
+      "expires_at": null
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "human-2",
+      "change": "approvers_added",
+      "approvers": [
+        "*"
+      ]
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "relax",
+      "change": "decision_relaxed",
+      "base": "deny",
+      "head": "require_approval"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "quota",
+      "field": "propose_per_requester_per_hour",
+      "change": "increased",
+      "base": 10,
+      "head": 20
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_defaults",
+      "field": "execution_window",
+      "change": "increased",
+      "base": 1800,
+      "head": 3600
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "human",
+      "change": "approvals",
+      "base": 2,
+      "head": 1
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "auto",
+      "change": "limits",
+      "field": "max_per_day",
+      "base": 20,
+      "head": null
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "quota",
+      "field": "pending_per_requester_max",
+      "change": "increased",
+      "base": 5,
+      "head": 20
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "auto",
+      "change": "limits",
+      "field": "max_per_hour",
+      "base": 5,
+      "head": 6
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "human-2",
+      "change": "ttl",
+      "field": "execution_window",
+      "base": 600,
+      "head": 1200
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "human",
+      "change": "ttl",
+      "field": "approval_ttl",
+      "base": 7200,
+      "head": null
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "human",
+      "change": "step_up",
+      "base": true,
+      "head": false
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "new-auto",
+      "change": "added",
+      "decision": "auto_approve"
+    },
+    {
+      "tenant": null,
+      "kind": "webhook",
+      "id": "added",
+      "change": "added"
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "new-svc",
+      "change": "added"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "role",
+      "change": "added",
+      "principal": "oidc:https://idp.example.invalid:2",
+      "role": "tenant_admin"
+    },
+    {
+      "tenant": "t-new",
+      "kind": "role",
+      "change": "added",
+      "principal": "oidc:https://idp.example.invalid:9",
+      "role": "approver"
+    },
+    {
+      "tenant": null,
+      "kind": "webhook",
+      "id": "changed",
+      "change": "changed"
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "demo",
+      "change": "internal_url_changed"
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "mcp",
+      "change": "kind_changed"
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "demo",
+      "change": "public_keys_added",
+      "public_keys": [
+        "ed25519:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+      ]
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "mcp",
+      "change": "public_keys_added",
+      "public_keys": [
+        "ed25519:GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+      ]
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "gone-deny",
+      "change": "removed",
+      "decision": "deny"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "gone-strict",
+      "change": "removed",
+      "decision": "require_approval"
+    },
+    {
+      "tenant": "t-gone",
+      "kind": "approval_rule",
+      "rule": "r",
+      "change": "removed",
+      "decision": "require_approval"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "auto",
+      "change": "requesters_added",
+      "requesters": [
+        "agent:t-alpha:scout"
+      ]
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "demo",
+      "change": "tenant_added",
+      "service_tenant": "t-new"
+    }
+  ],
+  "narrowing": [
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:scout",
+      "action": "collect",
+      "resource": "kb:kb-main/collection/e",
+      "change": "removed"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "read",
+      "resource": "kb:kb-main/collection/a",
+      "change": "expiry_shortened",
+      "base": "2027-06-01T00:00:00Z",
+      "head": "2027-03-01T00:00:00Z"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "read",
+      "resource": "kb:kb-main/collection/c",
+      "change": "expiry_shortened",
+      "base": null,
+      "head": "2027-01-01T00:00:00Z"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "read",
+      "resource": "kb:kb-main/collection/d",
+      "change": "expiry_shortened",
+      "base": null,
+      "head": "2027-01-01T00:00:00Z"
+    },
+    {
+      "tenant": "t-gone",
+      "kind": "grant",
+      "subject": "agent:t-gone:bot",
+      "action": "read",
+      "resource": "kb:kb-main/collection/x",
+      "change": "removed"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "human",
+      "change": "approvers_removed",
+      "approvers": [
+        "*"
+      ]
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "tighten",
+      "change": "decision_tightened",
+      "base": "auto_approve",
+      "head": "deny"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "human-2",
+      "change": "approvals",
+      "base": 1,
+      "head": 2
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "quota",
+      "field": "pending_per_tenant_max",
+      "change": "decreased",
+      "base": 100,
+      "head": 50
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "auto-everyone",
+      "change": "limits",
+      "field": "max_per_day",
+      "base": 3,
+      "head": 2
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_defaults",
+      "field": "approval_ttl",
+      "change": "decreased",
+      "base": 43200,
+      "head": 21600
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "human-2",
+      "change": "step_up",
+      "base": false,
+      "head": true
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "new-strict",
+      "change": "added",
+      "decision": "require_approval"
+    },
+    {
+      "tenant": "t-new",
+      "kind": "approval_rule",
+      "rule": "r",
+      "change": "added",
+      "decision": "require_approval"
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "mcp",
+      "change": "public_keys_removed",
+      "public_keys": [
+        "ed25519:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+      ]
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "gone-auto",
+      "change": "removed",
+      "decision": "auto_approve"
+    },
+    {
+      "tenant": null,
+      "kind": "webhook",
+      "id": "dropped",
+      "change": "removed"
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "old-svc",
+      "change": "removed"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "role",
+      "change": "removed",
+      "principal": "oidc:https://idp.example.invalid:1",
+      "role": "viewer"
+    },
+    {
+      "tenant": "t-gone",
+      "kind": "role",
+      "change": "removed",
+      "principal": "oidc:https://idp.example.invalid:9",
+      "role": "approver"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "auto-everyone",
+      "change": "requesters_removed",
+      "requesters": [
+        "*"
+      ]
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "auto",
+      "change": "requesters_removed",
+      "requesters": [
+        "agent:t-alpha:hermes"
+      ]
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "demo",
+      "change": "tenant_removed",
+      "service_tenant": "t-gone"
+    }
+  ]
+}

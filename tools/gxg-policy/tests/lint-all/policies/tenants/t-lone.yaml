@@ -1,0 +1,5 @@
+tenant: t-lone
+schema_version: 1
+connections: []
+principals: { agents: [{ id: "agent:t-lone:a" }] }
+grants: []

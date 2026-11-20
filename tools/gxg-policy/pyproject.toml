@@ -7,6 +7,7 @@ dependencies = [
     "cryptography>=44,<47",
     "jsonschema>=4.23,<5",
     "pyyaml>=6,<7",
+    "rfc3339-validator>=0.1.4,<0.2",  # enables the `date-time` format check of jsonschema (expires_at offset)
 ]
 
 [build-system]

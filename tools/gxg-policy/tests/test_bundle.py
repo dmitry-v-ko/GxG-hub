@@ -11,10 +11,23 @@ import subprocess
 import sys
 import unicodedata
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from gxg_policy.bundle import BUNDLE, SIG, BundleError, b64url, build, jcs, public_key, sign, verify
+from gxg_policy.bundle import (
+    BUNDLE,
+    SIG,
+    BundleError,
+    b64url,
+    build,
+    check_shape,
+    jcs,
+    public_key,
+    sign,
+    unb64url,
+    verify,
+)
 from gxg_policy.lint import lint
 from gxg_policy.load import REPO_ROOT
 
@@ -354,3 +367,74 @@ def test_bad_manifest_is_a_finding_with_file_and_path(tmp_path: Path, text: str,
 def test_second_manifest_for_one_connector_is_an_error() -> None:
     errors = lint(GOOD / "policies", [GOOD / "manifest.yaml"] * 2).errors
     assert [(e.path, e.code) for e in errors] == [("connector", "duplicate-id")]
+
+
+# DoD-4 (mutmut): exact error texts, no mutation of the loaded policies, edge encodings.
+def test_error_messages(tmp_path: Path) -> None:
+    kw: dict[str, Any] = {"bundle_version": SHA, "built_at": "2026-11-20T10:00:00Z", "seed": seed(), "kid": "k"}
+    bad = lint(HERE / "lint-all/policies", [HERE / "lint-all/manifest.yaml"])
+    with pytest.raises(BundleError) as exc:
+        build(bad, tmp_path, **kw)
+    assert str(exc.value) == "policies have errors:\n" + "\n".join(map(str, bad.errors)) and len(bad.errors) > 2
+    pol = lint(GOOD / "policies", [GOOD / "manifest.yaml"])
+    pol.platform = None
+    with pytest.raises(BundleError, match=r"^no platform registry under platform/$"):
+        build(pol, tmp_path, **kw)
+    pol = lint(GOOD / "policies", [GOOD / "manifest.yaml"])
+    pol.approval["t-zeta"] = pol.approval["t-alpha"]
+    with pytest.raises(BundleError, match=r"^approval policy for unknown tenant 't-zeta'$"):
+        build(pol, tmp_path, **kw)
+    with pytest.raises(BundleError, match=r"^signing key must be a 32-byte Ed25519 seed \(base64url\)$"):
+        sign(b"x", b"short", "k")
+    with pytest.raises(BundleError, match=r"^not allowed in a bundle \(float or unsafe int\): 1\.5$"):
+        jcs({"a": 1.5})
+    with pytest.raises(BundleError, match=r"^unsupported value b'x'$"):
+        jcs({"a": b"x"})
+    assert jcs({"a": [2**53 - 1, -(2**53 - 1), True, None]}) == b'{"a":[9007199254740991,-9007199254740991,true,null]}'
+
+
+def test_shape_errors_name_the_first_path(built: tuple[Path, bytes]) -> None:
+    d, _ = built
+    doc = json.loads((d / BUNDLE).read_bytes())
+    doc["tenants"]["t-alpha"]["grants"]["grants"][0]["actions"] = ["fly"]
+    doc["bundle_version"] = "x"
+    with pytest.raises(BundleError) as exc:
+        check_shape(doc)
+    assert str(exc.value).startswith("not a v1 bundle (grants-bundle.schema.json): bundle_version: 'x' does not match")
+    del doc["bundle_version"]
+    with pytest.raises(BundleError, match=r"^not a v1 bundle \(grants-bundle.schema.json\): <root>: 'bundle_version'"):
+        check_shape(doc)
+    doc["bundle_version"] = SHA
+    with pytest.raises(BundleError, match=r": tenants/t-alpha/grants/grants/0/actions/0: 'fly' is not one of"):
+        check_shape(doc)
+
+
+def test_verify_error_messages(built: tuple[Path, bytes]) -> None:
+    d, key = built
+    data, sig = (d / BUNDLE).read_bytes(), (d / SIG).read_bytes()
+    keys = {"ci-test": public_key(key)}
+    with pytest.raises(BundleError, match=r"^signature file: expected \{alg: EdDSA, kid, sig\}$"):
+        verify(data, b'{"alg": "EdDSA"}', keys)
+    with pytest.raises(BundleError, match=r"^bad signature$"):
+        verify(data, sign(data, seed(), "ci-test"), keys)
+    with pytest.raises(BundleError, match=r"^malformed: "):
+        verify(data, b"not json", keys)
+    pretty = json.dumps(json.loads(data), indent=1).encode()
+    with pytest.raises(BundleError, match=r"^bundle is not in JCS form$"):
+        verify(pretty, sign(pretty, key, "ci-test"), keys)
+    assert verify(data, sig, keys)["bundle_version"] == SHA
+
+
+def test_build_leaves_the_loaded_policies_unchanged(tmp_path: Path) -> None:
+    pol = lint(GOOD / "policies", [GOOD / "manifest.yaml"])
+    before = json.dumps([pol.tenants, pol.platform], sort_keys=True)
+    build(pol, tmp_path / "a" / "b", bundle_version=SHA, built_at="2026-11-20T10:00:00Z", seed=seed(), kid="k")
+    assert json.dumps([pol.tenants, pol.platform], sort_keys=True) == before
+    assert (tmp_path / "a" / "b" / BUNDLE).exists()  # nested --out is created
+
+
+def test_b64url_round_trip_without_padding() -> None:
+    for raw in (b"", b"\x00", b"\x00\x00", b"\x00\x00\x17", bytes(range(32))):
+        text = b64url(raw)
+        assert "=" not in text and unb64url(text) == raw
+    assert b64url(b"\x00\x00\x17") == "AAAX"  # a trailing X is data, not padding

@@ -1,0 +1,6 @@
+# Humans only, no agents key, no groups key.
+tenant: t-people
+schema_version: 1
+connections: []
+principals: { humans: [{ id: "oidc:https://idp.example.invalid:5", roles: [approver] }] }
+grants: []

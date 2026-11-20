@@ -1,0 +1,9 @@
+tenant: t-new
+schema_version: 1
+connections:
+  - { id: kb-main, domain: kb, credential_ref: secret://t-new/kb/service }
+principals:
+  agents: [{ id: "agent:t-new:bot" }]
+  humans: [{ id: "oidc:https://idp.example.invalid:9", roles: [approver] }]
+grants:
+  - { id: g, subjects: [agent:t-new:bot], actions: [read], resources: [kb:kb-main/collection/x] }

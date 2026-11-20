@@ -38,7 +38,6 @@ class Finding:
 
 @dataclass
 class Policies:
-    root: Path
     tenants: dict[str, tuple[str, dict[str, Any]]] = field(default_factory=dict)  # tenant -> (file, doc)
     approval: dict[str, tuple[str, dict[str, Any]]] = field(default_factory=dict)
     platform: tuple[str, dict[str, Any]] | None = None
@@ -78,11 +77,8 @@ def parse_yaml(text: str) -> Any:
 
 
 def parse_ts(value: str) -> datetime:
-    """RFC 3339 timestamp with an explicit offset, as UTC."""
-    ts = datetime.fromisoformat(value)
-    if ts.tzinfo is None:
-        raise ValueError(f"{value!r} has no UTC offset")
-    return ts.astimezone(UTC)
+    """RFC 3339 timestamp as UTC. Only for schema-checked values: `date-time` (rfc3339-validator) requires an offset."""
+    return datetime.fromisoformat(value).astimezone(UTC)
 
 
 def json_path(parts: Any) -> str:
@@ -123,7 +119,7 @@ def schema_findings(rel: str, schema_file: str, doc: Any) -> list[Finding]:
 
 def load(root: Path) -> Policies:
     """Load and schema-validate every `*.yaml` under `root/{tenants,approval,platform}`."""
-    pol = Policies(root)
+    pol = Policies()
     if not root.is_dir():
         pol.findings.append(Finding(str(root), "", "io", "not a directory"))
         return pol
@@ -139,11 +135,6 @@ def load(root: Path) -> Policies:
             pol.findings.append(Finding(rel, "", "yaml", str(exc).replace("\n", " ")))
             continue
         bad = schema_findings(rel, KINDS[kind], doc)
-        for i, g in enumerate(doc.get("grants", []) if kind == "tenants" and not bad else []):
-            try:
-                parse_ts(g.get("expires_at", "1970-01-01T00:00:00Z"))
-            except ValueError as exc:
-                bad.append(Finding(rel, f"grants[{i}].expires_at", "schema", str(exc)))
         pol.findings += bad
         if bad:
             continue

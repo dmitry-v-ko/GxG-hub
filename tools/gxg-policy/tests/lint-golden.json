@@ -1,0 +1,120 @@
+{
+ "01-dangling-subject": [
+  "error: tenants/t-alpha.yaml: grants[0].subjects[0]: [dangling-subject] 'agent:t-alpha:ghost' is not a declared principal"
+ ],
+ "02-foreign-principal": [
+  "error: tenants/t-alpha.yaml: grants[0].subjects[0]: [foreign-principal] 'agent:t-beta:spy' belongs to tenant 't-beta', not 't-alpha'"
+ ],
+ "03-rid-wrong-domain": [
+  "error: tenants/t-alpha.yaml: grants[0].resources[0]: [rid-domain] 'telegram:kb-main/chat/-100': connection 'kb-main' has domain 'kb'"
+ ],
+ "04-connection-level-mask": [
+  "error: tenants/t-alpha.yaml: grants[0].resources[0]: [forbidden-mask] 'kb:kb-main/*': `*` is allowed only as `<domain>:<connection>/<type>/*` (GR-04)",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
+ "05-duplicate-id": [
+  "error: tenants/t-alpha.yaml: grants[1].id: [duplicate-id] duplicate grant id 'kb-read'"
+ ],
+ "06-auto-approve-high-risk": [
+  "error: approval/t-alpha.yaml: rules[0].match.tools[0]: [auto-approve-high-risk] demo.wire.propose is high_risk (AP-02)"
+ ],
+ "07-approver-without-role": [
+  "error: approval/t-alpha.yaml: rules[0].approvers[0]: [approver-role] 'oidc:https://idp.example.invalid:1' has no `approver` role"
+ ],
+ "08-empty-approvers-intersection": [
+  "error: approval/t-alpha.yaml: rules[1].approvers: [approvers-empty-intersection] no common approver with 'by-one'"
+ ],
+ "09-approval-ttl-over-default": [
+  "error: approval/t-alpha.yaml: rules[0].approval_ttl: [ttl-exceeds-default] 48h is longer than default"
+ ],
+ "10-connector-all-tenants": [
+  "error: platform/registry.yaml: services[0].tenants[0]: [schema] '*' should not be valid under {'const': '*'}"
+ ],
+ "11-webhook-not-https": [
+  "error: platform/registry.yaml: webhooks[0].url: [schema] 'http://signals.internal/hooks' does not match '^https://[^/\\\\s]+(/\\\\S*)?$'"
+ ],
+ "12-credential-not-secret-ref": [
+  "error: tenants/t-alpha.yaml: connections[0].credential_ref: [schema] 'plain-token-value' does not match '^secret://\\\\S+$'",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
+ "13-dangling-connection": [
+  "error: tenants/t-alpha.yaml: grants[0].resources[0]: [dangling-connection] connection 'kb-other' of 'kb:kb-other/collection/x' is not declared"
+ ],
+ "14-dangling-requester": [
+  "error: approval/t-alpha.yaml: rules[0].match.requesters[0]: [dangling-requester] 'agent:t-alpha:ghost' is not a declared agent"
+ ],
+ "15-duplicate-yaml-key": [
+  "error: tenants/t-alpha.yaml: <root>: [yaml] duplicate key 'researchers'   in \"<unicode string>\", line 16, column 3:       researchers: [agent:t-alpha:hermes]       ^",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
+ "16-auto-approve-high-risk-class": [
+  "error: approval/t-alpha.yaml: rules[0].match.effect_classes: [auto-approve-high-risk] auto_approve for effect class high_risk (AP-02)"
+ ],
+ "17-human-in-subject-group": [
+  "error: tenants/t-alpha.yaml: grants[0].subjects[0]: [group-human-subject] group 'researchers' has non-agent members"
+ ],
+ "18-default-ttl-over-system": [
+  "error: approval/t-alpha.yaml: defaults.execution_window: [ttl-exceeds-default] 2h is longer than the system default"
+ ],
+ "19-dangling-group-subject": [
+  "error: tenants/t-alpha.yaml: grants[0].subjects[0]: [dangling-subject] group 'ghost' is not declared",
+  "warning: approval/t-alpha.yaml: rules[1].match.tools[0]: [unknown-tool] no manifest for demo.message.propose"
+ ],
+ "20-auto-approve-empty-limits": [
+  "error: approval/t-alpha.yaml: rules[1].limits: [schema] {} should be non-empty"
+ ],
+ "good": [],
+ "lint-all": [
+  "error: tenants/t-alpha.yaml: connections[1].id: [duplicate-id] duplicate connection id 'kb-main'",
+  "error: tenants/t-alpha.yaml: principals.agents[2].id: [duplicate-id] duplicate principal id 'agent:t-alpha:a'",
+  "error: tenants/t-alpha.yaml: principals.agents[1].id: [foreign-principal] 'agent:t-beta:x' belongs to tenant 't-beta', not 't-alpha'",
+  "error: tenants/t-alpha.yaml: groups.gf[0]: [foreign-principal] 'agent:t-gamma:z' belongs to tenant 't-gamma', not 't-alpha'",
+  "error: tenants/t-alpha.yaml: groups.gd[0]: [dangling-subject] 'agent:t-alpha:ghost' is not a declared principal",
+  "error: tenants/t-alpha.yaml: grants[1].id: [duplicate-id] duplicate grant id 'dup'",
+  "error: tenants/t-alpha.yaml: grants[0].subjects[1]: [group-human-subject] group 'gh' has non-agent members",
+  "error: tenants/t-alpha.yaml: grants[0].subjects[2]: [dangling-subject] group 'nope' is not declared",
+  "error: tenants/t-alpha.yaml: grants[0].subjects[3]: [foreign-principal] 'agent:t-beta:y' belongs to tenant 't-beta', not 't-alpha'",
+  "error: tenants/t-alpha.yaml: grants[0].subjects[4]: [dangling-subject] 'agent:t-alpha:ghost' is not a declared principal",
+  "error: tenants/t-alpha.yaml: grants[0].resources[1]: [dangling-connection] connection 'nowhere' of 'kb:nowhere/collection/x' is not declared",
+  "error: tenants/t-alpha.yaml: grants[0].resources[2]: [rid-domain] 'telegram:kb-main/chat/1': connection 'kb-main' has domain 'kb'",
+  "warning: tenants/t-alpha.yaml: grants[0].expires_at: [grant-expired] grant has expired",
+  "warning: tenants/t-alpha.yaml: grants[1].expires_at: [grant-expiring] expires within 14 days",
+  "error: tenants/t-alpha.yaml: grants[2].resources[2]: [rid-domain] 'kb:tg/chat/a:b': connection 'tg' has domain 'telegram'",
+  "warning: tenants/t-alpha.yaml: grants[3].expires_at: [grant-expired] grant has expired",
+  "warning: tenants/t-alpha.yaml: grants[4].expires_at: [grant-expiring] expires within 14 days",
+  "warning: tenants/t-alpha.yaml: grants[5].expires_at: [grant-expiring] expires within 14 days",
+  "error: approval/t-alpha.yaml: defaults.approval_ttl: [ttl-exceeds-default] 48h is longer than the system default",
+  "error: approval/t-alpha.yaml: rules[1].id: [duplicate-id] duplicate rule id 'dup'",
+  "error: approval/t-alpha.yaml: rules[0].approval_ttl: [ttl-exceeds-default] 47h is longer than default",
+  "error: approval/t-alpha.yaml: rules[0].execution_window: [ttl-exceeds-default] 45m is longer than default",
+  "error: approval/t-alpha.yaml: rules[0].match.resources[0]: [dangling-connection] connection 'nowhere' of 'kb:nowhere/collection/x' is not declared",
+  "error: approval/t-alpha.yaml: rules[0].match.resources[1]: [rid-domain] 'telegram:kb-main/chat/1': connection 'kb-main' has domain 'kb'",
+  "error: approval/t-alpha.yaml: rules[0].approvers[0]: [dangling-approver] group 'nope' is not declared",
+  "error: approval/t-alpha.yaml: rules[0].approvers[1]: [dangling-approver] 'oidc:https://idp.example.invalid:3' is not a declared human",
+  "error: approval/t-alpha.yaml: rules[0].approvers[2]: [approver-role] 'oidc:https://idp.example.invalid:2' has no `approver` role",
+  "error: approval/t-alpha.yaml: rules[0].approvers[4]: [approver-role] 'agent:t-alpha:a' has no `approver` role",
+  "error: approval/t-alpha.yaml: rules[1].match.requesters[0]: [dangling-requester] group 'nope' is not declared",
+  "error: approval/t-alpha.yaml: rules[1].match.requesters[1]: [foreign-principal] 'agent:t-beta:x' belongs to tenant 't-beta', not 't-alpha'",
+  "error: approval/t-alpha.yaml: rules[1].match.requesters[2]: [dangling-requester] 'agent:t-alpha:ghost' is not a declared agent",
+  "error: approval/t-alpha.yaml: rules[2].match.effect_classes: [auto-approve-high-risk] auto_approve for effect class high_risk (AP-02)",
+  "error: approval/t-alpha.yaml: rules[2].match.tools[0]: [auto-approve-high-risk] demo.wire.propose is high_risk (AP-02)",
+  "warning: approval/t-alpha.yaml: rules[2].match.tools[1]: [unknown-tool] no manifest for demo.unknown.propose",
+  "error: approval/t-alpha.yaml: rules[4].approvers: [approvers-empty-intersection] no common approver with 'dup'",
+  "error: approval/t-alpha.yaml: rules[4].approvers: [approvers-empty-intersection] no common approver with 'dup'",
+  "error: approval/t-alpha.yaml: rules[4].approvers: [approvers-empty-intersection] no common approver with 's1'",
+  "error: approval/t-ghost.yaml: tenant: [no-grants-file] no tenants/ file for tenant 't-ghost'",
+  "error: approval/t-ghost.yaml: defaults.execution_window: [ttl-exceeds-default] 2h is longer than the system default",
+  "error: approval/t-ghost.yaml: rules[0].approval_ttl: [ttl-exceeds-default] 25h is longer than default",
+  "error: approval/t-ghost.yaml: rules[1].execution_window: [ttl-exceeds-default] 3h is longer than default",
+  "error: approval/t-lone.yaml: rules[0].match.requesters[0]: [dangling-requester] group 'any' is not declared",
+  "error: approval/t-lone.yaml: rules[0].approvers[0]: [dangling-approver] group 'none' is not declared",
+  "error: platform/registry.yaml: services[2].id: [duplicate-id] duplicate service id 'demo'",
+  "error: platform/registry.yaml: webhooks[1].id: [duplicate-id] duplicate webhook id 'wh'",
+  "warning: platform/registry.yaml: services[1].tools: [ignored-tools] build takes tools from manifests",
+  "warning: platform/registry.yaml: services[1].tenants[1]: [unknown-tenant] no tenants/ file for 't-nowhere'",
+  "warning: platform/registry.yaml: webhooks[1].tenant: [unknown-tenant] no tenants/ file for 't-elsewhere'"
+ ]
+}

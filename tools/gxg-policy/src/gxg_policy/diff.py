@@ -27,7 +27,7 @@ class PolicyError(Exception):
 
 def _load(root: Path) -> Policies:
     if not root.exists():  # e.g. the base commit has no policies/ yet
-        return Policies(root)
+        return Policies()
     pol = load(root)
     if pol.errors:
         raise PolicyError("\n".join(map(str, pol.errors)))
@@ -199,13 +199,15 @@ class _Diff:
                         self.add(True, **e, change="tenant_added", service_tenant=t)
                     for t in set(b[sid]["tenants"]) - set(h[sid]["tenants"]):
                         self.add(False, **e, change="tenant_removed", service_tenant=t)
-                    for f in ("kind", "public_key", "internal_url"):
+                    # A new key lets its holder act as the service (AS-06): widening; a dropped key narrows.
+                    self.sets(e, "public_keys", b[sid]["public_keys"], h[sid]["public_keys"])
+                    for f in ("kind", "internal_url"):
                         if b[sid].get(f) != h[sid].get(f):
                             self.add(True, **e, change=f"{f}_changed")
 
 
 def _key(e: Entry) -> str:
-    return json.dumps(e, sort_keys=True, default=str)
+    return json.dumps(e, sort_keys=True)
 
 
 def diff(base_root: Path, head_root: Path) -> dict[str, list[Entry]]:
