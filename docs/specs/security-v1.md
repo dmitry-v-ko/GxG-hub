@@ -35,8 +35,8 @@
 ## Identity
 
 - **SEC-01.** Principal — неизменяемый ID от identity-провайдера: токен агента в ContextForge, OIDC-пользователь для людей. Display name, email из аргументов, `agent_id`/`tenant_id` в аргументах tool не являются identity.
-- **SEC-02.** У каждого агента свой credential. Общий токен на несколько агентов запрещён. Токен агента — API-токен ContextForge, выпущенный с `team_id` его team (`POST /v1/tokens`). На v1.1.1 такой JWT (HS256, ключ `JWT_SECRET_KEY` ContextForge) несёт `iss` = `mcpgateway`, `aud` = `mcpgateway-api`, `token_use` = `api`, `teams` = [`<team_id>`], `exp` ([проверено в M4](../adr/0001-identity-propagation.md#результаты-по-критериям), [claims](../../spikes/m4-contextforge/evidence/teams-claims-and-visibility.json)). Агенту выдаётся только токен ровно с одной team. Токен без team или с несколькими teams адаптер identity отклоняет.
-- **SEC-03.** Коннектор получает identity вызывающего только доверенным каналом от ContextForge. Канал — наш плагин-адаптер ContextForge `gxg_identity` (хук `tool_pre_invoke`, [ADR-0001](../adr/0001-identity-propagation.md), вариант C). Он добавляет заголовок `X-GxG-Identity`: JWS `alg` = `EdDSA` (Ed25519) с `kid`, ключ подписи есть только у адаптера, коннектор знает только публичный. Встроенное identity propagation ContextForge (`IDENTITY_PROPAGATION_ENABLED`, `IDENTITY_SIGN_CLAIMS`, на v1.1.1 оба по умолчанию `false`) полномочий не даёт и остаётся выключенным: его HMAC покрывает только `user_id:email`, без tenant, времени и nonce, и перехваченный заголовок можно повторять бесконечно. Минимальный набор claims: `iss`, `aud` = коннектор, `sub` = principal, `tenant_id`, `iat`, `exp` (`exp − iat ≤ 60 с`), `jti`, `ahs` = sha256 канонических аргументов вызова. Коннектор проверяет подпись, `aud`, срок с допуском 5 с, хеш аргументов и одноразовость `jti`. Без валидных claims коннектор отказывает (fail closed).
+- **SEC-02.** У каждого агента свой credential. Общий токен на несколько агентов запрещён. Токен агента выпускается с audience ContextForge и scope'ом его team (VERIFY: `teams` claim в JWT ContextForge).
+- **SEC-03.** Коннектор получает identity вызывающего только доверенным каналом от ContextForge: подписанное identity propagation (VERIFY: в ContextForge оно и HMAC-подпись выключены по умолчанию) или эквивалентный проверяемый механизм. Минимальный набор claims: `iss`, `aud` = коннектор, `sub` = principal, `tenant_id`, `iat`, `exp`, `jti`. Без валидных claims коннектор отказывает (fail closed).
 - **SEC-04.** Коннектор принимает MCP-вызовы только от ContextForge: сеть плюс аутентификация сервиса. Неподписанные заголовки и `_meta` не дают полномочий.
 - **SEC-05.** Нет token passthrough. Токен агента не уходит к провайдеру, у провайдера отдельные credentials tenant'а.
 - **SEC-06.** Человек-approver аутентифицируется в Approval Web UI отдельно от агентов: OIDC и/или passkey. Machine credentials не могут вызвать endpoint решения.
@@ -89,7 +89,7 @@
 ## Версия ContextForge
 
 - **SEC-22.** Используется только релиз, закреплённый по digest, без известных незакрытых уязвимостей. Перед закреплением и каждым обновлением проверяются security advisories IBM (в частности, [CVE-2026-110279](https://www.ibm.com/support/pages/node/7296490)) и прогоняются тесты этапа B. Prerelease-образы запрещены.
-- Тег `1.1.1` в `.env.example` — кандидат для локальной проверки, а не одобренная версия.
+- Закреплённая версия (спайк M4, 2026-11-20): `ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5`. Advisories на эту дату — в [ADR-0001](../adr/0001-identity-propagation.md). Для production версия одобряется после этапа B (M5).
 
 ## Ссылки
 
