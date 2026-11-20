@@ -7,7 +7,7 @@
   "commit_note": "Tested code commit. This report is added by the next commit on the same branch; that commit changes only reports/.",
   "run_at": "2026-11-20T21:30:00Z",
   "author": "Claude Code (executor, M0.1 cycle 2)",
-  "addresses": "reports/critic/M0.1-cycle-1.json required_improvements + minors; owner decision (cycle 2 task): one-line file-name check in gitleaks.sh allowed as an exception to AC-M0.1-02, AC-M0-04 not narrowed",
+  "addresses": "reports/critic/M0.1-cycle-1.json required_improvements + minors. The file-name check in gitleaks.sh is built as the task asks and awaits the owner's decision on AC-M0.1-02 (orchestrator correction 2026-11-20: the plan has no such exception yet)",
   "environment": {
     "local": {
       "os": "linux x86_64",
@@ -61,12 +61,13 @@
     },
     {
       "id": "AC-M0.1-02",
-      "status": "passed",
+      "status": "pending_owner_decision",
       "expected": "scripts/ci/check_secrets.py and its tests deleted; no other hand-made secret scanner",
-      "actual": "check_secrets.py and its test stay deleted. All content matching is done by gitleaks (.gitleaks.toml, .gitleaks-strict.toml). The one exception is the owner-approved check of file names in scripts/ci/gitleaks.sh: `git ls-tree -r -z --name-only` (tree) or `git log -z --name-only --diff-filter=d -m` (each commit of the range), piped through `grep -zP` with the same regex as the strict file-name rule. It exists only because gitleaks skips empty files. It reads no file content.",
+      "actual": "check_secrets.py and its test stay deleted; all content matching is gitleaks (.gitleaks.toml, .gitleaks-strict.toml). Open question for the owner: scripts/ci/gitleaks.sh now has one file-name check outside gitleaks (`git ls-tree -r -z --name-only` for the tree, `git log -z --name-only --diff-filter=d -m` for each commit of the range, piped through `grep -zP` with the strict rule's regex). It exists only because gitleaks skips empty files, and it reads no content. Does it count as 'another self-written secret scanner'? Alternative without own code: a local pre-commit hook with `language: fail` (it only fails on the listed file names and never reads content, so it also catches empty files). It needs: (1) `pre-commit` pinned in the dev group and uv.lock; (2) `.pre-commit-config.yaml` with `repo: local`, hook `id: secret-file-names`, `language: fail`, `entry: secret-like file name (AC-M0-04)`, `files: '(?i)(^|/)([^/]*\\.(pem|key|p12|pfx)|\\.env[^/]*|id_(rsa|dsa|ecdsa|ed25519))$'`, `exclude: '(^|/)\\.env\\.example$'`; (3) CI steps `pre-commit run secret-file-names --all-files` for the tree and, for the range, the same per commit (`for c in $(git rev-list A..B); do pre-commit run secret-file-names --files $(git diff-tree --no-commit-id --name-only -r -m --diff-filter=d $c); done`), because `--from-ref/--to-ref` only sees the net diff and misses a file added and removed inside the PR; that per-commit loop is again a few lines of glue; (4) tests/secrets pointed at those steps (the fixtures stay); (5) CODEOWNERS for the new config. If the owner rejects the gitleaks.sh line, it is removed (empty files are then caught only by this hook, or not at all).",
       "evidence": [
         "git show --stat 5964ee4"
-      ]
+      ],
+      "owner_decision": "pending"
     },
     {
       "id": "AC-M0.1-03",
@@ -100,9 +101,9 @@
     },
     {
       "id": "AC-M0-04",
-      "status": "passed",
+      "status": "passed (empty files: pending_owner_decision via AC-M0.1-02)",
       "expected": "CI rejects a commit with a file matching the secret patterns (*.pem, .env, the private key header)",
-      "actual": "See AC-M0.1-01. Empty .env and empty server.pem are now red in both tree and range (cycle 1: green).",
+      "actual": "See AC-M0.1-01. Empty .env and empty server.pem are now red in both tree and range (cycle 1: green). Empty files depend on the gitleaks.sh name check (AC-M0.1-02 pending_owner_decision).",
       "evidence": [
         "CI job `secrets` (run 44820402301)"
       ]
@@ -201,5 +202,13 @@
     "ci_frequency": "every push and PR (job `mutmut`, required via ci-ok)"
   },
   "plan": "reports/plans/M0.1-cycle-2.md",
-  "plan_source": "docs/implementation-plan-v1.md: claude/admiring-planck-vzys0x@b61acf2 is identical to this branch's copy (does not yet carry the AC-M0.1-02 wording on the name check), so nothing was brought over in cycle 2"
+  "plan_source": "docs/implementation-plan-v1.md: claude/admiring-planck-vzys0x@b61acf2 is identical to this branch's copy (does not yet carry the AC-M0.1-02 wording on the name check), so nothing was brought over in cycle 2",
+  "pending_owner_decisions": [
+    {
+      "ref": "AC-M0.1-02",
+      "question": "Is the one-line file-name check in scripts/ci/gitleaks.sh an allowed exception, or does it break 'no other self-written secret scanner'?",
+      "if_rejected": "remove the check (and the empty-file fixtures or point them at a pre-commit `language: fail` hook)",
+      "alternative": "Alternative without own code: a local pre-commit hook with `language: fail` (it only fails on the listed file names and never reads content, so it also catches empty files). It needs: (1) `pre-commit` pinned in the dev group and uv.lock; (2) `.pre-commit-config.yaml` with `repo: local`, hook `id: secret-file-names`, `language: fail`, `entry: secret-like file name (AC-M0-04)`, `files: '(?i)(^|/)([^/]*\\.(pem|key|p12|pfx)|\\.env[^/]*|id_(rsa|dsa|ecdsa|ed25519))$'`, `exclude: '(^|/)\\.env\\.example$'`; (3) CI steps `pre-commit run secret-file-names --all-files` for the tree and, for the range, the same per commit (`for c in $(git rev-list A..B); do pre-commit run secret-file-names --files $(git diff-tree --no-commit-id --name-only -r -m --diff-filter=d $c); done`), because `--from-ref/--to-ref` only sees the net diff and misses a file added and removed inside the PR; that per-commit loop is again a few lines of glue; (4) tests/secrets pointed at those steps (the fixtures stay); (5) CODEOWNERS for the new config. If the owner rejects the gitleaks.sh line, it is removed (empty files are then caught only by this hook, or not at all)."
+    }
+  ]
 }
