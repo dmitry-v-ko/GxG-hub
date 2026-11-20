@@ -1,8 +1,8 @@
-{"at": "2026-11-20T19:56:06Z", "kind": "bypass_no_identity", "status": 200}
-{"at": "2026-11-20T19:56:06Z", "captured_at": "2026-11-20T19:56:05.950838+00:00", "kind": "replay_immediate", "status": 200}
-{"at": "2026-11-20T19:56:06Z", "kind": "replay_tampered_args", "status": 200}
-{"at": "2026-11-20T19:56:06Z", "kind": "replay_other_connector", "path": "/mcp/t-beta", "status": 200}
-{"at": "2026-11-20T19:56:06Z", "kind": "replay_other_tool", "status": 200}
-{"at": "2026-11-20T19:56:06Z", "kind": "forged_jws_attacker_key", "status": 200}
+{"at": "2026-11-20T21:08:09Z", "kind": "bypass_no_identity", "status": 200}
+{"at": "2026-11-20T21:08:09Z", "captured_at": "2026-11-20T21:08:08.495013+00:00", "kind": "replay_immediate", "status": 200}
+{"at": "2026-11-20T21:08:09Z", "kind": "replay_tampered_args", "status": 200}
+{"at": "2026-11-20T21:08:09Z", "kind": "replay_other_connector", "path": "/mcp/t-beta", "status": 200}
+{"at": "2026-11-20T21:08:09Z", "kind": "replay_other_tool", "status": 200}
+{"at": "2026-11-20T21:08:09Z", "kind": "forged_jws_attacker_key", "status": 200}
 waiting 65s before delayed replay ...
-{"at": "2026-11-20T19:57:11Z", "captured_at": "2026-11-20T19:56:05.950838+00:00", "delay_s": 65, "kind": "replay_delayed", "status": 200}
+{"at": "2026-11-20T21:09:14Z", "captured_at": "2026-11-20T21:08:08.495013+00:00", "delay_s": 65, "kind": "replay_delayed", "status": 200}

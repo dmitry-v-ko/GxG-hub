@@ -3,8 +3,8 @@
   "claims": {
    "aud": "mcpgateway-api",
    "env": "development",
-   "exp": 1795291239,
-   "iat": 1795204839,
+   "exp": 1795295543,
+   "iat": 1795209143,
    "iss": "mcpgateway",
    "jti": "<redacted>",
    "scopes": {
@@ -13,9 +13,9 @@
     "server_id": null,
     "time_restrictions": {}
    },
-   "sub": "a9e5d77f-be13-4609-9ccf-198f41b69276",
+   "sub": "8d4c993a-c0e6-4810-ad36-58ab56d0fe2b",
    "teams": [
-    "73844a1e49ea485c9214808acfc91c48"
+    "cf44648dbe2647d08532cb9dcc8fcb1c"
    ],
    "token_use": "api",
    "user": {
