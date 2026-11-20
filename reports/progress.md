@@ -52,3 +52,5 @@
 | — | — | интеграция | claude/integration | e7d245f | — | база волны 3: m0-foundation + спеки оркестратора (аудит A, Must fix 5); check-all зелёный | 2026-11-20 |
 | M2 | 2 | критик | claude/m2-policy-tooling | fbd522a | **5.0** | < 9: 2× critical (смена base PR; fast-forward A→B после метки), major (тег origin/main, DoD-4 mutmut) → цикл 3 (+ tools из manifest в bundle, вектор подписи) | 2026-11-20 |
 | M2 | 3 | исполнитель | claude/m2-policy-tooling | — | — | запущен | 2026-11-20 |
+| M1 | 2 | критик | claude/m1-connector-kit | c64693a | **6.0** | < 9: DoD-4 (самописный скрипт вместо mutmut, 20 выживших), 2× major (thumbprint, jti) → цикл 3 (+ спеки аудита); без роста 1 цикл | 2026-11-20 |
+| M1 | 3 | исполнитель | claude/m1-connector-kit | — | — | запущен | 2026-11-20 |
