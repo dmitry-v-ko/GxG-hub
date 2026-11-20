@@ -1,13 +1,13 @@
 {
   "milestone": "M4",
-  "cycle": 2,
+  "cycle": 3,
   "branch": "claude/m4-contextforge-spike",
   "base": "claude/m0-foundation @ 6b3fe48",
-  "commit": "d2b62b06911f6c265fdfbc63ad5845b4deb65d15",
-  "commit_note": "Tested commit (spike code + docs 98f7ce1, re-run evidence d2b62b0). This report is added by the next commit, which changes only reports/.",
-  "run_at": "2026-11-20T20:02:08Z",
-  "author": "Claude Code (executor, M4 cycle 2)",
-  "plan": "reports/plans/M4-cycle-2.md",
+  "commit": "27c676a8b9786c8f36f11bab10c9a0413c20ce80",
+  "commit_note": "Tested commit: code a283c8b + b4b8656 (echo mount fix), ADR 466164f, re-run evidence 27c676a (= commit). This report is added by the next commit, which changes only reports/.",
+  "run_at": "2026-11-20T21:05:21Z",
+  "author": "Claude Code (executor, M4 cycle 3)",
+  "plan": "reports/plans/M4-cycle-3.md",
   "environment": {
     "where": "Claude Code cloud container, linux x86_64; dockerd 29.10.0 started manually inside the session; docker compose v5.7.1",
     "network": "ghcr.io and docker.io pulls OK; github.com/IBM pages read via web fetch; api.github.com and curl to github.com advisory pages: 403 from the egress proxy (not needed after web fetch)",
@@ -17,14 +17,14 @@
   "contextforge_image_digest": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
   "other_images": {
     "postgres": "postgres:18@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a",
-    "echo_runtime": "python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
+    "echo_runtime": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5 (its Python 3.12 venv: PyJWT 2.15.1, cryptography 50.0.2; echo mounted at /echo)",
     "upgrade_from": "ghcr.io/ibm/mcp-context-forge:v1.1.0@sha256:7eb21fb9a8070df59435c03c76c40d8c71230c55ba89f884f2482d2cc81cff1c"
   },
   "contextforge_source_commit": "dbc643befb6f412e62584179c8f0ebb0207d44fb (tag v1.1.1, image label org.opencontainers.image.revision)",
   "sdk_versions": {
     "mcp": null,
     "fastmcp": null,
-    "note": "echo server is stdlib JSON-RPC over streamable HTTP; plugin uses cpex.framework and cryptography 50.0.2 shipped in the v1.1.1 image"
+    "note": "echo server is stdlib JSON-RPC over streamable HTTP plus PyJWT 2.15.1 for the verifier; plugin uses cpex.framework 0.1.4 and PyJWT 2.15.1 shipped in the v1.1.1 image; CI tests use PyJWT==2.15.1 from the root dev group"
   },
   "policy_version": null,
   "bundle_version": null,
@@ -86,17 +86,17 @@
       {
         "id": 2,
         "status": "passed",
-        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (bypass_no_identity: missing X-GxG-Identity; forged_jws_attacker_key: bad signature; replay_immediate: replayed jti; replay_tampered_args: arguments hash mismatch; replay_other_connector: bad aud; replay_other_tool: bad tool)"
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (bypass_no_identity: missing X-GxG-Identity; forged_jws_attacker_key: InvalidSignatureError: Signature verification failed; replay_immediate: replayed jti; replay_tampered_args: arguments hash mismatch; replay_other_connector: InvalidAudienceError: Audience doesn't match (strict); replay_other_tool: bad tool)"
       },
       {
         "id": 3,
         "status": "passed",
-        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (replay_after_65s: expired or not yet valid)"
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (replay_after_65s: ExpiredSignatureError: Signature has expired)"
       },
       {
         "id": 4,
         "status": "passed",
-        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (10/10 calls via ContextForge accepted, tool claim = upstream 'echo' on alias paths too: /rpc, /servers/{id}/mcp, alias via /rpc and virtual server; 4 agents). Global /mcp/ refuses team members (RBAC tools.execute), not isolation evidence. Not covered by tool_pre_invoke (code reading, not run): direct_proxy gateways (MCPGATEWAY_DIRECT_PROXY_ENABLED=false), resources/read, prompts/get (connector refuses without identity)."
+        "evidence": "spikes/m4-contextforge/evidence/variant-c.verify_jws.jsonl (10/10 calls via ContextForge accepted on arrival by the connector-side verifier, identity = calling agent, arguments {\"text\": \"привет\", \"lang\": \"ru\"}, tool claim = upstream 'echo' on alias paths too: /rpc, /servers/{id}/mcp, alias via /rpc and virtual server; 4 agents). Global /mcp/ refuses team members (RBAC tools.execute), not isolation evidence. Not covered by tool_pre_invoke (code reading, not run): direct_proxy gateways (MCPGATEWAY_DIRECT_PROXY_ENABLED=false), resources/read, prompts/get (connector refuses without identity)."
       },
       {
         "id": 5,
@@ -168,7 +168,7 @@
     {
       "id": "DoD-2",
       "status": "passed",
-      "note": "Spike AC are recorded results; the live runs are scripted (run_spike.sh) and the verifier has a mutation self-check. They are not pytest tests: they need Docker and registry access, which the CI policy (no network in pytest) forbids."
+      "note": "Verifier: pytest spikes/m4-contextforge/tests/test_verify_jws.py (30 tests, own Ed25519 key, no network) runs in CI via root testpaths. Live criteria: run_spike.sh, which exits 1 if check_verdicts.py finds any ContextForge call not accepted with the calling agent's identity, any agent call refused by the plugin, the admin call not refused, or any attack rejected with a reason other than expected; plus the fail-closed and control checks. Live runs need Docker/registry, so they are not in CI (no network in pytest)."
     },
     {
       "id": "DoD-3",
@@ -178,24 +178,39 @@
     {
       "id": "DoD-4",
       "status": "passed",
-      "note": "mutate_verify_jws.py (evidence/variant-c.mutations.log, exit 0): dropping each check makes its attack accepted. Covered: signature (forged_jws_attacker_key), exp (replay_after_65s), ahs (replay_tampered_args), jti (replay_immediate), aud (replay_other_connector), tool (replay_other_tool), exp-iat<=60 (forged_ttl_3600), iss (forged_bad_iss), kid (forged_unknown_kid: mutant crashes with AttributeError, counted red), sub in tenant (forged_sub_other_tenant). The last four use requests signed with the real adapter key, since no live attack reaches them. Not covered: alg (equivalent mutant, Ed25519 verify rejects anything else). Fail closed in ContextForge: run_spike.sh stage 'missing adapter key' with a control run PLUGINS_FAIL_ON_PLUGIN_ERROR=false (healthy, call reaches connector without identity), evidence/variant-c-nokey.log; the script exits 1 if either result differs."
+      "note": "mutmut 3.8.1 on echo/verify_jws.py (spikes/m4-contextforge/mutmut.sh, setup.cfg): 132 mutants, 131 killed, 1 survived and equivalent: x_canonical__mutmut_4 ensure_ascii=False -> None (falsy, identical output). Report: reports/mutmut/M4.txt. mutmut.sh exits 1 on any other survivor (checked: dropping the ttl=61 assertion leaves 3 survivors, exit 1). mutate_verify_jws.py deleted. Plugin not under mutmut: it imports cpex (only in the image); its output is checked on every run by check_verdicts.py."
     },
     {
       "id": "DoD-5",
       "status": "passed",
       "note": "No skipped tests; repo check-all OK (ruff covers spikes/)."
+    },
+    {
+      "id": "DoD-6",
+      "status": "passed",
+      "note": "reports/plans/M4-cycle-3.md, table 'DoD-6': plugin hook (built-ins A, jwt_claims_extraction, header_injector, vault, RFC 8693 token exchange -> justified custom), JWS signing and verification (PyJWT, used), time check (in echo on arrival, because PyJWT has no 'now' parameter), canonical JSON (stdlib), mutation tool (mutmut), run assertions (stdlib check_verdicts.py)."
     }
   ],
   "tests": [
     {
       "id": "spikes/m4-contextforge/run_spike.sh (variants A, C, fail closed without key + control, upgrade)",
       "status": "passed",
-      "note": "exit 0, 2026-11-20 19:52-20:03 UTC; evidence/ committed in d2b62b0"
+      "note": "exit 0, 2026-11-20 21:00-21:14 UTC; check_verdicts c: OK (10/10 via ContextForge accepted, 7/7 attacks with expected reasons, admin refused by plugin), check_verdicts c-upgrade: OK (16/16 accepted); evidence/ committed in 27c676a"
     },
     {
-      "id": "spikes/m4-contextforge/mutate_verify_jws.py",
+      "id": "spikes/m4-contextforge/tests/test_verify_jws.py",
       "status": "passed",
-      "note": "10/10 mutations caught, run by run_spike.sh"
+      "note": "30 passed (uv run pytest), also part of the root pytest run"
+    },
+    {
+      "id": "spikes/m4-contextforge/mutmut.sh",
+      "status": "passed",
+      "note": "131/132 killed, 1 equivalent listed; reports/mutmut/M4.txt"
+    },
+    {
+      "id": "check_verdicts.py negative check",
+      "status": "passed",
+      "note": "one via-ContextForge verdict tampered to rejected -> FAIL, exit 1; c-upgrade with --attacks (no attacks present) -> FAIL; restored -> OK"
     },
     {
       "id": "scripts/ci/check-all.sh",
@@ -214,6 +229,8 @@
     "principal = local part of the ContextForge user email (the plugin sees email, not the user UUID). Recreating an agent with the same email gives the same principal and its grants; agent emails must never be reused (registry tombstone). Written in the ADR.",
     "Paths without tool_pre_invoke were read in code, not run: direct_proxy gateways (off by default, set false explicitly), resources/read and prompts/get (arrive without identity, connector refuses).",
     "Canonical JSON is Python json.dumps(sort_keys, compact separators, ensure_ascii=False), not RFC 8785; floats serialize differently from JCS. Both sides must use the same function (SEC-03).",
-    "Commit 8bb6efe (re-apply SEC-02/SEC-03) also carries the deletion of compose.passthrough-misconfig.yaml and its two evidence files, staged earlier; history not rewritten."
+    "Commit 8bb6efe (re-apply SEC-02/SEC-03) also carries the deletion of compose.passthrough-misconfig.yaml and its two evidence files, staged earlier; history not rewritten.",
+    "ToolPreInvokePayload.headers is deprecated in cpex 0.1.4 (use extensions.http.headers); v1.1.1 tool_service applies only modified_payload.headers to the upstream request, so migration is not possible yet. When the field is removed, identity stops reaching connectors (fail closed, outage). ADR criterion 5 and 'Что дальше': MC-05 must assert X-GxG-Identity arrives and is accepted; plugin migrates to modified_extensions with write_headers once ContextForge applies it.",
+    "Echo records the verdict but still answers a rejected call with the echo result; refusing with an error is the M5 connector's job."
   ]
 }
