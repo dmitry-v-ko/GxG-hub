@@ -23,7 +23,7 @@ python -m unittest discover -s tests/contract -p 'test_*.py' -v
 | SC-02 | B | Анонимный, истёкший токен, токен с чужим audience | 401 или MCP-эквивалент | SEC-01, SEC-02 |
 | SC-03 | B | Подмена `tenant_id`/`agent_id` в аргументах, forwarded-заголовках, `_meta` | Игнорируется или отклоняется; действует проверенная identity | SEC-01, MCC-02 |
 | SC-04 | B | Identity к коннектору: подделанная подпись, истёкшая, повтор, чужой issuer/audience | Коннектор отказывает до получения credentials | SEC-03 |
-| SC-05 | B | Агент tenant A запрашивает чат, документ или аккаунт tenant B | `not_found` / `resource_forbidden` | TEN-02, MCC-03 |
+| SC-05 | B | Агент tenant A запрашивает чат, документ или аккаунт tenant B | `not_found`, побайтно как для несуществующего (GR-17) | TEN-02, MCC-03 |
 | SC-06 | B | Прямой вызов коннектора в обход ContextForge | Сеть не пускает; при доступе — `unauthenticated` | SEC-04, SEC-13 |
 | SC-07 | B | SSRF: URL регистрации, OAuth discovery, редирект на metadata/RFC1918 | Отказ, в том числе после DNS-редиректа | SEC-15 |
 | SC-08 | B | Инструкции на вызов tool'а в тексте Telegram или KB | Не дают прав; эффекта нет; максимум — intent от агента в пределах его прав | SEC-11 |

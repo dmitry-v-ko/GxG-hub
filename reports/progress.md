@@ -44,3 +44,4 @@
 | A | — | ponytail-audit | claude/m0-foundation | 6b3fe48 | — | запуск аудита этапа A (пропущен при закрытии M0) | 2026-11-20 |
 | — | — | решение владельца | — | — | — | gitleaks вместо своего сканера, mutmut вместо самописных мутаций; критики явно проверяют «есть ли готовое решение» (поле existing_solutions); добавлена веха M0.1 | 2026-11-20 |
 | M0.1 | 1 | исполнитель | claude/m0.1-standard-tools | — | — | запущен (session_01V6d5A9JGmeLGTTTU3Ebz2D): gitleaks + mutmut; M1/M4/критику M2 отправлены новые правила | 2026-11-20 |
+| A | — | ponytail-audit | claude/audit-stage-a | fdae40b | — | Must fix 1–5 и Should fix 6–16, Nice 17 закрыты оркестратором в спеках/схемах (T12a, AS-26 tools из bundle, AS-11a on_behalf_of, MCC-09, схемы bundle + вектор подписи, uuid, rule_ids, public_keys, preview в manifest, JCS UTF-16); остаток → backlog | 2026-11-20 |

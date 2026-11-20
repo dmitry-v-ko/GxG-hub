@@ -18,13 +18,11 @@
   "properties": {
     "decision_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "intent_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "tenant_id": {
       "type": "string",

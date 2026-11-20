@@ -35,7 +35,7 @@ class EnvelopeContractTests(unittest.TestCase):
     def test_effect_intent_rejects_model_claimed_approval(self):
         v = validator('effect-intent.schema.json')
         valid = {
-            'intent_id': 'intent-1', 'tenant_id': 'tenant-1',
+            'intent_id': '11111111-1111-4111-8111-111111111111', 'tenant_id': 'tenant-1',
             'requester_principal': 'agent:one',
             'tool_key': 'telegram.message.send', 'tool_version': '1',
             'connection_id': 'telegram-account-1', 'resource_id': 'chat-1',

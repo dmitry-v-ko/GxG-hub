@@ -94,12 +94,6 @@
               }
             }
           },
-          "approval_default": {
-            "enum": [
-              "not_required",
-              "required"
-            ]
-          },
           "executes_via": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){2}$"
@@ -117,6 +111,30 @@
           },
           "limits": {
             "type": "object"
+          },
+          "preview": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "fields"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "fields": {
+                "type": "object",
+                "maxProperties": 30,
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              }
+            }
           }
         },
         "allOf": [
@@ -134,7 +152,7 @@
             "then": {
               "required": [
                 "executes_via",
-                "approval_default"
+                "preview"
               ],
               "properties": {
                 "action": {

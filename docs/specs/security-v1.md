@@ -25,7 +25,7 @@
 | --- | --- | --- | --- |
 | 1 | Ingress (TLS, ContextForge auth) | Подлинность токена агента: issuer, audience, срок; срезание клиентских identity- и approval-заголовков; rate limit | 401, вызова нет |
 | 2 | ContextForge RBAC + `unified_pdp` | Tool разрешён этому principal в этом tenant; tools `*.execute` агентам запрещены всегда | 403, вызова нет |
-| 3 | Коннектор, read и propose | Проверенная identity (tenant, principal) от ContextForge; доступ к конкретному ресурсу; credentials только своего tenant | `permission_denied` / `resource_forbidden`, обращения к провайдеру нет |
+| 3 | Коннектор, read и propose | Проверенная identity (tenant, principal) от ContextForge; доступ к конкретному ресурсу; credentials только своего tenant | `permission_denied` / `not_found` (GR-17), обращения к провайдеру нет |
 | 4 | Approval Service | Intent создан доверенным коннектором; политика; решение человека нужной роли того же tenant; срок; атомарное резервирование | Intent не исполняется |
 | 5 | Коннектор, execute | Подпись и claims execution token; совпадение хеша параметров; одноразовый переход в `dispatching` | Отказ, обращения к провайдеру нет |
 | 6 | Provider | Отдельные credentials на tenant; provider-side idempotency, где есть; egress allowlist | `outcome_unknown` → reconciliation |

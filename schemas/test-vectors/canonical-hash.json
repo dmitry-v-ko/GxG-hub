@@ -1,5 +1,5 @@
 {
-  "description": "EFF-05 canonicalization vectors: NFC-normalize strings, forbid floats, serialize with RFC 8785 (JCS), SHA-256 of UTF-8 bytes. Array order is significant. Implementations in every language MUST reproduce 'canonical' and 'sha256' exactly.",
+  "description": "EFF-05 canonicalization vectors: NFC-normalize strings, forbid floats, serialize with RFC 8785 (JCS), SHA-256 of UTF-8 bytes. Array order is significant. Implementations in every language MUST reproduce 'canonical' and 'sha256' exactly. Object keys are sorted by UTF-16 code units (RFC 8785 §3.2.3), not by code points. Integer -0 is serialized as 0. 'input_json' entries are raw JSON text to be parsed by the implementation.",
   "invalid_inputs": [
     {
       "name": "float_forbidden",
@@ -17,6 +17,11 @@
           "n": 9007199254740993
         }
       },
+      "expected_error": "invalid_input"
+    },
+    {
+      "name": "float_one_point_zero",
+      "input_json": "{\"args\":{\"a\":1.0}}",
       "expected_error": "invalid_input"
     }
   ],
@@ -130,6 +135,38 @@
       },
       "canonical": "{\"args\":{\"attachments\":[{\"name\":\"b.pdf\",\"sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"},{\"name\":\"a.pdf\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}],\"recipient\":\"bob_02\",\"text\":\"x\"},\"connection_id\":\"demo-main\",\"resource_id\":\"demo:demo-main/board/b-ops\",\"tenant_id\":\"t-beta\",\"tool_key\":\"demo.message.propose\",\"tool_version\":\"1.0.0\"}",
       "sha256": "d7b0e3e26cc2a5a74079755e9d6c1822dfd93ad61d7ef9a29701b1ff9c60eed3"
+    },
+    {
+      "name": "max_safe_integer",
+      "input": {
+        "args": {
+          "n": 9007199254740991
+        }
+      },
+      "canonical": "{\"args\":{\"n\":9007199254740991}}",
+      "sha256": "57a6cd5b575b6e26023bfd097dffdd5ad7a0813b6ccdd0bf8e4938f1644596aa"
+    },
+    {
+      "name": "negative_zero_is_zero",
+      "input": {
+        "args": {
+          "n": 0
+        }
+      },
+      "canonical": "{\"args\":{\"n\":0}}",
+      "sha256": "3b6872e939c0af79b0f43086b110f92ec0805bae5d5729982dd8b4f114625e16"
+    },
+    {
+      "name": "utf16_key_order",
+      "input": {
+        "args": {
+          "ﬁ": 1,
+          "😀": 2,
+          "a": 3
+        }
+      },
+      "canonical": "{\"args\":{\"a\":3,\"😀\":2,\"ﬁ\":1}}",
+      "sha256": "91002c29cb2b9eb465959eb1e5eee09ccd45bacc43e76b0ce045ec25353b9b66"
     }
   ]
 }

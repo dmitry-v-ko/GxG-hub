@@ -67,6 +67,28 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "rate_limited"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "then": {
+        "required": [
+          "retry_after_s"
+        ],
+        "properties": {
+          "retry_after_s": {
+            "minimum": 1
+          }
+        }
+      }
     }
   ]
 }
