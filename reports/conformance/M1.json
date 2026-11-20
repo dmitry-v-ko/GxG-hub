@@ -18,17 +18,19 @@
       "runner": "ubuntu-latest",
       "python": "3.12",
       "workflow": ".github/workflows/ci.yml",
-      "run_id": null,
-      "run_url": null,
-      "conclusion": "pending",
+      "run_id": 44815009584,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44815009584",
+      "conclusion": "success",
       "jobs": {
-        "lint": "pending",
-        "types": "pending",
-        "tests": "pending",
-        "schema-guard": "pending",
-        "secrets": "pending",
-        "ci-ok": "pending"
-      }
+        "lint": "success",
+        "types": "success",
+        "tests": "success",
+        "schema-guard": "success",
+        "secrets": "success",
+        "ci-ok": "success"
+      },
+      "head_sha": "0eb244b5697515a13588d567d9a1bad22185a157",
+      "note": "Run 44814878816 on the code commit a0c0b4a was cancelled by the workflow concurrency group when 0eb244b (report only, same code) was pushed; 44815009584 on 0eb244b is the run of record."
     }
   },
   "contextforge_image_digest": null,
@@ -162,7 +164,7 @@
     {
       "id": "DoD-1",
       "status": "not_run",
-      "note": "Merge into main via PR is done by a human after the critic; CI on the branch: see environment.ci."
+      "note": "Merge into main via PR is done by a human after the critic; CI on the branch is green (run 44815009584, ci-ok = success)."
     },
     {
       "id": "DoD-2",
