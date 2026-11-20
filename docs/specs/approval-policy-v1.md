@@ -8,7 +8,7 @@
 
 - Файл на tenant: `policies/approval/<tenant_id>.yaml`, схема [approval-policy.schema.json](../../schemas/approval-policy.schema.json), пример [policies/approval/example.yaml](../../policies/approval/example.yaml).
 - Политика живёт в Git рядом с grants, проходит тот же CI и попадает в тот же подписанный bundle ([GR-09…GR-14](resource-grants-v1.md#проверки-в-ci)).
-- `policy_version` в intent = `bundle_version` + `rule_id` сработавшего правила.
+- `policy_version` в intent = `bundle_version`; все совпавшие правила записываются в `rule_ids` (отсортированный список).
 
 ## Формат
 
@@ -63,7 +63,7 @@ rules:
 | `step_up` | Нужна повторная аутентификация approver'а перед решением |
 | `approvers` | Сужение круга approver'ов: люди (`oidc:…`) или группы людей из файла grants. Без поля — любой `approver` tenant'а |
 | `approval_ttl`, `execution_window` | Переопределение сроков, только в сторону уменьшения |
-| `limits` | Только для `auto_approve`: сколько авто-одобрений в час и в сутки по этому правилу |
+| `limits` | Только для `auto_approve`, обязателен и непуст (хотя бы `max_per_hour` или `max_per_day`): сколько авто-одобрений в час и в сутки по этому правилу |
 
 Правило срабатывает, если intent удовлетворяет **всем** указанным условиям `match` (AND); внутри списка достаточно совпадения с одним элементом (OR).
 
@@ -78,7 +78,7 @@ rules:
   6. Если лимит `auto_approve` исчерпан, intent уходит человеку (`require_approval`, 1 approver), а не отклоняется.
 - **AP-02.** Для `high_risk` правило `auto_approve` недопустимо: CI отклоняет такой файл, а во время работы оно игнорируется с alert'ом.
 - **AP-03.** Лимиты `auto_approve` считаются по intents, одобренным этим правилом, в скользящем окне, атомарно с созданием intent'а (SELECT … FOR UPDATE по счётчику правила или эквивалент).
-- **AP-04.** Решение политики записывается в intent: `approval.mode` (`human` / `auto` / `not_required`), `required_approvals`, `step_up`, `rule_id`, `policy_version`. Позднее изменение политики **не** меняет уже созданные intents. Kill switch и отзыв grants действуют на них при исполнении (EFF-18).
+- **AP-04.** Решение политики записывается в intent: `approval.mode` (`human` / `auto` / `not_required`), `required_approvals`, `step_up`, `rule_ids`, `policy_version`. Позднее изменение политики **не** меняет уже созданные intents. Kill switch и отзыв grants действуют на них при исполнении (EFF-18).
 
 ## Квоты на `propose`
 

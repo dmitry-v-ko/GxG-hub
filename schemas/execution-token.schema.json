@@ -31,13 +31,11 @@
     },
     "sub": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "jti": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "ten": {
       "type": "string",

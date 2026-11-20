@@ -30,11 +30,11 @@ MCP — протокол обнаружения и вызова. Этот док
 | `unsupported_version` | Неподдерживаемая версия tool'а или контракта | Нет |
 | `unauthenticated` | Нет или невалидна identity | Нет |
 | `permission_denied` | Нет права на tool или операцию | Нет |
-| `resource_forbidden` | Нет права на конкретный чат, документ или аккаунт | Нет |
+| `resource_forbidden` | Право на ресурс есть, но не на это действие (например, `read` есть, `propose` нет): существование ресурса вызывающему уже известно. **Нет права на названный ресурс вообще → `not_found`** (GR-17) | Нет |
 | `not_found` | Ресурс не существует **или** скрыт правами (не различаем, чтобы не раскрывать существование) | Нет |
 | `conflict` | Нарушено предусловие: версия записи, повтор `idempotency_key` с другими параметрами | Нет, нужен новый запрос |
 | `effect_disabled` | Эффект выключен: kill switch, tool не включён | Нет |
-| `rate_limited` | Лимит Hub или провайдера (flood-wait); `retry_after_s` в деталях | Да, после паузы |
+| `rate_limited` | Лимит Hub или провайдера (flood-wait); `retry_after_s` на верхнем уровне ошибки (обязателен) | Да, после паузы |
 | `temporarily_unavailable` | Backend или провайдер временно недоступен, запрос **не** выполнен | Да, для `read` |
 | `timeout_before_start` | Таймаут с доказательством, что провайдер не получил запрос | Да |
 | `outcome_unknown` | Исход эффекта неизвестен | **Никогда автоматически**, только reconciliation |
@@ -50,7 +50,7 @@ MCP — протокол обнаружения и вызова. Этот док
 
 **MCC-01 — Discovery, версии, manifest.**
 - Каждый tool MUST иметь стабильное уникальное имя, описание, типизированную `inputSchema` и, если это совместимо с закреплённой версией MCP SDK, `outputSchema`.
-- Коннектор MUST иметь manifest (`gxg-manifest.yaml`, схема [gxg-manifest.schema.json](../../schemas/gxg-manifest.schema.json)) со списком tools. Для каждого tool указываются версия (semver), effect class, действие и тип ресурса ([GR](resource-grants-v1.md#действия)), approval policy по умолчанию, лимиты и ссылки на схемы.
+- Коннектор MUST иметь manifest (`gxg-manifest.yaml`, схема [gxg-manifest.schema.json](../../schemas/gxg-manifest.schema.json)) со списком tools. Для каждого tool указываются версия (semver), effect class, действие и тип ресурса ([GR](resource-grants-v1.md#действия)), подписи для preview (EFF-30), лимиты и ссылки на схемы. Согласование по умолчанию определяется классом (AP-01), отдельного поля нет.
 - Breaking change — новая major-версия tool'а. Старая версия поддерживается до явного вывода.
 
 **MCC-02 — Identity.**
@@ -89,7 +89,7 @@ MCP — протокол обнаружения и вызова. Этот док
 - Редакция credentials, текстов сообщений и персональных данных ([SEC-18](security-v1.md#аудит)).
 
 **MCC-09 — Health.**
-- `GET /healthz` (жив) и `GET /readyz` (готов: backend, Approval Service, JWKS доступны). Без раскрытия конфигурации.
+- `GET /healthz` (жив) и `GET /readyz` (готов). Для всех коннекторов: backend доступен и загружен валидный bundle (GR-12). Только для коннекторов с effect tools (`executes_via` в manifest): ещё Approval Service и JWKS. Read-only коннектор не зависит от Approval Service. Без раскрытия конфигурации.
 
 **MCC-10 — Публикация.**
 - Коннектор регистрируется в ContextForge только после прохождения тестов соответствующего этапа [Conformance Matrix](conformance-matrix-v1.md).
@@ -113,7 +113,6 @@ tools:
   - name: telegram.message.propose
     version: 1.0.0
     effect_class: external_effect
-    approval_default: required
     action: propose
     resource: { type: chat, from_arg: chat_id, resolve: backend }
     executes_via: telegram.message.execute   # внутренний, не публикуется

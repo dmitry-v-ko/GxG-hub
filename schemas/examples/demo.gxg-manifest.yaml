@@ -32,8 +32,10 @@ tools:
     effect_class: external_effect
     action: propose
     resource: { type: board, scope: single, from_arg: board_id, resolve: arg }
-    approval_default: required
     executes_via: demo.message.execute
     dispatch_timeout_s: 60
     input_schema: schemas/message-propose.input.json
+    preview:
+      title: "Отправка демо-сообщения"
+      fields: { recipient: "Получатель", text: "Текст" }
     limits: { max_text_len: 4096 }

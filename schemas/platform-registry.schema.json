@@ -22,7 +22,7 @@
         "required": [
           "id",
           "kind",
-          "public_key",
+          "public_keys",
           "tenants"
         ],
         "properties": {
@@ -38,11 +38,6 @@
               "approval_mcp"
             ]
           },
-          "public_key": {
-            "type": "string",
-            "pattern": "^ed25519:[A-Za-z0-9_-]{43}$",
-            "description": "base64url raw 32-byte Ed25519 public key"
-          },
           "tenants": {
             "type": "array",
             "minItems": 1,
@@ -54,6 +49,68 @@
           "internal_url": {
             "type": "string",
             "pattern": "^https://[^/\\s]+(/\\S*)?$"
+          },
+          "public_keys": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^ed25519:[A-Za-z0-9_-]{43}$"
+            },
+            "description": "1-2 active keys; newest signs (AS-06)"
+          },
+          "tools": {
+            "type": "array",
+            "description": "Built by gxg-policy from the connector manifest; source of truth for AS-26",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "version",
+                "effect_class",
+                "action"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){2}$"
+                },
+                "version": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+                },
+                "effect_class": {
+                  "enum": [
+                    "read",
+                    "write_reversible",
+                    "external_effect",
+                    "high_risk"
+                  ]
+                },
+                "action": {
+                  "enum": [
+                    "read",
+                    "collect",
+                    "write",
+                    "propose"
+                  ]
+                },
+                "executes_via": {
+                  "type": "string"
+                },
+                "dispatch_timeout_s": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 600
+                },
+                "preview": {
+                  "$ref": "gxg-manifest.schema.json#/properties/tools/items/properties/preview"
+                }
+              }
+            }
           }
         },
         "allOf": [

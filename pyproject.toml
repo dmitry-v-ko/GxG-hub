@@ -25,6 +25,9 @@ dev = [
     # gxg-connector-kit: property tests (AC-M1-02) and branch coverage gate (AC-M1-09)
     "hypothesis>=6.100,<7",
     "pytest-cov>=6,<8",
+    # DoD-4: mutation testing of the kit (config in packages/gxg-connector-kit/pyproject.toml)
+    "mutmut>=3.8,<4",
+    "cryptography>=44,<51",
 ]
 
 [tool.uv]

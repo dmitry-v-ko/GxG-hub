@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/grants-bundle-sig.schema.json",
+  "title": "GxG bundle signature v1",
+  "description": "grants-bundle.json.sig (GR-11a)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "alg",
+    "kid",
+    "sig"
+  ],
+  "properties": {
+    "alg": {
+      "const": "EdDSA"
+    },
+    "kid": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "sig": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{86}$"
+    }
+  }
+}

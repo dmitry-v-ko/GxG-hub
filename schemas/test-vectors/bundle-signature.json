@@ -1,0 +1,59 @@
+{
+  "description": "GR-11a signature vector. The seed is public test data derived as sha256('gxg-hub test vector bundle key v1 - NOT A SECRET'); never use it outside tests. Loader and builder MUST reproduce bundle_bytes_b64 from bundle and verify sig.",
+  "seed_derivation": "sha256 of the ASCII string above",
+  "public_key": "ed25519:JuI00AkunLMs8DtERv1WKtdmxBvL1D-zN62OO9g83sY",
+  "kid": "test-vector-1",
+  "bundle": {
+    "schema_version": 1,
+    "bundle_version": "0000000000000000000000000000000000000000",
+    "built_at": "2026-11-20T00:00:00Z",
+    "tenants": {
+      "t-alpha": {
+        "grants": {
+          "tenant": "t-alpha",
+          "schema_version": 1,
+          "connections": [],
+          "principals": {
+            "agents": [
+              {
+                "id": "agent:t-alpha:reader"
+              }
+            ]
+          },
+          "grants": []
+        },
+        "approval_policy": null
+      }
+    },
+    "platform": {
+      "schema_version": 1,
+      "services": [
+        {
+          "id": "demo",
+          "kind": "connector",
+          "public_keys": [
+            "ed25519:JuI00AkunLMs8DtERv1WKtdmxBvL1D-zN62OO9g83sY"
+          ],
+          "tenants": [
+            "t-alpha"
+          ],
+          "internal_url": "https://demo.internal:8081",
+          "tools": [
+            {
+              "name": "demo.notes.search",
+              "version": "1.0.0",
+              "effect_class": "read",
+              "action": "read"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "bundle_bytes_b64": "eyJidWlsdF9hdCI6IjIwMjYtMTEtMjBUMDA6MDA6MDBaIiwiYnVuZGxlX3ZlcnNpb24iOiIwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwicGxhdGZvcm0iOnsic2NoZW1hX3ZlcnNpb24iOjEsInNlcnZpY2VzIjpbeyJpZCI6ImRlbW8iLCJpbnRlcm5hbF91cmwiOiJodHRwczovL2RlbW8uaW50ZXJuYWw6ODA4MSIsImtpbmQiOiJjb25uZWN0b3IiLCJwdWJsaWNfa2V5cyI6WyJlZDI1NTE5Okp1STAwQWt1bkxNczhEdEVSdjFXS3RkbXhCdkwxRC16TjYyT085Zzgzc1kiXSwidGVuYW50cyI6WyJ0LWFscGhhIl0sInRvb2xzIjpbeyJhY3Rpb24iOiJyZWFkIiwiZWZmZWN0X2NsYXNzIjoicmVhZCIsIm5hbWUiOiJkZW1vLm5vdGVzLnNlYXJjaCIsInZlcnNpb24iOiIxLjAuMCJ9XX1dfSwic2NoZW1hX3ZlcnNpb24iOjEsInRlbmFudHMiOnsidC1hbHBoYSI6eyJhcHByb3ZhbF9wb2xpY3kiOm51bGwsImdyYW50cyI6eyJjb25uZWN0aW9ucyI6W10sImdyYW50cyI6W10sInByaW5jaXBhbHMiOnsiYWdlbnRzIjpbeyJpZCI6ImFnZW50OnQtYWxwaGE6cmVhZGVyIn1dfSwic2NoZW1hX3ZlcnNpb24iOjEsInRlbmFudCI6InQtYWxwaGEifX19fQ==",
+  "signature_file": {
+    "alg": "EdDSA",
+    "kid": "test-vector-1",
+    "sig": "6468aI1WZpBgzAiJBUy1JKPKEMw29Qohxh9BRd-6b2BFEELm4-G96X9G3hxQ8JQtFoz4fn6VrcPvPCzdXgzkDA"
+  }
+}
