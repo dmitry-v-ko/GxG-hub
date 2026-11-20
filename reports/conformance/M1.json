@@ -3,8 +3,8 @@
   "cycle": 2,
   "branch": "claude/m1-connector-kit",
   "base": "claude/m1-connector-kit@9406f94 (cycle 1 + critic report)",
-  "commit": "SEE_COMMIT",
-  "commit_note": "Tested code commit = the commit that adds this report (code, tests, script and report together).",
+  "commit": "c64693a8fc0f8e425820bf134ca5dda5e9410a69",
+  "commit_note": "Tested code commit. Only commit + CI fields of this report are filled in by the next commit, which changes only reports/.",
   "run_at": "2026-11-20T19:38:16Z",
   "author": "Claude Code (executor, M1 cycle 2)",
   "environment": {
@@ -18,8 +18,17 @@
       "runner": "ubuntu-latest",
       "python": "3.12",
       "workflow": ".github/workflows/ci.yml",
-      "run_id": null,
-      "conclusion": "pending"
+      "run_id": 44804004035,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44804004035",
+      "conclusion": "success",
+      "jobs": {
+        "lint": "success",
+        "types": "success",
+        "tests": "success",
+        "schema-guard": "success",
+        "secrets": "success",
+        "ci-ok": "success"
+      }
     }
   },
   "contextforge_image_digest": null,
@@ -144,7 +153,7 @@
     {
       "id": "DoD-1",
       "status": "not_run",
-      "note": "Merge into main via PR is done by a human after the critic; CI on the branch: see environment.ci."
+      "note": "Merge into main via PR is done by a human after the critic; CI on the branch is green (run 44804004035)."
     },
     {
       "id": "DoD-2",
