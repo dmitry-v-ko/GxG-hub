@@ -1,0 +1,61 @@
+{
+  "milestone": "M1",
+  "cycle": 1,
+  "branch": "claude/m1-connector-kit",
+  "commit": "52874f53b81f64889122d13e7d53973fe390d761",
+  "score": 6.0,
+  "caps_applied": ["dod", "major"],
+  "dimensions": {"spec": 2.5, "tests": 1, "security": 1.5, "code": 1.5, "ops": 1, "evidence": 0},
+  "acceptance": [
+    {"id": "AC-M1-01", "status": "passed", "evidence": "clean clone @52874f5, UV_CACHE_DIR empty, Python 3.12.13: test_canonical.py::test_vectors_bytes_and_sha256[6 vectors], ::test_invalid_inputs[float_forbidden, int_out_of_safe_range] passed"},
+    {"id": "AC-M1-02", "status": "passed", "evidence": "3 Hypothesis properties, settings(max_examples=1000, derandomize=True); NFC and sort mutations make them fail"},
+    {"id": "AC-M1-03", "status": "passed", "evidence": "test_exec_token.py (53 tests) passed: foreign signature, unknown kid, iss, aud, exp > 5 s, iat > 5 s, 13 missing claims, alg none/HS256, jti replay rejected; 4 s skew accepted. Replay is tested only at the same instant (see finding 1)"},
+    {"id": "AC-M1-04", "status": "passed", "evidence": "test_svc_jwt.py (24 tests) passed incl. iss_unregistered; kid = RFC 7638 thumbprint (AS-06a), RFC 8037 vector reproduced"},
+    {"id": "AC-M1-05", "status": "passed", "evidence": "test_grants.py::test_check_table — 32 cases (example.yaml t-alpha + in-test t-beta for mask/foreign tenant/group), ::test_expired_grant, ::test_allowed_sets passed; mask/connection/expiry/principal/action mutations caught"},
+    {"id": "AC-M1-06", "status": "passed", "evidence": "test_changed_byte, test_missing_or_empty_signature, test_signed_by_foreign_key passed; BundleError and readiness().ready == False; signature and alg mutations caught"},
+    {"id": "AC-M1-07", "status": "passed", "evidence": "test_bundle_older_than_24h_is_not_ready, test_bundle_of_exactly_24h_is_ready, test_loaded_bundle_goes_stale passed; staleness mutations caught"},
+    {"id": "AC-M1-08", "status": "passed", "evidence": "test_redact.py — 20 tests (≥ 15 examples) passed; case, JWT and list mutations caught"},
+    {"id": "AC-M1-09", "status": "passed", "evidence": "pytest --cov-branch + scripts/ci/check_coverage.py: exec_token 10/10, svc_jwt 12/12, grants 54/54, canonical 20/20, identity 8/8, _jwt 38/38"}
+  ],
+  "dod": [
+    {"id": "DoD-1", "status": "not_run", "note": "No PR to main yet. CI on 52874f5: run 44793665616, lint/types/tests/schema-guard/secrets/ci-ok = success"},
+    {"id": "DoD-2", "status": "passed", "note": "All AC automated"},
+    {"id": "DoD-3", "status": "passed", "note": "reports/conformance/M1.json present (commit 672f4ba)"},
+    {"id": "DoD-4", "status": "failed", "note": "5 non-equivalent mutations of key conditions survive: jti cache lifetime (now + 1, exp, exp − 30) and the 5 s tolerance for exp and iat (−1). The orchestrator named the jti cache and the exp tolerance as key conditions"},
+    {"id": "DoD-5", "status": "passed", "note": "356 passed, 0 skipped/xfail"}
+  ],
+  "findings": [
+    {"severity": "major", "ref": "EFF-18 п.1, AS-06, DoD-4", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/_jwt.py:169; tests/test_exec_token.py:172; tests/test_svc_jwt.py",
+     "problem": "The jti replay cache lifetime is untested: changing `exp + SKEW_S` to `now + 1` or `exp` leaves all 253 kit tests green; with `now + 1` the same token replayed 2 s later is accepted while still valid for 58 s. Replay tests send the copy at the same clock instant",
+     "required_improvement": "Test for both verifiers: accept at T0, replay the same token at T0 + 30 and at exp + 5 → reason 'replay'"},
+    {"severity": "major", "ref": "GR-13, GR-13a", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/grants.py:168-170, 224, 231-239",
+     "problem": "built_at is never compared with the clock. A signed bundle with built_at = 2036-01-01T00:00:00Z is accepted and ready; the next correct bundle is then rejected as 'rollback', so revocations stop propagating while /readyz stays green (negative age never goes stale)",
+     "required_improvement": "Reject built_at > now + 5 s with BundleError; test that such a bundle is rejected and does not block the next correct one"},
+    {"severity": "major", "ref": "AS-11, DoD-4", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/_jwt.py:163-166",
+     "problem": "The exact 5 s boundary is untested: tolerance 4 s (`exp + SKEW_S - 1`, `now + SKEW_S - 1`) survives; tests cover only 4 s accepted and > 5 s rejected",
+     "required_improvement": "Add accepted cases exp = now − 5 and iat = now + 5 for execution token and service JWT"},
+    {"severity": "minor", "ref": "DoD-3, DoD-4", "where": "reports/conformance/M1.json (dod DoD-4)",
+     "problem": "'37 of 38 mutations caught, the survivor is equivalent' is not reproducible: the mutation list is not in the repo, and an independent sweep finds 5 non-equivalent survivors",
+     "required_improvement": "Record the mutation list with results in the report (or commit the script) after fixing findings 1 and 3"},
+    {"severity": "minor", "ref": "GR-04", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/grants.py:33-34, 272",
+     "problem": "`$` matches before a trailing newline: check(..., 'kb:kb-b/collection/x\\n') is allowed by a mask. Not exploitable while RIDs come from backend data (GR-01)",
+     "required_improvement": "Use fullmatch for _RID and _MASK"},
+    {"severity": "minor", "ref": "MCC-05, error.schema", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/errors.py:197-229",
+     "problem": "to_dict() can violate error.schema.json: retry_after_s=90000 or -1, details with 21 keys",
+     "required_improvement": "Validate retry_after_s in [0, 86400] and len(details) ≤ 20 in __init__"},
+    {"severity": "minor", "ref": "MCC-09", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/exec_token.py:161-187",
+     "problem": "ExecutorJwks has no readiness signal; a connector reports ready while JWKS is unreachable and every execute fails",
+     "required_improvement": "ExecutorJwks.readiness(); may be deferred to M3/M8 (first callers)"},
+    {"severity": "minor", "ref": "Lean", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/_jwt.py:79-80; svc_jwt.py:30,33",
+     "problem": "format_public_key is test-only code in src; Service.kind/internal_url have no reader",
+     "required_improvement": "Move format_public_key to tests/kit_testing.py"}
+  ],
+  "required_improvements": [
+    "Test the jti cache lifetime for execution token and service JWT: replay of an accepted token at T0 + 30 and at exp + 5 → 'replay' (mutations `now + 1`, `exp`, `exp - 30` of _jwt.py:169 must fail)",
+    "Pin the AS-11 boundary: exp = now − 5 and iat = now + 5 are accepted for both token types (tolerance-4 mutations must fail)",
+    "Reject a bundle with built_at later than now + 5 s (BundleError, not loaded); test that it is rejected and that the next correct bundle still loads",
+    "Re-run the mutation sweep and record the list (name, location, replacement, caught) in reports/conformance/M1.json; every non-equivalent mutation of the listed key conditions must be caught"
+  ],
+  "ponytail_review": "reports/critic/M1-cycle-1.review.md",
+  "lean_lines": 5
+}
