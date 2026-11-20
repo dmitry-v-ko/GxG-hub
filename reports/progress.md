@@ -28,3 +28,5 @@
 | M2 | 1 | критик | claude/m2-policy-tooling | 63d7c18 | — | запущен | 2026-11-20 |
 | M1 | 1 | исполнитель | claude/m1-connector-kit | 52874f5 (+672f4ba отчёт) | — | AC-M1-01…09 passed, CI 44793665616 зелёный; спеки уточнены оркестратором: AS-06a (kid service JWT), GR-13a (переподпись bundle ≤ 12 ч, анти-откат) | 2026-11-20 |
 | M1 | 1 | критик | claude/m1-connector-kit | 52874f5 | — | запущен (session_01V6d5AAYpQnkTuxAUe72eQu) | 2026-11-20 |
+| M2 | 1 | критик | claude/m2-policy-tooling | 63d7c18 (отчёт 409bf08) | **5.0** | < 9: AC-M2-04 failed — critical (зелёный ci-ok на head SHA через push-run), 3× major → цикл 2 (+GR-13a) | 2026-11-20 |
+| M2 | 2 | исполнитель | claude/m2-policy-tooling | — | — | запущен | 2026-11-20 |
