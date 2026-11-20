@@ -107,7 +107,7 @@ Intent соответствует [effect-intent.schema.json](../../schemas/effe
 - **EFF-18.** Коннектор в `execute` MUST:
   1. проверить подпись токена (известный `kid`), `iss`, `aud` = свой ID, `exp`, отсутствие `jti` в локальном кеше;
   2. пересчитать хеш полученных args и сравнить с `ahs`;
-  3. проверить, что `tool`, `connection`, `resource` и `tenant` из токена соответствуют его конфигурации, и что права requester'а на ресурс не отозваны;
+  3. проверить, что `tool`, `connection`, `resource` и `tenant` из токена соответствуют его конфигурации, и что право requester'а `propose` на ресурс не отозвано по текущему grants bundle ([GR](resource-grants-v1.md));
   4. проверить kill switch;
   5. вызвать `POST /v1/executions/{id}/dispatch` — атомарный переход `reserved → dispatching`. Только успешный ответ разрешает обращение к провайдеру;
   6. вызвать провайдера один раз, передав `idempotency_key`, если провайдер поддерживает идемпотентность.

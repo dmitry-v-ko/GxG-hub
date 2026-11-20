@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 import unittest
 
+import yaml
+
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +59,21 @@ class EnvelopeContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             v.validate({'operation_id': 'op-1', 'status': 'outcome_unknown', 'reconciliation_required': False})
         v.validate({'operation_id': 'op-2', 'status': 'succeeded', 'reconciliation_required': False})
+
+
+    def test_resource_grants_example_and_forbidden_masks(self):
+        v = validator('resource-grants.schema.json')
+        example = yaml.safe_load((ROOT / 'policies' / 'tenants' / 'example.yaml').read_text(encoding='utf-8'))
+        v.validate(example)
+        grant = example['grants'][0]
+        for bad_rid in ['kb:kb-main/*', 'kb:*/collection/x', 'kb:kb-main/collection/sa*les']:
+            with self.assertRaises(ValidationError):
+                v.validate({**example, 'grants': [{**grant, 'resources': [bad_rid]}]})
+        v.validate({**example, 'grants': [{**grant, 'resources': ['kb:kb-main/collection/*']}]})
+        with self.assertRaises(ValidationError):
+            v.validate({**example, 'grants': [{**grant, 'actions': ['execute']}]})
+        with self.assertRaises(ValidationError):
+            v.validate({**example, 'connections': [{**example['connections'][0], 'credential_ref': 'plain-token'}]})
 
 
 if __name__ == '__main__':

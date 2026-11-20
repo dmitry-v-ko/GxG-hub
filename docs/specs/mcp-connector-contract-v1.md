@@ -50,7 +50,7 @@ MCP — протокол обнаружения и вызова. Этот док
 
 **MCC-01 — Discovery, версии, manifest.**
 - Каждый tool MUST иметь стабильное уникальное имя, описание, типизированную `inputSchema` и, если это совместимо с закреплённой версией MCP SDK, `outputSchema`.
-- Коннектор MUST иметь manifest (`gxg-manifest.yaml`) со списком tools. Для каждого tool указываются версия (semver), effect class, approval policy по умолчанию, лимиты и ссылки на схемы.
+- Коннектор MUST иметь manifest (`gxg-manifest.yaml`) со списком tools. Для каждого tool указываются версия (semver), effect class, действие и тип ресурса ([GR](resource-grants-v1.md#действия)), approval policy по умолчанию, лимиты и ссылки на схемы.
 - Breaking change — новая major-версия tool'а. Старая версия поддерживается до явного вывода.
 
 **MCC-02 — Identity.**
@@ -59,7 +59,7 @@ MCP — протокол обнаружения и вызова. Этот док
 - Без валидных claims — `unauthenticated`.
 
 **MCC-03 — Доступ к ресурсам.**
-- Коннектор MUST проверить право на конкретный ресурс **до** получения provider credentials и обращения к провайдеру.
+- Коннектор MUST проверить право на конкретный ресурс **до** получения provider credentials и обращения к провайдеру. Модель прав, формат RID и поиск по многим ресурсам — [Права на ресурсы](resource-grants-v1.md) (GR-01…GR-17).
 - Credentials выбираются по проверенному tenant и connection.
 - Нет token passthrough, нет общих credentials между tenant'ами.
 
@@ -105,6 +105,8 @@ tools:
   - name: telegram.messages.search
     version: 1.0.0
     effect_class: read
+    action: read                     # действие для GrantResolver
+    resource: { type: chat, scope: list }   # поиск по набору allowed()
     input_schema: schemas/messages-search.input.json
     output_schema: ../../schemas/search-result.schema.json
     limits: { max_results: 50, timeout_s: 20 }
@@ -112,6 +114,8 @@ tools:
     version: 1.0.0
     effect_class: external_effect
     approval_default: required
+    action: propose
+    resource: { type: chat, from_arg: chat_id, resolve: backend }
     executes_via: telegram.message.execute   # внутренний, не публикуется
     input_schema: schemas/message-send.input.json
     limits: { max_text_len: 4096 }

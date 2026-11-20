@@ -11,8 +11,10 @@
 - [Целевая платформа](docs/specs/target-platform-v1.md) — компоненты, tenancy, роли, права.
 - [Security](docs/specs/security-v1.md) — identity, границы доверия, сеть, секреты, kill switch.
 - [Эффекты и согласование](docs/specs/effects-and-approval-v1.md) — `propose` → решение человека (бот + Web UI) → Executor с одноразовым токеном.
+- [Права на ресурсы](docs/specs/resource-grants-v1.md) — RID, grants в Git (`policies/tenants/`), подписанный bundle.
 - [MCP Connector Contract](docs/specs/mcp-connector-contract-v1.md) — обязательный стандарт коннекторов.
 - [MCP Toolkit](docs/specs/mcp-toolkit-v1.md) — шаблоны, генератор, общий набор тестов.
+- [Reference-коннектор `demo`](docs/specs/demo-connector-v1.md) — эталон и мишень для тестов.
 - [Интеграция сервисов](docs/specs/service-integration-v1.md) — KB, Telegram, Signals, Voice.
 - [Conformance Matrix](docs/specs/conformance-matrix-v1.md) — тесты, которые должны пройти до включения.
 - [Roadmap](docs/specs/roadmap-v1.md) — этапы A–F, PoC, GO/NO-GO, миграция.

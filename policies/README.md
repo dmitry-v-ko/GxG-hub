@@ -2,7 +2,9 @@
 
 Нормативно: [Целевая платформа → роли и права](../docs/specs/target-platform-v1.md#роли), [Эффекты → классы и согласование](../docs/specs/effects-and-approval-v1.md#классы-эффектов-и-путь-исполнения).
 
-Здесь будут храниться политики без секретов:
+Права агентов на ресурсы хранятся в `policies/tenants/<tenant>.yaml` по [модели прав на ресурсы](../docs/specs/resource-grants-v1.md). Пример: [tenants/example.yaml](tenants/example.yaml).
+
+Здесь же будут храниться остальные политики без секретов:
 
 - правила `unified_pdp` для ContextForge (tool-level RBAC по tenant и агенту, постоянный запрет `*.execute` для агентов);
 - политики согласования для Approval Service (по tenant, tool, effect class, правила авто-одобрения).

@@ -4,7 +4,7 @@
 
 | Интеграция | Целевой путь | Этап | Статус |
 | --- | --- | --- | --- |
-| Reference (`demo`) | Синтетический FastMCP-коннектор: read + `propose` на fake provider | B, C | Не реализован |
+| Reference (`demo`) | Синтетический FastMCP-коннектор: read + `propose` на fake provider ([спека](../docs/specs/demo-connector-v1.md)) | B, C | Не реализован |
 | Knowledge Base | Существующий KB MCP после gap-аудита; при необходимости тонкий wrapper | B | Не подключено |
 | Telegram | Фасад к существующему Telegram-сервису; сначала только чтение | D, E | Не реализован |
 | Signal Intelligence | Существующий Mastra-процесс; Hub на сборе и на `propose` | D | Не интегрирован |

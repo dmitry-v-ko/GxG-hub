@@ -11,15 +11,17 @@
 | [Целевая платформа](target-platform-v1.md) | Из каких компонентов состоит Hub, кто чем владеет, как устроены tenant'ы |
 | [Security](security-v1.md) | Кому и почему мы доверяем: identity, границы доверия, сеть, секреты, kill switch |
 | [Эффекты и согласование](effects-and-approval-v1.md) | Как агент предлагает действие, человек его одобряет, а Executor исполняет ровно один раз |
+| [Права на ресурсы](resource-grants-v1.md) | Кто может читать этот чат или документ: RID, grants в Git, bundle, `GrantResolver` |
 | [MCP Connector Contract](mcp-connector-contract-v1.md) | Обязательные требования к любому коннектору: имена, схемы, ошибки, результаты, эффекты |
 | [MCP Toolkit](mcp-toolkit-v1.md) | Как быстро и единообразно сделать новый коннектор |
+| [Reference-коннектор `demo`](demo-connector-v1.md) | Эталонный коннектор и мишень для тестов: tools, fixtures, fake provider |
 | [Интеграция сервисов](service-integration-v1.md) | Как подключаются KB, Telegram, Signals, Voice |
 | [Conformance Matrix](conformance-matrix-v1.md) | Какие тесты должны пройти, прежде чем что-то включать |
 | [Roadmap](roadmap-v1.md) | Этапы, PoC, критерии GO/NO-GO, порядок миграции |
 
 ## Приоритет при противоречиях
 
-1. `security-v1.md` и `effects-and-approval-v1.md` — доверие, права и эффекты.
+1. `security-v1.md`, `effects-and-approval-v1.md` и `resource-grants-v1.md` — доверие, права и эффекты.
 2. `mcp-connector-contract-v1.md` — интерфейсы и словарь.
 3. Остальные документы.
 
