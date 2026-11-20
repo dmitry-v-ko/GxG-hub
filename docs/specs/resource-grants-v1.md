@@ -101,6 +101,11 @@ grants:
 ## Bundle и распространение
 
 - **GR-11.** После мержа CI собирает `grants-bundle.json`: grants всех tenant'ов с развёрнутыми группами, политики согласования ([approval-policy-v1](approval-policy-v1.md)), реестр платформы ([AS-25](approval-service-v1.md#реестр-платформы)), `bundle_version` = git commit SHA, время сборки. Bundle подписывается Ed25519-ключом CI, отдельным от ключа Executor'а.
+- **GR-11a. Формат bundle** (общий для сборщика M2 и загрузчика M1):
+  - `grants-bundle.json` — UTF-8, сериализация JCS (RFC 8785), поля: `schema_version` (= 1), `bundle_version` (git SHA), `built_at` (RFC 3339, UTC), `tenants` — объект `{tenant_id: {"grants": <файл grants с развёрнутыми группами>, "approval_policy": <файл политики или null>}}`, `platform` — реестр платформы.
+  - `grants-bundle.json.sig` — JSON `{"alg": "EdDSA", "kid": "<id ключа>", "sig": "<base64url без паддинга подписи Ed25519 над точными байтами grants-bundle.json>"}`.
+  - Публичные ключи проверки (по `kid`) задаются конфигурацией сервиса, а не берутся из bundle.
+  - Детерминизм (AC-M2-05): при одинаковом commit всё содержимое, кроме `built_at`, побайтно одинаково.
 - **GR-12.** Коннектор и Approval Service загружают bundle при старте и при обновлении, проверяют подпись и берут только свой tenant-срез, если работают на один tenant. **Без валидного bundle сервис не готов** (`/readyz` = fail) и отклоняет вызовы.
 - **GR-13.** Новый bundle должен доехать до всех сервисов не позже чем за 5 минут после мержа. Устаревший bundle (старше 24 ч без проверки обновлений) — сервис не готов.
 - **GR-14.** `bundle_version` записывается в аудит и в intent как часть `policy_version`.
