@@ -5,7 +5,7 @@
   "cycle": 1,
   "reviewed_at": "2026-11-20",
   "score": 5.0,
-  "caps_applied": ["ac_failed", "dod", "major"],
+  "caps_applied": ["ac_failed", "dod", "critical", "major"],
   "dimensions": {"spec": 2, "tests": 1.5, "security": 1, "code": 1.5, "ops": 0.5, "evidence": 0.5},
   "acceptance": [
     {
