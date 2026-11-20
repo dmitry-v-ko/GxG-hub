@@ -83,3 +83,9 @@ After findings 1–3 are fixed, a throw-away PR from a `claude/**` branch that a
 Verdict: fix 1, 2, 3 and 4 first.
 Lean: -10 lines possible (marker constant; diff `_pairs` expiry merge can be `max` over parsed values in one expression).
 Not checked: how GitHub picks between two same-name check runs on one SHA for a required check (needs a real PR; finding 1 stands either way, because a green `grants-widening` check on the PR head contradicts the AC); whether `performed_via_github_app` is set for user-to-server tokens.
+
+## Addendum after the review (spec change during the cycle)
+
+The spec in `claude/admiring-planck-vzys0x@7466dfa` now has **GR-13a**: CI re-signs the bundle on a schedule, at least every 12 h. In 63d7c18 job `bundle` runs only on a push to `main`. With no policy change for a day, the last bundle becomes older than 24 h, and every service goes not ready (GR-13). This does not lower this cycle's score, because the requirement came after the cycle's spec. It is in `required_improvements` for the next cycle: add `schedule` to the workflow, let `bundle` run on it on `main`, and bring the spec text in unchanged.
+
+The M1 loader accepts both expanded subjects and raw `group:<id>`. This confirms that keeping the `groups` map is not a compatibility issue.
