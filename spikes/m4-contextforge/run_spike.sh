@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproduces the M4 spike end to end (~10 min). Needs: docker + compose, python3 with `cryptography`, access to ghcr.io and docker.io.
+# Reproduces the M4 spike end to end (~15 min). Needs: docker + compose, python3 with `cryptography`, access to ghcr.io and docker.io.
 # Raw output (may hold test secrets) -> secrets/ (git-ignored); redacted evidence -> evidence/.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -30,6 +30,19 @@ cp secrets/raw/echo.jsonl secrets/echo.variant-c.jsonl   # raw (signed) log, for
 python3 -I verify_jws.py | tee evidence/variant-c.verify_jws.jsonl; cp secrets/replay-c.out evidence/variant-c.replay.log; python3 -I redact.py c
 python3 -I mutate_verify_jws.py | tee evidence/variant-c.mutations.log
 
+echo "== fail closed: adapter key missing -> ContextForge must not become healthy, no call reaches the connector =="
+sed 's#/run/gxg/adapter_ed25519.pem#/run/gxg/missing.pem#' secrets/plugins.yaml > secrets/plugins-nokey.yaml
+nokey() {  # $1 = PLUGINS_FAIL_ON_PLUGIN_ERROR; false is the control run: proves this stage sees the difference
+  : > secrets/raw/echo.jsonl
+  SPIKE_PLUGINS_YAML=plugins-nokey.yaml SPIKE_FAIL_ON_PLUGIN_ERROR=$1 docker compose $C up -d contextforge 2>/dev/null
+  local healthy=no; for _ in $(seq 1 40); do curl -sf http://127.0.0.1:4444/health >/dev/null && { healthy=yes; break; }; sleep 3; done
+  local log; log=$(docker compose $C logs contextforge 2>&1 | grep -o -m1 -E 'Plugin initialization failed|Skipping plugin GxgIdentity because fail_on_plugin_error is disabled' || true)
+  echo "PLUGINS_FAIL_ON_PLUGIN_ERROR=$1 healthy=$healthy $(s probe) log=\"$log\""
+}
+{ nokey true; nokey false; } | tee evidence/variant-c-nokey.log
+grep -q '=true healthy=no {"rpc_status": 0, "reached_connector": false' evidence/variant-c-nokey.log || { echo "FAIL: not fail closed"; exit 1; }
+grep -q '=false healthy=yes .*"with_x_gxg_identity": false' evidence/variant-c-nokey.log || { echo "FAIL: control run"; exit 1; }
+
 echo "== criterion 5: upgrade v1.1.0 -> pinned v1.1.1 with the plugin, same PostgreSQL =="
 fresh; docker compose $OLD up -d; wait_up; s setup >/dev/null; s plugin_config
 docker compose $OLD restart contextforge; wait_up; s calls >/dev/null
@@ -37,9 +50,4 @@ docker compose $C up -d contextforge; wait_up; s calls >/dev/null; s admin_call 
 python3 -I verify_jws.py | tee evidence/variant-c-upgrade.verify_jws.jsonl; python3 -I redact.py c-upgrade
 docker compose $C logs contextforge | grep -o 'Running upgrade [^,]*' > evidence/variant-c-upgrade.migrations.log
 s visibility
-
-echo "== misconfiguration: header passthrough on for every identity header (variant C) =="
-: > secrets/raw/echo.jsonl; : > secrets/observations.jsonl
-docker compose $C -f compose.passthrough-misconfig.yaml up -d contextforge; wait_up
-PASSTHROUGH_LABEL=misconfig-all-identity-headers s attacks >/dev/null; python3 -I redact.py c-passthrough-misconfig
 echo "done; stop with: docker compose $C down -v"

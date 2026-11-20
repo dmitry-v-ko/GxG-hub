@@ -5,7 +5,12 @@ services:
     environment:
       PLUGINS_ENABLED: "true"
       PLUGINS_CONFIG_FILE: /run/gxg/plugins.yaml
+      # Fail closed: a plugin that cannot load stops startup. Only this env var counts in v1.1.1;
+      # plugin_settings in plugins.yaml are ignored. SPIKE_FAIL_ON_PLUGIN_ERROR exists only for the control run.
+      PLUGINS_FAIL_ON_PLUGIN_ERROR: ${SPIKE_FAIL_ON_PLUGIN_ERROR:-true}
+      # direct_proxy gateways skip all plugins, so the identity adapter too. Default false; keep it off.
+      MCPGATEWAY_DIRECT_PROXY_ENABLED: "false"
     volumes:
       - ./plugin/gxg_identity:/app/plugins/gxg_identity:ro
-      - ./secrets/plugins.yaml:/run/gxg/plugins.yaml:ro
+      - ./secrets/${SPIKE_PLUGINS_YAML:-plugins.yaml}:/run/gxg/plugins.yaml:ro
       - ./secrets/adapter_ed25519.pem:/run/gxg/adapter_ed25519.pem:ro

@@ -7,23 +7,22 @@
 | Файл | Назначение |
 | --- | --- |
 | `compose.yaml` | ContextForge `v1.1.1` + PostgreSQL 18 + echo-MCP, всё по digest. Вариант A включён: `IDENTITY_PROPAGATION_ENABLED`, `IDENTITY_SIGN_CLAIMS` |
-| `compose.variant-c.yaml` | Overlay варианта C: плагин `plugin/gxg_identity` (`tool_pre_invoke`, JWS Ed25519) |
+| `compose.variant-c.yaml` | Overlay варианта C: плагин `plugin/gxg_identity` (`tool_pre_invoke`, JWS Ed25519), `PLUGINS_FAIL_ON_PLUGIN_ERROR=true`, `MCPGATEWAY_DIRECT_PROXY_ENABLED=false` |
 | `compose.upgrade-from.yaml` | Overlay для критерия 5: старт на `v1.1.0`, затем апгрейд на закреплённый `v1.1.1` |
-| `compose.passthrough-misconfig.yaml` | Худший случай конфигурации: `ENABLE_HEADER_PASSTHROUGH=true` и все identity-заголовки в allowlist |
 | `echo/echo_mcp.py` | Echo-MCP-сервер на stdlib: логирует все заголовки и `_meta`, tool `echo` возвращает то, что получил |
 | `spike.py` | Настройка (2 team × 2 агента, team-scoped API-токены, gateway на team, virtual server, алиас), вызовы по всем путям, атаки |
 | `verify_hmac.py` | Проверка подписи варианта A на стороне коннектора, формула из исходника v1.1.1 |
 | `verify_jws.py` | Проверка варианта C на стороне коннектора (прообраз `IdentityVerifier`) по каждому запросу, который получил echo |
-| `mutate_verify_jws.py` | Мутационная самопроверка верификатора: без каждой проверки (подпись, срок, хеш аргументов, `jti`) соответствующая атака проходит |
+| `mutate_verify_jws.py` | Мутационная самопроверка верификатора: без каждой проверки (подпись, срок, хеш аргументов, `jti`, `aud`, `tool`, TTL, `iss`, `kid`, `sub` в tenant) соответствующая атака проходит |
 | `redact.py` | Копирует сырой вывод из `secrets/` в `evidence/` без токенов и подписей |
-| `run_spike.sh` | Весь прогон: A, C, апгрейд |
+| `run_spike.sh` | Весь прогон: A, C, fail closed без ключа адаптера (+ контроль), апгрейд |
 | `evidence/` | Доказательства без секретов |
 
 ## Как воспроизвести
 
 ```bash
 cd spikes/m4-contextforge
-./run_spike.sh            # ~10 мин: A, C, апгрейд; вывод в evidence/
+./run_spike.sh            # ~15 мин: A, C, fail closed, апгрейд; вывод в evidence/
 python3 -I spike.py visibility   # что видит каждый агент + claims токена агента
 docker compose -f compose.yaml -f compose.variant-c.yaml down -v
 ```

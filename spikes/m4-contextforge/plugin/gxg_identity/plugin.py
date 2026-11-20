@@ -2,7 +2,7 @@
 
 X-GxG-Identity: compact JWS, alg EdDSA (Ed25519), signed with a key only this adapter holds.
 Claims: iss, aud (= connector id of the gateway), sub (= agent:<tenant>:<name>), tenant_id, team_id,
-iat, exp (iat+60), jti, ahs (sha256 of canonical JSON arguments).
+tool (= upstream tool name the connector receives), iat, exp (iat+60), jti, ahs (sha256 of canonical JSON arguments).
 Fail closed: no authenticated user, caller not in exactly the tool's team, unknown team or gateway,
 or an email outside the tenant's agent domain -> PluginViolation, the call never leaves ContextForge.
 shortcut: key read from a file and config in YAML; production needs a secret store and key rotation (kid).
@@ -65,8 +65,12 @@ class GxgIdentityPlugin(Plugin):
         uc = gc.user_context
         if uc is None or not uc.user_id:
             return self._deny("no authenticated user")
-        # team that owns the tool, from the tool record ContextForge resolved (not from the request)
-        tool_team = getattr(gc.metadata.get("tool"), "team_id", None)
+        # team and upstream name of the tool, from the tool record ContextForge resolved (not from the request);
+        # ContextForge calls upstream with original_name whatever the alias, so that is what we sign
+        tool = gc.metadata.get("tool")
+        tool_team, tool_name = getattr(tool, "team_id", None), getattr(tool, "original_name", None)
+        if not tool_name:
+            return self._deny("tool record has no upstream name")
         if not tool_team or gc.tenant_id != tool_team:
             return self._deny("tool has no team or context tenant disagrees with the tool record")
         teams = list(uc.teams or [])
@@ -88,6 +92,7 @@ class GxgIdentityPlugin(Plugin):
             "sub": f"agent:{tenant['tenant']}:{local}",
             "tenant_id": tenant["tenant"],
             "team_id": tool_team,
+            "tool": tool_name,
             "iat": now,
             "exp": now + self._ttl,
             "jti": uuid.uuid4().hex,

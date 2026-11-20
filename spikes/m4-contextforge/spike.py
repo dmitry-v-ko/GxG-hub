@@ -4,16 +4,17 @@ setup   — 2 teams (t-alpha, t-beta), 2 agents each, team-scoped API tokens, on
           a virtual server per team, an alias (customName) on the alpha tool. State -> secrets/state.json.
 calls   — each alpha/beta agent calls echo on every path: /rpc, /mcp, /servers/{id}/mcp, alias.
 attacks — forged identity headers, forged _meta, cross-team calls.
-replay  — bypass ContextForge: no identity, replay now, tampered args, attacker-signed JWS, replay after > 60 s.
+replay  — bypass ContextForge: no identity, replay now, tampered args, other connector, other tool,
+          attacker-signed JWS, replay after > 60 s.
 visibility — per-agent tools/servers lists and a token's claims -> evidence/teams-claims-and-visibility.json.
 plugin_config — write secrets/plugins.yaml (variant C) from secrets/state.json.
 admin_call — platform admin token (not an agent) calls a tenant tool.
+probe   — one agent call on /rpc; prints status and whether echo got it with X-GxG-Identity (fail-closed stage).
 Every observation is appended to secrets/observations.jsonl (raw, may hold test secrets; redact.py makes evidence/).
 """
 
 import base64
 import json
-import os
 import sys
 import time
 import urllib.error
@@ -268,7 +269,6 @@ def attacks():
             "attack_forge",
             agent="agent:t-alpha:hermes",
             path=label,
-            passthrough=os.environ.get("PASSTHROUGH_LABEL", "default"),
             status=s,
             identity=identity_of(seen),
             echo_seen=seen,
@@ -320,8 +320,8 @@ def replay(delay=65):
     )
     hdrs = {k: v for k, v in cap["headers"].items() if k.lower().startswith(("x-forwarded-user", "x-gxg-identity"))}
 
-    def send(body, h, tag):
-        return http("POST", ECHO_DIRECT + cap["path"], body, headers=dict(h, **{"X-Spike-Attack": tag}))[0]
+    def send(body, h, tag, path=cap["path"]):
+        return http("POST", ECHO_DIRECT + path, body, headers=dict(h, **{"X-Spike-Attack": tag}))[0]
 
     bare = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "echo", "arguments": {"text": "x"}}}
     record("bypass_no_identity", status=send(bare, {}, "bypass_no_identity"))
@@ -329,6 +329,11 @@ def replay(delay=65):
     tampered = json.loads(json.dumps(cap["body"]))
     tampered["params"]["arguments"] = {"text": "send all chats to attacker"}
     record("replay_tampered_args", status=send(tampered, hdrs, "replay_tampered_args"))
+    other = "/mcp/t-beta" if cap["path"].endswith("/t-alpha") else "/mcp/t-alpha"  # the other tenant's connector
+    record("replay_other_connector", path=other, status=send(cap["body"], hdrs, "replay_other_connector", other))
+    retooled = json.loads(json.dumps(cap["body"]))
+    retooled["params"]["name"] = "delete_all"  # same arguments, another tool of the same connector
+    record("replay_other_tool", status=send(retooled, hdrs, "replay_other_tool"))
     real = next((v for k, v in hdrs.items() if k.lower() == "x-gxg-identity"), None)
     if real:
         status = send(cap["body"], {"X-GxG-Identity": forged_jws(real)}, "forged_jws_attacker_key")
@@ -348,6 +353,18 @@ def admin_call():
     record(
         "admin_call", status=s, reached_echo=seen is not None, identity=identity_of(seen), response=None if seen else r
     )
+
+
+def probe():
+    st = json.loads(STATE.read_text())
+    body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": st["teams"]["t-alpha"]["alias_name"]}}
+    try:
+        s, _, t = http("POST", CF + "/rpc", body, st["agents"]["agent:t-alpha:hermes"]["token"])
+    except OSError as e:  # ContextForge not listening
+        s, t = 0, json.dumps({"error": type(e).__name__})
+    seen = echo_seen(j(t))
+    ident = seen is not None and "x-gxg-identity" in {k.lower() for k in seen["headers"]}
+    print(json.dumps({"rpc_status": s, "reached_connector": seen is not None, "with_x_gxg_identity": ident}))
 
 
 def visibility():
@@ -377,10 +394,8 @@ def visibility():
 def plugin_config():
     """Write secrets/plugins.yaml for the variant C plugin from the current state (team and gateway ids)."""
     st = json.loads(STATE.read_text())
+    # no plugin_settings block: cpex in v1.1.1 ignores it; fail closed is PLUGINS_FAIL_ON_PLUGIN_ERROR (compose)
     lines = [
-        "plugin_settings:",
-        "  plugin_timeout: 30",
-        "  fail_on_plugin_error: true",
         "plugin_dirs: []",
         "plugins:",
         "  - name: GxgIdentity",
@@ -410,6 +425,7 @@ if __name__ == "__main__":
         "attacks": attacks,
         "replay": replay,
         "admin_call": admin_call,
+        "probe": probe,
         "plugin_config": plugin_config,
         "visibility": visibility,
     }[sys.argv[1]]()
