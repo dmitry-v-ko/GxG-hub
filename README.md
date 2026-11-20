@@ -17,16 +17,22 @@
 - [MCP Connector Contract v1](docs/specs/mcp-connector-contract-v1.md) — стандартизованные tools, identity, authorization, results, errors, effects.
 - [MCP Toolkit v1](docs/specs/mcp-toolkit-v1.md) — FastMCP/TypeScript SDK, будущий генератор и conformance-тесты.
 - [KB / Signals / Telegram / Voice](docs/specs/service-integration-v1.md) — существующие сервисы и особый двусторонний путь Signals.
-- [Human approvals](docs/APPROVALS.md) — отдельный GxG Approval Service и Action Gate.
+- [Security & Action Gate](docs/specs/security-and-action-gate-v1.md) — защита от чужих вызовов, подделки идентичности и обхода коннектора.
+- [Approval State Machine](docs/specs/approval-state-machine-v1.md) — проверенный человек, однократное резервирование и восстановление после сбоя.
+- [Conformance Matrix](docs/specs/conformance-matrix-v1.md) — критерии security/contract тестирования.
+- [Human approvals](docs/APPROVALS.md) — краткий обзор.
 - [Connector integration profile](docs/MCP_CONNECTOR_CONTRACT.md) и [Toolkit implementation plan](docs/CONNECTOR_TOOLKIT.md) — практические дополнения к нормативным документам в `docs/specs/`.
 
-**Security stop:** имеющиеся `compose.yaml` и `.env.example` всё ещё указывают на prerelease ContextForge `1.0.0-RC-3`. **Не запускайте его с личными данными, в мультиарендной среде или в production.** Перед PoC выберите проверенный исправленный образ (IBM рекомендует минимум v1.1.1 для известных на 20.11.2026 проблем), закрепите digest и подтвердите identity, RBAC, resource scope и межтенантную изоляцию. Этот этап изменяет только документацию, не конфигурацию и не runtime.
+**Security stop:** старый `1.0.0-RC-3` удалён из `compose.yaml` и `.env.example`. Пример теперь задаёт `1.1.1` как **кандидат для локальной проверки** известных исправлений IBM по состоянию на 20.11.2026. Тег **не** равен неизменяемому digest и не является подтверждением безопасности: перед общим PoC или production проверяйте новые advisories, закрепляйте digest и подтверждайте identity, RBAC, resource scope, tenant isolation и Action Gate. В dev Compose `IDENTITY_PROPAGATION_ENABLED=false` и `PLUGINS_ENABLED=false`; никакие реальные эффектные инструменты нельзя открывать до end-to-end тестов.
 
 ## Структура
 
 - `compose.yaml` — локальный **dev-only** запуск ContextForge (официальный OCI-образ, без изменений исходников).
 - `.env.example` — шаблон переменных. Реальный `.env` не коммитить.
-- `docs/ARCHITECTURE.md` — целевая архитектура и границы ответственности.
+- `docs/ARCHITECTURE.md` — краткий обзор целевой архитектуры.
+- `docs/specs/security-and-action-gate-v1.md` — нормативная security-модель.
+- `schemas/` — примеры машиночитаемых контрактов результатов и намерений.
+- `tests/contract/` — локальные тесты JSON Schema (не end-to-end проверка ContextForge).
 - `docs/POC.md` — критерии проверки, включая два тенанта и два агента.
 - `docs/MIGRATION.md` — постепенное подключение существующих сервисов GXG.
 - `connectors/README.md` — будущие доменные MCP-серверы; пока не реализованы.
@@ -74,7 +80,7 @@ docker compose down
 
 **Важно:** здесь SQLite и порт, доступный только с локальной машины. Для SaaS/production нужны отдельные PostgreSQL, HTTPS, управление секретами и ключами, проверка политик, закрепление проверенного digest образа, бэкапы, обновления и тесты изоляции. Не публикуйте этот Compose в интернет.
 
-Образ ContextForge закреплён на документированном релизном теге для начальной проверки; перед развёртыванием проверьте актуальную поддерживаемую версию и совместимость схем.
+Для локальной проверки пример использует тег `1.1.1`, но неизменяемый digest **ещё не закреплён**. Это не production-конфигурация. Плагины, передача identity и effect tools должны включаться только отдельным контролируемым этапом после проверки security-тестов.
 
 ## Действующая архитектурная история
 
