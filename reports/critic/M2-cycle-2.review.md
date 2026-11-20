@@ -47,9 +47,31 @@ The three bypasses below were reproduced with the repository's own test helpers.
    - **Fix:** After 1–3, add these steps with the exact expected result: (a) open the PR into another branch, then change the base to `main` → red; (b) B, then force-push to A, label, then fast-forward to B → red, label removed; (c) push the tag `origin/main` and run `workflow_dispatch` → red. Also record which `ci-ok` GitHub counts when the newer one is green.
    - **If we skip it:** The owner passes the checklist and believes the gate holds, while three bypasses stay open.
 
+5. **A home-made mutation script where mutmut is now required** (`scripts/ci/mutate_m2.py`, `reports/mutations/M2-cycle-2.txt`)
+   - **What this is:** DoD-4 proves that the tests catch broken behavior. The owner changed it on 2026-11-20 (plan on `claude/admiring-planck-vzys0x`, commit `892d570`): Python is checked with **mutmut**, a tool that makes many small code changes ("mutants") on its own, and home-made mutation scripts are not used.
+   - **Problem:** `mutate_m2.py` is a hand-picked list of 39 edits. 35 of them are in Python, where mutmut applies. A hand list only checks what its author thought of. Finding 2 is such a case: `stale()` misses a fast-forward to an older SHA, and no mutation or test covers it. The 39/39 result is real (re-run), but it does not meet the new DoD-4. The rule is newer than the code, and the score is already capped by findings 1–2.
+   - **Fix:** Configure mutmut in `pyproject.toml` for `gxg_policy/{diff,lint,bundle,load}.py` and `scripts/ci/widening_gate.py`, run it with one command, and attach the report with no surviving non-equivalent mutants. Delete the Python part of `mutate_m2.py`. Keep the custom check only for `grants_widening.sh` and `ci.yml`, since no mature mutation tool exists for bash or workflow YAML, and write that reason in the plan.
+   - **If we skip it:** DoD-4 stays open, and gaps like finding 2 stay invisible.
+
+## Existing solutions (ponytail «is there a ready solution»)
+
+| Component | Ready alternative | Verdict |
+| --- | --- | --- |
+| `validate` (JSON Schema) | `jsonschema`, already used | use existing |
+| `lint` cross-file rules | conftest/OPA, yamllint: frameworks only, every rule would still be written (in Rego, plus a new binary) | justified custom |
+| YAML duplicate keys | yamllint `key-duplicates`, ruamel.yaml: a few lines on PyYAML keep the error in the same report with file and path | justified custom |
+| `diff` widening/narrowing | dyff, deepdiff: structure only, no permission pairs | justified custom |
+| JCS (`bundle.py`, ~20 lines) | `rfc8785` on PyPI. The cycle-1 plan records "stdlib json + UTF-16 key sort, no floats". I found no input where the output differs | justified custom |
+| Ed25519 | `cryptography`, used | use existing |
+| `.sig` format | minisign, cosign: the format is fixed by GR-11a for the M1 loader | justified custom |
+| Widening gate (label, CODEOWNERS, staleness) | Code Owner review (excluded by the owner, AC-M0-03); environment with required reviewers (needs a paid plan for private repos; AC-M2-04 prescribes the label) | justified custom |
+| GitHub API client (`urllib`) | `gh api --paginate`, PyGithub: stdlib keeps the gate testable with a fake API | justified custom |
+| Mutation testing | **mutmut** (new DoD-4) for Python; bash and workflow YAML have no mature tool | use existing (finding 5) |
+| Cron gap check (test) | croniter: test-only, about 10 lines | justified custom |
+
 ## Nice to have
 
 None worth a line.
 
-Verdict: fix 1, 2 and 3 first (then 4).
-Not checked: which of two same-name `ci-ok` checks on one SHA GitHub branch protection counts (needs a real PR); that `actions/checkout` fetches tags was taken from its documented `fetch-depth: 0` behavior, not seen in this repo's CI log.
+Verdict: fix 1, 2 and 3 first, then 4 and 5.
+Not checked: mutmut itself was not run; which of two same-name `ci-ok` checks on one SHA GitHub branch protection counts (needs a real PR); that `actions/checkout` fetches tags was taken from its documented `fetch-depth: 0` behavior, not seen in this repo's CI log.

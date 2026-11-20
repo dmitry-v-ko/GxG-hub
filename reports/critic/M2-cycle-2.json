@@ -7,6 +7,7 @@
   "score": 5.0,
   "caps_applied": [
     "ac_failed",
+    "dod",
     "critical",
     "major"
   ],
@@ -73,6 +74,13 @@
       "required_improvement": "Use refs/remotes/origin/main explicitly (also in the fix for the first finding); test with a tag named origin/main -> red."
     },
     {
+      "severity": "major",
+      "ref": "DoD-4 (owner decision 2026-11-20, plan claude/admiring-planck-vzys0x@892d570), DoD-6",
+      "where": "scripts/ci/mutate_m2.py (211 lines), reports/mutations/M2-cycle-2.txt",
+      "problem": "New DoD-4: Python mutation checks run with mutmut, self-written mutation scripts are not used. mutate_m2.py is a self-written list of 39 hand-picked (file, old, new) edits; 35 of them target Python (gxg_policy/diff.py, lint.py, bundle.py, cli.py, scripts/ci/widening_gate.py), where mutmut generates mutants systematically. Example of what the hand list misses: finding 2 (stale() ignores fast-forward to an older SHA) has no mutation and no test. The 39/39 result is reproduced, but it does not meet the new DoD-4. The requirement is newer than the code; the score is already capped at 5 by older findings.",
+      "required_improvement": "mutmut config in pyproject.toml for tools/gxg-policy/src/gxg_policy/{diff,lint,bundle,load}.py and scripts/ci/widening_gate.py; one command runs it; attach the mutmut report; no surviving non-equivalent mutants (equivalent ones listed with reasons). Keep the custom check only for grants_widening.sh and ci.yml mutations (no mature mutation tool for bash/workflow YAML), with that reason written in the plan; delete the Python part of mutate_m2.py."
+    },
+    {
       "severity": "minor",
       "ref": "AC-M2-04 docs (cycle-1 F5)",
       "where": "docs/setup/widening-approval.md «Как работает проверка», «Сквозная проверка на реальном PR»",
@@ -84,6 +92,7 @@
     "Base change: pull_request diff is against main (merge-base of refs/remotes/origin/main and the PR head), not the event base; `edited` added to pull_request types; test with a non-main base -> red.",
     "F2 remainder: head arrival counts only runs created after the latest force-push; runs from another head repository ignored; A/B/A/B fast-forward test red; mutation added to mutate_m2.py.",
     "Tag shadowing: refs/remotes/origin/main in grants_widening.sh; test with a tag named origin/main -> red.",
+    "DoD-4 (new): replace the Python part of mutate_m2.py with mutmut on gxg_policy diff/lint/bundle/load and widening_gate.py; mutmut report attached, no surviving non-equivalent mutants; custom mutation check kept only for grants_widening.sh/ci.yml with the reason in the plan.",
     "docs/setup/widening-approval.md: remove the false claim or make it true; owner checklist extended with the three cases and both orders of same-name ci-ok; conformance report lists them under owner_pending/proven_by_tests."
   ],
   "ponytail_review": "reports/critic/M2-cycle-2.review.md",
@@ -92,6 +101,69 @@
     "Closed from cycle 1: F1 (plain push/dispatch red), F3, F4 (39/39 mutations reproduced), --built-at, MARKER, GR-13a (schedule 41 */6, bundle on schedule on main, docs, tests). F2 closed for the named cases, open for finding 2. F5 done but see the docs finding.",
     "ci-ok on fbd522a (run 44797618586, push) is red by design: widening vs main outside a PR. Not counted as a separate DoD cap; DoD-1 (main via PR, CI green) is owner-pending. The score cap comes from ac_failed/critical.",
     "Re-run: clean clone, UV_CACHE_DIR empty, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1, uv 0.11.32: pytest 202 passed, 136 subtests, 0 skipped; check-all OK.",
-    "Not checked: which of two same-name ci-ok checks on one SHA branch protection counts (needs a real PR)."
+    "Not checked: which of two same-name ci-ok checks on one SHA branch protection counts (needs a real PR).",
+    "Owner decisions relayed by the orchestrator after the first version of this report (existing-solutions check, mutmut as DoD-4) were checked against docs/implementation-plan-v1.md on claude/admiring-planck-vzys0x (892d570, ae5902e) and applied here. Score unchanged 5.0. mutmut itself was not run in this review."
+  ],
+  "existing_solutions": [
+    {
+      "component": "gxg-policy validate (JSON Schema)",
+      "alternative": "jsonschema (already a dependency, used)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "gxg-policy lint (cross-file rules: dangling refs, RID domain, masks, approver roles, TTLs)",
+      "alternative": "conftest/OPA, yamllint: frameworks only, every rule would still be written (in Rego) plus a new binary; yamllint covers only duplicate keys",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "YAML duplicate-key rejection (load.py)",
+      "alternative": "yamllint key-duplicates / ruamel.yaml; a few lines on PyYAML keep the error in the same lint report with file+path",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "gxg-policy diff (widening/narrowing of permission pairs and approval rules)",
+      "alternative": "dyff, deepdiff: structural diff only, no permission semantics; no tool computes GR-09 pairs",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "JCS canonicalization (bundle.py, ~20 lines)",
+      "alternative": "rfc8785 (PyPI); plan cycle 1 records stdlib json + UTF-16 key sort, float-free bundle (stdlib rung before a dependency); no case found where output differs",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "Ed25519 sign/verify",
+      "alternative": "cryptography (used)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "Bundle signature format (.sig JSON)",
+      "alternative": "minisign, sigstore/cosign; format is fixed by GR-11a for the M1 loader",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "widening gate (widening_gate.py: label, CODEOWNERS, staleness)",
+      "alternative": "GitHub required Code Owner review (excluded by owner decision AC-M0-03); environment with required reviewers (binds approval to a run server-side, but needs a paid plan for private repos, and AC-M2-04 prescribes the label)",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "GitHub API client (urllib + paged)",
+      "alternative": "gh api --paginate (preinstalled on runners), PyGithub; stdlib urllib keeps the gate testable with an injected fake API",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "grants_widening.sh (merge-base diff outside PRs)",
+      "alternative": "none; plain git + the tool",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "mutation testing (scripts/ci/mutate_m2.py)",
+      "alternative": "mutmut (new DoD-4) for all Python targets; bash/workflow mutations: no mature tool",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "cron gap check in tests/ci/test_ci_workflow.py",
+      "alternative": "croniter; test-only, about 10 lines for the */N hour field",
+      "verdict": "justified_custom"
+    }
   ]
 }
