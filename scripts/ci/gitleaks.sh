@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Secret scan with pinned gitleaks (AC-M0-04, AC-M0.1-01). Run inside the repository to scan.
+#
+#   scripts/ci/gitleaks.sh tree [REV]   every file in the tree of REV (default HEAD)
+#   scripts/ci/gitleaks.sh range A..B   every commit in A..B; A = all-zero SHA or empty: all of B
+#
+# Rules: .gitleaks.toml; historical findings: .gitleaksignore (both next to this repo's root,
+# not taken from the scanned repository). Exit code: 0 clean, non-zero findings or error.
+# GITLEAKS=/path/to/gitleaks uses that binary instead of downloading (it must be $VERSION).
+set -euo pipefail
+
+VERSION=8.30.1
+SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  # gitleaks_8.30.1_linux_x64.tar.gz
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CONFIG="$HERE/.gitleaks.toml"
+IGNORE="$HERE/.gitleaksignore"
+
+install_gitleaks() {
+  # shortcut: linux x64 only (CI); elsewhere set GITLEAKS to a local 8.30.1 binary.
+  local dir="${XDG_CACHE_HOME:-$HOME/.cache}/gxg/gitleaks-$VERSION"
+  if [ ! -x "$dir/gitleaks" ]; then
+    local tmp
+    tmp="$(mktemp -d)"
+    curl -fsSL -o "$tmp/gl.tar.gz" \
+      "https://github.com/gitleaks/gitleaks/releases/download/v$VERSION/gitleaks_${VERSION}_linux_x64.tar.gz"
+    echo "$SHA256  $tmp/gl.tar.gz" | sha256sum -c --quiet -
+    tar -xzf "$tmp/gl.tar.gz" -C "$tmp" gitleaks
+    mkdir -p "$dir" && mv "$tmp/gitleaks" "$dir/gitleaks" && rm -rf "$tmp"
+  fi
+  echo "$dir/gitleaks"
+}
+
+GL="${GITLEAKS:-$(install_gitleaks)}"
+[ "$("$GL" version)" = "$VERSION" ] || { echo "gitleaks.sh: need gitleaks $VERSION, got $("$GL" version)" >&2; exit 2; }
+# --redact: never print the secret; --ignore-gitleaks-allow: an inline "gitleaks:allow" must not hide a finding.
+COMMON=(--no-banner --no-color --redact --ignore-gitleaks-allow -v --exit-code 1
+  --config "$CONFIG" --gitleaks-ignore-path "$IGNORE")
+ZERO=0000000000000000000000000000000000000000
+
+scan_log() {
+  # --text: binary and UTF-16 diffs are scanned too; -m: diffs of merge commits.
+  "$GL" git "${COMMON[@]}" --log-opts="--text -m --full-history $1" .
+}
+
+case "${1:-}" in
+  tree)
+    rev="$(git rev-parse --verify "${2:-HEAD}^{commit}")"
+    # The tree as one parentless commit: every file is an added file of that commit, so the tree
+    # goes through the same `git log --text` path as the range (gitleaks `dir` skips binary files).
+    snapshot="$(GIT_AUTHOR_NAME=gitleaks GIT_AUTHOR_EMAIL=ci@example.invalid \
+      GIT_COMMITTER_NAME=gitleaks GIT_COMMITTER_EMAIL=ci@example.invalid \
+      git commit-tree -m "tree of $rev" "$rev^{tree}")"
+    scan_log "$snapshot"
+    ;;
+  range)
+    spec="${2:?range A..B}"
+    base="${spec%%..*}"
+    head="${spec#*..}"
+    [ "$spec" != "$base" ] && [ -n "$head" ] || { echo "gitleaks.sh: range must look like A..B" >&2; exit 2; }
+    git rev-parse --verify -q "$head^{commit}" >/dev/null || { echo "gitleaks.sh: bad revision $head" >&2; exit 2; }
+    if [ -z "$base" ] || [ "$base" = "$ZERO" ]; then
+      revs="$head"
+    else
+      git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "gitleaks.sh: bad revision $base" >&2; exit 2; }
+      revs="$base..$head"
+    fi
+    scan_log "$revs"
+    ;;
+  *)
+    echo "usage: $0 tree [REV] | range A..B" >&2
+    exit 2
+    ;;
+esac

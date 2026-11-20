@@ -1,0 +1,15 @@
+# Findings in commits already pushed to claude/m0-foundation, whose history must not be rewritten.
+# Format: commit:path:rule:line. Only that rule on that line of that commit is ignored; any other
+# finding in the same file, and the same text in any other commit, is reported.
+#
+# M0 cycle-1 conformance report and critic report quote AC-M0-04 in prose; no key material
+# (the two (path, blob) pairs of the former scripts/ci/check_secrets.py).
+9d346993626d3562552164c2828fc947ac6bf841:reports/conformance/M0.json:gxg-private-key-header:53
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:gxg-private-key-header:29
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:gxg-private-key-header:37
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:private-key:29
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:private-key:37
+# Default generic-api-key rule: the type name `Ed25519PrivateKey` in a signature, and the fake
+# 32-character key body constant of the deleted scanner tests. Neither is a secret.
+52874f53b81f64889122d13e7d53973fe390d761:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:76
+f5cf832eda2c190089c02dfb0de3be154ac7ade8:tests/ci/test_check_secrets.py:generic-api-key:21

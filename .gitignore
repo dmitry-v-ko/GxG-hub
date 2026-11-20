@@ -19,3 +19,6 @@ __pycache__/
 node_modules/
 dist/
 .venv/
+
+# mutmut working copy (scripts/ci/mutmut.sh)
+/mutants/

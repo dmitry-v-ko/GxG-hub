@@ -1,0 +1,46 @@
+# gitleaks configuration (AC-M0-04, AC-M0.1-01). Pinned binary: scripts/ci/gitleaks.sh.
+# The private key header is written as `-{5}` in regexes so this file never spells it.
+title = "GxG Hub"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "gxg-private-key-header"
+description = "PEM private key header anywhere (any case, inline, without trailing dashes)"
+regex = '''(?i)-{5}[ \t]*BEGIN[ \t]+(?:[A-Z0-9]+[ \t]+)*PRIVATE[ \t]+KEY[^\r\n]*'''
+keywords = ["begin"]
+  # The only quote of the header the repository keeps: the AC-M0-04 row of the plan,
+  # matched as the whole line, so any other text on that line or any other line is reported.
+  [[rules.allowlists]]
+  condition = "AND"
+  paths = ['''^docs/implementation-plan-v1\.md$''']
+  regexTarget = "line"
+  regexes = ['''^\n?\| AC-M0-04 \| CI отклоняет коммит с файлом, совпадающим с шаблонами секретов \(`\*\.pem`, `\.env`, строка `-{5}BEGIN PRIVATE KEY-{5}`\) \|$''']
+
+[[rules]]
+id = "gxg-secret-file-name"
+description = "Secret-like file name, any case: *.pem, *.key, *.p12, *.pfx, .env, .env.*, default SSH key names"
+path = '''(?i)(?:^|/)(?:[^/]*\.(?:pem|key|p12|pfx)|\.env(?:\.[^/]*)?|id_(?:rsa|dsa|ecdsa|ed25519))$'''
+  [[rules.allowlists]]
+  paths = ['''(?:^|/)\.env\.example$''']
+
+# UTF-16 text hides the ASCII header behind NUL bytes. Git diffs it as binary, so the
+# scan passes `--text` to git log (scripts/ci/gitleaks.sh) and these rules see raw bytes.
+[[rules]]
+id = "gxg-private-key-header-utf16le"
+description = "PEM private key header in UTF-16LE text"
+regex = '''(?i)(?:-\x00){5}(?:[ \t]\x00)*B\x00E\x00G\x00I\x00N\x00(?:[ \t]\x00)+(?:(?:[A-Z0-9]\x00)+(?:[ \t]\x00)+)*P\x00R\x00I\x00V\x00A\x00T\x00E\x00(?:[ \t]\x00)+K\x00E\x00Y[^\n]*'''
+
+[[rules]]
+id = "gxg-private-key-header-utf16be"
+description = "PEM private key header in UTF-16BE text"
+regex = '''(?i)(?:\x00-){5}(?:\x00[ \t])*\x00B\x00E\x00G\x00I\x00N(?:\x00[ \t])+(?:(?:\x00[A-Z0-9])+(?:\x00[ \t])+)*\x00P\x00R\x00I\x00V\x00A\x00T\x00E(?:\x00[ \t])+\x00K\x00E\x00Y[^\n]*'''
+
+# The schema lock stores SHA-256 digests under schema names; generic-api-key mistakes them for keys.
+[[allowlists]]
+description = "SHA-256 digests in the schema lock"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/contract/schema-lock\.json$''']
+regexes = ['''^[0-9a-f]{64}$''']

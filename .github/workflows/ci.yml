@@ -47,7 +47,7 @@ jobs:
           uv run mypy --strict
           packages/gxg-connector-kit/src packages/gxg-connector-kit/tests
           approval/src approval/tests
-          scripts conftest.py tests/ci
+          scripts conftest.py tests/ci tests/secrets
       - name: mypy (other packages and contract tests)
         run: >-
           uv run mypy
@@ -88,19 +88,17 @@ jobs:
       - run: uv run python scripts/ci/prove_schema_guard.py
 
   secrets:
-    # AC-M0-04: reject secret-like files in the tree and in every pushed commit.
+    # AC-M0-04, AC-M0.1-01: gitleaks (pinned, scripts/ci/gitleaks.sh) on the tree and on every pushed commit.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        with:
-          python-version: "3.12"
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Scan tree
-        run: python scripts/ci/check_secrets.py --tree HEAD
+        run: scripts/ci/gitleaks.sh tree HEAD
       - name: Scan every commit of the PR / push
         env:
           EVENT: ${{ github.event_name }}
@@ -109,10 +107,10 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
         run: |
+          ZERO=0000000000000000000000000000000000000000
           if [ "$EVENT" = "pull_request" ]; then
-            python scripts/ci/check_secrets.py --range "$PR_BASE..$PR_HEAD"
+            scripts/ci/gitleaks.sh range "$PR_BASE..$PR_HEAD"
           elif [ "$EVENT" = "push" ]; then
-            ZERO=0000000000000000000000000000000000000000
             BEFORE="${PUSH_BEFORE:-$ZERO}"
             if [ "$BEFORE" != "$ZERO" ] && ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
               # Force-push: the old tip is not in the clone. Scan everything not yet in main.
@@ -123,15 +121,29 @@ jobs:
                 BEFORE=$ZERO
               fi
             fi
-            python scripts/ci/check_secrets.py --range "$BEFORE..$PUSH_AFTER"
+            scripts/ci/gitleaks.sh range "$BEFORE..$PUSH_AFTER"
           else
-            python scripts/ci/check_secrets.py --range "0000000000000000000000000000000000000000..HEAD"
+            scripts/ci/gitleaks.sh range "$ZERO..HEAD"
           fi
+      - name: AC-M0.1-01 — every M0 secret case is caught (fixtures generated at test time)
+        run: uv sync && uv run pytest tests/secrets
+
+  mutmut:
+    # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: scripts/ci/mutmut.sh
 
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
     if: always()
-    needs: [lint, types, tests, schema-guard, secrets]
+    needs: [lint, types, tests, schema-guard, secrets, mutmut]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

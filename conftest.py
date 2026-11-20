@@ -76,5 +76,5 @@ def pytest_terminal_summary(terminalreporter: Any) -> None:
     if _violations:
         terminalreporter.write_line(
             "FAILED: skipped/xfail tests are forbidden (DoD-5): " + ", ".join(_violations),
-            red=True,
+            red=True,  # pragma: no mutate (colour only)
         )

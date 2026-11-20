@@ -11,6 +11,10 @@
 /tests/ci/               @dmitry-v-ko
 /.github/                @dmitry-v-ko
 /conftest.py             @dmitry-v-ko
+/.gitleaks.toml          @dmitry-v-ko
+/.gitleaksignore         @dmitry-v-ko
+/tests/secrets/          @dmitry-v-ko
+/pyproject.toml          @dmitry-v-ko
 
 # Specs and the plan (acceptance criteria).
 /docs/specs/             @dmitry-v-ko
