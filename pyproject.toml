@@ -107,7 +107,7 @@ exclude = ["*.md"]
 
 [tool.mutmut]
 # DoD-4 / AC-M0.1-03: modules with the key conditions of M0. Run: scripts/ci/mutmut.sh
-paths_to_mutate = ["scripts/ci/", "conftest.py"]
+source_paths = ["scripts/ci/", "conftest.py"]
 also_copy = ["schemas/", "policies/", "docs/", "tests/"]
 pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider"]
 pytest_add_cli_args_test_selection = ["tests/ci/", "tests/contract/"]
