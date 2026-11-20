@@ -11,6 +11,15 @@
 - Скрывать внутри доменных коннекторов выбор API/провайдера и безопасный технический fallback.
 - Сохранять границы: Hub — доступ и каталог; агент — оценка результата; оркестратор — бизнес-задачи.
 
+## Целевая спецификация (2026-11-20)
+
+- [Целевая платформа](docs/specs/target-platform-v1.md) — ContextForge как внешняя зависимость, независимые коннекторы, права, fallback.
+- [MCP Connector Contract v1](docs/specs/mcp-connector-contract-v1.md) — стандартизованные tools, identity, authorization, results, errors, effects.
+- [MCP Toolkit v1](docs/specs/mcp-toolkit-v1.md) — FastMCP/TypeScript SDK, будущий генератор и conformance-тесты.
+- [KB / Signals / Telegram / Voice](docs/specs/service-integration-v1.md) — существующие сервисы и особый двусторонний путь Signals.
+
+**Security stop:** имеющиеся `compose.yaml` и `.env.example` всё ещё указывают на prerelease ContextForge `1.0.0-RC-3`. **Не запускайте его с личными данными, в мультиарендной среде или в production.** Перед PoC выберите проверенный исправленный образ (IBM рекомендует минимум v1.1.1 для известных на 20.11.2026 проблем), закрепите digest и подтвердите identity, RBAC, resource scope и межтенантную изоляцию. Этот этап изменяет только документацию, не конфигурацию и не runtime.
+
 ## Структура
 
 - `compose.yaml` — локальный **dev-only** запуск ContextForge (официальный OCI-образ, без изменений исходников).
