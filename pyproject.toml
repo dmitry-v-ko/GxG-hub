@@ -22,6 +22,9 @@ dev = [
     "jsonschema>=4.23,<5",
     "PyYAML>=6,<7",
     "openapi-spec-validator>=0.7,<1",
+    # gxg-connector-kit: property tests (AC-M1-02) and branch coverage gate (AC-M1-09)
+    "hypothesis>=6.100,<7",
+    "pytest-cov>=6,<8",
 ]
 
 [tool.uv]
@@ -42,6 +45,8 @@ gxg-connector-demo = { path = "connectors/demo", editable = true }
 [tool.pytest.ini_options]
 minversion = "8.3"
 addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+# Test helpers of gxg-connector-kit (kit_testing.py); importlib mode does not add test dirs to sys.path.
+pythonpath = ["packages/gxg-connector-kit/tests"]
 testpaths = [
     "tests",
     "packages/gxg-connector-kit/tests",
