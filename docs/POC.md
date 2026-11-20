@@ -28,6 +28,16 @@
 
 Никакие пункты выше пока не выполнены: это план проверки.
 
+## Human approval acceptance (отдельная фаза)
+
+- [ ] Action Gate возвращает `approval_required` и не вызывает внешний эффект до решения человека.
+- [ ] Решение разрешённого пользователя ограничено правильным tenant, agent principal, tool, точными аргументами, ресурсом и сроком.
+- [ ] Отказ, истечение срока, повтор approval, подмена сообщения/получателя, прямой вызов коннектора блокируют эффект.
+- [ ] Неизвестный результат отправки требует reconciliation; повтор не создаёт второй effect.
+- [ ] Логи связывают approval, вызов и доменную задачу, не сохраняя приватные payload.
+
+Это проверки **целевой**, пока не реализованной архитектуры. См. [APPROVALS.md](APPROVALS.md).
+
 ## Contract-first gate (2026-11-20)
 
 До интеграции KB и Telegram сначала принять [MCP Connector Contract v1](specs/mcp-connector-contract-v1.md), реализовать тестовый read-only FastMCP server и conformance-набор из [Toolkit v1](specs/mcp-toolkit-v1.md). Уже работающий KB MCP не переписывать: сначала gap-audit. Доказать два отдельных вызова от Signals (collection и action) через Gateway, сохранив SourceInbox / ActionCandidate / Outcome в Signals. **Ни один пункт не закрыт этим документальным изменением.**
