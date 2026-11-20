@@ -36,3 +36,7 @@
 | M4 | 1 | исполнитель | claude/m4-contextforge-spike | 0130d78 (+9df9cde отчёт) | — | живой стенд в облаке: вариант A провалил 1–3, C прошёл 1–5; ADR Accepted (C), предварительно GO; digest закреплён | 2026-11-20 |
 | M4 | 1 | критик | claude/m4-contextforge-spike | 0130d78 | — | запущен (session_01V6d5A7XEpKRJstUuqRhWW5) | 2026-11-20 |
 | — | — | процесс | — | — | — | Сессия оркестратора повышена (доверенные устройства): дочерние треды больше не могут слать send_message → оркестратор опрашивает треды каждые 20 мин | 2026-11-20 |
+| M2 | 2 | исполнитель | claude/m2-policy-tooling | e10cf06/fbd522a (+59d7f61 отчёт) | — | F1–F5, GR-13a сделаны; AC-M2-04 ждёт 7 шагов владельца на реальном PR | 2026-11-20 |
+| M2 | 2 | критик | claude/m2-policy-tooling | fbd522a | — | запущен | 2026-11-20 |
+| M4 | 1 | критик | claude/m4-contextforge-spike | 0130d78 (отчёт 77d04f6) | **8.0** | < 9: 3× major (fail closed плагина не работает, JWS не привязан к tool + jti per-process, пробел мутаций aud) → цикл 2 | 2026-11-20 |
+| M4 | 2 | исполнитель | claude/m4-contextforge-spike | — | — | запущен (session_01V6d5A5ydmWfpBpGhdwffAc) | 2026-11-20 |
