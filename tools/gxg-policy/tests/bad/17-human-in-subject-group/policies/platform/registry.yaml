@@ -2,7 +2,7 @@ schema_version: 1
 services:
   - id: demo
     kind: connector
-    public_key: ed25519:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+    public_keys: [ed25519:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC]
     tenants: [t-alpha]
     internal_url: https://demo.internal:8081
 webhooks:

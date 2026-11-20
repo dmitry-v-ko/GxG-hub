@@ -7,8 +7,9 @@ its author there). The label must be added by hand: an event performed via a Git
 (an agent acting with the owner's credentials) does not count.
 
 The approval binds to the head commit on every event: a label older than the moment the head
-SHA arrived on the PR (server time: the first `pull_request` workflow run for that SHA on this PR,
-or the latest force-push) is stale. It is removed and the check is red.
+SHA arrived on the PR (server time: the first `pull_request` workflow run for that SHA on this PR
+after the latest force-push, from the PR's own head repository) is stale. It is removed and the
+check is red.
 
 Outside a pull request (`--no-pr`: push or workflow_dispatch to a branch other than main) there
 is no label to look at, so any widening is red: fail closed.
@@ -125,33 +126,35 @@ def _ts(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def head_arrival(api: Api, repo: str, pr: dict[str, Any]) -> datetime | None:
-    """Server time the head SHA first showed up on this PR: earliest `pull_request` run for it."""
+def head_arrival(api: Api, repo: str, pr: dict[str, Any], events: list[dict[str, Any]]) -> datetime | None:
+    """Server time the head SHA (last) arrived on this PR: the earliest `pull_request` run for it created
+    after the latest force-push. Runs before that force-push belong to an earlier visit of the same SHA
+    (B, force-push to A, fast-forward back to B), runs from another head repository to another PR."""
     sha = pr["head"]["sha"]
+    repo_id = (pr["head"].get("repo") or {}).get("id")
+    forced = max((_ts(e["created_at"]) for e in events if e.get("event") == "head_ref_force_pushed"), default=None)
     runs = api("GET", f"/repos/{repo}/actions/runs?event=pull_request&head_sha={sha}&per_page=100", None)
     times = [
         _ts(r["created_at"])
         for r in runs.get("workflow_runs", [])
         if r.get("head_sha") == sha
         and r.get("head_branch") == pr["head"]["ref"]
+        and repo_id is not None
+        and (r.get("head_repository") or {}).get("id") == repo_id
         # Runs linked to other PRs do not count (same SHA pushed to another branch earlier).
         and (not r.get("pull_requests") or pr["number"] in {x.get("number") for x in r["pull_requests"]})
     ]
-    return min(times, default=None)
+    return min((t for t in times if forced is None or t > forced), default=None)
 
 
-def stale(label: dict[str, Any] | None, arrival: datetime | None, events: list[dict[str, Any]]) -> str | None:
+def stale(label: dict[str, Any] | None, arrival: datetime | None) -> str | None:
     """Why the approval does not cover the head commit, or None if it does."""
     if label is None:
         return None
     if arrival is None:
         return "the arrival time of the head commit is unknown"
-    at = _ts(label["created_at"])
-    if at <= arrival:
+    if _ts(label["created_at"]) <= arrival:
         return f"the label ({label['created_at']}) is older than the head commit on the PR ({arrival.isoformat()})"
-    forced = [_ts(e["created_at"]) for e in events if e.get("event") == "head_ref_force_pushed"]
-    if forced and at <= max(forced):
-        return f"the branch was force-pushed after the label ({max(forced).isoformat()})"
     return None
 
 
@@ -184,7 +187,7 @@ def run(api: Api, repo: str, event: dict[str, Any], report: dict[str, Any], *, m
     label = last_label_event(events)
     note = ""
     if report["widening"] and LABEL in labels:
-        why = stale(label, head_arrival(api, repo, pr), events)
+        why = stale(label, head_arrival(api, repo, pr, events))
         if why:
             api("DELETE", f"{issue}/labels/{urllib.parse.quote(LABEL)}", None)
             labels.discard(LABEL)

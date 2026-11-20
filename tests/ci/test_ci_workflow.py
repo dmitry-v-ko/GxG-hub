@@ -52,3 +52,11 @@ def test_pull_request_runs_are_never_cancelled() -> None:
     conc = WF["concurrency"]
     assert "github.run_id" in conc["group"] and "event_name == 'pull_request'" in conc["group"]
     assert "github.event_name != 'pull_request'" in conc["cancel-in-progress"]
+
+
+def test_base_change_reruns_the_gate_and_the_event_base_is_not_used() -> None:
+    # Cycle 2 finding 1: changing the PR base sends `edited`; the job diffs against main, not base.sha.
+    assert "edited" in ON["pull_request"]["types"]
+    gate = next(s for s in WF["jobs"]["grants-widening"]["steps"] if "grants_widening.sh" in s.get("run", ""))
+    assert gate["env"]["PR_HEAD"] == "${{ github.event.pull_request.head.sha }}"
+    assert "PR_BASE" not in gate["env"]

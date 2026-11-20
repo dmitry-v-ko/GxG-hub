@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 
 from gxg_policy.lint import lint
-from gxg_policy.load import load
+from gxg_policy.load import REPO_ROOT, load
 
 HERE = Path(__file__).parent
-REPO = HERE.parents[2]
+REPO = REPO_ROOT
 BAD = sorted(p for p in (HERE / "bad").iterdir() if p.is_dir())
 GOOD = HERE / "good"
 NOW = datetime(2026, 11, 20, tzinfo=UTC)

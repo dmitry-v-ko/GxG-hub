@@ -11,9 +11,9 @@ from typing import Any
 import jsonschema
 import yaml
 
-# shortcut: schemas are read from the repository checkout (tools/gxg-policy/src/gxg_policy -> repo root),
-# upgrade to package data if gxg-policy is ever installed outside this repo.
-REPO_ROOT = Path(__file__).resolve().parents[4]
+# shortcut: schemas are read from the repository checkout (the nearest parent with schemas/; also works from
+# mutmut's copy under tools/gxg-policy/mutants/), upgrade to package data if gxg-policy is installed elsewhere.
+REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "schemas").is_dir())
 SCHEMAS = REPO_ROOT / "schemas"
 
 KINDS = {

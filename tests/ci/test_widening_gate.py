@@ -18,7 +18,7 @@ OWNERS = {"dmitry-v-ko"}
 
 
 def load_gate() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("widening_gate_under_test", SCRIPT)
+    spec = importlib.util.spec_from_file_location("scripts.ci.widening_gate", SCRIPT)  # mutmut keys use this name
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -30,7 +30,8 @@ gate = load_gate()
 
 T_PUSH = "2026-11-20T10:00:00Z"  # head commit B arrives on the PR
 T_BEFORE, T_AFTER = "2026-11-20T09:00:00Z", "2026-11-20T11:00:00Z"
-HEAD = {"sha": "b" * 40, "ref": "claude/x"}
+SHA, REF = "b" * 40, "claude/x"
+HEAD: dict[str, Any] = {"sha": SHA, "ref": REF, "repo": {"id": 1}}
 
 
 def labeled(
@@ -45,10 +46,11 @@ def labeled(
     }
 
 
-def pr_run(at: str = T_PUSH, sha: str = HEAD["sha"], branch: str = HEAD["ref"], prs: Any = (7,)) -> dict[str, Any]:
+def pr_run(at: str = T_PUSH, sha: str = SHA, branch: str = REF, prs: Any = (7,), repo_id: int = 1) -> dict[str, Any]:
     return {
         "head_sha": sha,
         "head_branch": branch,
+        "head_repository": {"id": repo_id},
         "created_at": at,
         "pull_requests": [{"number": n} for n in prs],
     }
@@ -172,6 +174,38 @@ def test_runs_of_other_prs_or_branches_do_not_date_the_head() -> None:
     runs = [pr_run(T_BEFORE, branch="claude/other"), pr_run(T_BEFORE, prs=(3,)), pr_run(T_PUSH)]
     api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at="2026-11-20T09:30:00Z")], [], runs)
     assert run(api, "labeled", WIDE) == 1 and api.deleted()
+
+
+def test_fast_forward_back_to_an_earlier_head_needs_a_new_label() -> None:
+    # Cycle 2 finding 2: B ran at 09:00, force-push to A at 09:30, owner labels A at 10:00, fast-forward
+    # A -> B at 11:00 (no force-push event). Only the 11:00 run dates B's current visit: the label is stale.
+    forced = {"event": "head_ref_force_pushed", "created_at": "2026-11-20T09:30:00Z"}
+    events = [forced, labeled("dmitry-v-ko", at="2026-11-20T10:00:00Z")]
+    api = FakeApi(["widening-approved"], events, [], [pr_run(T_BEFORE), pr_run(T_AFTER)])
+    assert run(api, "synchronize", WIDE) == 1 and api.deleted()
+    # Same label, only the post-force-push run: still older than B's arrival.
+    api = FakeApi(["widening-approved"], events, [], [pr_run(T_AFTER)])
+    assert run(api, "synchronize", WIDE) == 1 and api.deleted()
+
+
+def test_label_after_the_run_that_followed_the_force_push_counts() -> None:
+    forced = {"event": "head_ref_force_pushed", "created_at": "2026-11-20T09:30:00Z"}
+    events = [forced, labeled("dmitry-v-ko", at=T_AFTER)]
+    api = FakeApi(["widening-approved"], events, [], [pr_run(T_BEFORE), pr_run(T_PUSH)])
+    assert run(api, "labeled", WIDE) == 0 and not api.deleted()
+
+
+def test_runs_from_another_head_repository_are_ignored() -> None:
+    # A fork PR run has empty `pull_requests` and may share the branch name: the repository id decides.
+    runs = [pr_run(T_BEFORE, prs=(), repo_id=2), pr_run(T_PUSH)]
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at="2026-11-20T09:30:00Z")], [], runs)
+    assert run(api, "labeled", WIDE) == 1 and api.deleted()
+
+
+def test_unknown_head_repository_fails_closed() -> None:
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko")], [])
+    event = {"action": "labeled", "pull_request": {"number": 7, "head": {**HEAD, "repo": None}}}
+    assert gate.run(api, "o/r", event, WIDE, markdown="m", owners=OWNERS) == 1 and api.deleted()
 
 
 def test_unknown_arrival_fails_closed() -> None:

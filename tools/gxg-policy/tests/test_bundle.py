@@ -14,9 +14,10 @@ import pytest
 
 from gxg_policy.bundle import BUNDLE, SIG, BundleError, b64url, build, jcs, public_key, sign, verify
 from gxg_policy.lint import lint
+from gxg_policy.load import REPO_ROOT
 
 HERE = Path(__file__).parent
-REPO = HERE.parents[2]
+REPO = REPO_ROOT
 GOOD = HERE / "good"
 SHA = "0123456789abcdef0123456789abcdef01234567"
 
@@ -224,7 +225,7 @@ def test_jcs_matches_canonical_vectors_without_nfc() -> None:
     assert checked >= 3
     for v in vectors["invalid_inputs"]:
         with pytest.raises(BundleError):
-            jcs(v["input"])
+            jcs(v["input"] if "input" in v else json.loads(v["input_json"]))
 
 
 def test_jcs_orders_keys_by_utf16_code_units() -> None:

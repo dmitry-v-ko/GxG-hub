@@ -5,7 +5,7 @@ name: ci
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]  # edited: base branch changed
   push:
     branches: [main, "claude/**"]
   workflow_dispatch:
@@ -153,7 +153,8 @@ jobs:
   grants-widening:
     # AC-M2-04 / GR-10: red while the policy diff has widening and no code owner added the
     # `widening-approved` label after the head commit. Posts the diff report to the PR.
-    # Outside a PR (push / dispatch to a branch other than main) any widening is red.
+    # Always diffed against main (merge-base), not against the PR base. Outside a PR (push / dispatch
+    # to a branch other than main) any widening is red.
     # docs/setup/widening-approval.md
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -173,7 +174,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: bash scripts/ci/grants_widening.sh
 
   ci-ok:

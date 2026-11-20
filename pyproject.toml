@@ -23,6 +23,7 @@ dev = [
     "PyYAML>=6,<7",
     "openapi-spec-validator>=0.7,<1",
     "cryptography>=44,<51",
+    "mutmut==3.8.1",
 ]
 
 [tool.uv]
@@ -56,7 +57,7 @@ xfail_strict = true
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-extend-exclude = [".venv"]
+extend-exclude = [".venv", "mutants"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "S", "PL", "RUF"]
@@ -89,3 +90,11 @@ strict_equality = true
 quote-style = "preserve"
 # Specs are normative text: never rewrite code samples inside Markdown.
 exclude = ["*.md"]
+
+# DoD-4: mutation testing (mutmut) of scripts/ci/widening_gate.py; gxg_policy has its own section in
+# tools/gxg-policy/pyproject.toml. One command for both: scripts/ci/mutmut.sh
+[tool.mutmut]
+source_paths = ["scripts/ci/"]
+only_mutate = ["*widening_gate.py"]
+also_copy = ["conftest.py"]
+pytest_add_cli_args_test_selection = ["tests/ci/test_widening_gate.py"]

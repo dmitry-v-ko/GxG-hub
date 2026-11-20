@@ -18,3 +18,9 @@ module-name = "gxg_policy"
 
 [project.scripts]
 gxg-policy = "gxg_policy.cli:main"
+
+# DoD-4: mutation testing of the modules with M2 key conditions. Run from the repo root: scripts/ci/mutmut.sh
+[tool.mutmut]
+source_paths = ["src/gxg_policy/"]
+only_mutate = ["*/diff.py", "*/lint.py", "*/bundle.py", "*/load.py"]
+pytest_add_cli_args_test_selection = ["tests"]
