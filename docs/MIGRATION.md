@@ -13,6 +13,12 @@
 
 Не переписывать старые базы данных, не отключать сервисы и не удалять миграции заранее. Любую production-миграцию и доступ к секретам согласовывать отдельно.
 
+## Обязательный этап: Approval Service и Action Gate
+
+В **новом** GxG Hub человеческое подтверждение выносим в отдельный GxG Approval Service и UI. Action Gate определяет по политике, требуется ли подтверждение до отправки или изменения внешней системы. Коннектор проверяет его валидность, scope, конкретные параметры и resource grants; при попытке обхода отказывает. До прохождения тестов на подмену получателя, истечение, replay, прямой вызов и дублирование записи внешние эффекты не включаются. См. [APPROVALS.md](APPROVALS.md).
+
+Рекомендуемый порядок: контракт → безопасный ContextForge PoC → read-only KB и Telegram → обе границы Signals → Approval Service/Action Gate → контролируемые effects → A2A позже.
+
 ## Contract-first decision (2026-11-20)
 
 До физического переноса сервисов следовать [Connector Contract](specs/mcp-connector-contract-v1.md) и [Service Integration](specs/service-integration-v1.md). Knowledge MCP уже существует: провести аудит и при необходимости тонкий wrapper. Signal Intelligence **не заменять одним MCP-сервисом**: он остаётся доменным оркестратором и использует ContextForge на стороне сбора источников и на стороне actions; доменные записи, lease и outcome не переносятся в Gateway. Во время cutover одному ActionCandidate соответствует только один авторитетный исполнитель, особенно для эффектов. Генератор MCP и конformance suite ещё не написаны.
