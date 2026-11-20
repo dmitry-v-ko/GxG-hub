@@ -62,7 +62,7 @@ flowchart LR
 
 Модель — **оператор и несколько клиентов** (до ~10 tenant'ов в ближайший год). Клиенты не настраивают Hub сами: интеграции, агентов и политики заводит оператор.
 
-- **TEN-01.** Tenant = team в ContextForge (VERIFY: изоляция видимости tools/servers по team и `teams` в JWT). Каждый агент принадлежит ровно одному tenant.
+- **TEN-01.** Tenant = team в ContextForge. Проверено на v1.1.1 в [спайке M4](../adr/0001-identity-propagation.md#результаты-по-критериям). Gateway, tools и virtual servers с visibility `team` видны только участникам этой team: в `tools/list`, `/v1/tools`, `/v1/servers` ([доказательство](../../spikes/m4-contextforge/evidence/teams-claims-and-visibility.json)). Вызов tool'а чужой team отклоняется на `/rpc`, `/mcp` и `/servers/{id}/mcp` до обращения к upstream. Team-scoped токен агента несёт `teams` = [`<team_id>`] (SEC-02). `team_id` — UUID ContextForge, имя tenant'а (`t-alpha`) — slug team. Соответствие `team_id` → tenant хранится в реестре платформы. Каждый агент принадлежит ровно одному tenant.
 - **TEN-02.** У каждого tenant свои connections и provider credentials. Коннектор выбирает credentials только по проверенному tenant, никогда по аргументу.
 - **TEN-03.** Общие шаблоны коннекторов можно публиковать для всех tenant'ов, но публикация не означает выдачу доступа: tools конкретного tenant видимы только его команде.
 - **TEN-04.** Изоляция проверяется на каждом слое: ContextForge (видимость и вызов), коннектор (ресурс и credentials), Approval Service (intent, решение и approver того же tenant).
