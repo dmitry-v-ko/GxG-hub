@@ -168,6 +168,7 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 ## Аутентификация сервисов
 
 - **AS-06. Service JWT.** Каждый сервис (коннектор, executor, ContextForge-фасад) имеет свою пару Ed25519. Каждый внутренний вызов несёт `Authorization: Bearer <jwt>` с `typ: gxg-svc+jwt`, `iss` = ID сервиса, `aud` = ID получателя, `iat`, `exp ≤ iat + 60 с`, `jti`. Получатель проверяет подпись по реестру публичных ключей сервисов и allowlist «сервис → endpoint → tenant'ы» (см. «Реестр платформы»).
+- **AS-06a.** Заголовок service JWT содержит `kid` = JWK thumbprint (RFC 7638, SHA-256, base64url) публичного ключа сервиса `iss` из реестра платформы. Получатель вычисляет thumbprint ключа из реестра и отклоняет токен, если `kid` не совпадает.
 - **AS-07.** Транспорт — TLS во внутренней сети. mTLS — SHOULD, когда хостинг это поддерживает (не заменяет service JWT).
 - **AS-08. Identity requester'а при propose.** Коннектор передаёт `requester.principal`, `requester.tenant_id` и, если механизм из [ADR-0001](../adr/0001-identity-propagation.md) даёт проверяемую assertion, саму `requester.assertion`. Approval Service:
   - MUST проверить, что principal существует в tenant'е по bundle, а коннектор допущен к этому tenant'у;
