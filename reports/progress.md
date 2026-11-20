@@ -60,3 +60,4 @@
 | M4 | 3 | исполнитель | claude/m4-contextforge-spike | — | — | запущен (слот освободился) | 2026-11-20 |
 | M0.1 | 1 | исполнитель | claude/m0.1-standard-tools | 01ca42e (+f7f88f7) | — | gitleaks + mutmut, AC-M0.1-01…04 passed по отчёту, CI 44815259928 | 2026-11-20 |
 | M0.1 | 1 | критик | claude/m0.1-standard-tools | 01ca42e | — | запущен | 2026-11-20 |
+| M1 | 3 | критик | claude/m1-connector-kit | a0c0b4a | **9.0** | ≥ 9 — **веха закрыта**; 4 minor → backlog | 2026-11-20 |
