@@ -4,14 +4,22 @@
 Red while the policy diff report has `widening` entries and the PR has no `widening-approved`
 label added by a user listed in CODEOWNERS (read from the PR *base* commit, so a PR cannot add
 its author there). The label must be added by hand: an event performed via a GitHub App
-(an agent acting with the owner's credentials) does not count. On a new push with widening the
-label is removed, so the approval always covers what the owner saw.
+(an agent acting with the owner's credentials) does not count.
 
-Also posts the Markdown diff report as one PR comment, updated in place.
+The approval binds to the head commit on every event: a label older than the moment the head
+SHA arrived on the PR (server time: the first `pull_request` workflow run for that SHA on this PR,
+or the latest force-push) is stale. It is removed and the check is red.
 
-Usage (in a `pull_request` workflow):
-  widening_gate.py --report diff.json --markdown diff.md --codeowners base-CODEOWNERS
-Env: GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_EVENT_PATH, GITHUB_API_URL, GITHUB_STEP_SUMMARY.
+Outside a pull request (`--no-pr`: push or workflow_dispatch to a branch other than main) there
+is no label to look at, so any widening is red: fail closed.
+
+Also posts the Markdown diff report as one PR comment, updated in place. The comment is found by
+the first line of the Markdown file (the marker written by `gxg-policy diff`).
+
+Usage:
+  widening_gate.py --report diff.json --markdown diff.md --codeowners base-CODEOWNERS   (pull_request)
+  widening_gate.py --report diff.json --markdown diff.md --no-pr                        (other events)
+Env (PR mode): GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_EVENT_PATH, GITHUB_API_URL; GITHUB_STEP_SUMMARY.
 Exit: 0 — pass, 1 — widening not approved, 2 — usage or API error.
 """
 
@@ -25,11 +33,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 LABEL = "widening-approved"
-MARKER = "<!-- gxg-policy-diff -->"
 BOT = "github-actions[bot]"
 
 Api = Callable[[str, str, Any], Any]
@@ -105,52 +113,113 @@ def paged(api: Api, path: str) -> list[dict[str, Any]]:
     return out
 
 
-def upsert_comment(api: Api, issue: str, body: str) -> None:
+def upsert_comment(api: Api, issue: str, body: str, marker: str) -> None:
     for c in paged(api, f"{issue}/comments"):
-        if c.get("user", {}).get("login") == BOT and MARKER in c.get("body", ""):
+        if c.get("user", {}).get("login") == BOT and c.get("body", "").startswith(marker):
             api("PATCH", issue.rsplit("/", 1)[0] + f"/comments/{c['id']}", {"body": body})
             return
     api("POST", f"{issue}/comments", {"body": body})
 
 
-def run(api: Api, repo: str, event: dict[str, Any], report: dict[str, Any], *, markdown: str, owners: set[str]) -> int:
-    number = event["pull_request"]["number"]
-    issue = f"/repos/{repo}/issues/{number}"
-    labels = {lab["name"] for lab in api("GET", f"{issue}/labels", None)}
-    note = ""
-    if event.get("action") == "synchronize" and report["widening"] and LABEL in labels:
-        api("DELETE", f"{issue}/labels/{urllib.parse.quote(LABEL)}", None)
-        labels.discard(LABEL)
-        note = f"New commits since the approval: `{LABEL}` was removed, approve again after review.\n\n"
-    ok, msg = decide(report, labels, last_label_event(paged(api, f"{issue}/events")), owners)
-    body = f"{markdown}\n**grants-widening: {'pass' if ok else 'FAIL'}** — {note}{msg}\n"
-    try:
-        upsert_comment(api, issue, body)
-    except urllib.error.HTTPError as exc:  # e.g. a fork PR with a read-only token: the check still decides
-        print(f"::warning::could not post the diff comment: {exc}")
+def _ts(value: str) -> datetime:
+    return datetime.fromisoformat(value)
+
+
+def head_arrival(api: Api, repo: str, pr: dict[str, Any]) -> datetime | None:
+    """Server time the head SHA first showed up on this PR: earliest `pull_request` run for it."""
+    sha = pr["head"]["sha"]
+    runs = api("GET", f"/repos/{repo}/actions/runs?event=pull_request&head_sha={sha}&per_page=100", None)
+    times = [
+        _ts(r["created_at"])
+        for r in runs.get("workflow_runs", [])
+        if r.get("head_sha") == sha
+        and r.get("head_branch") == pr["head"]["ref"]
+        # Runs linked to other PRs do not count (same SHA pushed to another branch earlier).
+        and (not r.get("pull_requests") or pr["number"] in {x.get("number") for x in r["pull_requests"]})
+    ]
+    return min(times, default=None)
+
+
+def stale(label: dict[str, Any] | None, arrival: datetime | None, events: list[dict[str, Any]]) -> str | None:
+    """Why the approval does not cover the head commit, or None if it does."""
+    if label is None:
+        return None
+    if arrival is None:
+        return "the arrival time of the head commit is unknown"
+    at = _ts(label["created_at"])
+    if at <= arrival:
+        return f"the label ({label['created_at']}) is older than the head commit on the PR ({arrival.isoformat()})"
+    forced = [_ts(e["created_at"]) for e in events if e.get("event") == "head_ref_force_pushed"]
+    if forced and at <= max(forced):
+        return f"the branch was force-pushed after the label ({max(forced).isoformat()})"
+    return None
+
+
+def report_out(body: str, ok: bool, msg: str) -> int:
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as fh:
             fh.write(body)
-    print(("" if ok else "::error::") + note + msg)
+    print(("" if ok else "::error::") + msg)
     return 0 if ok else 1
+
+
+def run_no_pr(report: dict[str, Any], *, markdown: str) -> int:
+    n = len(report["widening"])
+    ok = n == 0
+    msg = (
+        "no widening against the merge-base with main"
+        if ok
+        else f"{n} widening change(s) outside a pull request: widening is approved only on a PR"
+        f" with the `{LABEL}` label from a code owner"
+    )
+    return report_out(f"{markdown}\n**grants-widening: {'pass' if ok else 'FAIL'}** — {msg}\n", ok, msg)
+
+
+def run(api: Api, repo: str, event: dict[str, Any], report: dict[str, Any], *, markdown: str, owners: set[str]) -> int:
+    pr = event["pull_request"]
+    issue = f"/repos/{repo}/issues/{pr['number']}"
+    labels = {lab["name"] for lab in api("GET", f"{issue}/labels", None)}
+    events = paged(api, f"{issue}/events")
+    label = last_label_event(events)
+    note = ""
+    if report["widening"] and LABEL in labels:
+        why = stale(label, head_arrival(api, repo, pr), events)
+        if why:
+            api("DELETE", f"{issue}/labels/{urllib.parse.quote(LABEL)}", None)
+            labels.discard(LABEL)
+            note = f"`{LABEL}` was removed: {why}. Review the new commits and approve again.\n\n"
+    ok, msg = decide(report, labels, label, owners)
+    body = f"{markdown}\n**grants-widening: {'pass' if ok else 'FAIL'}** — {note}{msg}\n"
+    try:
+        upsert_comment(api, issue, body, markdown.split("\n", 1)[0])
+    except urllib.error.HTTPError as exc:  # e.g. a fork PR with a read-only token: the check still decides
+        print(f"::warning::could not post the diff comment: {exc}")
+    return report_out(body, ok, note + msg)
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--report", type=Path, required=True)
     p.add_argument("--markdown", type=Path, required=True)
-    p.add_argument("--codeowners", type=Path, required=True, help="CODEOWNERS of the PR base commit")
+    p.add_argument("--codeowners", type=Path, help="CODEOWNERS of the PR base commit (PR mode)")
+    p.add_argument("--no-pr", action="store_true", help="not a pull_request event: any widening fails")
     a = p.parse_args(argv)
     try:
+        report = json.loads(a.report.read_text(encoding="utf-8"))
+        markdown = a.markdown.read_text(encoding="utf-8")
+        if a.no_pr:
+            return run_no_pr(report, markdown=markdown)
+        if a.codeowners is None:
+            p.error("--codeowners is required without --no-pr")
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
         api = github_api(os.environ["GITHUB_TOKEN"], os.environ.get("GITHUB_API_URL", "https://api.github.com"))
         return run(
             api,
             os.environ["GITHUB_REPOSITORY"],
             event,
-            json.loads(a.report.read_text(encoding="utf-8")),
-            markdown=a.markdown.read_text(encoding="utf-8"),
+            report,
+            markdown=markdown,
             owners=codeowners(a.codeowners.read_text(encoding="utf-8")),
         )
     except (KeyError, OSError, urllib.error.URLError, ValueError) as exc:

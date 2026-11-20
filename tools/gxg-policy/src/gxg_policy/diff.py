@@ -15,6 +15,7 @@ from gxg_policy.lint import SYSTEM_DEFAULTS, expand, seconds
 from gxg_policy.load import Policies, load, parse_ts
 
 Entry = dict[str, Any]
+Groups = dict[str, list[str]]
 STRICTNESS = {"auto_approve": 0, "require_approval": 1, "deny": 2}
 QUOTA_DEFAULTS = {"propose_per_requester_per_hour": 30, "pending_per_requester_max": 20, "pending_per_tenant_max": 100}
 INF = float("inf")
@@ -51,6 +52,16 @@ def _pairs(doc: dict[str, Any] | None) -> dict[tuple[str, str, str], str | None]
                     else:
                         out[key] = exp
     return out
+
+
+def _expanded(rule: dict[str, Any], groups: Groups) -> dict[str, Any]:
+    """Rule with `group:` refs in `match.requesters` and `approvers` replaced by members (compared as sets)."""
+    rule = {**rule, "match": dict(rule["match"])}
+    if "requesters" in rule["match"]:
+        rule["match"]["requesters"] = sorted(expand(rule["match"]["requesters"], groups))
+    if "approvers" in rule:
+        rule["approvers"] = sorted(expand(rule["approvers"], groups))
+    return rule
 
 
 def _roles(doc: dict[str, Any] | None) -> set[tuple[str, str]]:
@@ -100,7 +111,9 @@ class _Diff:
         for p, role in rb - rh:
             self.add(False, tenant=tenant, kind="role", change="removed", principal=p, role=role)
 
-    def approval(self, tenant: str, base: dict[str, Any] | None, head: dict[str, Any] | None) -> None:
+    def approval(
+        self, tenant: str, base: dict[str, Any] | None, head: dict[str, Any] | None, groups: tuple[Groups, Groups]
+    ) -> None:
         base, head = base or {"rules": []}, head or {"rules": []}
         for key, default in SYSTEM_DEFAULTS.items():
             bv, hv = (
@@ -119,7 +132,7 @@ class _Diff:
             elif rid not in h:
                 self.add(b[rid]["decision"] != "auto_approve", **e, change="removed", decision=b[rid]["decision"])
             else:
-                self.rule(e, b[rid], h[rid])
+                self.rule(e, _expanded(b[rid], groups[0]), _expanded(h[rid], groups[1]))
 
     def rule(self, e: Entry, b: dict[str, Any], h: dict[str, Any]) -> None:
         if b["decision"] != h["decision"]:
@@ -132,7 +145,13 @@ class _Diff:
                 head=h["decision"],
             )
             return
-        if b["match"] != h["match"]:
+        if h["decision"] == "auto_approve":
+            # New requesters of an auto_approve rule get intents approved without a human.
+            bm, hm = dict(b["match"]), dict(h["match"])
+            self.sets(e, "requesters", bm.pop("requesters", ["*"]), hm.pop("requesters", ["*"]))
+        else:
+            bm, hm = b["match"], h["match"]
+        if bm != hm:
             self.add(True, **e, change="match_changed")
         if h["decision"] == "auto_approve":
             for key in ("max_per_hour", "max_per_day"):
@@ -148,14 +167,19 @@ class _Diff:
                 base=b.get("step_up", False),
                 head=h.get("step_up", False),
             )
-        ba, ha = set(b.get("approvers", ["*"])), set(h.get("approvers", ["*"]))  # "*": any approver of the tenant
-        if ha - ba:
-            self.add(True, **e, change="approvers_added", approvers=sorted(ha - ba))
-        if ba - ha:
-            self.add(False, **e, change="approvers_removed", approvers=sorted(ba - ha))
+        self.sets(e, "approvers", b.get("approvers", ["*"]), h.get("approvers", ["*"]))
         for key in SYSTEM_DEFAULTS:
             bv, hv = (seconds(r[key]) if key in r else INF for r in (b, h))
             self.number(True, bv, hv, **e, change="ttl", field=key)
+
+    def sets(self, e: Entry, field: str, base: list[str], head: list[str]) -> None:
+        """Added members widen, removed narrow. `"*"` (field absent) means everyone."""
+        ba, ha = set(base), set(head)
+        added, removed = (set() if "*" in ba else ha - ba), (set() if "*" in ha else ba - ha)
+        if added:
+            self.add(True, **e, change=f"{field}_added", **{field: sorted(added)})
+        if removed:
+            self.add(False, **e, change=f"{field}_removed", **{field: sorted(removed)})
 
     def platform(self, base: dict[str, Any] | None, head: dict[str, Any] | None) -> None:
         for kind, key in (("service", "services"), ("webhook", "webhooks")):
@@ -190,7 +214,8 @@ def diff(base_root: Path, head_root: Path) -> dict[str, list[Entry]]:
     for t in sorted(base.tenants.keys() | head.tenants.keys()):
         d.grants(t, base.tenants.get(t, ("", None))[1], head.tenants.get(t, ("", None))[1])
     for t in sorted(base.approval.keys() | head.approval.keys()):
-        d.approval(t, base.approval.get(t, ("", None))[1], head.approval.get(t, ("", None))[1])
+        bg, hg = ((p.tenants.get(t, ("", None))[1] or {}).get("groups", {}) for p in (base, head))
+        d.approval(t, base.approval.get(t, ("", None))[1], head.approval.get(t, ("", None))[1], (bg, hg))
     d.platform(base.platform and base.platform[1], head.platform and head.platform[1])
     return {"widening": sorted(d.widening, key=_key), "narrowing": sorted(d.narrowing, key=_key)}
 

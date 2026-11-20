@@ -1,0 +1,40 @@
+killed    tools/gxg-policy/src/gxg_policy/diff.py: added pair -> narrowing
+killed    tools/gxg-policy/src/gxg_policy/diff.py: removed pair -> widening
+killed    tools/gxg-policy/src/gxg_policy/diff.py: no group expansion in grants
+killed    tools/gxg-policy/src/gxg_policy/diff.py: expiry extended -> narrowing
+killed    tools/gxg-policy/src/gxg_policy/diff.py: new role -> narrowing
+killed    tools/gxg-policy/src/gxg_policy/diff.py: new auto_approve -> narrowing
+killed    tools/gxg-policy/src/gxg_policy/diff.py: removed require_approval -> narrowing
+killed    tools/gxg-policy/src/gxg_policy/diff.py: match_changed -> narrowing
+killed    tools/gxg-policy/src/gxg_policy/diff.py: approvers/requesters added -> narrowing
+killed    tools/gxg-policy/src/gxg_policy/diff.py: approvers/requesters removed -> widening
+killed    tools/gxg-policy/src/gxg_policy/diff.py: requester groups not expanded
+killed    tools/gxg-policy/src/gxg_policy/diff.py: approver groups not expanded
+killed    tools/gxg-policy/src/gxg_policy/diff.py: auto_approve requesters ignored
+killed    tools/gxg-policy/src/gxg_policy/diff.py: '*' -> specific approvers reported as widening
+killed    tools/gxg-policy/src/gxg_policy/diff.py: relaxed decision -> narrowing
+killed    tools/gxg-policy/src/gxg_policy/lint.py: dangling group subject
+killed    tools/gxg-policy/src/gxg_policy/lint.py: foreign principal
+killed    tools/gxg-policy/src/gxg_policy/lint.py: RID of the wrong domain
+killed    tools/gxg-policy/src/gxg_policy/lint.py: auto_approve high_risk class
+killed    tools/gxg-policy/src/gxg_policy/lint.py: approver without role
+killed    tools/gxg-policy/src/gxg_policy/lint.py: defaults over system ttl
+killed    tools/gxg-policy/src/gxg_policy/lint.py: duplicate id
+killed    tools/gxg-policy/src/gxg_policy/cli.py: --built-at not checked (format)
+killed    tools/gxg-policy/src/gxg_policy/bundle.py: unknown kid check
+killed    tools/gxg-policy/src/gxg_policy/bundle.py: verify shape check
+killed    tools/gxg-policy/src/gxg_policy/bundle.py: JCS check in verify
+killed    tools/gxg-policy/src/gxg_policy/bundle.py: no group expansion in bundle
+killed    tools/gxg-policy/src/gxg_policy/bundle.py: code point instead of UTF-16 key order
+killed    scripts/ci/widening_gate.py: label by a non-owner counts
+killed    scripts/ci/widening_gate.py: label via GitHub App counts
+killed    scripts/ci/widening_gate.py: label older than the head commit counts
+killed    scripts/ci/widening_gate.py: force-push after the label ignored
+killed    scripts/ci/widening_gate.py: runs of other branches date the head
+killed    scripts/ci/widening_gate.py: runs of other PRs date the head
+killed    scripts/ci/widening_gate.py: unknown arrival passes
+killed    scripts/ci/widening_gate.py: staleness only on synchronize
+killed    scripts/ci/widening_gate.py: no-PR mode passes widening
+killed    scripts/ci/grants_widening.sh: push run diffs HEAD against itself
+killed    scripts/ci/grants_widening.sh: push run uses PR mode
+39/39 mutations killed

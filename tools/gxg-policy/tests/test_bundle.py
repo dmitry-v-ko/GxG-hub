@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import unicodedata
@@ -147,6 +148,53 @@ def test_verify_rejects_signed_but_not_canonical(built: tuple[Path, bytes]) -> N
     pretty = json.dumps(json.loads((d / BUNDLE).read_bytes()), indent=1).encode()
     with pytest.raises(BundleError, match="JCS"):
         verify(pretty, sign(pretty, key, "ci-test"), {"ci-test": public_key(key)})
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"schema_version": 2}, {"extra": 1}, {"built_at": None}],
+    ids=["schema_version-2", "extra-key", "missing-key"],
+)
+def test_verify_rejects_validly_signed_wrong_shape(built: tuple[Path, bytes], change: dict[str, object]) -> None:
+    d, key = built
+    doc = json.loads((d / BUNDLE).read_bytes())
+    doc.update(change)
+    doc = {k: v for k, v in doc.items() if v is not None}
+    data = jcs(doc)
+    with pytest.raises(BundleError, match="not a v1 bundle"):
+        verify(data, sign(data, key, "ci-test"), {"ci-test": public_key(key)})
+
+
+def test_verify_names_unknown_kid(built: tuple[Path, bytes]) -> None:
+    d, key = built
+    with pytest.raises(BundleError, match="unknown kid"):
+        verify((d / BUNDLE).read_bytes(), (d / SIG).read_bytes(), {"other": public_key(key)})
+
+
+@pytest.mark.parametrize(
+    "built_at",
+    ["yesterday", "2026-11-20T10:00:00+00:00", "2026-11-20 10:00:00Z", "2026-13-01T00:00:00Z", "2026-1-1T0:0:0Z"],
+)
+def test_build_rejects_bad_built_at(tmp_path: Path, built_at: str) -> None:
+    r = run_build(tmp_path, seed(), built_at, "0")
+    assert r.returncode == 2 and "built-at" in r.stderr
+    assert not (tmp_path / BUNDLE).exists()
+
+
+def test_gr_13a_rebuild_without_flag_only_changes_built_at(tmp_path: Path) -> None:
+    # The scheduled CI job runs `build` without --built-at on the same commit: same content, fresh built_at.
+    env = {**os.environ, "GXG_BUNDLE_SIGNING_KEY": b64url(seed())}
+    out = []
+    for name in ("a", "b"):
+        cmd = [sys.executable, "-m", "gxg_policy.cli", "build", str(REPO / "policies"), "--out", str(tmp_path / name)]
+        r = subprocess.run(
+            [*cmd, "--bundle-version", SHA, "--kid", "k"], capture_output=True, text=True, env=env, check=False
+        )
+        assert r.returncode == 0, r.stderr
+        out.append((tmp_path / name / BUNDLE).read_bytes())
+    assert without_built_at(out[0]) == without_built_at(out[1])
+    for data in out:
+        assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", json.loads(data)["built_at"])
 
 
 def test_build_without_key_is_a_usage_error(tmp_path: Path) -> None:

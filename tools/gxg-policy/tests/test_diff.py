@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from gxg_policy.diff import diff, markdown
+from gxg_policy.diff import _Diff, diff, markdown
 
 HERE = Path(__file__).parent
 CASES = sorted(p for p in (HERE / "diff").iterdir() if p.is_dir())
 
 
-def test_six_fixture_pairs() -> None:
-    assert len(CASES) == 6
+def test_at_least_six_fixture_pairs() -> None:
+    assert len(CASES) >= 6
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
@@ -35,6 +35,26 @@ def test_ac_m2_03_core_classification() -> None:
     assert removed["widening"] == [] and [e["change"] for e in removed["narrowing"]] == ["removed"]
     auto = diff(HERE / "diff/04-auto-approve-added/base", HERE / "diff/04-auto-approve-added/head")
     assert {"rule": "board-auto", "change": "added", "decision": "auto_approve"}.items() <= auto["widening"][1].items()
+
+
+def _changes(case: str) -> dict[str, set[tuple[str, str]]]:
+    r = diff(HERE / "diff" / case / "base", HERE / "diff" / case / "head")
+    return {side: {(e["rule"], e["change"]) for e in r[side]} for side in ("widening", "narrowing")}
+
+
+def test_group_membership_in_approval_rules_is_widening() -> None:
+    # Only groups changed: a new member of an auto_approve requester group and of an approvers group.
+    assert _changes("07-approval-groups") == {
+        "widening": {("tg-partner-auto", "requesters_added"), ("crm-two-person", "approvers_added")},
+        "narrowing": set(),
+    }
+
+
+def test_direct_rule_edits() -> None:
+    assert _changes("08-approval-match-approvers") == {
+        "widening": {("kb-auto", "match_changed"), ("msg", "approvers_added")},
+        "narrowing": {("hermes-auto", "requesters_removed")},
+    }
 
 
 def test_markdown_golden() -> None:
@@ -60,3 +80,11 @@ def test_cli_writes_reports_and_rejects_invalid_input(tmp_path: Path) -> None:
     (bad / "tenants/t-alpha.yaml").write_text("tenant: t-alpha\n")
     r = subprocess.run([*cmd[:-1], str(bad)], capture_output=True, text=True, check=False)
     assert r.returncode == 2 and "invalid policies" in r.stderr
+
+
+def test_star_means_everyone_in_approvers_and_requesters() -> None:
+    d = _Diff()
+    d.sets({"rule": "r"}, "approvers", ["*"], ["oidc:x"])  # any approver -> one: narrowing only
+    d.sets({"rule": "s"}, "approvers", ["oidc:x"], ["*"])  # one -> any: widening only
+    assert [(e["rule"], e["change"]) for e in d.widening] == [("s", "approvers_added")]
+    assert [(e["rule"], e["change"]) for e in d.narrowing] == [("r", "approvers_removed")]

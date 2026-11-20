@@ -17,6 +17,7 @@ from gxg_policy.load import Policies, load
 
 KEY_ENV = "GXG_BUNDLE_SIGNING_KEY"  # base64url 32-byte Ed25519 seed, from CI secrets
 KID_ENV = "GXG_BUNDLE_KID"
+TS = "%Y-%m-%dT%H:%M:%SZ"  # built_at: RFC 3339 UTC, seconds (GR-11a)
 
 
 def _report(pol: Policies) -> int:
@@ -91,7 +92,13 @@ def _build(a: argparse.Namespace) -> int:
     pol = lint(a.root, a.manifest)
     if pol.errors:
         return _report(pol)
-    built_at = a.built_at or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    built_at = a.built_at or datetime.now(UTC).strftime(TS)
+    try:  # round-trip: strptime alone accepts 2026-1-1T0:0:0Z
+        if datetime.strptime(built_at, TS).strftime(TS) != built_at:
+            raise ValueError(built_at)
+    except ValueError:
+        print(f"error: --built-at must be RFC 3339 UTC like 2026-01-01T00:00:00Z, got {built_at!r}", file=sys.stderr)
+        return 2
     try:
         seed = unb64url(seed_b64)
         build(pol, a.out, bundle_version=a.bundle_version or _git_head(), built_at=built_at, seed=seed, kid=a.kid)

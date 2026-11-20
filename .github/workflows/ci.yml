@@ -1,6 +1,6 @@
 # GxG Hub CI. Required status check for `main`: "ci-ok" (see docs/setup/branch-protection.md).
 # `ci-ok` includes `grants-widening` (AC-M2-04, docs/setup/widening-approval.md), so label
-# changes re-run the workflow.
+# changes re-run the workflow. The schedule re-signs the bundle on main (GR-13a).
 name: ci
 
 on:
@@ -9,14 +9,19 @@ on:
   push:
     branches: [main, "claude/**"]
   workflow_dispatch:
+  schedule:
+    # GR-13a: re-sign the bundle at least every 12 h; every 6 h leaves room for delayed or dropped runs.
+    - cron: "41 */6 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  # Superseded runs on feature branches are cancelled; runs on main always finish.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Pull request runs get their own group: none is cancelled or replaced while pending, so every
+  # head commit gets a run that reaches the grants-widening gate (F2). Superseded push runs on
+  # feature branches are cancelled; runs on main always finish.
+  group: ci-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'pull_request' && github.ref != 'refs/heads/main' }}
 
 env:
   UV_PYTHON: "3.12"
@@ -147,11 +152,14 @@ jobs:
 
   grants-widening:
     # AC-M2-04 / GR-10: red while the policy diff has widening and no code owner added the
-    # `widening-approved` label. Posts the diff report to the PR. docs/setup/widening-approval.md
+    # `widening-approved` label after the head commit. Posts the diff report to the PR.
+    # Outside a PR (push / dispatch to a branch other than main) any widening is red.
+    # docs/setup/widening-approval.md
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read         # workflow runs of the head SHA: when it arrived on the PR
       issues: write         # labels and the report comment
       pull-requests: write
     steps:
@@ -162,21 +170,11 @@ jobs:
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - run: uv sync
       - name: Policy diff and approval gate
-        if: github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
-          uv run gxg-policy diff "$RUNNER_TEMP/base/policies" policies \
-            --json "$RUNNER_TEMP/diff.json" --md "$RUNNER_TEMP/diff.md"
-          # Owners come from the base commit: a PR cannot make its author a code owner.
-          git show "$BASE:.github/CODEOWNERS" > "$RUNNER_TEMP/CODEOWNERS" || : > "$RUNNER_TEMP/CODEOWNERS"
-          uv run python scripts/ci/widening_gate.py --report "$RUNNER_TEMP/diff.json" \
-            --markdown "$RUNNER_TEMP/diff.md" --codeowners "$RUNNER_TEMP/CODEOWNERS"
-      - name: Not a pull request
-        if: github.event_name != 'pull_request'
-        run: echo "grants-widening applies to pull requests only"
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/ci/grants_widening.sh
 
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
@@ -195,7 +193,8 @@ jobs:
   bundle:
     # GR-11: signed grants-bundle.json after a merge into main. Key from secrets, never in the repo.
     # Not part of ci-ok. Setup: docs/setup/bundle-signing.md
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # GR-13a: also on schedule (default branch = main): same commit, same content, new built_at.
+    if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
     needs: [ci-ok]
     runs-on: ubuntu-latest
     timeout-minutes: 10

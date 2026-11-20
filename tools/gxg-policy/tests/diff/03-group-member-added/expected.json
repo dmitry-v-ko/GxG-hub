@@ -18,6 +18,15 @@
       "resource": "kb:kb-main/collection/public",
       "change": "added",
       "expires_at": null
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "msg-auto",
+      "change": "requesters_added",
+      "requesters": [
+        "agent:t-alpha:analyst"
+      ]
     }
   ],
   "narrowing": []

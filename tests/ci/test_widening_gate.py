@@ -28,8 +28,30 @@ def load_gate() -> ModuleType:
 gate = load_gate()
 
 
-def labeled(login: str, event: str = "labeled", label: str = "widening-approved", app: Any = None) -> dict[str, Any]:
-    return {"event": event, "label": {"name": label}, "actor": {"login": login}, "performed_via_github_app": app}
+T_PUSH = "2026-11-20T10:00:00Z"  # head commit B arrives on the PR
+T_BEFORE, T_AFTER = "2026-11-20T09:00:00Z", "2026-11-20T11:00:00Z"
+HEAD = {"sha": "b" * 40, "ref": "claude/x"}
+
+
+def labeled(
+    login: str, event: str = "labeled", label: str = "widening-approved", app: Any = None, at: str = T_AFTER
+) -> dict[str, Any]:
+    return {
+        "event": event,
+        "label": {"name": label},
+        "actor": {"login": login},
+        "performed_via_github_app": app,
+        "created_at": at,
+    }
+
+
+def pr_run(at: str = T_PUSH, sha: str = HEAD["sha"], branch: str = HEAD["ref"], prs: Any = (7,)) -> dict[str, Any]:
+    return {
+        "head_sha": sha,
+        "head_branch": branch,
+        "created_at": at,
+        "pull_requests": [{"number": n} for n in prs],
+    }
 
 
 def test_codeowners_reads_users_not_teams_or_comments() -> None:
@@ -64,8 +86,15 @@ def test_decide(report: dict[str, Any], labels: set[str], event: Any, ok: bool) 
 
 
 class FakeApi:
-    def __init__(self, labels: list[str], events: list[dict[str, Any]], comments: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        labels: list[str],
+        events: list[dict[str, Any]],
+        comments: list[dict[str, Any]],
+        runs: list[dict[str, Any]] | None = None,
+    ) -> None:
         self.labels, self.events, self.comments = labels, events, comments
+        self.runs = [pr_run()] if runs is None else runs
         self.calls: list[tuple[str, str, Any]] = []
 
     def __call__(self, method: str, path: str, body: Any) -> Any:
@@ -77,13 +106,19 @@ class FakeApi:
             return self.events
         if method == "GET" and base.endswith("/comments"):
             return self.comments
+        if method == "GET" and base.endswith("/actions/runs"):
+            assert "event=pull_request" in path and f"head_sha={HEAD['sha']}" in path
+            return {"workflow_runs": self.runs}
         if method == "DELETE":
             self.labels.remove("widening-approved")
         return None
 
+    def deleted(self) -> bool:
+        return ("DELETE", "/repos/o/r/issues/7/labels/widening-approved", None) in self.calls
+
 
 def run(api: FakeApi, action: str, report: dict[str, Any]) -> int:
-    event = {"action": action, "pull_request": {"number": 7}}
+    event = {"action": action, "pull_request": {"number": 7, "head": HEAD}}
     result: int = gate.run(api, "o/r", event, report, markdown="<!-- gxg-policy-diff -->\nreport", owners=OWNERS)
     return result
 
@@ -91,14 +126,15 @@ def run(api: FakeApi, action: str, report: dict[str, Any]) -> int:
 def test_run_passes_with_owner_label_and_posts_comment() -> None:
     api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko")], [])
     assert run(api, "labeled", WIDE) == 0
+    assert not api.deleted()
     method, path, body = api.calls[-1]
     assert (method, path) == ("POST", "/repos/o/r/issues/7/comments")
     assert "grants-widening: pass" in body["body"]
 
 
 def test_run_fails_without_label_and_updates_own_comment() -> None:
-    mine = {"id": 5, "user": {"login": "github-actions[bot]"}, "body": "<!-- gxg-policy-diff --> old"}
-    forged = {"id": 6, "user": {"login": "mallory"}, "body": "<!-- gxg-policy-diff --> fake"}
+    mine = {"id": 5, "user": {"login": "github-actions[bot]"}, "body": "<!-- gxg-policy-diff -->\nold"}
+    forged = {"id": 6, "user": {"login": "mallory"}, "body": "<!-- gxg-policy-diff -->\nfake"}
     api = FakeApi([], [], [forged, mine])
     assert run(api, "opened", WIDE) == 1
     method, path, body = api.calls[-1]
@@ -106,14 +142,60 @@ def test_run_fails_without_label_and_updates_own_comment() -> None:
     assert "grants-widening: FAIL" in body["body"]
 
 
-def test_new_push_with_widening_removes_the_approval() -> None:
-    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko")], [])
-    assert run(api, "synchronize", WIDE) == 1
-    assert ("DELETE", "/repos/o/r/issues/7/labels/widening-approved", None) in api.calls
-    # Without widening a new push keeps the label and passes.
-    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko")], [])
+# F2: the owner labelled commit A; the agent pushed B. Whatever event the next run has
+# (the synchronize run may never have reached the gate), the old label must not approve B.
+@pytest.mark.parametrize("action", ["synchronize", "labeled", "reopened", "unlabeled", "opened"])
+def test_label_older_than_head_commit_is_removed_on_any_event(action: str) -> None:
+    other = labeled("dmitry-v-ko", label="other", at=T_AFTER)
+    api = FakeApi(["widening-approved", "other"], [labeled("dmitry-v-ko", at=T_BEFORE), other], [])
+    assert run(api, action, WIDE) == 1
+    assert api.deleted()
+    assert "removed: the label" in api.calls[-1][2]["body"]
+
+
+def test_label_after_the_head_commit_counts() -> None:
+    # Earliest run for the SHA decides, not the latest (a `labeled` run is newer than the label).
+    runs = [pr_run(T_PUSH), pr_run("2026-11-20T12:00:00Z")]
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at=T_AFTER)], [], runs)
+    assert run(api, "labeled", WIDE) == 0 and not api.deleted()
+
+
+def test_force_push_after_the_label_makes_it_stale() -> None:
+    # Force-push back to an older SHA whose runs predate the label.
+    forced = {"event": "head_ref_force_pushed", "created_at": "2026-11-20T12:00:00Z"}
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at=T_AFTER), forced], [])
+    assert run(api, "synchronize", WIDE) == 1 and api.deleted()
+
+
+def test_runs_of_other_prs_or_branches_do_not_date_the_head() -> None:
+    # B was pushed to another branch / PR before the label; on this PR it arrives later.
+    runs = [pr_run(T_BEFORE, branch="claude/other"), pr_run(T_BEFORE, prs=(3,)), pr_run(T_PUSH)]
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at="2026-11-20T09:30:00Z")], [], runs)
+    assert run(api, "labeled", WIDE) == 1 and api.deleted()
+
+
+def test_unknown_arrival_fails_closed() -> None:
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko")], [], runs=[pr_run(sha="c" * 40)])
+    assert run(api, "labeled", WIDE) == 1 and api.deleted()
+
+
+def test_label_kept_without_widening() -> None:
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at=T_BEFORE)], [])
     assert run(api, "synchronize", NARROW) == 0
-    assert not [c for c in api.calls if c[0] == "DELETE"]
+    assert not api.deleted()
+
+
+# F1: push / workflow_dispatch on a branch: there is no PR and no label, widening is red.
+@pytest.mark.parametrize(("report", "code"), [(WIDE, 1), (NARROW, 0)])
+def test_no_pr_mode_fails_on_any_widening(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, report: dict[str, Any], code: int
+) -> None:
+    r, md = tmp_path / "r.json", tmp_path / "r.md"
+    r.write_text(json.dumps(report))
+    md.write_text("<!-- gxg-policy-diff -->\nreport\n")
+    for var in ("GITHUB_EVENT_PATH", "GITHUB_TOKEN"):
+        monkeypatch.delenv(var, raising=False)  # no API, no event: the decision is the report alone
+    assert gate.main(["--report", str(r), "--markdown", str(md), "--no-pr"]) == code
 
 
 def test_main_reports_missing_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
