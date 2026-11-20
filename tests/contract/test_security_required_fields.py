@@ -37,7 +37,7 @@ EXECUTION_TOKEN_CRITICAL: dict[str, str] = {
 }
 
 VALID_INTENT: dict[str, Any] = {
-    'intent_id': 'intent-1',
+    'intent_id': '11111111-1111-4111-8111-111111111111',
     'tenant_id': 'tenant-1',
     'requester_principal': 'agent:one',
     'tool_key': 'telegram.message.send',
@@ -55,8 +55,8 @@ VALID_INTENT: dict[str, Any] = {
 VALID_TOKEN: dict[str, Any] = {
     'iss': 'gxg-executor',
     'aud': 'demo',
-    'sub': 'intent-1',
-    'jti': 'exec-1',
+    'sub': '11111111-1111-4111-8111-111111111111',
+    'jti': '22222222-2222-4222-8222-222222222222',
     'ten': 'tenant-1',
     'req': 'agent:one',
     'tool': 'demo.note.create@1',

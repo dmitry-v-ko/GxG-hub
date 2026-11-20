@@ -13,13 +13,11 @@
   "properties": {
     "intent_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "execution_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 256
+      "format": "uuid"
     },
     "finding": {
       "enum": [

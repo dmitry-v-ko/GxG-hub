@@ -63,7 +63,7 @@ curl -f http://127.0.0.1:4444/health
 
 **Ограничения стенда:**
 - SQLite, порт только на localhost.
-- Тег `1.1.1` — кандидат для локальной проверки, а не закреплённый digest.
+- Образ закреплён по digest (SEC-22, спайк M4); для production версия одобряется после этапа B.
 - Identity propagation и плагины выключены.
 
 Не публикуйте этот стенд в интернет. Требования к production: [Security](docs/specs/security-v1.md).
