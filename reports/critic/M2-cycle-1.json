@@ -5,38 +5,108 @@
   "cycle": 1,
   "reviewed_at": "2026-11-20",
   "score": 5.0,
-  "caps_applied": ["ac_failed", "critical", "major"],
-  "dimensions": {"spec": 2, "tests": 1.5, "security": 1, "code": 1.5, "ops": 0.5, "evidence": 0},
+  "caps_applied": [
+    "ac_failed",
+    "critical",
+    "major"
+  ],
+  "dimensions": {
+    "spec": 2,
+    "tests": 1.5,
+    "security": 1,
+    "code": 1.5,
+    "ops": 0.5,
+    "evidence": 0
+  },
   "acceptance": [
-    {"id": "AC-M2-01", "status": "passed", "evidence": "Clean clone 63d7c18, empty UV_CACHE_DIR, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1: `uv run gxg-policy validate policies/` -> exit 0, 0 errors; `lint policies/` -> exit 0, 2 warnings (unknown-tool, unknown-tenant t-beta). CI run 44792404466 job policy: success."},
-    {"id": "AC-M2-02", "status": "passed", "evidence": "18 fixtures in tools/gxg-policy/tests/bad/ incl. all 12 from the AC; each via CLI `lint` -> exit 1, stderr `error: <file>: <path>: [<code>] ...` (e.g. 02 foreign-principal at tenants/t-alpha.yaml: grants[0].subjects[0]; 10 schema at platform/registry.yaml: services[0].tenants[0])."},
-    {"id": "AC-M2-03", "status": "passed", "evidence": "6 pairs, CLI `diff base head --json` equals expected.json for each (01..06). Formally passes, but the classification misses widening via group membership in approval rules (finding F3) and two widening rules are not guarded by tests (F4)."},
-    {"id": "AC-M2-04", "status": "failed", "evidence": "Not run end-to-end (no PR). On the reviewed commit itself CI run 44792404466 (event push on claude/m2-policy-tooling) has `grants-widening` and `ci-ok` success with no label: for non-PR events the job passes unconditionally, and every agent PR comes from a claude/** branch, so a green `grants-widening`/`ci-ok` check exists on any PR head with widening (F1). The re-approval after a new push can be skipped by cancelling the synchronize run (F2). Gate logic unit tests (tests/ci/test_widening_gate.py, 14) pass."},
-    {"id": "AC-M2-05", "status": "passed", "evidence": "Two CLI builds of policies/ in separate processes (different time and PYTHONHASHSEED): bytes equal after replacing built_at; scripts/ci/bundle_smoke.sh cmp OK; test_ac_m2_05 passes."},
-    {"id": "AC-M2-06", "status": "passed", "evidence": "`verify` on a fresh build -> `ok: bundle_version=63d7c18...`, exit 0; one bit flipped at byte 200 -> `bundle rejected: bad signature`, exit 1."}
+    {
+      "id": "AC-M2-01",
+      "status": "passed",
+      "evidence": "Clean clone 63d7c18, empty UV_CACHE_DIR, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1: `uv run gxg-policy validate policies/` -> exit 0, 0 errors; `lint policies/` -> exit 0, 2 warnings (unknown-tool, unknown-tenant t-beta). CI run 44792404466 job policy: success."
+    },
+    {
+      "id": "AC-M2-02",
+      "status": "passed",
+      "evidence": "18 fixtures in tools/gxg-policy/tests/bad/ incl. all 12 from the AC; each via CLI `lint` -> exit 1, stderr `error: <file>: <path>: [<code>] ...` (e.g. 02 foreign-principal at tenants/t-alpha.yaml: grants[0].subjects[0]; 10 schema at platform/registry.yaml: services[0].tenants[0])."
+    },
+    {
+      "id": "AC-M2-03",
+      "status": "passed",
+      "evidence": "6 pairs, CLI `diff base head --json` equals expected.json for each (01..06). Formally passes, but the classification misses widening via group membership in approval rules (finding F3) and two widening rules are not guarded by tests (F4)."
+    },
+    {
+      "id": "AC-M2-04",
+      "status": "failed",
+      "evidence": "Not run end-to-end (no PR). On the reviewed commit itself CI run 44792404466 (event push on claude/m2-policy-tooling) has `grants-widening` and `ci-ok` success with no label: for non-PR events the job passes unconditionally, and every agent PR comes from a claude/** branch, so a green `grants-widening`/`ci-ok` check exists on any PR head with widening (F1). The re-approval after a new push can be skipped by cancelling the synchronize run (F2). Gate logic unit tests (tests/ci/test_widening_gate.py, 14) pass."
+    },
+    {
+      "id": "AC-M2-05",
+      "status": "passed",
+      "evidence": "Two CLI builds of policies/ in separate processes (different time and PYTHONHASHSEED): bytes equal after replacing built_at; scripts/ci/bundle_smoke.sh cmp OK; test_ac_m2_05 passes."
+    },
+    {
+      "id": "AC-M2-06",
+      "status": "passed",
+      "evidence": "`verify` on a fresh build -> `ok: bundle_version=63d7c18...`, exit 0; one bit flipped at byte 200 -> `bundle rejected: bad signature`, exit 1."
+    }
   ],
   "findings": [
-    {"severity": "critical", "ref": "AC-M2-04, GR-10", "where": ".github/workflows/ci.yml:6-11 (on: push claude/**, workflow_dispatch) and job grants-widening step 'Not a pull request'",
-     "problem": "Outside pull_request the job grants-widening passes without checking anything. Agent PRs come from claude/** branches, so every push makes a second run on the PR head SHA where grants-widening and ci-ok are green (seen in run 44792404466 on 63d7c18); workflow_dispatch makes a fresh green run any time. The required check ci-ok is matched by name and source, not by event, so a widening PR has a green ci-ok without the owner's label.",
-     "required_improvement": "Fail closed outside pull_request: on push/workflow_dispatch to any branch other than main, run `gxg-policy diff` of merge-base(origin/main) vs HEAD and exit 1 if there is any widening (or drop push: claude/** and workflow_dispatch). Test that path. Owner confirms on a real PR that no green grants-widening/ci-ok exists on the head SHA before the label."},
-    {"severity": "major", "ref": "AC-M2-04, GR-10", "where": "scripts/ci/widening_gate.py:121; .github/workflows/ci.yml concurrency (cancel-in-progress true for PRs)",
-     "problem": "The label is removed only when event.action == 'synchronize'. Push B after the owner labelled A, then quickly add any other label or close and reopen the PR: the new run cancels the synchronize run before its gate step, runs with action labeled/reopened, keeps the owner's old label and passes on B, which the owner never saw. No test covers non-synchronize events after a push.",
-     "required_improvement": "On every run, treat the label as stale if its labeled event is older than the arrival of the head commit (server time, e.g. earliest created_at of pull_request workflow runs for head_sha; not git commit dates) and then remove it and fail; set cancel-in-progress false for pull_request runs; add tests with action 'labeled' (other label) and 'reopened' after an unprocessed push."},
-    {"severity": "major", "ref": "approval-policy-v1 «Lint в CI», AC-M2-03, GR-10", "where": "tools/gxg-policy/src/gxg_policy/diff.py:107-160 (approval/rule compare group refs as text)",
-     "problem": "Reproduced: auto_approve rule with requesters [group:actors]; PR adds agent:t-alpha:hermes to group actors, and adds a human to group fin used in approvers of a require_approval rule -> `gxg-policy diff` = {widening: [], narrowing: []}. Auto-approval and the approver circle widen, the gate is green without a label.",
-     "required_improvement": "Expand group: refs in match.requesters and approvers with the tenant's groups on both sides; new requesters of an auto_approve rule and new approvers are widening; add a diff fixture pair with golden report."},
-    {"severity": "major", "ref": "DoD-4", "where": "tools/gxg-policy/tests/test_diff.py, test_lint.py, test_bundle.py",
-     "problem": "Mutations that keep all 165 tests green: diff.py:136 match_changed -> narrowing; diff.py:153 approvers_added -> narrowing; lint.py:114 dangling group: subject check removed (no fixture); bundle.py:114 verify shape check removed. The report's '17/17 mutations' cannot be reproduced: the script is not committed.",
-     "required_improvement": "Diff fixture with a widened match of an auto_approve rule and a direct approvers change; bad fixture with subjects [group:ghost]; test that verify rejects a validly signed bundle with schema_version 2 or an extra key; commit the mutation script and its output."},
-    {"severity": "minor", "ref": "AC-M2-04 docs", "where": "docs/setup/widening-approval.md «Как работает проверка», «Ограничения»",
-     "problem": "Lists only ci.yml and widening_gate.py as files that can disable the gate; the job also executes the PR's tools/gxg-policy/src/** (diff.py decides widening), pyproject.toml/uv.lock and schemas/. Says nothing about the push-run check (F1) or the cancelled run (F2), yet states the approval binds to what the owner saw.",
-     "required_improvement": "List every path the job executes; after F1/F2 describe the remaining limits honestly and add the owner's end-to-end checklist (review.md, section 'What the owner must check')."},
-    {"severity": "minor", "ref": "GR-11a", "where": "tools/gxg-policy/src/gxg_policy/cli.py:94",
-     "problem": "`build --built-at yesterday` writes and signs built_at = 'yesterday'. CI does not pass the flag, so main is not affected.",
-     "required_improvement": "Validate --built-at as RFC 3339 UTC with Z (parse_ts), exit 2 otherwise."},
-    {"severity": "minor", "ref": "Lean", "where": "tools/gxg-policy/src/gxg_policy/diff.py:198, scripts/ci/widening_gate.py:32",
-     "problem": "MARKER defined twice; if they diverge, the gate posts a new comment on every run instead of updating its own.",
-     "required_improvement": "One constant (import from gxg_policy.diff or take the first line of the Markdown file)."}
+    {
+      "severity": "critical",
+      "ref": "AC-M2-04, GR-10",
+      "where": ".github/workflows/ci.yml:6-11 (on: push claude/**, workflow_dispatch) and job grants-widening step 'Not a pull request'",
+      "problem": "Outside pull_request the job grants-widening passes without checking anything. Agent PRs come from claude/** branches, so every push makes a second run on the PR head SHA where grants-widening and ci-ok are green (seen in run 44792404466 on 63d7c18); workflow_dispatch makes a fresh green run any time. The required check ci-ok is matched by name and source, not by event, so a widening PR has a green ci-ok without the owner's label.",
+      "required_improvement": "Fail closed outside pull_request: on push/workflow_dispatch to any branch other than main, run `gxg-policy diff` of merge-base(origin/main) vs HEAD and exit 1 if there is any widening (or drop push: claude/** and workflow_dispatch). Test that path. Owner confirms on a real PR that no green grants-widening/ci-ok exists on the head SHA before the label."
+    },
+    {
+      "severity": "major",
+      "ref": "AC-M2-04, GR-10",
+      "where": "scripts/ci/widening_gate.py:121; .github/workflows/ci.yml concurrency (cancel-in-progress true for PRs)",
+      "problem": "The label is removed only when event.action == 'synchronize'. Push B after the owner labelled A, then quickly add any other label or close and reopen the PR: the new run cancels the synchronize run before its gate step, runs with action labeled/reopened, keeps the owner's old label and passes on B, which the owner never saw. No test covers non-synchronize events after a push.",
+      "required_improvement": "On every run, treat the label as stale if its labeled event is older than the arrival of the head commit (server time, e.g. earliest created_at of pull_request workflow runs for head_sha; not git commit dates) and then remove it and fail; set cancel-in-progress false for pull_request runs; add tests with action 'labeled' (other label) and 'reopened' after an unprocessed push."
+    },
+    {
+      "severity": "major",
+      "ref": "approval-policy-v1 «Lint в CI», AC-M2-03, GR-10",
+      "where": "tools/gxg-policy/src/gxg_policy/diff.py:107-160 (approval/rule compare group refs as text)",
+      "problem": "Reproduced: auto_approve rule with requesters [group:actors]; PR adds agent:t-alpha:hermes to group actors, and adds a human to group fin used in approvers of a require_approval rule -> `gxg-policy diff` = {widening: [], narrowing: []}. Auto-approval and the approver circle widen, the gate is green without a label.",
+      "required_improvement": "Expand group: refs in match.requesters and approvers with the tenant's groups on both sides; new requesters of an auto_approve rule and new approvers are widening; add a diff fixture pair with golden report."
+    },
+    {
+      "severity": "major",
+      "ref": "DoD-4",
+      "where": "tools/gxg-policy/tests/test_diff.py, test_lint.py, test_bundle.py",
+      "problem": "Mutations that keep all 165 tests green: diff.py:136 match_changed -> narrowing; diff.py:153 approvers_added -> narrowing; lint.py:114 dangling group: subject check removed (no fixture); bundle.py:114 verify shape check removed. The report's '17/17 mutations' cannot be reproduced: the script is not committed.",
+      "required_improvement": "Diff fixture with a widened match of an auto_approve rule and a direct approvers change; bad fixture with subjects [group:ghost]; test that verify rejects a validly signed bundle with schema_version 2 or an extra key; commit the mutation script and its output."
+    },
+    {
+      "severity": "minor",
+      "ref": "AC-M2-04 docs",
+      "where": "docs/setup/widening-approval.md «Как работает проверка», «Ограничения»",
+      "problem": "Lists only ci.yml and widening_gate.py as files that can disable the gate; the job also executes the PR's tools/gxg-policy/src/** (diff.py decides widening), pyproject.toml/uv.lock and schemas/. Says nothing about the push-run check (F1) or the cancelled run (F2), yet states the approval binds to what the owner saw.",
+      "required_improvement": "List every path the job executes; after F1/F2 describe the remaining limits honestly and add the owner's end-to-end checklist (review.md, section 'What the owner must check')."
+    },
+    {
+      "severity": "minor",
+      "ref": "GR-11a",
+      "where": "tools/gxg-policy/src/gxg_policy/cli.py:94",
+      "problem": "`build --built-at yesterday` writes and signs built_at = 'yesterday'. CI does not pass the flag, so main is not affected.",
+      "required_improvement": "Validate --built-at as RFC 3339 UTC with Z (parse_ts), exit 2 otherwise."
+    },
+    {
+      "severity": "minor",
+      "ref": "Lean",
+      "where": "tools/gxg-policy/src/gxg_policy/diff.py:198, scripts/ci/widening_gate.py:32",
+      "problem": "MARKER defined twice; if they diverge, the gate posts a new comment on every run instead of updating its own.",
+      "required_improvement": "One constant (import from gxg_policy.diff or take the first line of the Markdown file)."
+    },
+    {
+      "severity": "minor",
+      "ref": "GR-13a (added to the spec in claude/admiring-planck-vzys0x@7466dfa after the reviewed commit)",
+      "where": ".github/workflows/ci.yml job bundle (if: github.event_name == 'push' && github.ref == 'refs/heads/main')",
+      "problem": "The signed bundle is built only on push to main. With no policy change for 24 h the last bundle gets older than the GR-13 limit and every service becomes not ready; GR-13a now requires a re-sign at least every 12 h. Not counted against this cycle's score: the requirement did not exist in the spec the cycle was built from.",
+      "required_improvement": "Bring the GR-13a spec text into the branch unchanged; add `schedule` (e.g. every 6 h) to the workflow and let job bundle run on schedule on main (default branch) with the same build+verify steps; document in docs/setup/bundle-signing.md. The M1 loader side (reject older built_at) is not M2."
+    }
   ],
   "required_improvements": [
     "F1: grants-widening fails closed outside pull_request (diff vs merge-base of origin/main on push/workflow_dispatch to non-main branches, exit 1 on widening) or the extra triggers are removed; test for that path.",
@@ -44,8 +114,12 @@
     "F3: diff expands group: refs in approval requesters/approvers; new auto_approve requesters and new approvers are widening; diff fixture pair with golden report.",
     "F4: tests that kill the mutations match_changed->narrowing, approvers_added->narrowing, dangling group: subject, verify shape check; mutation script committed with output.",
     "F5: docs/setup/widening-approval.md lists all executed paths and the remaining limits accurately, with the owner's end-to-end checklist.",
-    "AC-M2-04 evidence: the conformance report records which parts are proven by tests after F1/F2, and the end-to-end PR steps stay as owner-pending with exact expected results (including that a label set via the Claude GitHub App is rejected)."
+    "AC-M2-04 evidence: the conformance report records which parts are proven by tests after F1/F2, and the end-to-end PR steps stay as owner-pending with exact expected results (including that a label set via the Claude GitHub App is rejected).",
+    "GR-13a (new spec): job bundle also runs on a schedule on main, at least every 12 h, same build+verify; spec text brought into the branch unchanged; bundle-signing.md updated."
   ],
   "ponytail_review": "reports/critic/M2-cycle-1.review.md",
-  "lean_lines": 10
+  "lean_lines": 10,
+  "notes": [
+    "Orchestrator message after the review: the M1 loader accepts both expanded subjects and raw group:<id>, which confirms that keeping the groups map in the bundle is not a compatibility issue (not a finding, as in the review)."
+  ]
 }
