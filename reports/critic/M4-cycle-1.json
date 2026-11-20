@@ -1,0 +1,90 @@
+{
+  "milestone": "M4",
+  "branch": "claude/m4-contextforge-spike",
+  "commit": "0130d781babd14483acc4e97bd21fa5d28add765",
+  "report_commit": "9df9cdea53342ec8f3efd510a6dce7b64d26503b",
+  "cycle": 1,
+  "reviewed_at": "2026-11-20",
+  "score": 8.0,
+  "caps_applied": ["major"],
+  "dimensions": {"spec": 2.5, "tests": 1.5, "security": 1.5, "code": 1.0, "ops": 1, "evidence": 0.5},
+  "reproduction": {
+    "where": "Claude Code cloud container, linux x86_64, dockerd 29.10.0 started by hand; images pulled from ghcr.io/docker.io by the pinned digests",
+    "run_spike_sh": "exit 0, 2026-11-20 19:05-19:13 UTC, fresh .env and adapter key. A: signatures_valid 14/14, one signature per user, signature_still_valid_after_changing_teams_and_admin=true, admin reaches tenant tool with Admin=true. C: 10/10 accepted; bypass_no_identity/replay_immediate/replay_tampered_args/forged_jws_attacker_key/replay_after_65s rejected with the same reasons as the committed evidence; admin_call GXG_IDENTITY_DENIED; cross-team never reaches echo. Upgrade v1.1.0->v1.1.1: 16/16 accepted, same 3 alembic migrations. Visibility: each agent lists only its team's tool and server.",
+    "mutate_verify_jws": "output byte-identical to evidence/variant-c.mutations.log (4/4 mutations caught)",
+    "variant_A_config_check": "pinned image mcpgateway/utils/identity_propagation.py: Claims-Signature = HMAC-SHA256(IDENTITY_CLAIMS_SECRET or JWT_SECRET_KEY, f'{user_id}:{email}'); no setting adds teams/time/nonce; IDENTITY_CLAIMS_SECRET was set and used (signature does not match JWT_SECRET_KEY). Failure of A is not a misconfiguration.",
+    "critic_probes": [
+      "plugin key file missing, default env: ContextForge healthy, 'Skipping plugin GxgIdentity because fail_on_plugin_error is disabled', call reaches connector without X-GxG-Identity",
+      "same + PLUGINS_FAIL_ON_PLUGIN_ERROR=true: startup fails 'Plugin initialization failed' (never healthy)",
+      "PLUGINS_ENABLED=false: call reaches connector without X-GxG-Identity (connector rejects: fail closed only at connector)",
+      "captured t-alpha JWS -> t-beta connector: rejected 'bad aud'; with the aud check removed: ACCEPTED, no spike step turns red",
+      "captured JWS + same args under another tool name: verify() accepts (tool name not signed)",
+      "two verifier replicas with in-memory jti: replica A 'replayed jti', replica B ACCEPTED",
+      "passthrough misconfig stand: global allowlist holds all 9 headers, gateways passthroughHeaders=null, yet a plain call with X-Tenant-Id/X-Trace-Id reaches echo without them"
+    ],
+    "evidence_restored": "committed evidence/ restored with git checkout after the rerun; no repo change besides reports/critic/"
+  },
+  "digest_and_advisories_today": "ghcr index digest for v1.1.1 and latest = sha256:16c7a8985c1a…56a5 (matches pin); no tag newer than v1.1.1; OSV PyPI mcp-contextforge-gateway==1.1.1 -> no vulns; GitHub advisories list 19 GHSA, newest 2026-09-07; IBM bulletin 7296490: CVE-2026-110279, affected v1.0.0-v1.1.0, fixed v1.1.1. ADR statements correct.",
+  "acceptance": [
+    {"id": "AC-M4-01", "status": "passed", "evidence": "ADR-0001 'Результаты по критериям' gives passed/failed with evidence for criteria 1-5 for A and C; run_spike.sh rerun by the critic reproduces every recorded result (see reproduction). Caveats: criterion 4 'all paths' omits direct_proxy/resources/prompts (finding 5); line 123 'forged X-GxG-Identity overwritten' is not observed (finding 6)."},
+    {"id": "AC-M4-02", "status": "passed", "evidence": "Status 'Accepted — вариант C'; A rejected on reproduced evidence (criteria 1-3 failed). claude/m4-live independently rejects A (2, 3 failed)."},
+    {"id": "AC-M4-03", "status": "passed", "evidence": ".env.example CONTEXTFORGE_IMAGE=ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a898…; compose.yaml requires it; equal to today's registry index digest; advisories re-checked today (OSV, GHSA list, IBM bulletin) and match the ADR links."},
+    {"id": "AC-M4-04", "status": "passed", "evidence": "VERIFY gone from SEC-02 (d486da5), SEC-03 (a552e26), TEN-01 (a1354c3), GR example (7784dcc); no other spec lines changed (diff 6b3fe48..0130d78 on docs/specs touches only those 4 lines). SEC-02 claims match evidence/teams-claims-and-visibility.json. Inaccuracies inside the new text: TEN-01 '/mcp' (finding 4), SEC-03 missing tool binding / shared jti store / fail_on_plugin_error env (findings 1, 2)."}
+  ],
+  "go_no_go_check": "Preliminary GO is not supported as worded: roadmap condition 4 (unified_pdp) not_run, condition 3 only cross-team. Evidence supports 'no NO-GO trigger found; 1 and 2 confirmed' (finding 7).",
+  "findings": [
+    {"severity": "major", "ref": "ADR-0001 (C, fail closed), SEC-03", "where": "spikes/m4-contextforge/spike.py:382-383; docs/adr/0001-identity-propagation.md:106",
+     "problem": "plugins.yaml plugin_settings.fail_on_plugin_error is ignored by cpex in v1.1.1 (read only from env PLUGINS_FAIL_ON_PLUGIN_ERROR, default false). Live: missing key file -> 'Skipping plugin GxgIdentity because fail_on_plugin_error is disabled', ContextForge healthy, tool calls reach the connector without X-GxG-Identity. The ADR states the opposite.",
+     "required_improvement": "Set PLUGINS_FAIL_ON_PLUGIN_ERROR=true in compose.variant-c.yaml, drop plugin_settings from the generated YAML, correct ADR line 106 and SEC-03 (env var named; with plugins off only the connector guards), add a run_spike.sh stage: missing key -> ContextForge never healthy."},
+    {"severity": "major", "ref": "SEC-03, ADR-0001 criteria 2-3", "where": "spikes/m4-contextforge/plugin/gxg_identity/plugin.py:84-96; spikes/m4-contextforge/verify_jws.py:32-59; docs/specs/security-v1.md:39",
+     "problem": "JWS binds only arguments (ahs), not the tool name/method: a captured JWS with the same args verifies for any tool on that connector (probe). jti cache is per process: replica B accepts a replay that replica A rejected (probe). SEC-03 lists neither tool binding nor a shared jti store, so M1 can comply and keep both gaps.",
+     "required_improvement": "Add a signed tool claim (the name sent upstream; check the alias path) or hash {name, arguments}; verifier compares it. In SEC-03 add 'tool name signed and checked' and 'jti store shared by all replicas of a connector, retained until exp+skew'; name the canonical JSON form."},
+    {"severity": "major", "ref": "DoD-4", "where": "spikes/m4-contextforge/mutate_verify_jws.py:19-24; spikes/m4-contextforge/verify_jws.py:46-52",
+     "problem": "Mutation self-check covers signature, exp, ahs, jti only. Removing the aud check makes a t-alpha JWS accepted by the t-beta connector and no spike step fails (probe); same for exp-iat<=60, iss, kid, sub-in-tenant. aud is the only guard against cross-connector reuse.",
+     "required_improvement": "Add spike.py replay step 'replay_other_connector' (captured headers to /mcp/<other tenant>) and the aud mutation; optionally validly-signed max-TTL and sub-outside-tenant cases in the mutation script; state covered checks in M4.json DoD-4."},
+    {"severity": "minor", "ref": "TEN-01", "where": "docs/specs/target-platform-v1.md:65",
+     "problem": "Says a cross-team call is refused on /mcp as isolation evidence, but on /mcp own-team calls of all 4 agents are refused too ('Access denied', RBAC tools.execute) in variant-c.observations.jsonl.",
+     "required_improvement": "Keep /rpc and /servers/{id}/mcp; state that global /mcp refuses team-scoped agent tokens for every tool on v1.1.1."},
+    {"severity": "minor", "ref": "ADR-0001 criterion 4, SEC-03", "where": "docs/adr/0001-identity-propagation.md:134",
+     "problem": "'All paths' omits paths that skip tool_pre_invoke: direct_proxy gateways (MCPGATEWAY_DIRECT_PROXY_ENABLED, invoke_tool_direct bypasses plugins), resources/read, prompts/get. Fail closed at the connector, but undocumented.",
+     "required_improvement": "ADR and SEC-03: MCPGATEWAY_DIRECT_PROXY_ENABLED=false; identity-dependent data exposed only as tools (or hook resource/prompt pre-hooks)."},
+    {"severity": "minor", "ref": "Lean / ADR criterion 1", "where": "spikes/m4-contextforge/run_spike.sh:41-44; spikes/m4-contextforge/compose.passthrough-misconfig.yaml; docs/adr/0001-identity-propagation.md:123",
+     "problem": "Passthrough-misconfig stage cannot deliver any agent header on this MCP path in v1.1.1 (critic: allowlist loaded, gateway override null, X-Tenant-Id still not forwarded), so it proves nothing; ADR still says forged X-GxG-Identity was 'перезаписан'.",
+     "required_improvement": "Delete the stage, overlay and its evidence (or replace with a check of the plugin header filter); ADR: 'not reachable on v1.1.1; the signature is the guard'."},
+    {"severity": "minor", "ref": "Roadmap GO/NO-GO", "where": "reports/conformance/M4.json:154",
+     "problem": "Verdict 'GO … (preliminary)' while roadmap condition 4 is not_run and 3 is partial; GO requires all 4.",
+     "required_improvement": "Reword to 'no NO-GO trigger found: 1, 2 confirmed; 3 partial; 4 not run (M5); decision at end of stage B'."},
+    {"severity": "minor", "ref": "SEC-03 wording", "where": "docs/adr/0001-identity-propagation.md:52,72",
+     "problem": "'Key held only by the adapter': the adapter is the ContextForge process; any code execution there reads the key and mints JWS for every tenant.",
+     "required_improvement": "State the trust boundary in C 'Минусы'; production: secret store, kid rotation, alert on unknown kid. Backlog."},
+    {"severity": "minor", "ref": "SEC-01, GR example", "where": "spikes/m4-contextforge/plugin/gxg_identity/plugin.py:80-88",
+     "problem": "Principal = email local part (ContextForge exposes no user UUID). Deleting and recreating hermes@t-alpha gives a new agent the same principal and its grants.",
+     "required_improvement": "Runbook/GR note: agent emails never reused (or registry tombstones). Backlog."},
+    {"severity": "minor", "ref": "SEC-22", "where": "docs/specs/security-v1.md:92",
+     "problem": "Still says the 1.1.1 tag in .env.example is only a candidate; contradicts the pinned digest (executor flagged it).",
+     "required_improvement": "Owner decision; one line."}
+  ],
+  "required_improvements": [
+    "1. Fail closed in ContextForge for real: PLUGINS_FAIL_ON_PLUGIN_ERROR=true in compose.variant-c.yaml, remove plugin_settings from plugins.yaml, run_spike.sh stage 'missing key -> ContextForge not healthy', correct ADR line 106 and SEC-03.",
+    "2. Bind the JWS to the tool: signed tool name (upstream name) checked by verify_jws.py; SEC-03 adds tool binding, a jti store shared across connector replicas (retained until exp+skew) and the canonical JSON definition.",
+    "3. Close the mutation gap: replay_other_connector attack + aud mutation in mutate_verify_jws.py (and the tool-name mutation from item 2); list covered checks in M4.json DoD-4.",
+    "4. TEN-01: drop /mcp as isolation evidence and state the RBAC refusal.",
+    "5. ADR/SEC-03: direct_proxy must stay disabled; resources/prompts are not covered by tool_pre_invoke.",
+    "6. Remove or fix the passthrough-misconfig stage and the 'перезаписан' claim in ADR line 123.",
+    "7. Reword go_no_go_preliminary.verdict to 'no NO-GO trigger found', with condition 3 partial and 4 not run.",
+    "8. Re-run run_spike.sh, commit the new evidence and M4.json for the new commit."
+  ],
+  "comparison_m4_live": {
+    "branch": "claude/m4-live",
+    "commit": "65eabd226d3f6eb653eb9e7f686ed48c6577a33e",
+    "agreement": "Same A mechanism (HMAC over user_id:email, one static signature per user, tenant unsigned, symmetric secret); A rejected; criteria 2 and 3 failed in both; tenant visibility per team on /rpc and virtual server; /mcp refused by RBAC for team tokens; advisories: none affect v1.1.1.",
+    "discrepancies": [
+      "A criterion 1: executor failed (unsigned teams/admin, admin reaches tenant tool), m4-live passed for the path through ContextForge and counts the unsigned tenant under 2. A difference in how cases are counted, not in the facts; the decision is the same.",
+      "A criterion 5: executor passed as an upgrade rehearsal, m4-live not run.",
+      "m4-live calls the index digest 16c7a898… 'the linux/arm64 image'; registry returns it as the OCI index digest (multi-arch), so the pin is right and the m4-live note is inaccurate.",
+      "m4-live did not test variant C; its open items (direct_proxy, resources/prompts, multi-worker) are carried into findings 2 and 5."
+    ]
+  },
+  "ponytail_review": "reports/critic/M4-cycle-1.review.md",
+  "lean_lines": 10
+}
