@@ -10,12 +10,12 @@ shortcut: key read from a file and config in YAML; production needs a secret sto
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import time
 import uuid
 
+import jwt  # PyJWT, ships in the ContextForge image
 from cpex.framework import (
     HttpHeaderPayload,
     Plugin,
@@ -28,10 +28,6 @@ from cpex.framework import (
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 HEADER = "X-GxG-Identity"
-
-
-def b64(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
 def canonical(obj) -> bytes:
@@ -99,9 +95,8 @@ class GxgIdentityPlugin(Plugin):
             "request_id": gc.request_id,
             "ahs": hashlib.sha256(canonical(payload.args or {})).hexdigest(),
         }
-        head = {"alg": "EdDSA", "typ": "JWT", "kid": self._kid}
-        signing_input = b64(canonical(head)) + "." + b64(canonical(claims))
-        token = signing_input + "." + b64(self._key.sign(signing_input.encode()))
+        token = jwt.encode(claims, self._key, algorithm="EdDSA", headers={"kid": self._kid})
+        # shortcut: payload.headers is deprecated in cpex 0.1.4 (use extensions.http.headers); see ADR-0001, M5
         headers = {
             k: v
             for k, v in (payload.headers.model_dump() if payload.headers else {}).items()

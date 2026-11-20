@@ -177,7 +177,8 @@ def mcp_session(url, token, extra=None):
 
 
 def call_tool(path_kind, url, token, tool, *, args=None, meta=None, extra=None):
-    params = {"name": tool, "arguments": args or {"text": "hi"}}
+    # non-ASCII and two keys: the adapter and the connector must hash the same canonical JSON
+    params = {"name": tool, "arguments": args or {"text": "привет", "lang": "ru"}}
     if meta is not None:
         params["_meta"] = meta
     if path_kind == "rpc":

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Reproduces the M4 spike end to end (~15 min). Needs: docker + compose, python3 with `cryptography`, access to ghcr.io and docker.io.
+# Exits non-zero if any stage check fails (check_verdicts.py, fail closed, control run).
 # Raw output (may hold test secrets) -> secrets/ (git-ignored); redacted evidence -> evidence/.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,11 +25,10 @@ python3 -I verify_hmac.py | tee evidence/variant-a.verify_hmac.json; cp secrets/
 
 echo "== variant C: our tool_pre_invoke plugin (JWS Ed25519) =="
 fresh; docker compose $A up -d; wait_up; s setup >/dev/null; s plugin_config
-docker compose $C up -d contextforge; wait_up
+docker compose $C up -d contextforge echo; wait_up   # echo now verifies on arrival
 s calls >/dev/null; s attacks >/dev/null; s admin_call >/dev/null; s replay > secrets/replay-c.out
-cp secrets/raw/echo.jsonl secrets/echo.variant-c.jsonl   # raw (signed) log, for mutation checks
-python3 -I verify_jws.py | tee evidence/variant-c.verify_jws.jsonl; cp secrets/replay-c.out evidence/variant-c.replay.log; python3 -I redact.py c
-python3 -I mutate_verify_jws.py | tee evidence/variant-c.mutations.log
+cp secrets/replay-c.out evidence/variant-c.replay.log; python3 -I redact.py c
+python3 -I check_verdicts.py c --attacks   # fails unless every ContextForge call is accepted, every attack has its reason
 
 echo "== fail closed: adapter key missing -> ContextForge must not become healthy, no call reaches the connector =="
 sed 's#/run/gxg/adapter_ed25519.pem#/run/gxg/missing.pem#' secrets/plugins.yaml > secrets/plugins-nokey.yaml
@@ -47,7 +47,7 @@ echo "== criterion 5: upgrade v1.1.0 -> pinned v1.1.1 with the plugin, same Post
 fresh; docker compose $OLD up -d; wait_up; s setup >/dev/null; s plugin_config
 docker compose $OLD restart contextforge; wait_up; s calls >/dev/null
 docker compose $C up -d contextforge; wait_up; s calls >/dev/null; s admin_call >/dev/null
-python3 -I verify_jws.py | tee evidence/variant-c-upgrade.verify_jws.jsonl; python3 -I redact.py c-upgrade
+python3 -I redact.py c-upgrade; python3 -I check_verdicts.py c-upgrade
 docker compose $C logs contextforge | grep -o 'Running upgrade [^,]*' > evidence/variant-c-upgrade.migrations.log
 s visibility
 echo "done; stop with: docker compose $C down -v"

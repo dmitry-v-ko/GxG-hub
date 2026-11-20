@@ -23,6 +23,8 @@ dev = [
     "PyYAML>=6,<7",
     "openapi-spec-validator>=0.7,<1",
     "cryptography>=44,<51",
+    # spikes/m4-contextforge verifier tests: the PyJWT version in the pinned ContextForge image
+    "PyJWT==2.15.1",
 ]
 
 [tool.uv]
@@ -49,6 +51,7 @@ testpaths = [
     "approval/tests",
     "tools/gxg-policy/tests",
     "connectors/demo/tests",
+    "spikes/m4-contextforge/tests",
 ]
 # DoD-5: a skipped or xfailed test is a failure, not a pass.
 xfail_strict = true
