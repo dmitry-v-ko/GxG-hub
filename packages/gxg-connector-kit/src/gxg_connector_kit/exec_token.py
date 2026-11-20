@@ -1,7 +1,7 @@
 """Execution token verification in the connector (EFF-18 п.1, AS-09…AS-11).
 
-Token: compact JWS, `alg: EdDSA`, `typ: gxg-exec+jwt`, claims per
-schemas/execution-token.schema.json. Keys come only from the executor JWKS
+Token: compact JWS, `alg: EdDSA`, `typ: gxg-exec+jwt`, claims validated by
+schemas/execution-token.schema.json (`sub`, `jti` are UUIDs). Keys come only from the executor JWKS
 (`GET /.well-known/gxg-exec-jwks.json`), cached for at most 10 minutes. The HTTP
 transport is injected as `fetch()`.
 
@@ -18,13 +18,14 @@ from typing import Any, TypedDict, cast
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from . import _jwt
+from . import _jwt, _schema
 from ._jwt import Clock, JtiCache, TokenError
 from .readiness import Readiness
 
 TYP = "gxg-exec+jwt"
 ISSUER = "gxg-executor"
 JWKS_MAX_AGE_S = 600  # AS-09
+JWKS_RETRY_S = 5  # after a failed fetch: no refetch on every call and every /readyz during an outage
 REQUIRED_CLAIMS = ("iss", "aud", "sub", "jti", "ten", "req", "tool", "con", "res", "ahs", "idk", "iat", "exp")
 
 
@@ -59,7 +60,11 @@ def parse_jwks(data: bytes) -> dict[str, Ed25519PublicKey]:
 
 
 class ExecutorJwks:
-    """JWKS cache: refetched when older than `max_age_s`. If the refetch fails, no key is trusted (fail closed)."""
+    """JWKS cache: refetched when older than `max_age_s`.
+
+    If the refetch fails, no key is trusted (fail closed) and the next fetch is tried
+    `JWKS_RETRY_S` later.
+    """
 
     def __init__(
         self, fetch: Callable[[], bytes], *, max_age_s: float = JWKS_MAX_AGE_S, now: Clock = time.time
@@ -68,19 +73,19 @@ class ExecutorJwks:
         self._max_age_s = max_age_s
         self._now = now
         self._keys: dict[str, Ed25519PublicKey] = {}
-        self._fetched_at: float | None = None
+        self._refetch_at = float("-inf")
         self._lock = threading.Lock()
 
     def _current(self) -> dict[str, Ed25519PublicKey]:
         with self._lock:
             t = self._now()
-            if self._fetched_at is None or t - self._fetched_at >= self._max_age_s:
+            if t >= self._refetch_at:
                 try:
                     self._keys = parse_jwks(self._fetch())
-                    self._fetched_at = t
+                    self._refetch_at = t + self._max_age_s
                 except Exception:  # transport or format error: drop the stale keys
                     self._keys = {}
-                    self._fetched_at = None
+                    self._refetch_at = t + JWKS_RETRY_S
             return self._keys
 
     def key(self, kid: str) -> Ed25519PublicKey:
@@ -90,7 +95,7 @@ class ExecutorJwks:
         return found
 
     def readiness(self) -> Readiness:
-        """MCC-09: not ready while no executor key can be loaded. Refetches only when the cache is stale."""
+        """MCC-09: not ready while no executor key can be loaded. Fetches only when a fetch is due."""
         if not self._current():
             return Readiness(False, ("executor JWKS is unreachable or has no Ed25519 key",))
         return Readiness(True)
@@ -119,4 +124,6 @@ class ExecTokenVerifier:
             jti_cache=self._jti,
             now=self._now,
         )
+        if not _schema.validator("execution-token").is_valid(claims):
+            raise TokenError("claims")
         return cast(ExecutionClaims, claims)

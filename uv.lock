@@ -396,12 +396,14 @@ version = "0.0.0"
 source = { editable = "packages/gxg-connector-kit" }
 dependencies = [
     { name = "cryptography" },
+    { name = "jsonschema" },
     { name = "pyjwt", extra = ["crypto"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=46,<51" },
+    { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10,<3" },
 ]
 

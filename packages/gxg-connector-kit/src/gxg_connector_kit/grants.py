@@ -4,24 +4,27 @@ Allow-only: anything not granted explicitly is denied. A RID is
 `<domain>:<connection_id>/<type>/<id>`; a grant resource is an exact RID or the mask
 `<domain>:<connection_id>/<type>/*` (GR-04). The bundle is `grants-bundle.json`
 (JCS) plus `grants-bundle.json.sig` (`{"alg": "EdDSA", "kid", "sig"}`); verification
-keys by `kid` come from service configuration, never from the bundle.
+keys by `kid` come from service configuration, never from the bundle. The signed document
+must match schemas/grants-bundle.schema.json.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from . import _jwt
+from . import _jwt, _schema
 from ._jwt import Clock
 from .errors import GxgError
 from .readiness import Readiness
@@ -91,9 +94,7 @@ class Bundle:
     platform: Mapping[str, Service]
 
 
-def _parse_time(value: Any) -> datetime:
-    if not isinstance(value, str):
-        raise ValueError("timestamp must be an RFC 3339 string")
+def _parse_time(value: str) -> datetime:
     parsed = datetime.fromisoformat(value)
     if parsed.utcoffset() is None:
         raise ValueError("timestamp must carry a time zone")
@@ -101,9 +102,7 @@ def _parse_time(value: Any) -> datetime:
 
 
 def parse_tenant(doc: Mapping[str, Any]) -> TenantGrants:
-    """One tenant grants file (schemas/resource-grants.schema.json). Groups are expanded here (GR-11a or raw)."""
-    if doc.get("schema_version") != 1:
-        raise ValueError("grants: schema_version must be 1")
+    """One tenant grants file, already valid by schemas/resource-grants.schema.json. Expands groups (GR-11a or raw)."""
     principals_doc = doc["principals"]
     principals = frozenset(p["id"] for kind in ("agents", "humans") for p in principals_doc.get(kind, []))
     groups: Mapping[str, list[str]] = doc.get("groups") or {}
@@ -121,6 +120,7 @@ def parse_tenant(doc: Mapping[str, Any]) -> TenantGrants:
             elif m := _MASK.fullmatch(r):
                 masks.add((m[1], m[2], m[3]))
             else:
+                # e.g. a trailing newline: the schema's `$` allows it, fullmatch does not
                 raise ValueError(f"grant {g['id']!r}: resource is neither a RID nor a type mask (GR-04)")
         expires = g.get("expires_at")
         grants.append(
@@ -160,14 +160,13 @@ def load_bundle(data: bytes, sig: bytes, keys: Mapping[str, Ed25519PublicKey], *
     _verify_signature(data, sig, keys)
     try:
         doc = json.loads(data.decode("utf-8"))
-        if doc.get("schema_version") != 1:
-            raise BundleError("bundle: schema_version must be 1")
-        version = doc["bundle_version"]
-        if not isinstance(version, str) or not version:
-            raise BundleError("bundle: bundle_version must be a non-empty string")
-        built_at = _parse_time(doc["built_at"])
-        if built_at.utcoffset() != timedelta(0):
-            raise BundleError("bundle: built_at must be UTC")
+    except ValueError:
+        raise BundleError("bundle: not UTF-8 JSON") from None
+    error = next(_schema.validator("grants-bundle").iter_errors(doc), None)
+    if error is not None:
+        raise BundleError(f"bundle: does not match grants-bundle.schema.json at /{'/'.join(map(str, error.path))}")
+    try:
+        built_at = _parse_time(doc["built_at"])  # schema pins the form: YYYY-MM-DDTHH:MM:SSZ
         tenants: dict[str, TenantGrants] = {}
         policies: dict[str, Mapping[str, Any] | None] = {}
         for tid, entry in doc["tenants"].items():
@@ -186,14 +185,15 @@ def load_bundle(data: bytes, sig: bytes, keys: Mapping[str, Ed25519PublicKey], *
         raise
     except (ValueError, KeyError, TypeError, AttributeError) as exc:
         raise BundleError(f"bundle: malformed ({type(exc).__name__})") from None
-    return Bundle(version, built_at, tenants, policies, platform)
+    return Bundle(doc["bundle_version"], built_at, tenants, policies, platform)
 
 
 class BundleStore:
     """Holds the current valid bundle; implements `GrantResolver` and readiness.
 
     A failed load keeps the previous valid bundle. A bundle older (`built_at`) than the
-    loaded one is rejected, so an old signed bundle cannot bring back a revoked grant.
+    loaded one, or than the newest `built_at` recorded in `state_file`, is rejected, so an
+    old signed bundle cannot bring back a revoked grant, also across restarts (GR-13a).
     Without a valid bundle younger than 24 h the store is not ready and every call raises
     `temporarily_unavailable` (GR-12, GR-13).
     """
@@ -202,6 +202,7 @@ class BundleStore:
         self,
         keys: Mapping[str, Ed25519PublicKey],
         *,
+        state_file: Path,
         tenant: str | None = None,
         max_age_s: float = MAX_BUNDLE_AGE_S,
         now: Clock = time.time,
@@ -213,6 +214,9 @@ class BundleStore:
         self._bundle: Bundle | None = None
         self._last_error: str | None = None
         self._lock = threading.Lock()
+        self._state_file = state_file
+        # A missing file is a first start; an unreadable one stops the service (fail closed).
+        self._floor = float(json.loads(state_file.read_text())["max_built_at"]) if state_file.exists() else None
 
     def load(self, data: bytes, sig: bytes) -> Bundle:
         try:
@@ -225,9 +229,15 @@ class BundleStore:
             self._last_error = "bundle: built_at is in the future"
             raise BundleError(self._last_error)
         with self._lock:
-            if self._bundle is not None and bundle.built_at < self._bundle.built_at:
-                self._last_error = "bundle: older than the loaded bundle (rollback)"
+            t = bundle.built_at.timestamp()
+            if self._floor is not None and t < self._floor:
+                self._last_error = "bundle: older than a bundle loaded before (rollback)"
                 raise BundleError(self._last_error)
+            if self._floor != t:
+                tmp = self._state_file.with_name(self._state_file.name + ".tmp")
+                tmp.write_text(json.dumps({"max_built_at": t}))
+                os.replace(tmp, self._state_file)
+                self._floor = t
             self._bundle = bundle
             self._last_error = None
         return bundle

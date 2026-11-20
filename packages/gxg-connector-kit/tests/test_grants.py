@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from kit_testing import BUNDLE_KID, T0, BundleKit, Clock, iso, sign_bundle
+from kit_testing import BUNDLE_KID, REPO, T0, BundleKit, Clock, iso, sign_bundle
 
-from gxg_connector_kit import _jwt
+from gxg_connector_kit import _jwt, canonical
 from gxg_connector_kit.errors import GxgError
-from gxg_connector_kit.grants import AllowedSet, BundleError, BundleStore, Decision, GrantResolver, load_bundle
+from gxg_connector_kit.grants import (
+    AllowedSet,
+    BundleError,
+    BundleStore,
+    Decision,
+    GrantResolver,
+    load_bundle,
+    parse_tenant,
+)
+from gxg_connector_kit.readiness import Readiness
 
 EXPIRY = 1_803_859_200  # 2027-03-01T00:00:00Z, expires_at of tg-hermes-chats in example.yaml
 DAY = 24 * 3600
@@ -92,7 +103,7 @@ def kit(bundle_kit: BundleKit) -> BundleKit:
 
 @pytest.fixture
 def store(kit: BundleKit, clock: Clock) -> BundleStore:
-    s = BundleStore(kit.keys, now=clock)
+    s = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
     s.load(*kit.signed())
     return s
 
@@ -115,7 +126,7 @@ def test_check_table(store: BundleStore, case: tuple[str, str, Any, str, str | N
 @pytest.mark.parametrize(("t", "allowed"), [(EXPIRY - 1, True), (EXPIRY, False), (EXPIRY + DAY, False)])
 def test_expired_grant(kit: BundleKit, clock: Clock, t: int, allowed: bool) -> None:
     clock.t = t
-    store = BundleStore(kit.keys, now=clock)
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
     store.load(*kit.signed(built_at=t))
     assert store.check("t-alpha", HERMES, "read", TG_CHAT).allowed is allowed
 
@@ -129,7 +140,7 @@ def test_already_expanded_groups(kit: BundleKit, clock: Clock) -> None:
     alpha = kit.tenants["t-alpha"]["grants"]
     del alpha["groups"]
     alpha["grants"][0]["subjects"] = [HERMES, ANALYST]
-    store = BundleStore(kit.keys, now=clock)
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
     store.load(*kit.signed())
     assert store.check("t-alpha", ANALYST, "read", "kb:kb-main/collection/sales") == Decision(True, "kb-research")
 
@@ -149,19 +160,19 @@ def test_allowed_sets(store: BundleStore) -> None:
 
 def test_allowed_excludes_expired_grant(kit: BundleKit, clock: Clock) -> None:
     clock.t = EXPIRY
-    store = BundleStore(kit.keys, now=clock)
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
     store.load(*kit.signed(built_at=EXPIRY))
     assert store.allowed("t-alpha", HERMES, "read", "tg-main", "chat") == AllowedSet(False, frozenset())
 
 
 def test_tenant_slice(kit: BundleKit, clock: Clock) -> None:
-    store = BundleStore(kit.keys, tenant="t-beta", now=clock)
+    store = BundleStore(kit.keys, state_file=kit.state_file, tenant="t-beta", now=clock)
     store.load(*kit.signed())
     assert set(store.current.tenants) == {"t-beta"}
     assert store.current.approval_policies == {"t-beta": None}
     assert not store.check("t-alpha", HERMES, "read", TG_CHAT).allowed
     with pytest.raises(BundleError, match="no slice"):
-        BundleStore(kit.keys, tenant="t-gamma", now=clock).load(*kit.signed())
+        BundleStore(kit.keys, state_file=kit.state_file, tenant="t-gamma", now=clock).load(*kit.signed())
 
 
 def test_approval_policy_is_kept(store: BundleStore) -> None:
@@ -174,11 +185,11 @@ def test_approval_policy_is_kept(store: BundleStore) -> None:
 
 
 def assert_rejected(kit: BundleKit, clock: Clock, data: bytes, sig: bytes, match: str) -> None:
-    store = BundleStore(kit.keys, now=clock)
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
     with pytest.raises(BundleError, match=match):
         store.load(data, sig)
     r = store.readiness()
-    assert not r.ready
+    assert r.ready is False
     assert match.split(":", maxsplit=1)[0] in r.reasons[0]
     with pytest.raises(GxgError) as exc:
         store.check("t-alpha", HERMES, "read", TG_CHAT)
@@ -191,8 +202,8 @@ def test_valid_bundle_is_ready(store: BundleStore) -> None:
 
 
 def test_not_loaded_is_not_ready(kit: BundleKit, clock: Clock) -> None:
-    store = BundleStore(kit.keys, now=clock)
-    assert not store.readiness().ready
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
+    assert store.readiness() == Readiness(False, ("no valid grants bundle: not loaded",))
     with pytest.raises(GxgError, match="not ready"):
         _ = store.version
 
@@ -250,25 +261,23 @@ def test_signature_with_padding_or_bad_alphabet(kit: BundleKit, clock: Clock) ->
 
 def test_verification_key_comes_from_config_not_bundle(kit: BundleKit, clock: Clock) -> None:
     with pytest.raises(BundleError, match="unknown kid"):
-        BundleStore({}, now=clock).load(*kit.signed())
+        BundleStore({}, state_file=kit.state_file, now=clock).load(*kit.signed())
 
 
 # --- AC-M1-07: staleness (GR-13) ----------------------------------------------------------
 
 
 def test_bundle_older_than_24h_is_not_ready(kit: BundleKit, clock: Clock) -> None:
-    store = BundleStore(kit.keys, now=clock)
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
     store.load(*kit.signed(built_at=T0 - DAY - 1))
-    r = store.readiness()
-    assert not r.ready
-    assert "older than 24 h" in r.reasons[0]
+    assert store.readiness() == Readiness(False, (f"grants bundle {'a' * 40} is older than 24 h (GR-13)",))
     with pytest.raises(GxgError) as exc:
         store.check("t-alpha", HERMES, "read", TG_CHAT)
     assert exc.value.code == "temporarily_unavailable"
 
 
 def test_bundle_of_exactly_24h_is_ready(kit: BundleKit, clock: Clock) -> None:
-    store = BundleStore(kit.keys, now=clock)
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
     store.load(*kit.signed(built_at=T0 - DAY))
     assert store.readiness().ready
 
@@ -284,7 +293,7 @@ def test_loaded_bundle_goes_stale(store: BundleStore, clock: Clock) -> None:
 
 
 def test_bundle_from_the_future_is_rejected_and_does_not_block_the_next(kit: BundleKit, clock: Clock) -> None:
-    store = BundleStore(kit.keys, now=clock)
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
     with pytest.raises(BundleError, match="future"):
         store.load(*kit.signed(built_at=T0 + 6, version="f" * 40))
     assert not store.readiness().ready
@@ -330,29 +339,48 @@ def _signed_doc(kit: BundleKit, mutate: Any) -> tuple[bytes, bytes]:
     return data, sign_bundle(kit.ci_key, data)
 
 
+SCHEMA_ERR = "does not match grants-bundle.schema.json at "
+
+
 @pytest.mark.parametrize(
     ("mutate", "match"),
     [
-        (lambda d: d.update(schema_version=2), "schema_version"),
-        (lambda d: d.update(bundle_version=""), "bundle_version"),
-        (lambda d: d.pop("bundle_version"), "malformed"),
-        (lambda d: d.update(built_at="2027-01-15T11:00:00+03:00"), "UTC"),
-        (lambda d: d.update(built_at="2027-01-15T08:00:00"), "malformed"),
-        (lambda d: d.update(built_at=T0), "malformed"),
-        (lambda d: d.update(tenants=[]), "malformed"),
+        (lambda d: d.update(schema_version=2), SCHEMA_ERR + "/schema_version"),
+        (lambda d: d.update(bundle_version=""), SCHEMA_ERR + "/bundle_version"),
+        (lambda d: d.update(bundle_version="A" * 40), SCHEMA_ERR + "/bundle_version"),
+        (lambda d: d.pop("bundle_version"), SCHEMA_ERR + "/$"),
+        (lambda d: d.update(built_at="2027-01-15T11:00:00+03:00"), SCHEMA_ERR + "/built_at"),
+        (lambda d: d.update(built_at="2027-01-15T08:00:00"), SCHEMA_ERR + "/built_at"),
+        (lambda d: d.update(built_at=T0), SCHEMA_ERR + "/built_at"),
+        (lambda d: d.update(built_at="2027-13-45T08:00:00Z"), "malformed"),  # schema pins the form, not the date
+        (lambda d: d.update(tenants=[]), SCHEMA_ERR + "/tenants"),
+        (lambda d: d.update(extra=1), SCHEMA_ERR + "/$"),
         (lambda d: d["tenants"].update({"t-beta": d["tenants"]["t-alpha"]}), "another tenant"),
         (lambda d: d["tenants"]["t-alpha"]["approval_policy"].update(tenant="t-beta"), "another tenant"),
         (lambda d: d["tenants"]["t-alpha"]["grants"].update(tenant="t-beta"), "another tenant"),
-        (lambda d: d["tenants"]["t-alpha"]["grants"].update(schema_version=2), "malformed"),
-        (lambda d: d["tenants"]["t-alpha"]["grants"]["grants"][0].update(resources=["kb:kb-main/*"]), "malformed"),
-        (lambda d: d["tenants"]["t-alpha"]["grants"]["grants"][0].update(expires_at="soon"), "malformed"),
-        (lambda d: d["tenants"]["t-alpha"].pop("approval_policy"), "malformed"),
-        (lambda d: d["platform"].update(services=[{"id": "x"}]), "malformed"),
-        (lambda d: d.pop("platform"), "malformed"),
+        (lambda d: d["tenants"]["t-alpha"]["grants"].update(schema_version=2), SCHEMA_ERR + "/tenants/t-alpha/grants"),
+        (lambda d: d["tenants"]["t-alpha"]["grants"]["grants"][0].update(resources=["kb:kb-main/*"]),
+         SCHEMA_ERR + "/tenants/t-alpha/grants/grants/0/resources/0"),
+        (lambda d: d["tenants"]["t-alpha"]["grants"]["grants"][0].update(resources=["kb:kb-main/collection/x\n"]),
+         "malformed"),  # passes the schema pattern (`$` before a final newline), not fullmatch
+        (lambda d: d["tenants"]["t-alpha"]["grants"]["grants"][0].update(expires_at="2027-03-01T00:00:00"),
+         "expires_at|malformed"),  # no time zone
+        (lambda d: d["tenants"]["t-alpha"]["grants"]["grants"][0].update(expires_at="soon"),
+         "expires_at|malformed"),  # schema `format` only with rfc3339-validator installed; else _parse_time
+        (lambda d: d["tenants"]["t-alpha"].pop("approval_policy"), SCHEMA_ERR + "/tenants/t-alpha$"),
+        (lambda d: d["platform"].update(services=[{"id": "x"}]), SCHEMA_ERR + "/platform/services/0"),
+        (lambda d: d["platform"]["services"][0].update(public_keys=[]),
+         SCHEMA_ERR + "/platform/services/0/public_keys"),
+        (lambda d: d["platform"]["services"][0].update(public_keys=["ed25519:" + "A" * 43] * 3),
+         SCHEMA_ERR + "/platform/services/0/public_keys"),
+        (lambda d: d["platform"]["services"][0].update(public_key="ed25519:" + "A" * 43),
+         SCHEMA_ERR + "/platform/services/0"),
+        (lambda d: d["platform"]["services"].append(d["platform"]["services"][0]), "malformed"),  # ID uniqueness
+        (lambda d: d.pop("platform"), SCHEMA_ERR + "/$"),
     ],
-)
+)  # fmt: skip
 def test_malformed_signed_bundle(kit: BundleKit, clock: Clock, mutate: Any, match: str) -> None:
-    assert_rejected(kit, clock, *_signed_doc(kit, mutate), match="bundle: " if match != "malformed" else "bundle")
+    assert_rejected(kit, clock, *_signed_doc(kit, mutate), match="bundle: ")
     with pytest.raises(BundleError, match=match):
         load_bundle(*_signed_doc(kit, mutate), kit.keys)
 
@@ -364,3 +392,74 @@ def test_signed_garbage(kit: BundleKit, clock: Clock, data: bytes) -> None:
 
 def test_built_at_iso_helper_matches_spec_format() -> None:
     assert iso(T0) == "2027-01-15T08:00:00Z"
+
+
+# --- GR-11a test vector (schemas/test-vectors/bundle-signature.json) -------------------------
+
+VECTOR = json.loads((REPO / "schemas/test-vectors/bundle-signature.json").read_text(encoding="utf-8"))
+
+
+def test_signature_vector_loads(tmp_path: Path) -> None:
+    data = base64.b64decode(VECTOR["bundle_bytes_b64"])
+    assert canonical.dumps(VECTOR["bundle"]) == data  # the builder's bytes are JCS of `bundle`
+    sig = json.dumps(VECTOR["signature_file"]).encode()
+    keys = {VECTOR["kid"]: _jwt.parse_public_key(VECTOR["public_key"])}
+    store = BundleStore(keys, state_file=tmp_path / "s.json", now=lambda: 1_795_132_800)  # 2026-11-20T00:00:00Z
+    bundle = store.load(data, sig)
+    assert bundle.version == "0" * 40
+    assert set(bundle.tenants) == {"t-alpha"}
+    assert len(bundle.platform["demo"].public_keys) == 1
+    assert store.readiness().ready
+    with pytest.raises(BundleError, match="does not verify"):
+        load_bundle(data.replace(b"t-alpha", b"t-alphb"), sig, keys)
+
+
+# --- GR-13a: newest built_at survives a restart ---------------------------------------------
+
+
+def test_rollback_is_rejected_after_restart(kit: BundleKit, clock: Clock) -> None:
+    clock.t = T0 + 20
+    BundleStore(kit.keys, state_file=kit.state_file, now=clock).load(*kit.signed(built_at=T0 + 10, version="b" * 40))
+    restarted = BundleStore(kit.keys, state_file=kit.state_file, now=clock)  # same disk, empty memory
+    with pytest.raises(BundleError, match="rollback"):
+        restarted.load(*kit.signed(built_at=T0 + 9, version="a" * 40))
+    assert not restarted.readiness().ready
+    restarted.load(*kit.signed(built_at=T0 + 10, version="b" * 40))  # the same bundle again is fine
+    assert restarted.version == "b" * 40
+
+
+def test_state_file_keeps_the_maximum(kit: BundleKit, clock: Clock) -> None:
+    clock.t = T0 + 20
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
+    assert not kit.state_file.exists()  # first start
+    store.load(*kit.signed(built_at=T0))
+    store.load(*kit.signed(built_at=T0 + 10))
+    with pytest.raises(BundleError):
+        store.load(*kit.signed(built_at=T0 + 5))
+    with pytest.raises(BundleError, match="future"):
+        store.load(*kit.signed(built_at=T0 + 26))
+    assert json.loads(kit.state_file.read_text()) == {"max_built_at": T0 + 10}
+    assert not kit.state_file.with_name(kit.state_file.name + ".tmp").exists()
+
+
+def test_rejected_bundle_does_not_move_the_state(kit: BundleKit, clock: Clock) -> None:
+    store = BundleStore(kit.keys, state_file=kit.state_file, now=clock)
+    data, sig = kit.signed(built_at=T0 - 10)
+    with pytest.raises(BundleError):
+        store.load(data[:-1], sig)
+    assert not kit.state_file.exists()
+
+
+@pytest.mark.parametrize("content", ["", "{}", "not json", '{"max_built_at": "x"}'])
+def test_unreadable_state_file_stops_the_start(kit: BundleKit, content: str) -> None:
+    kit.state_file.write_text(content)
+    with pytest.raises((ValueError, KeyError)):
+        BundleStore(kit.keys, state_file=kit.state_file)
+
+
+def test_expiry_without_time_zone_is_rejected_without_a_format_checker() -> None:
+    """`format: date-time` is only checked when rfc3339-validator is installed; parse_tenant does not rely on it."""
+    doc = copy.deepcopy(T_BETA)
+    doc["grants"][0]["expires_at"] = "2027-03-01T00:00:00"
+    with pytest.raises(ValueError, match="time zone"):
+        parse_tenant(doc)

@@ -56,6 +56,8 @@ class GxgError(Exception):
             or not 0 <= retry_after_s <= _RETRY_AFTER_MAX_S
         ):
             raise ValueError("retry_after_s must be an integer in [0, 86400]")
+        if code == "rate_limited" and (retry_after_s is None or retry_after_s < 1):
+            raise ValueError("rate_limited requires retry_after_s >= 1 (MCC-05)")
         if request_id is not None and not 1 <= len(request_id) <= _REQUEST_ID_MAX:
             raise ValueError("request_id must be 1..256 characters")
         if details is not None and len(details) > _DETAILS_MAX_KEYS:

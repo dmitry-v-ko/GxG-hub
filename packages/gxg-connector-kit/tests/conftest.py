@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from kit_testing import BundleKit, Clock
 
@@ -12,8 +14,8 @@ def clock() -> Clock:
 
 
 @pytest.fixture
-def bundle_kit() -> BundleKit:
-    return BundleKit()
+def bundle_kit(tmp_path: Path) -> BundleKit:
+    return BundleKit(tmp_path / "bundle-state.json")
 
 
 @pytest.fixture

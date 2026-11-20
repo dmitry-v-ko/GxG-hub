@@ -1,10 +1,9 @@
 """Service JWT between internal services (AS-06, AS-25).
 
 `Authorization: Bearer <jwt>`, `alg: EdDSA`, `typ: gxg-svc+jwt`, claims `iss` (service ID),
-`aud` (receiver ID), `iat`, `exp ≤ iat + 60 s`, `jti`. The verification key is the
-issuer's `public_key` in the platform registry (part of the signed bundle).
-`kid` = RFC 7638 thumbprint of that key (interpretation recorded in
-reports/plans/M1-cycle-1.md: the spec has one key per service and no `kid`).
+`aud` (receiver ID), `iat`, `exp ≤ iat + 60 s`, `jti`. The verification keys are the
+issuer's `public_keys` (1-2 active keys) in the platform registry (part of the signed
+bundle); `kid` = RFC 7638 thumbprint of the signing key (AS-06a), any active key is accepted.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ REQUIRED_CLAIMS = ("iss", "aud", "iat", "exp", "jti")
 class Service:
     id: str
     kind: str
-    public_key: Ed25519PublicKey
+    public_keys: tuple[Ed25519PublicKey, ...]  # 1-2 active keys (AS-06)
     tenants: frozenset[str]
     internal_url: str | None = None
 
@@ -38,9 +37,7 @@ class Service:
 
 
 def parse_registry(doc: Mapping[str, Any]) -> dict[str, Service]:
-    """Platform registry (schemas/platform-registry.schema.json) → services by ID."""
-    if doc.get("schema_version") != 1:
-        raise ValueError("platform registry: schema_version must be 1")
+    """Platform registry (schemas/platform-registry.schema.json, already validated by the bundle loader) → by ID."""
     services: dict[str, Service] = {}
     for s in doc["services"]:
         if s["id"] in services:
@@ -48,7 +45,7 @@ def parse_registry(doc: Mapping[str, Any]) -> dict[str, Service]:
         services[s["id"]] = Service(
             id=s["id"],
             kind=s["kind"],
-            public_key=_jwt.parse_public_key(s["public_key"]),
+            public_keys=tuple(_jwt.parse_public_key(k) for k in s["public_keys"]),
             tenants=frozenset(s["tenants"]),
             internal_url=s.get("internal_url"),
         )
@@ -84,9 +81,10 @@ class SvcJwtVerifier:
             service = services.get(iss) if isinstance(iss, str) else None
             if service is None:
                 raise TokenError("iss_unregistered")
-            if kid != _jwt.thumbprint(service.public_key):
-                raise TokenError("kid")
-            return service.public_key
+            for key in service.public_keys:
+                if kid == _jwt.thumbprint(key):
+                    return key
+            raise TokenError("kid")
 
         claims = _jwt.verify(
             token,

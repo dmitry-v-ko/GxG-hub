@@ -12,7 +12,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 from gxg_connector_kit import _jwt, canonical
 
-REPO = Path(__file__).resolve().parents[3]
+# First parent with uv.lock: also right from mutmut's `mutants/` copy of the package.
+REPO = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 T0 = 1_800_000_000  # 2027-01-15T08:00:00Z, before the example grant expires (2027-03-01)
 BUNDLE_KID = "ci-2026-11"
 
@@ -46,14 +47,15 @@ def sign_bundle(key: Ed25519PrivateKey, data: bytes, kid: str = BUNDLE_KID) -> b
 class BundleKit:
     """Builds GR-11a bundles from the repository examples, signed with a fresh CI key."""
 
-    def __init__(self) -> None:
+    def __init__(self, state_file: Path) -> None:
+        self.state_file = state_file  # GR-13a: BundleStore keeps the newest built_at here
         self.ci_key = Ed25519PrivateKey.generate()
         self.keys: dict[str, Ed25519PublicKey] = {BUNDLE_KID: self.ci_key.public_key()}
         self.service_keys: dict[str, Ed25519PrivateKey] = {}
         registry = load_yaml("policies/platform/registry.example.yaml")
         for s in registry["services"]:  # replace synthetic keys with real ones we can sign with
             self.service_keys[s["id"]] = Ed25519PrivateKey.generate()
-            s["public_key"] = format_public_key(self.service_keys[s["id"]].public_key())
+            s["public_keys"] = [format_public_key(self.service_keys[s["id"]].public_key())]
         self.platform: dict[str, Any] = registry
         self.tenants: dict[str, Any] = {
             "t-alpha": {

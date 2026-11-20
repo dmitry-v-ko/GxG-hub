@@ -21,8 +21,8 @@ PROPERTY = settings(max_examples=1000, derandomize=True, deadline=None)
 
 
 def test_vector_file_has_the_expected_cases() -> None:
-    assert len(VECTORS["vectors"]) == 6
-    assert len(VECTORS["invalid_inputs"]) == 2
+    assert len(VECTORS["vectors"]) == 9
+    assert len(VECTORS["invalid_inputs"]) == 3
 
 
 @pytest.mark.parametrize("vector", VECTORS["vectors"], ids=lambda v: v["name"])
@@ -36,7 +36,8 @@ def test_vectors_bytes_and_sha256(vector: dict[str, Any]) -> None:
 @pytest.mark.parametrize("case", VECTORS["invalid_inputs"], ids=lambda v: v["name"])
 def test_invalid_inputs(case: dict[str, Any]) -> None:
     with pytest.raises(GxgError) as exc:
-        canonical.hash(case["input"])
+        # `input_json` is raw text: `1.0` must stay a float after parsing, not collapse to 1
+        canonical.hash(json.loads(case["input_json"]) if "input_json" in case else case["input"])
     assert exc.value.code == case["expected_error"] == "invalid_input"
 
 

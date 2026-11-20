@@ -22,3 +22,6 @@ dist/
 .hypothesis/
 .coverage
 coverage-kit.json
+
+# mutmut (DoD-4)
+mutants/

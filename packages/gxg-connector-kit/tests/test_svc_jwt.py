@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from kit_testing import T0, BundleKit, Clock, hs256, jws
+from kit_testing import T0, BundleKit, Clock, format_public_key, hs256, jws
 
 from gxg_connector_kit import _jwt, svc_jwt
 from gxg_connector_kit.grants import BundleStore
@@ -50,6 +51,12 @@ def reason(verifier: SvcJwtVerifier, token: str, allowed: frozenset[str] = CALLE
 
 def test_sign_and_verify(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier, clock: Clock) -> None:
     token = svc_jwt.sign(demo_key, iss="demo", aud=RECEIVER, now=clock)
+    second = svc_jwt.sign(demo_key, iss="demo", aud=RECEIVER, now=clock)
+    assert (
+        jwt.decode(token, options={"verify_signature": False})["jti"]
+        != jwt.decode(second, options={"verify_signature": False})["jti"]
+    )
+    assert verifier.verify(second, allowed_issuers=CALLERS).id == "demo"  # not a replay of the first
     caller = verifier.verify(token, allowed_issuers=CALLERS)
     assert caller.id == "demo"
     assert caller.kind == "connector"
@@ -163,25 +170,78 @@ def test_lifetime_over_60s(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier
 
 def test_sign_rejects_long_ttl(demo_key: Ed25519PrivateKey) -> None:
     for ttl in (0, 61):
-        with pytest.raises(ValueError, match="ttl_s"):
+        with pytest.raises(ValueError, match=r"^ttl_s must be in \(0, 60\]$"):
             svc_jwt.sign(demo_key, iss="demo", aud=RECEIVER, ttl_s=ttl)
 
 
+@pytest.mark.parametrize("ttl", [1, 60])
+def test_sign_ttl_bounds_verify(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier, clock: Clock, ttl: int) -> None:
+    token = svc_jwt.sign(demo_key, iss="demo", aud=RECEIVER, ttl_s=ttl, now=clock)
+    assert verifier.verify(token, allowed_issuers=CALLERS).id == "demo"
+
+
+def test_lifetime_of_1s_is_accepted(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier) -> None:
+    assert (
+        verifier.verify(jws(demo_key, header(demo_key), claims(iat=T0, exp=T0 + 1)), allowed_issuers=CALLERS).id
+        == "demo"
+    )
+
+
+@pytest.mark.parametrize("iss", [["demo"], {"id": "demo"}, 7])
+def test_non_string_iss_is_unregistered(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier, iss: Any) -> None:
+    assert reason(verifier, jws(demo_key, header(demo_key), claims(iss=iss))) == "iss_unregistered"
+
+
+def _token_of_length(key: Ed25519PrivateKey, n: int) -> str:
+    """A valid service JWT exactly `n` characters long (padded with an extra claim)."""
+    for pad in range(n):
+        for extra in ("", " "):  # base64url never has length 4k+1; one more header byte fixes that
+            token = jws(key, header(key, x=extra), claims(pad="p" * pad))
+            if len(token) == n:
+                return token
+    raise AssertionError(n)
+
+
+def test_token_length_limit_is_8192(demo_key: Ed25519PrivateKey, verifier: SvcJwtVerifier) -> None:
+    assert verifier.verify(_token_of_length(demo_key, 8192), allowed_issuers=CALLERS).id == "demo"
+    assert reason(verifier, _token_of_length(demo_key, 8193)) == "malformed"
+
+
+def test_thumbprint_rfc8037_a3() -> None:
+    """AS-06a `kid`: the RFC 8037 §A.3 key gives the RFC's RFC 7638 thumbprint (other libraries compute the same)."""
+    key = _jwt.parse_public_key("ed25519:11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo")
+    assert _jwt.thumbprint(key) == "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k"
+
+
+def test_kid_of_either_active_key_is_accepted(bundle_kit: BundleKit, clock: Clock) -> None:
+    """AS-06: 1-2 active keys per service (rotation without downtime)."""
+    old, new = bundle_kit.service_keys["demo"], Ed25519PrivateKey.generate()
+    demo = next(s for s in bundle_kit.platform["services"] if s["id"] == "demo")
+    demo["public_keys"] = [*demo["public_keys"], format_public_key(new.public_key())]
+    registry = parse_registry(bundle_kit.platform)
+    v = SvcJwtVerifier(RECEIVER, lambda: registry, now=clock)
+    for key in (old, new):
+        assert v.verify(svc_jwt.sign(key, iss="demo", aud=RECEIVER, now=clock), allowed_issuers=CALLERS).id == "demo"
+    retired = Ed25519PrivateKey.generate()
+    assert reason(v, svc_jwt.sign(retired, iss="demo", aud=RECEIVER, now=clock)) == "kid"
+    # a key's kid does not unlock the other key: the signature is checked with the key the kid names
+    assert reason(v, jws(old, header(new), claims())) == "signature"
+
+
 def test_registry_comes_from_the_current_bundle(bundle_kit: BundleKit, clock: Clock, demo_key: Any) -> None:
-    store = BundleStore(bundle_kit.keys, now=clock)
+    store = BundleStore(bundle_kit.keys, state_file=bundle_kit.state_file, now=clock)
     store.load(*bundle_kit.signed())
     v = SvcJwtVerifier(RECEIVER, store.registry, now=clock)
     assert v.verify(svc_jwt.sign(demo_key, iss="demo", aud=RECEIVER, now=clock), allowed_issuers=CALLERS).id == "demo"
 
 
 def test_parse_registry_rejects_bad_documents(bundle_kit: BundleKit) -> None:
+    """The bundle schema checks the shape; these are the checks a schema cannot express."""
     doc = bundle_kit.platform
-    with pytest.raises(ValueError, match="schema_version"):
-        parse_registry({**doc, "schema_version": 2})
     with pytest.raises(ValueError, match="duplicate"):
         parse_registry({**doc, "services": doc["services"] + doc["services"][:1]})
-    bad_key = [{**doc["services"][0], "public_key": "ed25519:shortk"}]
+    bad_key = [{**doc["services"][0], "public_keys": ["ed25519:shortk"]}]
     with pytest.raises(ValueError, match="32 bytes"):
         parse_registry({**doc, "services": bad_key})
     with pytest.raises(ValueError, match="ed25519:"):
-        parse_registry({**doc, "services": [{**doc["services"][0], "public_key": "rsa:x"}]})
+        parse_registry({**doc, "services": [{**doc["services"][0], "public_keys": ["rsa:x"]}]})

@@ -46,7 +46,7 @@ def test_minimal_envelope() -> None:
     ],
 )
 def test_default_retryable(code: str, retryable: bool) -> None:
-    assert GxgError(code, "x").retryable is retryable  # type: ignore[arg-type]
+    assert GxgError(code, "x", retry_after_s=1).retryable is retryable  # type: ignore[arg-type]
 
 
 def test_outcome_unknown_is_never_retryable() -> None:
@@ -73,12 +73,24 @@ def test_unknown_code_is_rejected() -> None:
 )
 def test_values_outside_the_schema_are_rejected(kw: dict[str, Any]) -> None:
     with pytest.raises(ValueError):
-        GxgError("rate_limited", "x", **kw)
+        GxgError("temporarily_unavailable", "x", **kw)
 
 
 def test_schema_bounds_are_accepted() -> None:
-    for kw in (
-        {"retry_after_s": 0, "request_id": "r"},
-        {"retry_after_s": 86400, "request_id": "r" * 256, "details": {f"k{i}": i for i in range(20)}},
+    for code, kw in (
+        ("temporarily_unavailable", {"retry_after_s": 0, "request_id": "r"}),
+        ("rate_limited", {"retry_after_s": 1}),
+        ("rate_limited", {"retry_after_s": 86400, "request_id": "r" * 256, "details": {f"k{i}": i for i in range(20)}}),
     ):
-        jsonschema.validate(GxgError("rate_limited", "x", **kw).to_dict(), SCHEMA)  # type: ignore[arg-type]
+        jsonschema.validate(GxgError(code, "x", **kw).to_dict(), SCHEMA)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("retry_after_s", [None, 0])
+def test_rate_limited_requires_retry_after(retry_after_s: int | None) -> None:
+    with pytest.raises(ValueError, match="rate_limited requires retry_after_s"):
+        GxgError("rate_limited", "x", retry_after_s=retry_after_s)
+    body = {"code": "rate_limited", "message": "x", "retryable": True}
+    if retry_after_s is not None:
+        body["retry_after_s"] = retry_after_s
+    with pytest.raises(jsonschema.ValidationError):  # the schema agrees
+        jsonschema.validate(body, SCHEMA)

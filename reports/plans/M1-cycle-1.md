@@ -17,7 +17,7 @@ Base: `claude/m0-foundation` @ 6b3fe48. Everything lives in `packages/gxg-connec
 | `redact` (SEC-18, AC-M1-08) | `redact.py` | minimal code: recursive copy dropping sensitive keys, `re` for JWTs |
 | `readiness` | `readiness.py` | one dataclass + `all_ready()` |
 | Deps | `packages/gxg-connector-kit/pyproject.toml`, root `pyproject.toml` (dev: `hypothesis`, `pytest-cov`), `uv.lock`, `.gitignore` (`.hypothesis/`) | — |
-| AC-M1-09 coverage gate | `.github/workflows/ci.yml`, `scripts/ci/check-all.sh` | platform feature: `pytest --cov --cov-branch --cov-fail-under=90` on the 5 modules |
+| AC-M1-09 coverage gate | `.github/workflows/ci.yml`, `scripts/ci/check-all.sh` | `pytest --cov --cov-branch` + own `scripts/ci/check_coverage.py` (36 lines). *Corrected in cycle 3 (DoD-6):* this row first said "platform feature: `--cov-fail-under`", which is not what was built. `--cov-fail-under` / `coverage report --fail-under` count lines and branches together over the total; AC-M1-09 needs branch coverage per module, so a small script over `coverage.json` is needed |
 | Tests | `packages/gxg-connector-kit/tests/*` | test keys generated at test time (never stored); vectors and example policies read from the repo |
 | Docs | `packages/gxg-connector-kit/README.md` | short: modules, config, what is test-only |
 | Report | `reports/conformance/M1.json` | — |
