@@ -23,8 +23,7 @@ class NetworkAccessError(RuntimeError):
     pass
 
 
-@pytest.fixture(autouse=True)
-def _no_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _install_network_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     real_connect = socket.socket.connect
     real_connect_ex = socket.socket.connect_ex
 
@@ -42,6 +41,12 @@ def _no_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     monkeypatch.setattr(socket.socket, "connect", connect)
     monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    # The body is a plain function: mutmut does not mutate decorated functions.
+    _install_network_guard(monkeypatch)
     yield
 
 

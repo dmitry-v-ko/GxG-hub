@@ -3,6 +3,7 @@ skipped or xfailed tests (DoD-5)."""
 
 from __future__ import annotations
 
+import errno
 import socket
 from pathlib import Path
 
@@ -15,9 +16,10 @@ CONFTEST = (ROOT / "conftest.py").read_text(encoding="utf-8")
 def test_internet_socket_is_blocked() -> None:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        with pytest.raises(RuntimeError, match="network access is forbidden"):
+        blocked = r"^network access is forbidden in tests: \('192\.0\.2\.1', 443\)$"
+        with pytest.raises(RuntimeError, match=blocked):
             s.connect(("192.0.2.1", 443))  # TEST-NET-1, never routed
-        with pytest.raises(RuntimeError, match="network access is forbidden"):
+        with pytest.raises(RuntimeError, match=blocked):
             s.connect_ex(("192.0.2.1", 443))
     finally:
         s.close()
@@ -127,7 +129,7 @@ def test_unix_socket_is_allowed() -> None:
     try:
         with pytest.raises(FileNotFoundError):  # the guard let the call through to the OS
             s.connect("/nonexistent/gxg.sock")
-        assert s.connect_ex("/nonexistent/gxg.sock") != 0
+        assert s.connect_ex("/nonexistent/gxg.sock") == errno.ENOENT
     finally:
         s.close()
 
