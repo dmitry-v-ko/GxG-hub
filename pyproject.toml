@@ -14,6 +14,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.3,<10",
+    "pytest-socket==0.8.1",  # AC-M0-01: no internet socket in tests
     "ruff==0.17.6",
     "mypy==2.4.1",
     "types-PyYAML>=6,<7",
@@ -42,7 +43,11 @@ gxg-connector-demo = { path = "connectors/demo", editable = true }
 
 [tool.pytest.ini_options]
 minversion = "8.3"
-addopts = ["-ra", "-p", "pytester", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+# AC-M0-01: pytest-socket refuses to create any socket except Unix ones (TCP, UDP, IPv6).
+addopts = [
+    "-ra", "-p", "pytester", "--strict-markers", "--strict-config", "--import-mode=importlib",
+    "--disable-socket", "--allow-unix-socket",
+]
 testpaths = [
     # tests/secrets is not here: it downloads gitleaks (AC-M0-01); the `secrets` CI job runs it.
     "tests/ci",
@@ -103,6 +108,6 @@ exclude = ["*.md"]
 [tool.mutmut]
 # DoD-4 / AC-M0.1-03: modules with the key conditions of M0. Run: scripts/ci/mutmut.sh
 paths_to_mutate = ["scripts/ci/", "conftest.py"]
-tests_dir = ["tests/ci/", "tests/contract/"]
 also_copy = ["schemas/", "policies/", "docs/", "tests/"]
 pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider"]
+pytest_add_cli_args_test_selection = ["tests/ci/", "tests/contract/"]

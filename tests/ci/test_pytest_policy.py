@@ -5,24 +5,47 @@ from __future__ import annotations
 
 import errno
 import socket
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from pytest_socket import SocketBlockedError
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFTEST = (ROOT / "conftest.py").read_text(encoding="utf-8")
 
 
-def test_internet_socket_is_blocked() -> None:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        blocked = r"^network access is forbidden in tests: \('192\.0\.2\.1', 443\)$"
-        with pytest.raises(RuntimeError, match=blocked):
-            s.connect(("192.0.2.1", 443))  # TEST-NET-1, never routed
-        with pytest.raises(RuntimeError, match=blocked):
-            s.connect_ex(("192.0.2.1", 443))
-    finally:
-        s.close()
+def _tcp() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        s.connect(("192.0.2.1", 443))  # TEST-NET-1, never routed
+
+
+def _tcp_connect_ex() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        s.connect_ex(("192.0.2.1", 443))
+
+
+def _udp_sendto() -> None:
+    # UDP needs no connect(): only blocking socket creation stops it.
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.sendto(b"x", ("192.0.2.1", 9))
+
+
+def _ipv6() -> None:
+    with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as s:
+        s.sendto(b"x", ("2001:db8::1", 9))  # documentation prefix
+
+
+def _create_connection() -> None:
+    socket.create_connection(("192.0.2.1", 443), timeout=1).close()
+
+
+@pytest.mark.parametrize("use_network", [_tcp, _tcp_connect_ex, _udp_sendto, _ipv6, _create_connection])
+def test_internet_socket_is_blocked(use_network: Callable[[], None]) -> None:
+    with pytest.raises(SocketBlockedError):
+        use_network()
 
 
 def _run_inner(pytester: pytest.Pytester, body: str) -> pytest.RunResult:
@@ -127,7 +150,7 @@ def test_clean_run_stays_green(pytester: pytest.Pytester) -> None:
 def test_unix_socket_is_allowed() -> None:
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
-        with pytest.raises(FileNotFoundError):  # the guard let the call through to the OS
+        with pytest.raises(FileNotFoundError):  # pytest-socket let the call through to the OS
             s.connect("/nonexistent/gxg.sock")
         assert s.connect_ex("/nonexistent/gxg.sock") == errno.ENOENT
     finally:
