@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -71,6 +73,27 @@ def test_lists_are_walked_only_under_subschema_keywords() -> None:
     }
     assert schema_lock.normative(doc) == {"allOf": [{"required": ["a"]}], "enum": doc["enum"]}
     assert schema_lock.required_map(doc) == {"/allOf/0": ["a"]}
+
+
+# Every subschema keyword of JSON Schema 2020-12 (plus draft-07 leftovers), spelled out here and not
+# taken from schema_lock: mutmut does not mutate its module-level keyword tables, this test does.
+SUB = {"required": ["r"], "title": "t"}
+ONE = ["items", "not", "if", "then", "else", "additionalProperties", "contains", "propertyNames"]
+ONE += ["unevaluatedProperties", "unevaluatedItems", "additionalItems"]
+NAMED = ["properties", "patternProperties", "$defs", "definitions", "dependentSchemas"]
+LIST = ["allOf", "anyOf", "oneOf", "prefixItems"]
+EVERY_KEYWORD: list[tuple[str, Any, str]] = [
+    *((k, SUB, f"/{k}") for k in ONE),
+    *((k, {"n": SUB}, f"/{k}/n") for k in NAMED),
+    *((k, [SUB], f"/{k}/0") for k in LIST),
+]
+
+
+@pytest.mark.parametrize(("keyword", "value", "pointer"), EVERY_KEYWORD, ids=[k for k, _, _ in EVERY_KEYWORD])
+def test_every_subschema_keyword_is_walked(keyword: str, value: Any, pointer: str) -> None:
+    doc = {keyword: value}
+    assert schema_lock.required_map(doc) == {pointer: ["r"]}
+    assert '"title"' not in json.dumps(schema_lock.normative(doc))
 
 
 def test_hashes_keep_non_ascii_as_utf8(tmp_path: Path) -> None:

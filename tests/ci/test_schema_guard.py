@@ -11,12 +11,12 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from types import ModuleType
 from typing import Any
 
 import pytest
 
-from scripts.ci import prove_schema_guard
+from scripts.ci import prove_schema_guard as guard
+from scripts.ci import schema_lock
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "ci" / "prove_schema_guard.py"
@@ -31,11 +31,6 @@ SUBSET = [
 ]
 
 
-@pytest.fixture(scope="module")
-def guard() -> ModuleType:
-    return prove_schema_guard
-
-
 @pytest.mark.e2e
 def test_schema_mutations_are_caught() -> None:
     args = [a for s in SUBSET for a in ("--only", s)]
@@ -48,7 +43,7 @@ def _schema(root: Path, name: str) -> Any:
     return json.loads((root / "schemas" / name).read_text(encoding="utf-8"))
 
 
-def _apply(guard: ModuleType, root: Path, name: str) -> None:
+def _apply(root: Path, name: str) -> None:
     (m,) = [m for m in guard.mutations() if m.name == name]
     guard.prepare(root)
     m.apply(root)
@@ -70,7 +65,7 @@ CRITICAL = {
 }
 
 
-def test_mutation_names_are_unique_and_complete(guard: ModuleType) -> None:
+def test_mutation_names_are_unique_and_complete() -> None:
     names = [m.name for m in guard.mutations()]
     assert len(names) == len(set(names)), "--only selects by name"
     assert FIXED <= set(names)
@@ -81,13 +76,13 @@ def test_mutation_names_are_unique_and_complete(guard: ModuleType) -> None:
         assert any(s in n for n in names), s
 
 
-def test_fixed_mutations_have_exactly_their_effect(guard: ModuleType, tmp_path: Path) -> None:
+def test_fixed_mutations_have_exactly_their_effect(tmp_path: Path) -> None:
     clean = tmp_path / "clean"
     guard.prepare(clean)
 
     def run(name: str) -> Path:
         root = tmp_path / str(len(list(tmp_path.iterdir())))
-        _apply(guard, root, name)
+        _apply(root, name)
         return root
 
     r = run("effect-intent: delete top-level required (AC-M0-02 example)")
@@ -132,7 +127,7 @@ def test_fixed_mutations_have_exactly_their_effect(guard: ModuleType, tmp_path: 
     assert (r / "schemas" / "approval-service.openapi.yaml").read_text(encoding="utf-8") == want_text
 
 
-def test_prepare_copies_the_contract_inputs(guard: ModuleType, tmp_path: Path) -> None:
+def test_prepare_copies_the_contract_inputs(tmp_path: Path) -> None:
     guard.prepare(tmp_path)
     for rel in guard.COPY:
         assert (tmp_path / rel).exists(), rel
@@ -142,39 +137,39 @@ def test_prepare_copies_the_contract_inputs(guard: ModuleType, tmp_path: Path) -
     assert not list(tmp_path.rglob("__pycache__"))
 
 
-def test_drop_required_removes_exactly_one_field(guard: ModuleType, tmp_path: Path) -> None:
+def test_drop_required_removes_exactly_one_field(tmp_path: Path) -> None:
     guard.prepare(tmp_path / "clean")
     want = _schema(tmp_path / "clean", "execution-token.schema.json")
     want["required"].remove("jti")
-    _apply(guard, tmp_path / "m", "execution-token.schema.json: drop 'jti' from required + lock --write")
+    _apply(tmp_path / "m", "execution-token.schema.json: drop 'jti' from required + lock --write")
     assert _schema(tmp_path / "m", "execution-token.schema.json") == want
 
 
-def test_lock_rewrite_matches_the_mutated_schemas(guard: ModuleType, tmp_path: Path) -> None:
-    _apply(guard, tmp_path, "effect-intent.schema.json: drop 'tenant_id' from required + lock --write")
+def test_lock_rewrite_matches_the_mutated_schemas(tmp_path: Path) -> None:
+    _apply(tmp_path, "effect-intent.schema.json: drop 'tenant_id' from required + lock --write")
     lock = (tmp_path / "tests" / "contract" / "schema-lock.json").read_text(encoding="utf-8")
-    assert lock == guard.schema_lock.render(guard.schema_lock.build_lock(tmp_path / "schemas"))
+    assert lock == schema_lock.render(schema_lock.build_lock(tmp_path / "schemas"))
     assert "tenant_id" not in json.loads(lock)["schemas"]["effect-intent.schema.json"]["required"]["/"]
 
 
-def test_resolve_follows_json_pointer(guard: ModuleType) -> None:
+def test_resolve_follows_json_pointer() -> None:
     doc = {"a/b": {"c~d": [{"x": 1}, {"x": 2}]}}
     assert guard._resolve(doc, "/a~1b/c~0d/1/x") == 2
     assert guard._resolve(doc, "") is doc
 
 
-def test_mutations_cover_every_required_array(guard: ModuleType) -> None:
+def test_mutations_cover_every_required_array() -> None:
     names = [m.name for m in guard.mutations()]
     for path in sorted((ROOT / "schemas").glob("*.schema.json")):
         doc = json.loads(path.read_text(encoding="utf-8"))
-        for pointer in guard.schema_lock.required_map(doc):
+        for pointer in schema_lock.required_map(doc):
             assert any(n.startswith(f"{path.name}: drop ") and n.endswith(f" at {pointer}") for n in names), (
                 path.name,
                 pointer,
             )
 
 
-def test_run_contract_tests_reports_pytest_result(guard: ModuleType, tmp_path: Path) -> None:
+def test_run_contract_tests_reports_pytest_result(tmp_path: Path) -> None:
     for body, expected_ok in (("def test_a():\n    assert True\n", True), ("def test_a():\n    assert False\n", False)):
         root = tmp_path / str(expected_ok)
         (root / "tests" / "contract").mkdir(parents=True)
@@ -198,16 +193,16 @@ class FakeRunner:
         return 0 if self.applied.get(root.name) in self.survivors else 1
 
 
-def _main(guard: ModuleType, monkeypatch: pytest.MonkeyPatch, runner: FakeRunner, *argv: str) -> tuple[int, list[str]]:
+def _main(monkeypatch: pytest.MonkeyPatch, runner: FakeRunner, *argv: str) -> tuple[int, list[str]]:
     original = list(guard.mutations())
 
-    def recording() -> list[object]:
+    def recording() -> list[guard.Mutation]:
         out = []
-        for i, m in enumerate(original):
+        for m in original:
 
-            def apply(root: Path, m: object = m, i: int = i) -> None:
-                runner.applied[root.name] = m.name  # type: ignore[attr-defined]
-                m.apply(root)  # type: ignore[attr-defined]
+            def apply(root: Path, m: guard.Mutation = m) -> None:
+                runner.applied[root.name] = m.name
+                m.apply(root)
 
             out.append(guard.Mutation(m.name, apply))
         return out
@@ -218,10 +213,10 @@ def _main(guard: ModuleType, monkeypatch: pytest.MonkeyPatch, runner: FakeRunner
 
 
 def test_main_passes_when_every_mutation_is_caught(
-    guard: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     runner = FakeRunner()
-    code, _ = _main(guard, monkeypatch, runner, "--only", "invalid JSON", "--only", "schema file deleted")
+    code, _ = _main(monkeypatch, runner, "--only", "invalid JSON", "--only", "schema file deleted")
     out = capsys.readouterr().out
     assert code == 0
     assert "[caught] preview: invalid JSON" in out
@@ -230,13 +225,11 @@ def test_main_passes_when_every_mutation_is_caught(
 
 
 def test_main_fails_on_a_surviving_mutation(
-    guard: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     both = ("preview: invalid JSON", "intent-event: schema file deleted")
     runner = FakeRunner(survivors=both)
-    code, _ = _main(
-        guard, monkeypatch, runner, "--only", "invalid JSON", "--only", "schema file deleted", "--only", "objekt"
-    )
+    code, _ = _main(monkeypatch, runner, "--only", "invalid JSON", "--only", "schema file deleted", "--only", "objekt")
     cap = capsys.readouterr()
     assert code == 1
     assert "[SURVIVED] preview: invalid JSON" in cap.out
@@ -246,35 +239,35 @@ def test_main_fails_on_a_surviving_mutation(
 
 
 def test_main_fails_when_the_clean_copy_is_red(
-    guard: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code, _ = _main(guard, monkeypatch, FakeRunner(baseline_ok=False), "--only", "invalid JSON")
+    code, _ = _main(monkeypatch, FakeRunner(baseline_ok=False), "--only", "invalid JSON")
     assert code == 1
     assert capsys.readouterr().err == "FAIL: unmutated contract tests do not pass; the proof is meaningless\n"
 
 
-def test_main_runs_all_mutations_by_default(guard: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_runs_all_mutations_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = FakeRunner()
-    code, names = _main(guard, monkeypatch, runner)
+    code, names = _main(monkeypatch, runner)
     assert code == 0
     assert len(runner.calls) == len(names) + 1
 
 
 def test_main_list_prints_names_and_runs_nothing(
-    guard: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     runner = FakeRunner()
-    code, names = _main(guard, monkeypatch, runner, "--list")
+    code, names = _main(monkeypatch, runner, "--list")
     assert code == 0
     assert capsys.readouterr().out.splitlines() == names
     assert runner.calls == []
 
 
 def test_unknown_mutation_filter_is_an_error(
-    guard: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     runner = FakeRunner()
-    code, _ = _main(guard, monkeypatch, runner, "--only", "no-such-mutation")
+    code, _ = _main(monkeypatch, runner, "--only", "no-such-mutation")
     assert code == 2
     assert capsys.readouterr().err == "no mutation matched --only\n"
     assert runner.calls == []

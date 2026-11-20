@@ -161,7 +161,11 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__,  # pragma: no mutate (help text)
         formatter_class=argparse.RawDescriptionHelpFormatter,  # pragma: no mutate (help text)
     )
-    parser.add_argument("--write", action="store_true")
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="rewrite tests/contract/schema-lock.json from schemas/",  # pragma: no mutate (help text)
+    )
     args = parser.parse_args(argv)
     text = render(build_lock())
     if args.write:

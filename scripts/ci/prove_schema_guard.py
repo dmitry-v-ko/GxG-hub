@@ -180,7 +180,11 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__,  # pragma: no mutate (help text)
         formatter_class=argparse.RawDescriptionHelpFormatter,  # pragma: no mutate (help text)
     )
-    parser.add_argument("--only", action="append")
+    parser.add_argument(
+        "--only",
+        action="append",
+        help="run only mutations whose name contains this text (repeatable)",  # pragma: no mutate (help text)
+    )
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args(argv)
     selected = [m for m in mutations() if not args.only or any(o in m.name for o in args.only)]
