@@ -8,7 +8,12 @@
   "author": "Claude Code (executor, M0 cycle 2)",
   "addresses": "reports/critic/M0-cycle-1.json (score 5.0): all required_improvements, the critical and all major findings, all minor findings",
   "environment": {
-    "local": {"os": "linux x86_64", "python": "3.12.3", "uv": "0.11.32", "command": "UV_PYTHON=3.12 UV_LOCKED=1 bash scripts/ci/check-all.sh -> check-all: OK"},
+    "local": {
+      "os": "linux x86_64",
+      "python": "3.12.3",
+      "uv": "0.11.32",
+      "command": "UV_PYTHON=3.12 UV_LOCKED=1 bash scripts/ci/check-all.sh -> check-all: OK"
+    },
     "ci": {
       "runner": "ubuntu-latest",
       "python": "3.12",
@@ -20,8 +25,18 @@
     }
   },
   "contextforge_image_digest": null,
-  "sdk_versions": {"mcp": null, "fastmcp": null, "note": "M0 does not use MCP SDKs"},
-  "tool_versions": {"pytest": "9.2.0", "ruff": "0.17.6", "mypy": "2.4.1", "jsonschema": "4.26.0", "openapi-spec-validator": "0.9.0"},
+  "sdk_versions": {
+    "mcp": null,
+    "fastmcp": null,
+    "note": "M0 does not use MCP SDKs"
+  },
+  "tool_versions": {
+    "pytest": "9.2.0",
+    "ruff": "0.17.6",
+    "mypy": "2.4.1",
+    "jsonschema": "4.26.0",
+    "openapi-spec-validator": "0.9.0"
+  },
   "policy_version": null,
   "bundle_version": null,
   "fixture_identity": "none (M0 has no identity fixtures)",
@@ -52,9 +67,12 @@
     {
       "id": "AC-M0-03",
       "status": "manual_pending",
-      "expected": "A PR without an approving review cannot be merged into `main` (checked by trying)",
-      "actual": "Not configured: needs the repository owner. docs/setup/branch-protection.md now has a Preconditions section (private repo on a personal account: GitHub Free does not enforce rulesets/branch protection -> Pro, public repo or organization; single maintainer opening PRs under their own name -> mandatory approval would block every merge) and explicit variants: (a) second reviewer or machine account as PR author - full setup incl. Require review from Code Owners; (b) single maintainer - ci-ok required, CODEOWNERS present, approvals 0 with non-blocking conversation resolution, AC-M0-03 stays not met; (c) plan without protection. The choice is marked as the owner's. The probe now includes `gh pr merge --admin` and expected error texts.",
-      "evidence": ["docs/setup/branch-protection.md"]
+      "expected": "Updated AC (plan, owner decision 2026-11-20): a PR with red or unfinished `ci-ok` cannot be merged into `main`, direct push is impossible; changes to CODEOWNERS paths automatically request the owner's review. No mandatory approval. Checked by trying.",
+      "actual": "Not configured yet: needs the repository owner. docs/setup/branch-protection.md: owner's variant as the main step-by-step setup (ruleset: block force push/deletion, PR required with 0 approvals, Code Owners review off, required check `ci-ok` strict, empty bypass list); preconditions (GitHub Free does not enforce rules on a private personal repo -> Pro / public / organization); probe incl. `gh pr merge --admin`, pending ci-ok, force-push and the expected error texts; other variants briefly under 'Alternatives'.",
+      "evidence": [
+        "docs/setup/branch-protection.md"
+      ],
+      "owner_decision": "2026-11-20: ci-ok + CODEOWNERS (auto-requested review), no required approval; direct push and force-push forbidden"
     },
     {
       "id": "AC-M0-04",
@@ -69,31 +87,89 @@
     }
   ],
   "dod": [
-    {"id": "DoD-1", "status": "pending", "note": "Merge into `main` via PR with green CI is done by a human after critic review."},
-    {"id": "DoD-2", "status": "passed", "note": "AC-M0-01/02/04 automated; AC-M0-03 is [manual check]."},
-    {"id": "DoD-3", "status": "passed", "note": "This file; CI run ID above."},
-    {"id": "DoD-4", "status": "passed", "note": "Mutations: schema 59/59 (incl. lock --write), secret scanner cases, skip/xfail policy (18 cases), network guard."},
-    {"id": "DoD-5", "status": "passed", "note": "conftest.py turns red: skip marker/call, skipif(True), skip in fixture, module-level skip, importorskip (also when nothing else is collected), unittest.skip (method and class), skipTest, expectedFailure, xfail (strict or not), XPASS with strict=False and with xfail_strict=false in config. Proven by tests/ci/test_pytest_policy.py."}
+    {
+      "id": "DoD-1",
+      "status": "pending",
+      "note": "Merge into `main` via PR with green CI is done by a human after critic review."
+    },
+    {
+      "id": "DoD-2",
+      "status": "passed",
+      "note": "AC-M0-01/02/04 automated; AC-M0-03 is [manual check]."
+    },
+    {
+      "id": "DoD-3",
+      "status": "passed",
+      "note": "This file; CI run ID above."
+    },
+    {
+      "id": "DoD-4",
+      "status": "passed",
+      "note": "Mutations: schema 59/59 (incl. lock --write), secret scanner cases, skip/xfail policy (18 cases), network guard."
+    },
+    {
+      "id": "DoD-5",
+      "status": "passed",
+      "note": "conftest.py turns red: skip marker/call, skipif(True), skip in fixture, module-level skip, importorskip (also when nothing else is collected), unittest.skip (method and class), skipTest, expectedFailure, xfail (strict or not), XPASS with strict=False and with xfail_strict=false in config. Proven by tests/ci/test_pytest_policy.py."
+    }
   ],
   "tests": [
-    {"id": "tests/ci/test_check_secrets.py (43 tests, 22 new)", "status": "passed"},
-    {"id": "tests/ci/test_pytest_policy.py (18 tests, 13 new)", "status": "passed"},
-    {"id": "tests/ci/test_schema_guard.py (2 tests, subset now 7 mutations)", "status": "passed"},
-    {"id": "tests/contract/test_security_required_fields.py (6 tests, 63 subtests, new)", "status": "passed"},
-    {"id": "tests/contract/test_schema_lock.py (6 tests)", "status": "passed"},
-    {"id": "tests/contract/test_envelopes.py, test_specs.py (15 tests)", "status": "passed"},
-    {"id": "package import tests (kit, approval, gxg-policy, demo)", "status": "passed"},
-    {"id": "connectors/demo standalone: uv sync && uv run pytest (new CI step)", "status": "passed"},
-    {"id": "ruff check / ruff format --check", "status": "passed"},
-    {"id": "mypy --strict (kit, approval, scripts, conftest, tests/ci); mypy (gxg-policy, demo, tests/contract)", "status": "passed"},
-    {"id": "scripts/ci/prove_schema_guard.py (59 mutations)", "status": "passed"},
-    {"id": "scripts/ci/check_secrets.py --tree HEAD --range origin/main..HEAD", "status": "passed"}
+    {
+      "id": "tests/ci/test_check_secrets.py (43 tests, 22 new)",
+      "status": "passed"
+    },
+    {
+      "id": "tests/ci/test_pytest_policy.py (18 tests, 13 new)",
+      "status": "passed"
+    },
+    {
+      "id": "tests/ci/test_schema_guard.py (2 tests, subset now 7 mutations)",
+      "status": "passed"
+    },
+    {
+      "id": "tests/contract/test_security_required_fields.py (6 tests, 63 subtests, new)",
+      "status": "passed"
+    },
+    {
+      "id": "tests/contract/test_schema_lock.py (6 tests)",
+      "status": "passed"
+    },
+    {
+      "id": "tests/contract/test_envelopes.py, test_specs.py (15 tests)",
+      "status": "passed"
+    },
+    {
+      "id": "package import tests (kit, approval, gxg-policy, demo)",
+      "status": "passed"
+    },
+    {
+      "id": "connectors/demo standalone: uv sync && uv run pytest (new CI step)",
+      "status": "passed"
+    },
+    {
+      "id": "ruff check / ruff format --check",
+      "status": "passed"
+    },
+    {
+      "id": "mypy --strict (kit, approval, scripts, conftest, tests/ci); mypy (gxg-policy, demo, tests/contract)",
+      "status": "passed"
+    },
+    {
+      "id": "scripts/ci/prove_schema_guard.py (59 mutations)",
+      "status": "passed"
+    },
+    {
+      "id": "scripts/ci/check_secrets.py --tree HEAD --range origin/main..HEAD",
+      "status": "passed"
+    }
   ],
   "known_limitations": [
-    "AC-M0-03 cannot be met by Claude: the owner must pick variant (a)/(b)/(c) in docs/setup/branch-protection.md. With the current setup (private repo, personal account, single maintainer authoring PRs) only (b) or (c) is possible, and neither satisfies AC-M0-03.",
+    "AC-M0-03 cannot be done by Claude: the owner must apply docs/setup/branch-protection.md and run the probe. On GitHub Free the rules are not enforced for this private personal repository (Pro, public or organization needed).",
     "HISTORICAL_BLOB_ALLOWLIST pins two cycle-1 report blobs (reports/conformance/M0.json fcc7ad0, reports/critic/M0-cycle-1.json 8bcef75) that quote the AC header. Without it the PR scan of this branch would be red forever, and fixing it would require rewriting pushed history, which the process forbids. Reports from now on must not spell the header out.",
     "The secret scanner is pattern-based (names + PEM private key headers); it does not detect arbitrary API tokens. A full scanner (e.g. gitleaks) can be added later.",
     "connectors/demo tests run standalone without the root conftest policy (network guard, skip ban); the root run applies it. Stated in connectors/demo/pyproject.toml.",
-    "CODEOWNERS only takes effect when the owner enables 'Require review from Code Owners' (variant (a)); in variant (b) it is advisory."
-  ]
+    "CODEOWNERS only requests the owner's review automatically; by the owner's decision it does not block the merge."
+  ],
+  "plan": "reports/plans/M0-cycle-2.md",
+  "docs_brought_from_orchestrator": "commit 'M0: bring ponytail skills and updated plan' (.claude/skills, docs/implementation-plan-v1.md from claude/admiring-planck-vzys0x, unchanged)"
 }
