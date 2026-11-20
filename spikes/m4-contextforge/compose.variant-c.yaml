@@ -1,0 +1,11 @@
+# Overlay for ADR-0001 variant C: our tool_pre_invoke identity plugin.
+# docker compose -f compose.yaml -f compose.variant-c.yaml up -d
+services:
+  contextforge:
+    environment:
+      PLUGINS_ENABLED: "true"
+      PLUGINS_CONFIG_FILE: /run/gxg/plugins.yaml
+    volumes:
+      - ./plugin/gxg_identity:/app/plugins/gxg_identity:ro
+      - ./secrets/plugins.yaml:/run/gxg/plugins.yaml:ro
+      - ./secrets/adapter_ed25519.pem:/run/gxg/adapter_ed25519.pem:ro

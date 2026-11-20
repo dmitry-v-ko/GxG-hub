@@ -1,0 +1,5 @@
+services:
+  contextforge:
+    environment:
+      ENABLE_HEADER_PASSTHROUGH: "true"
+      DEFAULT_PASSTHROUGH_HEADERS: '["X-Tenant-Id","X-Trace-Id","X-GxG-Identity","X-Forwarded-User-Id","X-Forwarded-User-Teams","X-Forwarded-User-Admin","X-Forwarded-User-Claims-Signature","X-Forwarded-User-Groups","X-Forwarded-User-Roles"]'

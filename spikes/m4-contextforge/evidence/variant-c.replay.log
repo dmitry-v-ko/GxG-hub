@@ -1,0 +1,6 @@
+{"at": "2026-11-20T18:42:06Z", "kind": "bypass_no_identity", "status": 200}
+{"at": "2026-11-20T18:42:06Z", "captured_at": "2026-11-20T18:42:04.742954+00:00", "kind": "replay_immediate", "status": 200}
+{"at": "2026-11-20T18:42:06Z", "kind": "replay_tampered_args", "status": 200}
+{"at": "2026-11-20T18:42:06Z", "kind": "forged_jws_attacker_key", "status": 200}
+waiting 65s before delayed replay ...
+{"at": "2026-11-20T18:43:11Z", "captured_at": "2026-11-20T18:42:04.742954+00:00", "delay_s": 65, "kind": "replay_delayed", "status": 200}
