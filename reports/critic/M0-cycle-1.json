@@ -26,7 +26,7 @@
     {
       "id": "AC-M0-04",
       "status": "failed",
-      "evidence": "Ловятся: probe.pem, .env, .env.local, строка-заголовок в начале строки, заголовок+тело через \\n. НЕ ловятся (check_secrets.py --tree HEAD -> exit 0): файл `a.txt` с `KEY=\"-----BEGIN PRIVATE KEY-----MIIEvQIBADANBgkq…\"` (настоящий ключ в одну строку), `c.txt` с `PRIVATE_KEY=-----BEGIN PRIVATE KEY-----`, `d.py` с `k = '-----BEGIN PRIVATE KEY-----'`, файлы `KEY.PEM`, `server.Pem`, `.ENV`. В AC прямо названа строка `-----BEGIN PRIVATE KEY-----`, а сканер принимает файлы, которые её содержат. Исполнитель сам сузил критерий («заголовок в прозе — не ключ»), хотя процесс запрещает менять критерии молча."
+      "evidence": "Ловятся: probe.pem, .env, .env.local, строка-заголовок в начале строки, заголовок+тело через \\n. НЕ ловятся (check_secrets.py --tree HEAD -> exit 0): файл `a.txt` с `KEY=\"<PEM-заголовок BEGIN PRIVATE KEY>MIIEvQIBADANBgkq…\"` (настоящий ключ в одну строку), `c.txt` с `PRIVATE_KEY=<PEM-заголовок BEGIN PRIVATE KEY>`, `d.py` с `k = '<PEM-заголовок BEGIN PRIVATE KEY>'`, файлы `KEY.PEM`, `server.Pem`, `.ENV`. В AC прямо названа строка `<PEM-заголовок BEGIN PRIVATE KEY>`, а сканер принимает файлы, которые её содержат. Исполнитель сам сузил критерий («заголовок в прозе — не ключ»), хотя процесс запрещает менять критерии молча."
     }
   ],
   "findings": [
@@ -34,8 +34,8 @@
       "severity": "critical",
       "ref": "AC-M0-04, SEC (секреты не в коде)",
       "where": "scripts/ci/check_secrets.py:51-56 (_PEM_LINE_START/_PEM_WITH_BODY), :70-77 (fnmatchcase)",
-      "problem": "Настоящий приватный ключ проходит CI в двух распространённых видах: (1) заголовок не в начале строки и без перевода строки перед телом (`KEY=\"-----BEGIN PRIVATE KEY-----MIIE…\"`, `PRIVATE_KEY=-----BEGIN …`); (2) имя в другом регистре (`KEY.PEM`, `.ENV`). Возможна утечка секрета, AC-M0-04 не выполнен буквально.",
-      "required_improvement": "Срабатывать на любое вхождение `-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----` в любом месте файла. Исключения задать явным списком путей в скрипте (например, docs/implementation-plan-v1.md) с тестом, что вне списка тот же текст ловится. Шаблоны имён проверять без учёта регистра. Добавить в tests/ci/test_check_secrets.py кейсы: inline-ключ после `KEY=`, `KEY = '…'` в .py, `KEY.PEM`, `.ENV`, `Server.Key`."
+      "problem": "Настоящий приватный ключ проходит CI в двух распространённых видах: (1) заголовок не в начале строки и без перевода строки перед телом (`KEY=\"<PEM-заголовок BEGIN PRIVATE KEY>MIIE…\"`, `PRIVATE_KEY=<PEM-заголовок>`); (2) имя в другом регистре (`KEY.PEM`, `.ENV`). Возможна утечка секрета, AC-M0-04 не выполнен буквально.",
+      "required_improvement": "Срабатывать на любое вхождение PEM-заголовка BEGIN … PRIVATE KEY (regex по всему файлу) в любом месте файла. Исключения задать явным списком путей в скрипте (например, docs/implementation-plan-v1.md) с тестом, что вне списка тот же текст ловится. Шаблоны имён проверять без учёта регистра. Добавить в tests/ci/test_check_secrets.py кейсы: inline-ключ после `KEY=`, `KEY = '…'` в .py, `KEY.PEM`, `.ENV`, `Server.Key`."
     },
     {
       "severity": "major",
@@ -81,7 +81,7 @@
     }
   ],
   "required_improvements": [
-    "AC-M0-04: сканер ловит любое вхождение `-----BEGIN … PRIVATE KEY-----` (inline, после `KEY=`, в кавычках), исключения — только явный allowlist путей; имена `*.pem`/`*.key`/`.env*` — без учёта регистра; тесты на каждый из этих случаев, включая KEY.PEM, .ENV и inline-ключ.",
+    "AC-M0-04: сканер ловит любое вхождение PEM-заголовка BEGIN … PRIVATE KEY (inline, после `KEY=`, в кавычках), исключения — только явный allowlist путей; имена `*.pem`/`*.key`/`.env*` — без учёта регистра; тесты на каждый из этих случаев, включая KEY.PEM, .ENV и inline-ключ.",
     "DoD-5: conftest переводит в красный прогон skip на этапе сбора (module-level skip, importorskip) и любой xfail/XPASS, включая strict=False; test_pytest_policy.py покрывает эти случаи плюс unittest.skip и skipif.",
     "AC-M0-02: семантические негативные тесты security-критичных required-полей (effect-intent: idempotency_key, canonical_args_hash, tenant_id, expires_at; execution-token: jti, aud, exp, ahs), независимые от schema-lock.json и со ссылками на ID требований. HINT больше не советует --write как первое действие. CODEOWNERS для schemas/, tests/contract/, scripts/ci/.",
     "AC-M0-03: в docs/setup/branch-protection.md раздел предусловий (план GitHub для private-репозитория на личном аккаунте; второй ревьюер или автор PR не владелец; как не заблокировать все мержи при одном мейнтейнере), шаг «Require review from Code Owners», проверка `gh pr merge --admin`.",
