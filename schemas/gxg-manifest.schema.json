@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/gxg-manifest.schema.json",
+  "title": "GxG Connector Manifest v1",
+  "description": "gxg-manifest.yaml of a connector (MCC-01)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "connector",
+    "version",
+    "contract",
+    "tools"
+  ],
+  "properties": {
+    "connector": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "contract": {
+      "const": "gxg-mcp-connector/v1"
+    },
+    "tools": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version",
+          "effect_class",
+          "action",
+          "resource",
+          "input_schema"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){2}$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "effect_class": {
+            "enum": [
+              "read",
+              "write_reversible",
+              "external_effect",
+              "high_risk"
+            ]
+          },
+          "action": {
+            "enum": [
+              "read",
+              "collect",
+              "write",
+              "propose"
+            ]
+          },
+          "resource": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "scope": {
+                "enum": [
+                  "single",
+                  "list"
+                ]
+              },
+              "from_arg": {
+                "type": "string"
+              },
+              "resolve": {
+                "enum": [
+                  "arg",
+                  "backend"
+                ]
+              }
+            }
+          },
+          "approval_default": {
+            "enum": [
+              "not_required",
+              "required"
+            ]
+          },
+          "executes_via": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){2}$"
+          },
+          "dispatch_timeout_s": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600
+          },
+          "input_schema": {
+            "type": "string"
+          },
+          "output_schema": {
+            "type": "string"
+          },
+          "limits": {
+            "type": "object"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "effect_class": {
+                  "enum": [
+                    "external_effect",
+                    "high_risk"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "executes_via",
+                "approval_default"
+              ],
+              "properties": {
+                "action": {
+                  "const": "propose"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "effect_class": {
+                  "const": "read"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "read",
+                    "collect"
+                  ]
+                }
+              },
+              "not": {
+                "required": [
+                  "executes_via"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

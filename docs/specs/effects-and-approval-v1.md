@@ -75,7 +75,7 @@ sequenceDiagram
 ## Шаг 1: propose
 
 - **EFF-04.** Коннектор перед созданием intent'а проверяет identity, права principal'а на connection и ресурс и валидность аргументов по `inputSchema`, а затем канонизирует параметры.
-- **EFF-05.** Канонизация: нормализованный JSON (строки в Unicode NFC, без float для денежных сумм — целые минорные единицы или строки, вложения как SHA-256), сериализация по [RFC 8785 (JCS)](https://www.rfc-editor.org/rfc/rfc8785). Хешируется SHA-256 от `{tool_key, tool_version, tenant_id, connection_id, resource_id, args}`.
+- **EFF-05.** Канонизация: нормализованный JSON (строки в Unicode NFC, без float для денежных сумм — целые минорные единицы или строки, вложения как SHA-256), сериализация по [RFC 8785 (JCS)](https://www.rfc-editor.org/rfc/rfc8785). Хешируется SHA-256 от `{tool_key, tool_version, tenant_id, connection_id, resource_id, args}`. Float запрещены, целые — в диапазоне ±(2⁵³−1). Реализации MUST воспроизводить [тестовые векторы](../../schemas/test-vectors/canonical-hash.json).
 - **EFF-06.** Коннектор формирует `preview` — человекочитаемое представление эффекта для UI (получатель, полный текст, изменяемые поля CRM с diff). Preview строится из канонических args, а не из текста агента.
 - **EFF-07.** Intent неизменяем. Любое изменение параметров — новый intent и новое согласование.
 - **EFF-08.** Идемпотентность propose: уникальность по `(tenant_id, idempotency_key)`. Повтор с тем же хешем возвращает существующий intent, повтор с другим хешем — ошибку `conflict`. `idempotency_key` не даёт полномочий, это только ключ дедупликации. Signals передаёт `action_candidate_id:version`. Если ключ не передан, коннектор генерирует его сам, и тогда дедупликации между повторами propose нет.
@@ -84,7 +84,7 @@ Intent соответствует [effect-intent.schema.json](../../schemas/effe
 
 ## Шаг 2: политика и решение человека
 
-- **EFF-09.** Политика вычисляется в Approval Service по `tenant`, `tool`, `effect_class`, `resource`, `requester` и правилам tenant. Результат фиксируется вместе с `policy_version`. Политика может только ужесточать умолчания из таблицы выше, кроме явно разрешённых правил авто-одобрения для `external_effect`.
+- **EFF-09.** Политика вычисляется в Approval Service по `tenant`, `tool`, `effect_class`, `resource`, `requester` и правилам tenant ([формат и алгоритм](approval-policy-v1.md)). Результат фиксируется вместе с `policy_version`. Политика может только ужесточать умолчания из таблицы выше, кроме явно разрешённых правил авто-одобрения для `external_effect`.
 - **EFF-10.** Решение принимает человек с ролью `approver` в tenant intent'а. Self-approval и cross-tenant approval запрещены (SEC-07).
 - **EFF-11.** Решение привязано к `intent_id` и `canonical_args_hash` и записывается условно: только если intent всё ещё `pending_approval` (оптимистичная блокировка по версии). Устаревший экран UI не может одобрить изменившийся или уже решённый intent.
 - **EFF-12.** Для `high_risk` при включённом кворуме нужны два решения `approve` от разных людей. Одно `reject` отклоняет intent.
@@ -108,14 +108,13 @@ Intent соответствует [effect-intent.schema.json](../../schemas/effe
   1. проверить подпись токена (известный `kid`), `iss`, `aud` = свой ID, `exp`, отсутствие `jti` в локальном кеше;
   2. пересчитать хеш полученных args и сравнить с `ahs`;
   3. проверить, что `tool`, `connection`, `resource` и `tenant` из токена соответствуют его конфигурации, и что право requester'а `propose` на ресурс не отозвано по текущему grants bundle ([GR](resource-grants-v1.md));
-  4. проверить kill switch;
-  5. вызвать `POST /v1/executions/{id}/dispatch` — атомарный переход `reserved → dispatching`. Только успешный ответ разрешает обращение к провайдеру;
-  6. вызвать провайдера один раз, передав `idempotency_key`, если провайдер поддерживает идемпотентность.
-- **EFF-19.** Коннектор возвращает результат по [effect-result.schema.json](../../schemas/effect-result.schema.json). Executor записывает его через `complete`.
+  4. вызвать `POST /v1/executions/{id}/dispatch` — атомарный переход `reserved → dispatching`, внутри которого Approval Service проверяет и kill switch (AS-05). Только успешный ответ разрешает обращение к провайдеру;
+  5. вызвать провайдера один раз, передав `idempotency_key`, если провайдер поддерживает идемпотентность.
+- **EFF-19.** Коннектор возвращает результат по [effect-result.schema.json](../../schemas/effect-result.schema.json). Executor записывает результат (переходы T11–T13 в [Approval Service](approval-service-v1.md#статусы-intentа-и-переходы)).
 
 ### Execution token
 
-JWS (EdDSA/Ed25519), compact serialization, `typ: gxg-exec+jwt`.
+JWS (EdDSA/Ed25519), compact serialization, `typ: gxg-exec+jwt`. Claims: [execution-token.schema.json](../../schemas/execution-token.schema.json). Ключи и ротация — AS-09…AS-11.
 
 | Claim | Значение |
 | --- | --- |
@@ -137,18 +136,22 @@ JWS (EdDSA/Ed25519), compact serialization, `typ: gxg-exec+jwt`.
 
 ## Состояния intent'а
 
+Полная таблица переходов (кто, при каком условии, с какими побочными эффектами) — [Approval Service → T1…T18](approval-service-v1.md#статусы-intentа-и-переходы). Обзор:
+
 ```text
-pending_approval ──approve──> approved ──reserve──> reserved ──dispatch──> dispatching
-      │                          │                     │                    │
-      ├─reject──> rejected       ├─cancel/expire──> cancelled/expired       ├─> succeeded
-      ├─expire──> expired        │                     │                    ├─> failed_before_effect ──(retry ≤ N)──> reserved
-      └─cancel──> cancelled      │                     └─lease─> approved*  └─> outcome_unknown ──reconcile──> reconciled_succeeded
-                                                                                                           └──> reconciled_failed
+                    ┌─reject──> rejected
+                    ├─expire──> expired
+                    ├─cancel──> cancelled
+pending_approval ───┤
+                    └─approve─> approved ──reserve──> executing ──> succeeded
+                                  ▲  │                  │  │
+                  lease без       │  ├─expire──> expired│  ├─failed_before_effect, попытки кончились ──> failed
+                  dispatch,       │  └─cancel──> cancelled  │
+                  failed_before_  └─────────────────────┘  └─outcome_unknown ──reconcile──> reconciled_succeeded
+                  effect с запасом попыток                                            └──> reconciled_failed
 ```
 
-\* Резервирование без `dispatch` по истечении lease возвращается в `approved`: провайдер не вызывался, так что это безопасно.
-
-- **EFF-22.** Авто-одобренный intent переходит сразу в `approved`.
+- **EFF-22.** Авто-одобренный intent создаётся сразу в статусе `approved`.
 - **EFF-23.** `failed_before_effect` ставится только при доказательстве, что провайдер не получил запрос: ошибка до отправки или явный отказ провайдера без эффекта. Повтор допустим не более `max_attempts` раз (по умолчанию 3) в пределах окна исполнения, с новым `execution_id` и тем же `idempotency_key`.
 - **EFF-24.** Таймаут, обрыв или падение после `dispatch` дают `outcome_unknown`. Автоматического повтора нет.
 - **EFF-25.** Reconciliation: Executor вызывает `reconcile` коннектора (поиск операции у провайдера по `idempotency_key` или `provider_operation_id`). Если провайдер не позволяет проверить, intent остаётся `outcome_unknown` и показывается в UI для ручного разбора. Человек отмечает исход с обоснованием.
@@ -161,28 +164,28 @@ pending_approval ──approve──> approved ──reserve──> reserved ─
 | --- | --- | --- |
 | Ожидание решения (`pending_approval` → `expired`) | 24 ч | Политика tenant/tool |
 | Окно исполнения после одобрения | 1 ч | Политика |
-| Lease резервирования | 5 мин | Конфигурация Executor |
+| Lease резервирования (reserve → dispatch) | 60 с | Конфигурация Executor |
+| Lease исполнения (dispatch → результат) | `dispatch_timeout_s` tool'а + 30 с (по умолчанию 90 с) | Manifest коннектора |
 | Срок execution token | 60 с | Конфигурация Executor |
 | `max_attempts` для `failed_before_effect` | 3 | Политика tool |
 
 ## Уведомление requester'а
 
-- **EFF-28.** Источник истины — `effects.status`. Бизнес-сервис MAY подписаться на подписанные webhooks смены статуса (dedupe по `intent_id` + `status`), но MUST уметь восстанавливаться опросом.
+- **EFF-28.** Источник истины — `effects.status`. Бизнес-сервис MAY подписаться на подписанные webhooks смены статуса (подпись и dedupe по `event_id` — AS-21…AS-23), но MUST уметь восстанавливаться опросом.
 - **EFF-29.** MCP-вызов `propose` возвращается сразу. Hub не держит соединение в ожидании человека.
 
-## Внутренний API Approval Service
+## Preview
 
-| Endpoint | Кто вызывает | Назначение |
-| --- | --- | --- |
-| `POST /v1/intents` | Коннектор (service auth + identity requester'а) | Создать intent или вернуть существующий |
-| `GET /v1/intents/{id}` | ContextForge → `effects.status`, UI | Статус и результат с проверкой tenant и роли |
-| `POST /v1/intents/{id}/cancel` | Requester через `effects.cancel`, approver | Отмена до `reserved` |
-| `POST /v1/intents/{id}/decisions` | Backend Web UI (сессия человека) | Approve/reject с условием по версии |
-| `POST /v1/executions/{id}/dispatch` | Коннектор (по execution token) | Атомарный CAS `reserved → dispatching` |
-| `POST /v1/executions/{id}/complete` | Executor | Зафиксировать результат |
-| `GET /v1/switches` | Коннектор, Executor | Состояние kill switch |
+Preview — то, что видит человек перед решением. Это ключевая точка защиты от подмены смысла, поэтому формат строгий: [preview.schema.json](../../schemas/preview.schema.json).
 
-Это проектный контракт. OpenAPI появится вместе с реализацией.
+- **EFF-30.** Preview строит коннектор детерминированно из канонических args и данных backend'а (например, название чата по ID). Заголовок и подписи полей берутся из manifest, значения — из args.
+- **EFF-31.** UI выводит все значения как **plain text**: без markdown и HTML, без автоссылок. Длинный текст показывается полностью (с прокруткой), без обрезания.
+- **EFF-32.** UI делает видимыми невидимые и опасные символы: управляющие bidi (U+202A–U+202E, U+2066–U+2069), нулевой ширины (U+200B–U+200D, U+FEFF), прочие управляющие. Они показываются как отмеченные коды `⟦U+202E⟧`, а их наличие добавляет предупреждение.
+- **EFF-33.** Под preview всегда доступны канонические args как есть (JSON). Если они противоречат preview, это ошибка коннектора и повод отклонить заявку.
+
+## Внутренний API и реализация
+
+Модель данных, переходы, API, аутентификация сервисов, UI, бот, webhooks, хранение и администрирование — в [Approval Service v1](approval-service-v1.md). Политика согласования и квоты — в [Политика согласования v1](approval-policy-v1.md).
 
 ## Связь с Signals
 
@@ -190,5 +193,4 @@ pending_approval ──approve──> approved ──reserve──> reserved ─
 
 ## Схемы
 
-Уже есть: [effect-intent](../../schemas/effect-intent.schema.json), [effect-result](../../schemas/effect-result.schema.json).
-Нужно добавить: `execution-token.schema.json` (claims), `intent-status.schema.json` (ответ `effects.status`), `approval-decision.schema.json`.
+[effect-intent](../../schemas/effect-intent.schema.json), [effect-result](../../schemas/effect-result.schema.json), [intent-create](../../schemas/intent-create.schema.json), [intent-status](../../schemas/intent-status.schema.json), [approval-decision](../../schemas/approval-decision.schema.json), [execution-token](../../schemas/execution-token.schema.json), [execute-request](../../schemas/execute-request.schema.json), [reconcile-result](../../schemas/reconcile-result.schema.json), [intent-event](../../schemas/intent-event.schema.json), [preview](../../schemas/preview.schema.json), [approval-policy](../../schemas/approval-policy.schema.json). Тестовые векторы канонизации (EFF-05): [canonical-hash.json](../../schemas/test-vectors/canonical-hash.json).

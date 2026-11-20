@@ -12,6 +12,8 @@
 - [Security](docs/specs/security-v1.md) — identity, границы доверия, сеть, секреты, kill switch.
 - [Эффекты и согласование](docs/specs/effects-and-approval-v1.md) — `propose` → решение человека (бот + Web UI) → Executor с одноразовым токеном.
 - [Права на ресурсы](docs/specs/resource-grants-v1.md) — RID, grants в Git (`policies/tenants/`), подписанный bundle.
+- [Политика согласования](docs/specs/approval-policy-v1.md) — авто-одобрение, кворум, запреты, квоты.
+- [Approval Service](docs/specs/approval-service-v1.md) — модель данных, переходы, API, UI, бот, webhooks.
 - [MCP Connector Contract](docs/specs/mcp-connector-contract-v1.md) — обязательный стандарт коннекторов.
 - [MCP Toolkit](docs/specs/mcp-toolkit-v1.md) — шаблоны, генератор, общий набор тестов.
 - [Reference-коннектор `demo`](docs/specs/demo-connector-v1.md) — эталон и мишень для тестов.
@@ -22,9 +24,10 @@
 ## Структура
 
 - `docs/specs/` — нормативные спеки.
-- `schemas/` — JSON Schema доменных envelopes (не замена MCP wire protocol).
+- `schemas/` — JSON Schema, OpenAPI внутреннего API, тестовые векторы канонизации (не замена MCP wire protocol).
+- `docs/adr/` — решения, принимаемые по итогам экспериментов.
 - `tests/contract/` — schema smoke-тесты (не end-to-end проверка безопасности).
-- `policies/` — модель доступа, без секретов.
+- `policies/` — grants, политики согласования, реестр платформы (примеры, без секретов).
 - `connectors/` — каталог коннекторов и их статус. Коннекторы пока не реализованы.
 - `compose.yaml`, `.env.example` — локальный dev-стенд ContextForge.
 

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/execution-token.schema.json",
+  "title": "GxG Execution Token Claims v1",
+  "description": "JWS payload (EdDSA, typ gxg-exec+jwt). See effects-and-approval-v1.md#execution-token",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "iss",
+    "aud",
+    "sub",
+    "jti",
+    "ten",
+    "req",
+    "tool",
+    "con",
+    "res",
+    "ahs",
+    "idk",
+    "iat",
+    "exp"
+  ],
+  "properties": {
+    "iss": {
+      "const": "gxg-executor"
+    },
+    "aud": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "sub": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "jti": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "ten": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "req": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "tool": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]+@[0-9A-Za-z.+-]+$"
+    },
+    "con": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "res": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "ahs": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "idk": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 256
+    },
+    "iat": {
+      "type": "integer"
+    },
+    "exp": {
+      "type": "integer"
+    }
+  }
+}

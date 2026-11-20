@@ -50,7 +50,7 @@ MCP — протокол обнаружения и вызова. Этот док
 
 **MCC-01 — Discovery, версии, manifest.**
 - Каждый tool MUST иметь стабильное уникальное имя, описание, типизированную `inputSchema` и, если это совместимо с закреплённой версией MCP SDK, `outputSchema`.
-- Коннектор MUST иметь manifest (`gxg-manifest.yaml`) со списком tools. Для каждого tool указываются версия (semver), effect class, действие и тип ресурса ([GR](resource-grants-v1.md#действия)), approval policy по умолчанию, лимиты и ссылки на схемы.
+- Коннектор MUST иметь manifest (`gxg-manifest.yaml`, схема [gxg-manifest.schema.json](../../schemas/gxg-manifest.schema.json)) со списком tools. Для каждого tool указываются версия (semver), effect class, действие и тип ресурса ([GR](resource-grants-v1.md#действия)), approval policy по умолчанию, лимиты и ссылки на схемы.
 - Breaking change — новая major-версия tool'а. Старая версия поддерживается до явного вывода.
 
 **MCC-02 — Identity.**
@@ -70,7 +70,7 @@ MCP — протокол обнаружения и вызова. Этот док
 - Секреты и внутренние идентификаторы провайдера не возвращаются.
 
 **MCC-05 — Ошибки.**
-- Коды из словаря выше передаются в стабильном машиночитаемом виде. Tool-ошибки возвращаются как MCP tool error (`isError: true`) со `structuredContent` `{code, message, retryable, details?}`. Протокольные ошибки MCP используются только для протокольных проблем.
+- Коды из словаря выше передаются в стабильном машиночитаемом виде ([error.schema.json](../../schemas/error.schema.json)). Tool-ошибки возвращаются как MCP tool error (`isError: true`) со `structuredContent` `{code, message, retryable, details?}`. Протокольные ошибки MCP используются только для протокольных проблем.
 - `timeout_before_start` — только при доказательстве отсутствия запроса к провайдеру.
 - `outcome_unknown` никогда не помечается как `retryable`.
 
@@ -80,7 +80,7 @@ MCP — протокол обнаружения и вызова. Этот док
 
 **MCC-07 — Эффекты.**
 - Tools с классом `external_effect` и `high_risk` публикуются только как `propose`.
-- Коннектор реализует внутренние `execute` и `reconcile` по [Эффекты и согласование](effects-and-approval-v1.md) (EFF-04…EFF-08, EFF-18, EFF-19, EFF-25).
+- Коннектор реализует внутренние `execute` и `reconcile` по [Эффекты и согласование](effects-and-approval-v1.md) (EFF-04…EFF-08, EFF-18, EFF-19, EFF-25, EFF-30) и HTTP-контракту AS-12…AS-14 из [Approval Service](approval-service-v1.md#контракт-коннектора-для-executorа).
 - `write_reversible` вызывается напрямую, но требует `idempotency_key`, проверки ресурса и аудита.
 
 **MCC-08 — Надёжность, стоимость, аудит.**

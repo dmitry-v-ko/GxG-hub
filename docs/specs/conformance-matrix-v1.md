@@ -1,6 +1,6 @@
 # GxG Hub — Conformance & Security Test Matrix v1
 
-**Статус:** обязательный план приёмки. Сейчас существуют только JSON Schema smoke-тесты (`tests/contract/test_envelopes.py`). Все остальные тесты — **not_run**.
+**Статус:** обязательный план приёмки. Сейчас существуют только проверки спецификационных артефактов (`tests/contract/`). Все остальные тесты — **not_run**.
 
 ## Локальные schema smoke-тесты
 
@@ -9,7 +9,7 @@ python -m pip install -r tests/contract/requirements.txt
 python -m unittest discover -s tests/contract -p 'test_*.py' -v
 ```
 
-Они проверяют только примеры доменных envelopes, но не MCP-сервер, аутентификацию, права или runtime-безопасность.
+Они проверяют валидность всех JSON Schema, примеры политик, manifest и реестра, запрещённые значения, тестовые векторы канонизации и OpenAPI внутреннего API. Но не MCP-сервер, аутентификацию, права или runtime-безопасность.
 
 ## Матрица
 
@@ -50,6 +50,14 @@ python -m unittest discover -s tests/contract -p 'test_*.py' -v
 | EX-14 | C | Права requester'а на ресурс отозваны между approve и execute | Отказ на execute | EFF-18 |
 | EX-15 | C | Подделанный callback или webhook бота; кнопка в боте | Бот не может одобрить | EFF-13 |
 | EX-16 | C | Approval Service недоступен во время propose / execute | Propose возвращает ошибку, intent не создан; execute не идёт без `dispatch` | EFF-18 |
+| EX-17 | C | Превышение квот `propose`; повторные срабатывания у одного агента | `rate_limited`, intent не создан, approver'у ничего не пришло; alert | AP-05…AP-07 |
+| EX-18 | C | Вычисление политики: deny + auto, require + auto, исчерпанный лимит auto, auto для `high_risk` | Решение по AP-01, AP-02; лимит → человеку, а не отказ | AP-01…AP-04 |
+| EX-19 | C | Preview с HTML, markdown, bidi-символами, символами нулевой ширины, очень длинным текстом | Всё выводится как текст, невидимые символы видны, предупреждение, нет обрезания | EFF-30…EFF-33, AS-15 |
+| EX-20 | C | Webhook: неверная подпись, старый `t`, повтор `event_id`; недоступный получатель | Отклонено получателем; повторная доставка с backoff, затем `dead` и alert | AS-21…AS-23 |
+| EX-21 | C | Service JWT: чужой ключ, чужой `aud`, коннектор не из реестра для tenant'а | 401/403; intent не создан, `dispatch` не разрешён | AS-06, AS-25, SEC-24 |
+| EX-22 | C | Канонизация: тестовые векторы в Python и в каждой другой реализации; float, большие целые | Совпадение байт и хеша; `invalid_input` для запрещённых значений | EFF-05 |
+| EX-23 | C | Lease без `dispatch`, просроченный dispatch lease, исчерпание `max_attempts` | T10, T14, T12 → `failed`; попытки считаются только после `dispatch` | AS-03, T7…T14 |
+| EX-24 | C | Ротация ключа executor'а; удаление скомпрометированного `kid`; расхождение часов 4 с и 10 с | Плавная ротация; старые токены отклоняются; 4 с проходит, 10 с — нет | AS-09…AS-11 |
 
 ### Контракт
 
@@ -70,6 +78,8 @@ python -m unittest discover -s tests/contract -p 'test_*.py' -v
 | OPS-01 | E | Рестарт всех сервисов с intents в `pending_approval`, `reserved`, `dispatching` | Восстановление или reconcile без повторной отправки |
 | OPS-02 | E | Изменение политики, отзыв агента, ротация ключа подписи | Действует немедленно; изменение в аудите; alert на ослабление |
 | OPS-03 | F | Backup/restore Approval Service | Состояния intents восстановлены; повторных исполнений нет |
+| OPS-04 | F | Очистка payload через срок; восстановление из бэкапа старше срока хранения | Args и preview удалены; бэкапы старше 35 дней отсутствуют | RET-01…RET-04 |
+| OPS-05 | F | Изменения в `audit_events` от роли приложения | Запрещены правами БД | AS-02 |
 
 ## Фиксация результатов
 

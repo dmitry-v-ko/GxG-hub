@@ -8,7 +8,7 @@
 
 - **Python:** [FastMCP](https://gofastmcp.com/), версия закреплена lockfile'ом каждого коннектора.
 - **TypeScript:** официальный MCP TypeScript SDK для существующих TS-сервисов. Переписывать их на Python не нужно.
-- **Общая библиотека `gxg-connector-kit`** (тонкая, Python): проверка identity claims, `GrantResolver` и загрузка подписанного grants bundle ([Права на ресурсы](resource-grants-v1.md)), проверка execution token, канонизация и хеш (EFF-05), клиент Approval Service, envelope ошибок, редакция логов. Только то, что иначе дублировалось бы в каждом коннекторе и где ошибка = дыра в безопасности. Для TS — эквивалентный минимальный пакет, когда появится первый TS-коннектор с эффектами.
+- **Общая библиотека `gxg-connector-kit`** (тонкая, Python): `IdentityVerifier` → `VerifiedIdentity` ([ADR-0001](../adr/0001-identity-propagation.md)), service JWT (AS-06), `GrantResolver` и загрузка подписанного grants bundle ([Права на ресурсы](resource-grants-v1.md)), проверка execution token, канонизация и хеш (EFF-05), клиент Approval Service, envelope ошибок, редакция логов. Только то, что иначе дублировалось бы в каждом коннекторе и где ошибка = дыра в безопасности. Для TS — эквивалентный минимальный пакет, когда появится первый TS-коннектор с эффектами.
 
 Эталон, из которого делается шаблон, — [reference-коннектор `demo`](demo-connector-v1.md).
 

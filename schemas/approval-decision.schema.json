@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/approval-decision.schema.json",
+  "title": "GxG Approval Decision v1",
+  "description": "A recorded decision (human or policy). EFF-10..EFF-12",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision_id",
+    "intent_id",
+    "tenant_id",
+    "decided_by",
+    "decision",
+    "decided_at",
+    "intent_version",
+    "canonical_args_hash"
+  ],
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "intent_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "decided_by": {
+      "type": "string",
+      "pattern": "^(oidc:\\S+|policy:[a-z0-9_-]+@\\S+)$"
+    },
+    "decision": {
+      "enum": [
+        "approve",
+        "reject"
+      ]
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "intent_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "canonical_args_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "step_up": {
+      "type": "boolean"
+    },
+    "comment": {
+      "type": "string",
+      "maxLength": 500
+    }
+  }
+}

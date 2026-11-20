@@ -1,0 +1,135 @@
+{
+  "description": "EFF-05 canonicalization vectors: NFC-normalize strings, forbid floats, serialize with RFC 8785 (JCS), SHA-256 of UTF-8 bytes. Array order is significant. Implementations in every language MUST reproduce 'canonical' and 'sha256' exactly.",
+  "invalid_inputs": [
+    {
+      "name": "float_forbidden",
+      "input": {
+        "args": {
+          "amount": 19.99
+        }
+      },
+      "expected_error": "invalid_input"
+    },
+    {
+      "name": "int_out_of_safe_range",
+      "input": {
+        "args": {
+          "n": 9007199254740993
+        }
+      },
+      "expected_error": "invalid_input"
+    }
+  ],
+  "vectors": [
+    {
+      "name": "basic",
+      "input": {
+        "tool_key": "demo.message.propose",
+        "tool_version": "1.0.0",
+        "tenant_id": "t-alpha",
+        "connection_id": "demo-main",
+        "resource_id": "demo:demo-main/board/a-public",
+        "args": {
+          "recipient": "alice_01",
+          "text": "Привет!"
+        }
+      },
+      "canonical": "{\"args\":{\"recipient\":\"alice_01\",\"text\":\"Привет!\"},\"connection_id\":\"demo-main\",\"resource_id\":\"demo:demo-main/board/a-public\",\"tenant_id\":\"t-alpha\",\"tool_key\":\"demo.message.propose\",\"tool_version\":\"1.0.0\"}",
+      "sha256": "5a814cc6cf39e4cbb5aa28bf29a977b9aade33274955751825c17f1b92061c59"
+    },
+    {
+      "name": "key_order_irrelevant",
+      "input": {
+        "args": {
+          "text": "Привет!",
+          "recipient": "alice_01"
+        },
+        "resource_id": "demo:demo-main/board/a-public",
+        "connection_id": "demo-main",
+        "tenant_id": "t-alpha",
+        "tool_version": "1.0.0",
+        "tool_key": "demo.message.propose"
+      },
+      "canonical": "{\"args\":{\"recipient\":\"alice_01\",\"text\":\"Привет!\"},\"connection_id\":\"demo-main\",\"resource_id\":\"demo:demo-main/board/a-public\",\"tenant_id\":\"t-alpha\",\"tool_key\":\"demo.message.propose\",\"tool_version\":\"1.0.0\"}",
+      "sha256": "5a814cc6cf39e4cbb5aa28bf29a977b9aade33274955751825c17f1b92061c59"
+    },
+    {
+      "name": "nfc_normalization",
+      "input": {
+        "tool_key": "demo.message.propose",
+        "tool_version": "1.0.0",
+        "tenant_id": "t-alpha",
+        "connection_id": "demo-main",
+        "resource_id": "demo:demo-main/board/a-public",
+        "args": {
+          "recipient": "alice_01",
+          "text": "Café и ë"
+        }
+      },
+      "canonical": "{\"args\":{\"recipient\":\"alice_01\",\"text\":\"Café и ë\"},\"connection_id\":\"demo-main\",\"resource_id\":\"demo:demo-main/board/a-public\",\"tenant_id\":\"t-alpha\",\"tool_key\":\"demo.message.propose\",\"tool_version\":\"1.0.0\"}",
+      "sha256": "1321201a16bdcbaa685abc22334c73a23255ff5fa8a33d92e2462410f276bb10"
+    },
+    {
+      "name": "escapes_and_control",
+      "input": {
+        "tool_key": "demo.message.propose",
+        "tool_version": "1.0.0",
+        "tenant_id": "t-alpha",
+        "connection_id": "demo-main",
+        "resource_id": "demo:demo-main/board/a-public",
+        "args": {
+          "recipient": "alice_01",
+          "text": "line1\nline2\t\"q\" \\ ‮RTL"
+        }
+      },
+      "canonical": "{\"args\":{\"recipient\":\"alice_01\",\"text\":\"line1\\nline2\\t\\\"q\\\" \\\\ ‮RTL\"},\"connection_id\":\"demo-main\",\"resource_id\":\"demo:demo-main/board/a-public\",\"tenant_id\":\"t-alpha\",\"tool_key\":\"demo.message.propose\",\"tool_version\":\"1.0.0\"}",
+      "sha256": "f5b11714783ce29cc35e1e11e662c36c9d434e6ec293249aaf7b04946daba29a"
+    },
+    {
+      "name": "amount_minor_units",
+      "input": {
+        "tool_key": "crm.deal.propose_update",
+        "tool_version": "1.0.0",
+        "tenant_id": "t-alpha",
+        "connection_id": "crm-main",
+        "resource_id": "crm:crm-main/account/42",
+        "args": {
+          "deal_id": "d-7",
+          "amount_minor": 1999000,
+          "currency": "RUB",
+          "expected_version": 12,
+          "close": false,
+          "note": null
+        }
+      },
+      "canonical": "{\"args\":{\"amount_minor\":1999000,\"close\":false,\"currency\":\"RUB\",\"deal_id\":\"d-7\",\"expected_version\":12,\"note\":null},\"connection_id\":\"crm-main\",\"resource_id\":\"crm:crm-main/account/42\",\"tenant_id\":\"t-alpha\",\"tool_key\":\"crm.deal.propose_update\",\"tool_version\":\"1.0.0\"}",
+      "sha256": "326386f2d35ca9fdfc27237813d0a0ab37e07ba7717ef91902349b8d6feff2fb"
+    },
+    {
+      "name": "nested_and_arrays",
+      "input": {
+        "tool_key": "demo.message.propose",
+        "tool_version": "1.0.0",
+        "tenant_id": "t-beta",
+        "connection_id": "demo-main",
+        "resource_id": "demo:demo-main/board/b-ops",
+        "args": {
+          "recipient": "bob_02",
+          "text": "x",
+          "attachments": [
+            {
+              "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "name": "b.pdf"
+            },
+            {
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "name": "a.pdf"
+            }
+          ]
+        }
+      },
+      "canonical": "{\"args\":{\"attachments\":[{\"name\":\"b.pdf\",\"sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"},{\"name\":\"a.pdf\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}],\"recipient\":\"bob_02\",\"text\":\"x\"},\"connection_id\":\"demo-main\",\"resource_id\":\"demo:demo-main/board/b-ops\",\"tenant_id\":\"t-beta\",\"tool_key\":\"demo.message.propose\",\"tool_version\":\"1.0.0\"}",
+      "sha256": "d7b0e3e26cc2a5a74079755e9d6c1822dfd93ad61d7ef9a29701b1ff9c60eed3"
+    }
+  ]
+}

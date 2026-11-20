@@ -4,10 +4,13 @@
 
 Права агентов на ресурсы хранятся в `policies/tenants/<tenant>.yaml` по [модели прав на ресурсы](../docs/specs/resource-grants-v1.md). Пример: [tenants/example.yaml](tenants/example.yaml).
 
-Здесь же будут храниться остальные политики без секретов:
+| Каталог | Что | Спека | Пример |
+| --- | --- | --- | --- |
+| `tenants/` | Grants: connections, principals, группы, права на ресурсы | [resource-grants](../docs/specs/resource-grants-v1.md) | [example.yaml](tenants/example.yaml) |
+| `approval/` | Политика согласования и квоты | [approval-policy](../docs/specs/approval-policy-v1.md) | [example.yaml](approval/example.yaml) |
+| `platform/` | Реестр сервисов и webhooks | [approval-service](../docs/specs/approval-service-v1.md#реестр-платформы) | [registry.example.yaml](platform/registry.example.yaml) |
 
-- правила `unified_pdp` для ContextForge (tool-level RBAC по tenant и агенту, постоянный запрет `*.execute` для агентов);
-- политики согласования для Approval Service (по tenant, tool, effect class, правила авто-одобрения).
+Всё это собирается в один подписанный bundle (GR-11). Правила `unified_pdp` для ContextForge (tool-level RBAC, постоянный запрет `*.execute` для агентов) появятся здесь по итогам спайка [ADR-0001](../docs/adr/0001-identity-propagation.md).
 
 ## Пример для первого пилота (tenant оператора)
 

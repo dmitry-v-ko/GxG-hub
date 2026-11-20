@@ -93,10 +93,10 @@ Fallback `index → scan` только при `temporarily_unavailable` или `
 
 | Endpoint | Назначение |
 | --- | --- |
-| `POST /internal/v1/demo.message.execute` | Тело — канонические args, `Authorization: Bearer <execution token>`. Проверки EFF-18, затем вызов fake provider |
-| `POST /internal/v1/demo.message.reconcile` | Тело `{ intent_id, idempotency_key }` → `succeeded` / `failed_before_effect` / `outcome_unknown` по журналу fake provider |
+| `POST /internal/v1/execute/demo.message.execute` | Service JWT executor'а + [execute-request](../../schemas/execute-request.schema.json). Проверки EFF-18, `dispatch`, затем вызов fake provider → [effect-result](../../schemas/effect-result.schema.json) |
+| `POST /internal/v1/reconcile/demo.message.execute` | Service JWT executor'а + `{intent_id, execution_id, idempotency_key}` → [reconcile-result](../../schemas/reconcile-result.schema.json) по журналу fake provider |
 
-Форматы тел запросов и ответов задаются вместе с внутренним API Approval Service (следующая спека). До неё ориентир — [effect-result.schema.json](../../schemas/effect-result.schema.json).
+Коды ответов и поведение при ошибках — AS-12…AS-14 в [Approval Service](approval-service-v1.md#контракт-коннектора-для-executorа). Manifest `demo` — [пример](../../schemas/examples/demo.gxg-manifest.yaml).
 
 ## Fake provider
 

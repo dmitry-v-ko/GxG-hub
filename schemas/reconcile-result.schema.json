@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/reconcile-result.schema.json",
+  "title": "GxG Reconcile Result v1",
+  "description": "Response of POST /internal/v1/reconcile/{execute_tool} (EFF-25)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent_id",
+    "execution_id",
+    "finding"
+  ],
+  "properties": {
+    "intent_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "execution_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "finding": {
+      "enum": [
+        "executed",
+        "not_executed",
+        "unknown"
+      ]
+    },
+    "provider_operation_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "provider_receipt_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    },
+    "evidence": {
+      "type": "string",
+      "maxLength": 1000
+    }
+  }
+}

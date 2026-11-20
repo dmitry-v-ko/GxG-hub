@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/platform-registry.schema.json",
+  "title": "GxG Platform Registry v1",
+  "description": "Services allowed to call internal APIs and webhook subscribers. Part of the signed policy bundle (AS-06, AS-21, AS-25).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "services"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "services": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "public_key",
+          "tenants"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{1,62}$"
+          },
+          "kind": {
+            "enum": [
+              "connector",
+              "executor",
+              "approval_api",
+              "approval_mcp"
+            ]
+          },
+          "public_key": {
+            "type": "string",
+            "pattern": "^ed25519:[A-Za-z0-9_-]{43}$",
+            "description": "base64url raw 32-byte Ed25519 public key"
+          },
+          "tenants": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^([a-z0-9][a-z0-9_-]{0,62}|\\*)$"
+            }
+          },
+          "internal_url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/\\S*)?$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "connector"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "internal_url"
+              ],
+              "properties": {
+                "tenants": {
+                  "items": {
+                    "not": {
+                      "const": "*"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "webhooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "tenant",
+          "url",
+          "secret_ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{1,62}$"
+          },
+          "tenant": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/\\S*)?$"
+          },
+          "secret_ref": {
+            "type": "string",
+            "pattern": "^secret://\\S+$"
+          },
+          "business_task_prefix": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      }
+    }
+  }
+}

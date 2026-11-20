@@ -10,10 +10,10 @@
 | --- | --- | --- | --- |
 | **A. Спеки и схемы** | Согласованные спеки, JSON Schema, smoke-тесты в CI | Schema smoke | Нет |
 | **B. Read-only PoC** | ContextForge (pinned digest, PostgreSQL) с двумя tenant'ами и двумя агентами в каждом; reference FastMCP-коннектор; KB через ContextForge после gap-аудита | SC-01…10, MC-01…04 | Только синтетические |
-| **C. Effect sandbox** | Approval Service + Executor + Web UI + notify-бот; `gxg-connector-kit`; тестовый `demo.message.propose` на fake provider | EX-01…16, MC-05 | Синтетические |
+| **C. Effect sandbox** | Approval Service + Executor + Web UI + notify-бот; `gxg-connector-kit`; тестовый `demo.message.propose` на fake provider | EX-01…24, MC-05 | Синтетические |
 | **D. Реальные чтения и Signals** | Telegram read-only (разрешённые чаты); Signals собирает через Hub и вызывает `propose` на fake provider | SI-01, SI-02 и повтор B на реальных коннекторах | Реальные, в пределах выданных прав |
 | **E. Первый реальный эффект** | `telegram.message.propose` включён для одного tenant'а и узкого allowlist'а чатов, только с решением человека | OPS-01, OPS-02, повтор EX на реальном коннекторе | Реальные |
-| **F. Production-кандидат** | Мониторинг, backup/restore, incident response, ротация секретов, политика хранения аудита, процедура изменений; клиенты-tenant'ы | OPS-03, полный прогон | Реальные |
+| **F. Production-кандидат** | Мониторинг, backup/restore, incident response, ротация секретов, политика хранения аудита, процедура изменений; клиенты-tenant'ы | OPS-03…05, полный прогон | Реальные |
 
 После F: CRM, публикации, A2A-исполнители.
 
@@ -22,10 +22,10 @@
 - [x] Переписанные спеки (этот набор).
 - [x] [Модель прав на ресурсы](resource-grants-v1.md) + `resource-grants.schema.json` + пример.
 - [x] [Спека reference-коннектора `demo`](demo-connector-v1.md).
-- [ ] Спайк ContextForge: механизм identity к коннектору, формат principal ID, teams, `unified_pdp`; результат — в [Security](security-v1.md) вместо VERIFY.
-- [ ] Внутренний API Approval Service: модель данных, таблица переходов, OpenAPI, execute/reconcile, аутентификация сервисов.
-- [ ] Формат политики согласования, формат `preview`, лимиты на `propose`, срок хранения args.
-- [ ] Схемы `execution-token`, `intent-status`, `approval-decision`, `error`, `gxg-manifest`.
+- [ ] Спайк ContextForge по [ADR-0001](../adr/0001-identity-propagation.md): механизм identity, формат principal ID, teams, `unified_pdp`. Это работа на стенде, а не документ: итог записывается в ADR и [Security](security-v1.md). Блокирует подключение коннекторов через ContextForge, но не их локальную разработку.
+- [x] [Approval Service](approval-service-v1.md): модель данных, переходы T1–T18, [OpenAPI](../../schemas/approval-service.openapi.yaml), execute/reconcile, service JWT, UI, бот, webhooks, хранение, администрирование, метрики.
+- [x] [Политика согласования](approval-policy-v1.md), квоты `propose`, формат `preview` (EFF-30…33).
+- [x] Схемы `execution-token`, `intent-status`, `intent-create`, `approval-decision`, `execute-request`, `reconcile-result`, `intent-event`, `preview`, `error`, `gxg-manifest`, `approval-policy`, `platform-registry`; тестовые векторы канонизации.
 - [ ] CI (GitHub Actions): schema smoke-тесты, lint и diff-отчёт grants (GR-09).
 
 ## Этап B — критерии приёмки PoC

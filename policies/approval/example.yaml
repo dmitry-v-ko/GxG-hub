@@ -1,0 +1,35 @@
+# Example approval policy (synthetic). Format: docs/specs/approval-policy-v1.md
+tenant: t-alpha
+schema_version: 1
+
+defaults:
+  approval_ttl: 24h
+  execution_window: 1h
+
+quotas:
+  propose_per_requester_per_hour: 30
+  pending_per_requester_max: 20
+  pending_per_tenant_max: 100
+
+rules:
+  - id: tg-partner-auto
+    description: "Short replies to the partner chat without human approval"
+    match:
+      tools: [telegram.message.propose]
+      resources: [telegram:tg-main/chat/-1009876543210]
+      requesters: [agent:t-alpha:signals-actions]
+    decision: auto_approve
+    limits: { max_per_hour: 10, max_per_day: 50 }
+
+  - id: crm-two-person
+    match:
+      tools: [crm.deal.propose_update]
+    decision: require_approval
+    approvals: 2
+    step_up: true
+    approval_ttl: 4h
+
+  - id: no-broadcast
+    match:
+      tools: [telegram.broadcast.propose]
+    decision: deny

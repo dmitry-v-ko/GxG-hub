@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/intent-status.schema.json",
+  "title": "GxG Intent Status v1",
+  "description": "Response of effects.status and GET /v1/intents/{id}; never contains args, preview or tokens",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent_id",
+    "tenant_id",
+    "tool_key",
+    "status",
+    "version",
+    "created_at",
+    "expires_at"
+  ],
+  "properties": {
+    "intent_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "tool_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "business_task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "status": {
+      "enum": [
+        "pending_approval",
+        "approved",
+        "executing",
+        "succeeded",
+        "failed",
+        "outcome_unknown",
+        "reconciled_succeeded",
+        "reconciled_failed",
+        "rejected",
+        "expired",
+        "cancelled"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "required_approvals",
+        "received_approvals"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "human",
+            "auto",
+            "not_required"
+          ]
+        },
+        "required_approvals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "received_approvals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "rule_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "execution_deadline": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "result": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "effect-result.schema.json"
+        }
+      ]
+    }
+  }
+}
