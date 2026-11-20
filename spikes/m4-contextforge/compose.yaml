@@ -17,10 +17,10 @@ services:
   echo:
     # Same pinned image as ContextForge: its Python has PyJWT + cryptography for the variant C verifier.
     image: ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5
-    entrypoint: ["python3", "-I", "/app/echo_mcp.py", "9000"]
+    entrypoint: ["/app/.venv/bin/python3", "-I", "/echo/echo_mcp.py", "9000"]
     user: "0:0"  # writes the log into the host's secrets/raw
     volumes:
-      - ./echo:/app:ro
+      - ./echo:/echo:ro  # not /app: that would hide the image's /app/.venv
       - ./secrets/raw:/data
     # Published on loopback only to run the "bypass ContextForge" attack (criterion 2).
     ports: ["127.0.0.1:9000:9000"]
