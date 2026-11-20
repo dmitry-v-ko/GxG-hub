@@ -40,3 +40,5 @@
 | M2 | 2 | критик | claude/m2-policy-tooling | fbd522a | — | запущен | 2026-11-20 |
 | M4 | 1 | критик | claude/m4-contextforge-spike | 0130d78 (отчёт 77d04f6) | **8.0** | < 9: 3× major (fail closed плагина не работает, JWS не привязан к tool + jti per-process, пробел мутаций aud) → цикл 2 | 2026-11-20 |
 | M4 | 2 | исполнитель | claude/m4-contextforge-spike | — | — | запущен (session_01V6d5A5ydmWfpBpGhdwffAc) | 2026-11-20 |
+| — | — | процесс | — | — | — | Ponytail обязателен для любой оценки; критик без ponytail-review → отчёт не принимается | 2026-11-20 |
+| A | — | ponytail-audit | claude/m0-foundation | 6b3fe48 | — | запуск аудита этапа A (пропущен при закрытии M0) | 2026-11-20 |
