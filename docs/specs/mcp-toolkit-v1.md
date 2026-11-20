@@ -1,6 +1,6 @@
 # MCP Connector Toolkit v1 — целевой стандарт разработки
 
-Статус: **план/требования; генератор, шаблоны и тесты ещё не созданы**.
+Статус: **план/требования; генератор и MCP-интеграционный стенд ещё не созданы**. Первые JSON Schema и локальные schema smoke-тесты существуют, но не заменяют полноценные security/conformance tests.
 
 ## Цель
 
@@ -34,6 +34,12 @@ docs/specs/                  # нормативные требования
 
 Генератор SHOULD создавать: typed input/output schema, читаемую документацию и metadata sidecar, заготовку FastMCP или TS SDK, локальный test fixture, health/readiness, structured errors, auth/scope hooks (fail-closed), bounded result/pagination, config example без секретов, Dockerfile, автоматические тесты и **отключённый** пример регистрации в ContextForge. Генератор не должен создавать реальные credentials, сам выдавать permissions или разворачивать в production.
 
+## Действующие заготовки
+
+- `schemas/search-result.schema.json`, `schemas/effect-intent.schema.json`, `schemas/effect-result.schema.json` — структурированные доменные envelopes (не новый MCP wire protocol).
+- `tests/contract/test_envelopes.py` — schema smoke tests, запуск: `python -m pip install -r tests/contract/requirements.txt && python -m unittest discover -s tests/contract -v`.
+- [Conformance Matrix](conformance-matrix-v1.md) — отдельные **пока не реализованные** end-to-end security и approval сценарии, которые должны проверяться с работающими ContextForge и fake-provider.
+
 ## Общий conformance-набор
 
 1. MCP negotiate/discover/invoke + JSON Schema, версии.
@@ -49,11 +55,11 @@ docs/specs/                  # нормативные требования
 
 ## Этапы
 
-P0. Исправить небезопасный/устаревший образ ContextForge в Compose до запуска.
+P0. Удалить prerelease из Compose (**сделано**); проверить `1.1.1` на локальном стенде, выбрать поддерживаемый безопасный релиз, закрепить неизменяемый digest, затем доказать security gate и identity перед доступом к персональным данным.
 P1. Создать минимальный read-only reference на FastMCP.
 P2. Создать conformance tests и CLI-генератор.
 P3. Аудит/возможный wrapper готового GxG KB MCP.
 P4. Telegram read-only, Signals collection + action port.
-P5. Встроить Action Gate / отдельный Approval Service и UI, доказать end-to-end enforcement; только после этого эффекты, затем A2A.
+P5. Проверить `tool_pre_invoke` в fail-closed режиме как Action Gate и его покрытие на каждом пути, реализовать отдельный Approval Service с atomic reservation и UI. Только после [security/conformance tests](conformance-matrix-v1.md) включать effects, затем A2A.
 
 Подробный стандарт: [MCP Connector Contract](mcp-connector-contract-v1.md).
