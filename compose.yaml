@@ -1,8 +1,11 @@
 # Local development ONLY. Do not expose directly to the internet.
-# ContextForge is used as an external, pinned OCI dependency, not forked.
+# ContextForge is used as an external OCI dependency, not forked.
+# Default image removed deliberately: no accidental fallback to insecure prerelease.
+# DEV-ONLY: a release tag in .env is NOT an immutable digest or production approval.
+# Effects are NOT enabled by this Compose; Action Gate/identity PoC is separate.
 services:
   contextforge:
-    image: ${CONTEXTFORGE_IMAGE:-ghcr.io/ibm/mcp-context-forge:1.0.0-RC-3}
+    image: ${CONTEXTFORGE_IMAGE:?Set CONTEXTFORGE_IMAGE to an audited, patched release in .env}
     restart: unless-stopped
     ports:
       - "127.0.0.1:4444:4444"
@@ -11,6 +14,9 @@ services:
       PORT: "4444"
       APP_DOMAIN: "http://localhost:4444"
       AUTH_REQUIRED: "true"
+      # Default deny: no effects or identity propagation until the trusted security PoC.
+      IDENTITY_PROPAGATION_ENABLED: "false"
+      PLUGINS_ENABLED: "false"
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
       AUTH_ENCRYPTION_SECRET: ${AUTH_ENCRYPTION_SECRET:?Set AUTH_ENCRYPTION_SECRET in .env}
       JWT_AUDIENCE: "mcpgateway-api"
