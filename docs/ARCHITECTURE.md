@@ -1,6 +1,8 @@
 # GxG Hub — архитектурные границы
 
-**Статус:** проектное решение, не свидетельство реализованных функций.
+**Статус:** обзор, не свидетельство реализации. **Нормативные спецификации:** [Target Platform](specs/target-platform-v1.md), [MCP Connector Contract](specs/mcp-connector-contract-v1.md), [Toolkit](specs/mcp-toolkit-v1.md), [Service Integration](specs/service-integration-v1.md).
+
+**Уточнение решения:** ContextForge не форкаем и не копируем — только официальный version-pinned образ. Для новых Python-коннекторов используем FastMCP, для действующих TypeScript — официальный MCP SDK. Внутренний выбор реализации и технический fallback у domain MCP-коннектора. Signals остаётся отдельным бизнес-процессом: первый вызов ContextForge при сборе, второй — для действий по ActionCandidate. Шаблон MCP и conformance suite пока **цель**, а не готовые программы.
 
 ## Компоненты
 
