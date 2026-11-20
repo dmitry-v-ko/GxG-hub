@@ -115,6 +115,11 @@ name = "gxg-connector-demo"
 version = "0.0.0"
 source = { editable = "connectors/demo" }
 
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.3,<10" }]
+
 [[package]]
 name = "gxg-connector-kit"
 version = "0.0.0"

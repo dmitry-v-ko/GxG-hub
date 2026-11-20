@@ -3,13 +3,15 @@
 
 Checks, for every file it is asked to look at:
 
-* file name: ``*.pem``, ``*.key``, ``*.p12``, ``*.pfx``, ``.env``, ``.env.*``
-  (except ``.env.example``) and default SSH private key names;
-* content: a PEM private key header (``-----BEGIN ... PRIVATE KEY-----``) that
-  starts a line, or that is directly followed by key material (e.g. a key
-  pasted into a JSON/YAML string as ``"-----BEGIN...-----\\nMIIE..."``).
-  A header merely quoted inside prose (as in the implementation plan) is not
-  key material and is not reported.
+* file name, case-insensitively: ``*.pem``, ``*.key``, ``*.p12``, ``*.pfx``,
+  ``.env``, ``.env.*`` (except ``.env.example``) and default SSH private key
+  names (so ``KEY.PEM``, ``Server.Key`` and ``.ENV`` are rejected too);
+* content: ANY occurrence of a PEM private key header
+  (five dashes, ``BEGIN``, optional words, ``PRIVATE KEY``) anywhere in the file: at the start of a
+  line, inline after ``KEY=``, inside quotes, in source code, in prose.
+  The only exceptions are the paths listed in ``CONTENT_ALLOWLIST`` (normative
+  documents that must quote the header literally); the same text anywhere else
+  is reported.
 
 Modes (combinable):
 
@@ -26,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import hashlib
 import re
 import subprocess
 import sys
@@ -47,11 +50,32 @@ FORBIDDEN_NAME_PATTERNS: tuple[str, ...] = (
 )
 ALLOWED_NAMES: frozenset[str] = frozenset({".env.example"})
 
-_PEM_HEADER = r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----"
-# Header at the start of a line (real PEM files, heredocs, multi-line strings).
-_PEM_LINE_START = re.compile(rf"(?m)^[ \t]*{_PEM_HEADER}")
-# Header followed by key material, separated by a newline or an escaped "\n".
-_PEM_WITH_BODY = re.compile(rf"{_PEM_HEADER}(?:\r?\n|(?:\\r)?\\n)[ \t]*[A-Za-z0-9+/=]{{16,}}")
+# Exact repository paths whose content may contain the PEM header text.
+# Keep this list minimal; every entry needs a reason. File-name rules still apply.
+CONTENT_ALLOWLIST: dict[str, str] = {
+    "docs/implementation-plan-v1.md": "AC-M0-04 quotes the header literally; the plan must not be edited",
+}
+
+# Exact historical file versions (path + Git blob SHA-1) that quote the header in prose.
+# They are already in the pushed history of this branch, which must not be rewritten,
+# so a PR scan (`--range`) would otherwise stay red forever. Any other content at the
+# same path, including the next edit of the same file, is scanned normally.
+HISTORICAL_BLOB_ALLOWLIST: dict[tuple[str, str], str] = {
+    (
+        "reports/conformance/M0.json",
+        "fcc7ad045456b4ada7d9752fa4d2f1719dbd0d86",
+    ): "M0 cycle 1 report (commit 9d34699) quotes AC-M0-04; no key material",
+    (
+        "reports/critic/M0-cycle-1.json",
+        "8bcef7589e7d3b0ba8f446e22ef01e0109f3e794",
+    ): "M0 cycle 1 critic report (commit 3182606) quotes AC-M0-04; no key material",
+}
+
+# Any PEM private key header: five dashes, BEGIN, zero or more words (RSA, EC, DSA,
+# OPENSSH, ENCRYPTED, PGP, ...), PRIVATE KEY. Trailing dashes are not required; case
+# and runs of spaces/tabs are ignored. (This file never spells a header out, so it
+# is scanned like any other file.)
+_PEM_PRIVATE_KEY = re.compile(r"-----[ \t]*BEGIN[ \t]+(?:[A-Z0-9]+[ \t]+)*PRIVATE[ \t]+KEY", re.IGNORECASE)
 
 ZERO_SHA = "0" * 40
 
@@ -71,15 +95,25 @@ def name_rule(path: str) -> str | None:
     if name in ALLOWED_NAMES:
         return None
     for pattern in FORBIDDEN_NAME_PATTERNS:
-        if fnmatch.fnmatchcase(name, pattern):
+        if fnmatch.fnmatchcase(name.lower(), pattern):
             return f"forbidden file name pattern {pattern!r}"
     return None
 
 
-def content_rule(data: bytes) -> str | None:
-    text = data.decode("utf-8", errors="replace")
-    if _PEM_LINE_START.search(text) or _PEM_WITH_BODY.search(text):
-        return "PEM private key block"
+def git_blob_sha(data: bytes) -> str:
+    """The SHA-1 Git uses as the blob id of ``data`` (``git hash-object``)."""
+    return hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False).hexdigest()
+
+
+def content_rule(data: bytes, path: str = "") -> str | None:
+    if path in CONTENT_ALLOWLIST or (path, git_blob_sha(data)) in HISTORICAL_BLOB_ALLOWLIST:
+        return None
+    # UTF-16/32 text would hide the ASCII header; scan the common encodings.
+    texts = [data.decode("utf-8", errors="replace")]
+    if b"\0" in data:
+        texts += [data.decode(enc, errors="replace") for enc in ("utf-16-le", "utf-16-be")]
+    if any(_PEM_PRIVATE_KEY.search(t) for t in texts):
+        return "PEM private key header"
     return None
 
 
@@ -89,7 +123,7 @@ def check_file(rev: str, path: str, data: bytes | None) -> list[Finding]:
     if rule:
         findings.append(Finding(rev, path, rule))
     if data is not None:
-        rule = content_rule(data)
+        rule = content_rule(data, path)
         if rule:
             findings.append(Finding(rev, path, rule))
     return findings

@@ -1,0 +1,17 @@
+# Code owners (AC-M0-02, AC-M0-03). With "Require review from Code Owners"
+# enabled in the `main` ruleset, a PR touching these paths needs the owner's
+# approval. See docs/setup/branch-protection.md.
+
+# Normative schemas and their guards: weakening a schema needs a security review.
+/schemas/                @dmitry-v-ko
+/tests/contract/         @dmitry-v-ko
+
+# CI, secret scanning, schema lock tooling and the pytest policy.
+/scripts/ci/             @dmitry-v-ko
+/tests/ci/               @dmitry-v-ko
+/.github/                @dmitry-v-ko
+/conftest.py             @dmitry-v-ko
+
+# Specs and the plan (acceptance criteria).
+/docs/specs/             @dmitry-v-ko
+/docs/implementation-plan-v1.md @dmitry-v-ko

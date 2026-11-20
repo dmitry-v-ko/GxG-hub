@@ -11,3 +11,13 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "demo_connector"
+
+[dependency-groups]
+# Standalone `uv run pytest` inside connectors/demo. The repository-wide policy
+# (no network, no skip/xfail) applies when tests run from the repository root.
+dev = ["pytest>=8.3,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+xfail_strict = true

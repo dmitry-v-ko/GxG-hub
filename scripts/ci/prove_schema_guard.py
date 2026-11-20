@@ -12,7 +12,10 @@ applies one mutation at a time and runs ``pytest tests/contract`` there.
 Mutations: the AC example (``required`` deleted from ``effect-intent``), one
 field dropped from every ``required`` array of every schema,
 ``additionalProperties: false`` relaxed, a pattern loosened, an enum widened,
-invalid JSON, a meta-schema violation, a deleted schema, a broken OpenAPI file.
+invalid JSON, a meta-schema violation, a deleted schema, a broken OpenAPI file,
+and a security-critical field dropped from ``required`` together with a
+regenerated lock (``schema_lock.py --write``): the lock-independent tests in
+``tests/contract/test_security_required_fields.py`` must still fail.
 
     uv run python scripts/ci/prove_schema_guard.py [--only NAME ...] [--list]
 """
@@ -90,6 +93,19 @@ def _set(pointer: str, key: str, value: Json) -> Callable[[Json], None]:
     return change
 
 
+def _with_lock_rewrite(mutate: Mutate) -> Mutate:
+    def apply(root: Path) -> None:
+        mutate(root)
+        subprocess.run(
+            [sys.executable, str(root / "scripts" / "ci" / "schema_lock.py"), "--write"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+
+    return apply
+
+
 def mutations() -> Iterator[Mutation]:
     yield Mutation(
         "effect-intent: delete top-level required (AC-M0-02 example)",
@@ -106,6 +122,18 @@ def mutations() -> Iterator[Mutation]:
             yield Mutation(
                 f"{path.name}: drop {field!r} from required at {pointer}",
                 _edit_json(path.name, _drop_required(pointer, field)),
+            )
+    # The critic's scenario: drop a security-critical field AND regenerate the lock,
+    # as an agent reacting to a red CI might. The semantic tests must still fail.
+    critical = {
+        "effect-intent.schema.json": ("idempotency_key", "canonical_args_hash", "tenant_id", "expires_at"),
+        "execution-token.schema.json": ("jti", "aud", "exp", "ahs"),
+    }
+    for name, crit_fields in critical.items():
+        for crit in crit_fields:
+            yield Mutation(
+                f"{name}: drop {crit!r} from required + lock --write",
+                _with_lock_rewrite(_edit_json(name, _drop_required("", crit))),
             )
     yield Mutation(
         "execution-token: additionalProperties false -> true",

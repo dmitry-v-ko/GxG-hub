@@ -13,6 +13,7 @@ uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/t
 uv run mypy tools/gxg-policy/src tools/gxg-policy/tests connectors/demo/src connectors/demo/tests tests/contract
 uv run pytest
 uv run python scripts/ci/schema_lock.py
+(cd connectors/demo && uv sync --locked && uv run pytest -q)
 uv run python scripts/ci/prove_schema_guard.py
 uv run python scripts/ci/check_secrets.py --tree HEAD
 echo "check-all: OK"

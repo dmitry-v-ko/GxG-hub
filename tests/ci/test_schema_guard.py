@@ -18,6 +18,8 @@ SUBSET = [
     "invalid JSON",
     "schema file deleted",
     "openapi.yaml",
+    "drop 'idempotency_key' from required + lock --write",
+    "drop 'jti' from required + lock --write",
 ]
 
 

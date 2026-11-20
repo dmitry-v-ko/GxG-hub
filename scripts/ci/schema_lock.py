@@ -13,9 +13,15 @@ Schemas) is locked by the SHA-256 of its parsed content.
 
 ``tests/contract/test_schema_lock.py`` fails when a schema no longer matches
 the lock, so any normative schema change (and any deleted or added schema)
-turns CI red until the lock is regenerated in the same PR, deliberately:
+turns CI red until the lock is regenerated in the same PR, deliberately and
+only after the spec in ``docs/specs/`` that calls for the change is updated
+(weakening needs a CODEOWNERS security review):
 
     uv run python scripts/ci/schema_lock.py --write
+
+Regenerating the lock does not silence
+``tests/contract/test_security_required_fields.py``: security-critical fields
+are pinned there independently of the lock.
 
 Wording-only changes to titles and descriptions do not touch the lock.
 """
@@ -138,7 +144,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {LOCK.relative_to(ROOT)}")
         return 0
     if not LOCK.exists() or LOCK.read_text(encoding="utf-8") != text:
-        print("schema lock is out of date: run `uv run python scripts/ci/schema_lock.py --write`", file=sys.stderr)
+        print(
+            "schema lock is out of date. First make sure docs/specs/ calls for this schema change "
+            "(change the spec first, CODEOWNERS review for any weakening); only then run "
+            "`uv run python scripts/ci/schema_lock.py --write`.",
+            file=sys.stderr,
+        )
         return 1
     print("schema lock is up to date")
     return 0

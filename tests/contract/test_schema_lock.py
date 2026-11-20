@@ -12,9 +12,13 @@ ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS = ROOT / 'schemas'
 LOCK = Path(__file__).with_name('schema-lock.json')
 HINT = (
-    'Schema differs from tests/contract/schema-lock.json. If the change is intended and reviewed '
-    '(weakening `required` or `additionalProperties` needs a security review), run '
-    '`uv run python scripts/ci/schema_lock.py --write` and commit the lock.'
+    'Schema differs from tests/contract/schema-lock.json. Do NOT start by regenerating the lock. '
+    '1) Find the requirement in docs/specs/ that this schema change implements; if the spec does not '
+    'call for it, revert the schema change. 2) If the spec must change, change the spec first in the '
+    'same PR (weakening `required`, `additionalProperties`, a pattern or an enum needs a security '
+    'review by CODEOWNERS). 3) Only then refresh the lock with '
+    '`uv run python scripts/ci/schema_lock.py --write`. Security-critical fields are also guarded by '
+    'tests/contract/test_security_required_fields.py, which the lock does not affect.'
 )
 
 

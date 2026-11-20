@@ -13,7 +13,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded runs on feature branches are cancelled; runs on main always finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   UV_PYTHON: "3.12"
@@ -70,6 +71,9 @@ jobs:
         run: uv sync && uv run pytest
       - name: Schema lock is current
         run: uv run python scripts/ci/schema_lock.py
+      - name: connectors/demo tests from its own lockfile
+        working-directory: connectors/demo
+        run: uv sync && uv run pytest
 
   schema-guard:
     # AC-M0-02: proves that every schema mutation turns the contract tests red.
@@ -108,7 +112,18 @@ jobs:
           if [ "$EVENT" = "pull_request" ]; then
             python scripts/ci/check_secrets.py --range "$PR_BASE..$PR_HEAD"
           elif [ "$EVENT" = "push" ]; then
-            python scripts/ci/check_secrets.py --range "${PUSH_BEFORE:-0000000000000000000000000000000000000000}..$PUSH_AFTER"
+            ZERO=0000000000000000000000000000000000000000
+            BEFORE="${PUSH_BEFORE:-$ZERO}"
+            if [ "$BEFORE" != "$ZERO" ] && ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              # Force-push: the old tip is not in the clone. Scan everything not yet in main.
+              echo "::notice::push.before $BEFORE is not reachable (force-push?); scanning origin/main..$PUSH_AFTER instead"
+              if git rev-parse --verify -q origin/main >/dev/null; then
+                BEFORE=origin/main
+              else
+                BEFORE=$ZERO
+              fi
+            fi
+            python scripts/ci/check_secrets.py --range "$BEFORE..$PUSH_AFTER"
           else
             python scripts/ci/check_secrets.py --range "0000000000000000000000000000000000000000..HEAD"
           fi
@@ -118,6 +133,7 @@ jobs:
     if: always()
     needs: [lint, types, tests, schema-guard, secrets]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: All jobs succeeded
         env:
