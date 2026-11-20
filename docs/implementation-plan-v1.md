@@ -1,0 +1,309 @@
+# GxG Hub — план реализации v1
+
+**Статус:** план, работы не начаты. 2026-11-20.
+Детализирует этапы A–F из [Roadmap](specs/roadmap-v1.md) до вех (M0–M14). Требования — в [спеках](specs/README.md), тесты — в [Conformance Matrix](specs/conformance-matrix-v1.md).
+
+## Как читать критерии приёмки
+
+Каждый критерий (`AC-Mx-NN`) объективен: это команда или сценарий с наблюдаемым результатом, который либо выполнен, либо нет. Формулировки вида «работает корректно» не используются.
+
+**Общие условия закрытия любой вехи (DoD):**
+1. Код в `main` через PR, CI зелёный.
+2. Все критерии вехи выполнены автоматическими тестами, кроме явно помеченных **[ручная проверка]**.
+3. Отчёт о прогоне закоммичен в `reports/conformance/<веха>.json`: commit, digest ContextForge (если участвует), версии SDK, `bundle_version`, ID тестов со статусами `passed`/`failed`, время. Формат — раздел «Фиксация результатов» Conformance Matrix.
+4. Тест, упомянутый в критерии, существует в репозитории и падает, если сломать проверяемое поведение (проверяется на ревью: мутация одного условия → тест красный).
+5. Ни один тест не пропущен (`skip`) и не помечен как ожидаемо падающий.
+
+**Оценки** — грубые, в днях одного разработчика с AI-ассистентом, для планирования, не обязательство.
+
+## Граф зависимостей
+
+```mermaid
+flowchart LR
+  M0[M0 Основа и CI] --> M1[M1 connector-kit]
+  M0 --> M2[M2 Policy tooling]
+  M0 --> M4[M4 Спайк ContextForge]
+  M1 --> M3[M3 demo read-only]
+  M2 --> M3
+  M3 --> M5[M5 Read-only PoC через ContextForge]
+  M4 --> M5
+  M5 --> M6[M6 KB]
+  M1 --> M7[M7 Approval core]
+  M2 --> M7
+  M7 --> M8[M8 Executor + execute]
+  M3 --> M8
+  M7 --> M9[M9 Web UI + бот]
+  M8 --> M10[M10 Webhooks и эксплуатация]
+  M9 --> M10
+  M5 --> M11[M11 Telegram read-only]
+  M10 --> M12[M12 Signals]
+  M11 --> M12
+  M12 --> M13[M13 Первый реальный эффект]
+  M13 --> M14[M14 Production-кандидат]
+```
+
+**Критический путь:** M0 → M1 → M7 → M8 → M10 → M12 → M13 → M14.
+**Параллельно:** M4 (спайк) сразу после M0; M2 — параллельно M1; M9 — параллельно M8.
+
+| Веха | Этап | Оценка, дней | Зависит от |
+| --- | --- | --- | --- |
+| M0 Основа и CI | A | 2 | — |
+| M1 `gxg-connector-kit` | B | 6–8 | M0 |
+| M2 Policy tooling | B | 4–5 | M0 |
+| M3 `demo` read-only | B | 4–5 | M1, M2 |
+| M4 Спайк ContextForge | B | 3 (timebox) | M0 |
+| M5 Read-only PoC через ContextForge | B | 4–6 | M3, M4 |
+| M6 KB | B | 3–8 | M5 |
+| M7 Approval Service core | C | 8–10 | M1, M2 |
+| M8 Executor и исполнение | C | 7–9 | M3, M7 |
+| M9 Web UI и бот | C | 8–10 | M7 |
+| M10 Webhooks и эксплуатация | C | 5–6 | M8, M9 |
+| M11 Telegram read-only | D | 5–7 | M5 |
+| M12 Signals | D | 5–7 | M10, M11 |
+| M13 Первый реальный эффект | E | 3 + 14 пилот | M12 |
+| M14 Production-кандидат | F | 8–10 | M13 |
+
+---
+
+## Этап A
+
+### M0 — основа репозитория и CI
+
+**Делаем:** Python-workspace (uv, lockfile), структура `packages/gxg-connector-kit`, `approval/`, `connectors/demo/`, `tools/gxg-policy/`; ruff + mypy (strict для `gxg-connector-kit` и `approval/`); GitHub Actions: lint, типы, `tests/contract`, unit-тесты всех пакетов; защита `main` (обязательный CI и ревью).
+
+| ID | Критерий |
+| --- | --- |
+| AC-M0-01 | `uv sync && uv run pytest` в чистом клоне проходит без сетевого доступа, кроме реестра пакетов |
+| AC-M0-02 | PR, ломающий любую JSON Schema (например, удаление `required` в `effect-intent`), получает красный CI и не может быть смержен |
+| AC-M0-03 | PR без одобряющего ревью не может быть смержен в `main` (проверяется попыткой) **[ручная проверка]** |
+| AC-M0-04 | CI отклоняет коммит с файлом, совпадающим с шаблонами секретов (`*.pem`, `.env`, строка `-----BEGIN PRIVATE KEY-----`) |
+
+---
+
+## Этап B — read-only
+
+### M1 — `gxg-connector-kit`
+
+**Делаем:** модули `canonical` (EFF-05), `errors` (error.schema), `svc_jwt` (AS-06), `exec_token` (EFF-18 п.1, AS-09…AS-11), `grants` (`GrantResolver`, загрузка и проверка подписи bundle, GR-11…GR-17), `identity` (интерфейс `IdentityVerifier`, тестовый issuer, ADR-0001), `redact` (SEC-18), `readiness`.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M1-01 | `canonical.hash()` воспроизводит все 6 векторов `canonical-hash.json` побайтно и по SHA-256; оба `invalid_inputs` дают `invalid_input` |
+| AC-M1-02 | Property-тест (≥ 1000 случайных JSON без float): перестановка ключей и NFD↔NFC не меняют хеш; изменение любого значения меняет хеш |
+| AC-M1-03 | Верификатор execution token отклоняет каждый из 9 случаев: чужая подпись, неизвестный `kid`, `iss` ≠ `gxg-executor`, `aud` ≠ свой ID, `exp` в прошлом > 5 с, `iat` в будущем > 5 с, отсутствующий обязательный claim, `alg` ≠ `EdDSA` (включая `none`), повтор `jti` в локальном кеше. Валидный токен принимается; расхождение часов 4 с — принимается |
+| AC-M1-04 | Service JWT: те же 9 случаев плюс `iss`, отсутствующий в реестре платформы → отклонено |
+| AC-M1-05 | `GrantResolver.check` на `policies/tenants/example.yaml`: таблица из ≥ 20 кейсов (разрешённый ресурс, маска `*`, чужой connection, чужой tenant, истёкший grant, группа, действие не из grant'а) — все ожидаемые allow/deny совпадают |
+| AC-M1-06 | Bundle с изменённым байтом, без подписи или подписанный чужим ключом → загрузчик возвращает ошибку, `readiness()` = not ready |
+| AC-M1-07 | Bundle с `built_at` старше 24 ч → not ready (GR-13) |
+| AC-M1-08 | `redact` удаляет из лог-записи поля `text`, `body`, `query`, `args`, `token`, `authorization` и значения, совпадающие с шаблонами JWT, на наборе из ≥ 15 примеров |
+| AC-M1-09 | Покрытие ветвей модулей `exec_token`, `svc_jwt`, `grants`, `canonical`, `identity` ≥ 90 % |
+
+### M2 — policy tooling (`gxg-policy`)
+
+**Делаем:** CLI `gxg-policy validate | lint | diff | build | verify` для `policies/` (grants, approval, platform); job в CI с публикацией diff-отчёта в PR; подпись bundle ключом CI из secrets.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M2-01 | `gxg-policy validate policies/` проходит на примерах репозитория |
+| AC-M2-02 | `lint` находит каждую из ≥ 12 заранее подготовленных ошибок (fixtures `tools/gxg-policy/tests/bad/`): висячий subject, principal чужого tenant'а, RID не того домена, маска уровня connection, дубль `id`, `auto_approve` для tool класса `high_risk`, approver без роли `approver`, пустое пересечение `approvers`, `approval_ttl` больше умолчания, коннектор с `tenants: ["*"]`, webhook на не-HTTPS URL, credential без `secret://` — и для каждой выдаёт ненулевой код выхода с указанием файла и пути |
+| AC-M2-03 | `diff base head` выдаёт отчёт, где добавленная пара (subject, action, resource) и новое `auto_approve` помечены `widening`, удалённые — `narrowing`. Проверяется на 6 fixtures-парах с эталонными отчётами |
+| AC-M2-04 | PR с `widening` без ревью второго человека (не автора) не мержится (GR-10) **[ручная проверка: настройка CODEOWNERS/правила]** |
+| AC-M2-05 | `build` детерминирован: два запуска на одном commit дают побайтно одинаковый bundle (без учёта подписи и `built_at`) |
+| AC-M2-06 | `verify` принимает bundle, собранный `build`, и отклоняет его после изменения одного байта |
+
+### M3 — коннектор `demo`, read-only, локально
+
+**Делаем:** по [demo-connector-v1](specs/demo-connector-v1.md): `demo.boards.list`, `demo.notes.search` (index/scan, fallback), `demo.note.get`; fixtures двух tenant'ов; тестовый issuer; `/healthz`, `/readyz`; Dockerfile.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M3-01 | `docker build` + `docker run` → `/readyz` = 200 с валидным bundle и 503 без него |
+| AC-M3-02 | MCP-клиент (официальный SDK) получает список из 3 tools (без `propose` до M8); схемы входа/выхода совпадают с файлами в `connectors/demo/schemas/` (MC-01, локально) |
+| AC-M3-03 | `agent:t-alpha:reader` в `demo.boards.list` видит ровно `a-public`, `a-sales`; `agent:t-alpha:nobody` — пустой список; `agent:t-beta:reader` — ровно `b-public`, `b-ops` |
+| AC-M3-04 | `demo.notes.search` с запросом, совпадающим с заметками во всех 5 досках: для `t-alpha:reader` все результаты только из `a-public`/`a-sales`; `items`, `next_cursor` и `partial_reasons` не меняются при добавлении в fixtures совпадающих заметок в `a-secret` (GR-16, SC-10) |
+| AC-M3-05 | `demo.note.get` для заметки из `a-secret` и для заметки `t-beta` от `t-alpha:reader` → `not_found`, ответ побайтно одинаков для «нет прав» и «не существует» (SC-05) |
+| AC-M3-06 | Вызов с `tenant_id`, `agent_id` в аргументах, в заголовках `X-Tenant-Id`, `X-Forwarded-User`, в `_meta` не меняет результат относительно вызова без них (SC-03) |
+| AC-M3-07 | Вызов без identity, с identity от чужого issuer'а, с истёкшей или повторённой → `unauthenticated`, счётчик обращений к backend = 0 (SC-04) |
+| AC-M3-08 | При `POST /_test/index/fail` поиск возвращает результат методом `scan` (`partial_reasons` пуст, есть маркер метода в логах); при валидном пустом результате `index` метод `scan` не вызывается (счётчик = 0) (MC-02) |
+| AC-M3-09 | После 100 вызовов всех tools в логах и ответах нет строки `DEMO_PROVIDER_TOKEN` и её значения, нет текстов заметок в логах (SC-09) |
+| AC-M3-10 | Поиск по заметке с prompt injection возвращает её как данные; в журнале fake provider и Approval Service нет записей (SC-08) |
+| AC-M3-11 | Production-профиль с включённым тестовым issuer'ом или `DEMO_TEST_CONTROLS=1` не стартует (код выхода ≠ 0) |
+
+### M4 — спайк ContextForge (timebox 3 дня)
+
+**Делаем:** протокол из [ADR-0001](adr/0001-identity-propagation.md) на закреплённом digest ContextForge с PostgreSQL.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M4-01 | В ADR-0001 для каждого из 5 критериев записан результат `passed`/`failed` с приложенным доказательством (захваченные заголовки, логи, команды воспроизведения) |
+| AC-M4-02 | Статус ADR — `Accepted` с выбранным вариантом (A/B/C) **или** зафиксировано NO-GO с альтернативой по [Roadmap](specs/roadmap-v1.md#go--no-go) |
+| AC-M4-03 | Digest образа ContextForge закреплён в `compose.yaml`/`.env.example`, проверены advisories IBM на дату спайка (ссылки в ADR) |
+| AC-M4-04 | Пометки VERIFY в SEC-02, SEC-03, TEN-01, GR-примере заменены конкретикой по итогам спайка |
+
+### M5 — read-only PoC через ContextForge
+
+**Делаем:** dev-стенд: ContextForge (pinned digest, PostgreSQL), два team (`t-alpha`, `t-beta`), по два агента; `demo` зарегистрирован в обоих team; правила `unified_pdp`; `IdentityVerifier` выбранного механизма; сетевая изоляция `demo` (доступен только ContextForge).
+
+| ID | Критерий |
+| --- | --- |
+| AC-M5-01 | Тесты SC-01…SC-10 и MC-01…MC-04 проходят через ContextForge; отчёт `reports/conformance/M5.json` |
+| AC-M5-02 | Агент `t-alpha` не видит в `tools/list` tools, зарегистрированных только для `t-beta`, и получает отказ при прямом вызове по имени (SC-01) |
+| AC-M5-03 | Прямой HTTP-запрос к `demo` с хоста агента не устанавливает соединение; с хоста внутри сети без identity → `unauthenticated` (SC-06) |
+| AC-M5-04 | Повтор M5-тестов после рестарта всех контейнеров проходит без ручных действий (политики и connections восстановлены) |
+| AC-M5-05 | Решение GO/NO-GO записано в Roadmap с датой и ссылкой на отчёт |
+
+### M6 — Knowledge Base
+
+**Делаем:** gap-аудит существующего KB MCP (отчёт `docs/audits/kb-gap-audit.md`); по итогам — подключение напрямую или тонкий wrapper-коннектор на `gxg-connector-kit`.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M6-01 | Отчёт аудита содержит для каждого существующего KB-tool: схемы, коды ошибок, лимиты, механизм auth, наличие tenant/агентной изоляции — с выводом «подключать как есть / wrapper / не публиковать» |
+| AC-M6-02 | Через ContextForge `kb.documents.search/get` для агента с grant'ом на коллекцию `sales` возвращают только документы `sales`; документ другой коллекции по ID → `not_found` (SC-05, SC-10 на KB) |
+| AC-M6-03 | Код и схема БД существующей KB не изменены (diff в репозитории KB пуст) |
+| AC-M6-04 | Служебный ключ wrapper'а к KB имеет только read-права: попытка записи этим ключом отклоняется KB |
+
+---
+
+## Этап C — путь эффектов на fake provider
+
+### M7 — Approval Service: ядро
+
+**Делаем:** миграции БД (модель из [approval-service-v1](specs/approval-service-v1.md#модель-данных)); процесс `api` (`POST /v1/intents`, `GET`, `cancel`); движок политики ([approval-policy-v1](specs/approval-policy-v1.md)); квоты; `sweeper` для T5/T8; `mcp` (`effects.status`, `effects.cancel`); шифрование payload.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M7-01 | OpenAPI, сгенерированный FastAPI, совместим с `schemas/approval-service.openapi.yaml`: каждый путь, метод, тело и код ответа из файла присутствуют (автоматическое сравнение) |
+| AC-M7-02 | **Тест машины состояний:** для каждой пары (статус intent'а, событие) из декартова произведения всех 11 статусов и всех событий таблицы T1–T18 разрешены ровно переходы из этой таблицы, остальные возвращают `conflict` и не меняют строку (проверка `version` и `audit_events`) |
+| AC-M7-03 | `POST /v1/intents` с хешем, не совпадающим с пересчитанным из `canonical_args`, → 400 `invalid_input` |
+| AC-M7-04 | Повтор с тем же `(tenant, idempotency_key)` и хешем → 200 и тот же `intent_id`; с другим хешем → 409 (EX-06). 50 параллельных одинаковых запросов → ровно одна строка в `intents` |
+| AC-M7-05 | Политика: 12 эталонных сценариев AP-01 (deny+auto, require+auto, два require с разными `approvals`/ttl, исчерпанный лимит auto, auto для `high_risk`, отсутствие правил по каждому классу) дают ожидаемые `approval_mode`, `required_approvals`, `step_up_required`, `rule_id` (EX-18) |
+| AC-M7-06 | Лимит `auto_approve` `max_per_hour: 10`: 30 параллельных `propose` → ровно 10 `approved` с `mode=auto`, 20 `pending_approval` (AP-03) |
+| AC-M7-07 | Квоты: 31-й `propose` агента за час → 429 `rate_limited` с `retry_after_s > 0`, строка не создана, outbox пуст (EX-17) |
+| AC-M7-08 | Коннектор, отсутствующий в реестре для tenant'а, или service JWT с чужим ключом → 401/403, строка не создана (EX-21) |
+| AC-M7-09 | `effects.status` агента на чужой intent (другой requester или другой tenant) → `not_found`, побайтно как для несуществующего |
+| AC-M7-10 | В БД `args_ciphertext` и `preview_ciphertext` не содержат открытого текста args (поиск подстроки по 100 intents = 0 совпадений) |
+| AC-M7-11 | Роль БД приложения: `UPDATE`/`DELETE` на `audit_events`, `DELETE` на `intents` → ошибка прав (OPS-05) |
+| AC-M7-12 | Sweeper: intent с `expires_at` в прошлом переходит в `expired` не позже чем через 60 с |
+
+### M8 — Executor и исполнение
+
+**Делаем:** процесс `executor` (outbox, reserve, выпуск токена, вызов `execute`, `complete`, reconcile с backoff); `POST /v1/executions/{id}/dispatch`; JWKS и ротация ключа; в `demo` — `demo.message.propose`, внутренние `execute`/`reconcile`, fake provider со всеми режимами; правило `unified_pdp`, запрещающее `*.execute`.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M8-01 | Сквозной сценарий с авто-одобрением: `propose` → через ≤ 10 с `effects.status` = `succeeded`, журнал fake provider содержит ровно 1 запись с тем же `idempotency_key` и `text_hash` |
+| AC-M8-02 | **Гонка:** 50 одобренных intents, 10 экземпляров executor'а, режим `no_dedupe`, задержка провайдера 200 мс → в журнале провайдера ровно 50 записей, по одной на `idempotency_key` (EX-10) |
+| AC-M8-03 | 9 случаев невалидного токена из AC-M1-03 на `execute` → коннектор отвечает 401, счётчик провайдера = 0, `dispatch` не вызывался (EX-03) |
+| AC-M8-04 | Повтор `execute` с тем же токеном после успеха → 409, счётчик провайдера не изменился (EX-04) |
+| AC-M8-05 | `execute` с args, где изменён один символ текста или получатель, → 422, счётчик = 0 (EX-05) |
+| AC-M8-06 | Режим `commit_then_drop`: статус → `outcome_unknown`, затем reconcile → `reconciled_succeeded`; счётчик провайдера = 1 (EX-11) |
+| AC-M8-07 | Kill процесса коннектора после `dispatch`, до ответа: через `dispatch_timeout_s + 30 с` статус `outcome_unknown`; новых вызовов провайдера нет (T14) |
+| AC-M8-08 | Режим `timeout_before_start` ×2, затем `ok`: итог `succeeded`, `attempts` = 3, записи журнала с одним `idempotency_key`; при `max_attempts` = 2 итог `failed` (EX-12, EX-23) |
+| AC-M8-09 | Executor, падающий между reserve и dispatch: через 60 с execution `released`, intent снова `approved`, затем исполнен; `attempts` учитывает только dispatch (T10) |
+| AC-M8-10 | Kill switch (`tenant:t-alpha`), включённый после reserve, но до dispatch → `dispatch` 423, провайдер не вызван; intents `t-beta` исполняются (EX-13) |
+| AC-M8-11 | Отзыв grant'а `propose` у requester'а (новый bundle) между approve и execute → отказ коннектора, провайдер не вызван (EX-14) |
+| AC-M8-12 | Approval Service недоступен: `propose` → `temporarily_unavailable`, intent не создан; `execute` без доступного `dispatch` → провайдер не вызван (EX-16) |
+| AC-M8-13 | Через ContextForge агент не видит `demo.message.execute` в `tools/list`; вызов по имени → отказ (EX-01) |
+| AC-M8-14 | Ротация ключа executor'а без простоя: токены нового `kid` принимаются через ≤ 10 мин после публикации; удаление скомпрометированного `kid` → его токены отклоняются ≤ 10 мин (EX-24) |
+
+### M9 — Web UI и notify-бот
+
+**Делаем:** процесс `ui` (OIDC, сессии, список, карточка, решение, step-up WebAuthn, ручной reconcile, привязка Telegram); процесс `notifier` (бот, long polling, дайджест).
+
+| ID | Критерий |
+| --- | --- |
+| AC-M9-01 | E2E (Playwright): approver входит через тестовый OIDC, видит intent, одобряет → статус `approved`, затем `succeeded` |
+| AC-M9-02 | POST решения без CSRF-токена, с чужим CSRF-токеном, с устаревшим `version` или изменённым `args_hash` → 403/409, решение не записано (EX-07) |
+| AC-M9-03 | Решение пытаются принять: service JWT агента, сам requester (тот же OIDC-subject), approver другого tenant'а → 403 (EX-07) |
+| AC-M9-04 | `high_risk` без step-up → 403; step-up старше 5 мин или для другого `intent_id` → 403; кворум 2: один человек дважды → второе решение 409, статус остаётся `pending_approval` (EX-08) |
+| AC-M9-05 | Preview с `<script>`, `**md**`, `[x](javascript:…)`, U+202E, U+200B и текстом 20 000 символов: DOM не содержит созданных из значений элементов, невидимые символы показаны маркерами, есть предупреждение, длина отображённого текста = 20 000 (EX-19) |
+| AC-M9-06 | Заголовки ответа UI: CSP `default-src 'self'` без `unsafe-inline`, cookie `__Host-`, `HttpOnly`, `Secure`, `SameSite=Strict` (автоматическая проверка заголовков) |
+| AC-M9-07 | Сообщение бота approver'у не содержит значений `fields`, `changes` preview (проверка на 20 intents со случайным текстом: 0 вхождений) и содержит ссылку на `/intents/<id>` |
+| AC-M9-08 | В сообщениях бота нет callback-кнопок, только URL; присланная боту строка «approve <id>» не меняет статус (EX-15) |
+| AC-M9-09 | 8 новых intents за 2 минуты одному approver'у → не больше 5 отдельных уведомлений + 1 дайджест (AP-08) |
+| AC-M9-10 | Привязка Telegram: код действует 10 минут и один раз; повторное и просроченное использование отклоняется |
+| AC-M9-11 | Ручной reconcile `outcome_unknown` без обоснования (< 10 символов) отклоняется; с обоснованием — статус меняется, запись в `audit_events` с автором |
+
+### M10 — webhooks и эксплуатация
+
+**Делаем:** доставка webhooks из outbox; задание очистки payload; метрики Prometheus и правила alert'ов; admin API и CLI (`switch`, `keys rotate`); runbook'и.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M10-01 | Подписчик получает событие на каждый переход статуса с валидной подписью; тестовый получатель отклоняет неверную подпись, `t` старше 300 с и повтор `event_id` (EX-20) |
+| AC-M10-02 | Недоступный подписчик: повторы с backoff, через 24 ч — `dead` и alert; доступный после 1 ч простоя получает все события по порядку `version` |
+| AC-M10-03 | Очистка: intent, терминальный 31 день назад, → `args_ciphertext` и `preview_ciphertext` = NULL, метаданные на месте; `outcome_unknown` не очищается (OPS-04, частично) |
+| AC-M10-04 | `gxg-approval switch set --scope global` → следующий `dispatch` любого tenant'а 423 в пределах одной транзакции; запись в аудите и alert (EX-13) |
+| AC-M10-05 | Все метрики из таблицы approval-service-v1 доступны на `/metrics`; правила alert'ов загружаются в Prometheus без ошибок; искусственный `outcome_unknown` старше 1 ч поднимает alert |
+| AC-M10-06 | MC-05: повтор SC- и EX-тестов на следующей минорной версии ContextForge и FastMCP проходит (или зафиксированы регрессии и pin не меняется) |
+| AC-M10-07 | **Выход этапа C:** отчёт `reports/conformance/stage-C.json` — EX-01…EX-24 и MC-05 в статусе `passed` |
+
+---
+
+## Этап D — реальные чтения и Signals
+
+### M11 — Telegram read-only
+
+**Делаем:** Telegram MCP-коннектор поверх доменных портов существующего сервиса: `telegram.messages.search`, `telegram.thread.read`, `telegram.messages.collect`.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M11-01 | SC-03…SC-05, SC-09, SC-10 и MC-02, MC-03 проходят на Telegram-коннекторе с тестовым аккаунтом и тестовыми чатами |
+| AC-M11-02 | Количество активных Telegram-сессий у существующего сервиса не изменилось (коннектор не открывает свою) |
+| AC-M11-03 | Запрос к неразрешённому чату не доходит до существующего сервиса (счётчик запросов к его порту = 0) |
+| AC-M11-04 | Flood-wait провайдера → `rate_limited` с `retry_after_s`, равным значению Telegram (± 1 с) |
+| AC-M11-05 | 1000 вызовов: в логах коннектора 0 вхождений текстов сообщений, peer ID и строк сессии (поиск по известным значениям fixtures) |
+
+### M12 — Signals
+
+**Делаем:** в Signals порты `CollectSource` (через `*.collect`) и `ExecuteAction` (через `*.propose` + `effects.status`/webhook) на `demo` и fake provider.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M12-01 | Прогон сбора на фиксированном наборе источников через Hub даёт то же множество `SourceInboxItem` (по ключам dedupe), что и старый путь на том же наборе (SI-01) |
+| AC-M12-02 | 100 `ActionCandidate` → 100 intents (`business_task_id` совпадает) → 100 `Outcome`; журнал fake provider = 100 записей (SI-02) |
+| AC-M12-03 | Повторный запуск Action worker'а по тем же 100 кандидатам → 0 новых intents и 0 новых записей провайдера (EFF-08) |
+| AC-M12-04 | Webhooks выключены → `Outcome` всё равно появляются через опрос `effects.status` не позже чем через 2 интервала опроса |
+| AC-M12-05 | При включённом новом пути старый dispatcher не исполняет кандидатов (счётчик старого пути = 0 за прогон) |
+
+---
+
+## Этап E — первый реальный эффект
+
+### M13 — `telegram.message.propose` в пилоте
+
+**Делаем:** включаем эффект для одного tenant'а, allowlist из ≤ 3 чатов, только `require_approval` (без авто-одобрения), 1 approver; пилот 14 дней.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M13-01 | EX-03…EX-05, EX-11 повторены на реальном Telegram-коннекторе с тестовым чатом и проходят |
+| AC-M13-02 | OPS-01: рестарт всех сервисов при intents в `pending_approval`, `executing`, `outcome_unknown` → после рестарта 0 повторных сообщений в тестовом чате, все intents продолжают жизненный цикл |
+| AC-M13-03 | OPS-02: отзыв агента в ContextForge → его следующий `propose` отклонён ≤ 1 мин; ослабление политики в PR вызывает alert |
+| AC-M13-04 | Итог пилота: каждое отправленное сообщение соответствует ровно одному intent'у в `succeeded`/`reconciled_succeeded` с решением человека (сверка журнала чата с БД, 0 расхождений) |
+| AC-M13-05 | Итог пилота: 0 сообщений, отправленных без записи `decisions` с `decision=approve` от человека |
+| AC-M13-06 | Итог пилота: 0 intents в `outcome_unknown` старше 24 ч на конец пилота |
+
+---
+
+## Этап F — production-кандидат
+
+### M14 — hardening и эксплуатационная готовность
+
+**Делаем:** production-конфигурация (HTTPS, secret store, PostgreSQL с PITR, сетевые политики, egress allowlist), бэкапы, runbook'и (kill switch, ротация ключей, компрометация агента, `outcome_unknown`, восстановление), политика хранения аудита, процедура изменений.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M14-01 | OPS-03: восстановление Approval Service из бэкапа на чистый стенд → состояния intents совпадают с моментом бэкапа, executor после старта не создаёт повторных вызовов провайдера |
+| AC-M14-02 | OPS-04: бэкапов старше 35 дней нет (проверка хранилища); восстановленный старый бэкап не содержит payload, очищенного по RET-01 |
+| AC-M14-03 | SC-07 (SSRF): попытки зарегистрировать или вызвать URL на `169.254.169.254`, `127.0.0.1`, RFC1918, через DNS-редирект → отклонены egress-политикой |
+| AC-M14-04 | Внешний порт-скан production-адресов: открыты только HTTPS ContextForge и HTTPS UI |
+| AC-M14-05 | Учебная тревога по каждому runbook'у выполнена по шагам дежурным, не автором runbook'а, время до блокировки эффектов ≤ 5 мин **[ручная проверка, протокол в `reports/drills/`]** |
+| AC-M14-06 | Полный прогон Conformance Matrix (все SC, EX, MC, SI, OPS) — `passed`, отчёт `reports/conformance/stage-F.json` |
+| AC-M14-07 | Решение go/no-go на подключение первого внешнего клиента принято оператором и записано в Roadmap |
+
+---
+
+## Что не входит в план
+
+CRM-коннектор, публикации в соцсети, A2A, self-service для клиентов, второй язык коннекторов (TypeScript-пакет кита появится вместе с первым TS-коннектором с эффектами). Планируются после M14 отдельными вехами по тому же шаблону.

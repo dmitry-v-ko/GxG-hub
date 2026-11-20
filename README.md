@@ -19,6 +19,7 @@
 - [Reference-коннектор `demo`](docs/specs/demo-connector-v1.md) — эталон и мишень для тестов.
 - [Интеграция сервисов](docs/specs/service-integration-v1.md) — KB, Telegram, Signals, Voice.
 - [Conformance Matrix](docs/specs/conformance-matrix-v1.md) — тесты, которые должны пройти до включения.
+- [План реализации](docs/implementation-plan-v1.md) — вехи M0–M14, зависимости, оценки, объективные критерии приёмки.
 - [Roadmap](docs/specs/roadmap-v1.md) — этапы A–F, PoC, GO/NO-GO, миграция.
 
 ## Структура
