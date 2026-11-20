@@ -28,6 +28,10 @@
 
 Никакие пункты выше пока не выполнены: это план проверки.
 
+## Security: nobody-else-can-trigger-an-action gate
+
+Обязательные P0 сценарии описаны в [Conformance Matrix](specs/conformance-matrix-v1.md): анонимный/чужой агент, украденный токен не для этого audience, forged tenant/identity headers, неверный чат/аккаунт, прямой вызов MCP-коннектора, отказ pre-hook, self-approval, expired/replayed approval, двойной worker, provider timeout и неизвестный результат. **Нулевые эффекты** во всех случаях нарушения. Эти тесты не выполнены.
+
 ## Human approval acceptance (отдельная фаза)
 
 - [ ] Action Gate возвращает `approval_required` и не вызывает внешний эффект до решения человека.
