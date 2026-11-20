@@ -4,9 +4,10 @@
 
 ## Architectural decision
 
-**Human approval belongs to a dedicated GxG Approval Service (control plane) alongside ContextForge** — not inside an MCP connector, not inside ContextForge's upstream code, and not in the agent's prompt. The service can initially run as a small module in the same deployment, but owns a separate responsibility and durable state.
+**Human approval belongs to a dedicated GxG Approval Service (control plane) alongside ContextForge** — not inside an MCP connector, not inside ContextForge's upstream code, and not in the agent's prompt. **GxG Action Gate** is a trusted policy/enforcement layer: it intercepts an effectful invocation, determines whether approval is required, and prevents execution while approval is pending. It is our adapter, not an assumed native ContextForge feature. The service can initially run as a small module in the same deployment, but owns a separate responsibility and durable state.
 
 - **ContextForge:** authenticates the caller, enforces tool-level grants and routes authorized MCP calls; it must not become the human review UI or a long-running business workflow engine.
+- **Action Gate:** applies effect and approval policies to a trusted invocation; creates pending requests using Approval Service and prevents bypass. The technical placement must be proved in the chosen ContextForge integration.
 - **Approval Service:** creates, persists and expires approval requests; verifies the human approver's authority; records decisions; issues a narrowly scoped, short-lived authorization/approval grant or exposes a trusted server-to-server decision check.
 - **Calling business application / orchestrator:** owns the user's business task and pauses/resumes that task. It creates the approval request through the trusted backend when a proposed action needs approval.
 - **MCP connector / executor:** checks its own resource-level authorization and, for sensitive effects, validates an approval grant or a trusted approval decision before any side effect. It owns execution and idempotency, not human interaction.
@@ -17,7 +18,7 @@ The two controls are complementary: **capability authorization is not human appr
 ## Flow (asynchronous, no long-running MCP request)
 
 1. Agent/workflow proposes an effect with a canonical request: tenant, authenticated caller, exact operation/version, connection/resource, concrete arguments and idempotency key.
-2. The Hub policy / trusted application classifies the effect. If the caller has no capability grant, **deny**; do not ask a human to override missing permissions.
+2. The Action Gate / trusted policy application classifies the effect. If the caller has no capability grant, **deny**; do not ask a human to override missing permissions.
 3. If approval is required, **do not invoke the effect**. The trusted backend opens an approval request, preserving the canonical payload or a secure reference and hash. Return `approval_required` plus a request ID to the calling application.
 4. The Approval Inbox shows **who** is asking, **what** will happen, **which exact account/recipient/resource**, and relevant impact. An authorized human chooses approve or reject.
 5. Approval Service stores the approver's identity, decision, timestamp, expiry and original payload hash. Approval is **bound** to tenant, caller/delegated task, action, resource, parameter hash and max uses (normally one).
