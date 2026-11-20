@@ -5,3 +5,5 @@
 | Веха | Цикл | Роль | Ветка | Commit | Оценка | Решение | Дата |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | M0 | 1 | исполнитель | claude/m0-foundation | — | — | запущен (session_01V6d5A8r9tNJf6eQbcBq8sx) | 2026-11-20 |
+| M0 | 1 | исполнитель | claude/m0-foundation | f5cf832 (+9d34699 отчёт) | — | завершён: AC-01/02/04 passed, AC-03 manual_pending | 2026-11-20 |
+| M0 | 1 | критик | claude/m0-foundation | f5cf832 | — | запущен (session_01V6d5A8DktDagTDtC6VYQvn) | 2026-11-20 |
