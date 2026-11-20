@@ -68,7 +68,29 @@ curl -f http://127.0.0.1:4444/health
 
 Не публикуйте этот стенд в интернет. Требования к production: [Security](docs/specs/security-v1.md).
 
-## Тесты
+## Разработка и тесты
+
+Python-workspace на [uv](https://docs.astral.sh/uv/), Python ≥ 3.12. Пакеты:
+
+| Путь | Пакет / модуль | Статус |
+| --- | --- | --- |
+| `packages/gxg-connector-kit/` | `gxg-connector-kit` / `gxg_connector_kit` | Каркас (M0), функциональность — M1 |
+| `approval/` | `gxg-approval` / `gxg_approval` | Каркас (M0), реализация — M7+ |
+| `tools/gxg-policy/` | `gxg-policy` / `gxg_policy` | Каркас (M0), реализация — M2 |
+| `connectors/demo/` | `gxg-connector-demo` / `demo_connector` | Каркас (M0), свой `uv.lock`; реализация — M3 |
+
+```bash
+uv sync && uv run pytest          # все тесты: tests/contract, tests/ci, unit-тесты пакетов
+scripts/ci/check-all.sh           # то же, что CI: ruff, mypy, тесты, schema guard, проверка секретов
+```
+
+- Тесты не ходят в сеть (сокеты блокирует `conftest.py`). `skip` и `xfail` делают прогон красным.
+- Изменили нормативную часть схемы в `schemas/` — перегенерируйте lock и закоммитьте его вместе со схемой:
+  `uv run python scripts/ci/schema_lock.py --write`. Ослабление `required`/`additionalProperties` требует security-ревью.
+- CI (`.github/workflows/ci.yml`) отклоняет файлы `*.pem`, `*.key`, `*.p12`, `.env*` (кроме `.env.example`)
+  и приватные PEM-ключи в любом коммите PR. Защита `main`: [docs/setup/branch-protection.md](docs/setup/branch-protection.md).
+
+Только контрактные тесты, без uv:
 
 ```bash
 python -m pip install -r tests/contract/requirements.txt

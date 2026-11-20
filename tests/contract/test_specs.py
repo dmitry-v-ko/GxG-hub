@@ -1,5 +1,6 @@
 """Executable checks for machine-readable spec artifacts (schemas, examples, vectors, OpenAPI).
 Not an end-to-end security test."""
+
 import hashlib
 import json
 import unicodedata
@@ -37,10 +38,13 @@ def load_yaml(rel):
 
 H = 'a' * 64
 PREVIEW = {
-    'schema_version': 1, 'title': 'Отправка демо-сообщения',
+    'schema_version': 1,
+    'title': 'Отправка демо-сообщения',
     'target': {'label': 'Доска a-public', 'rid': 'demo:demo-main/board/a-public'},
-    'fields': [{'label': 'Получатель', 'value': 'alice_01', 'kind': 'identifier'},
-               {'label': 'Текст', 'value': 'Привет!', 'kind': 'multiline'}],
+    'fields': [
+        {'label': 'Получатель', 'value': 'alice_01', 'kind': 'identifier'},
+        {'label': 'Текст', 'value': 'Привет!', 'kind': 'multiline'},
+    ],
 }
 
 
@@ -85,18 +89,33 @@ class SchemaArtifacts(unittest.TestCase):
             v.validate({**r, 'services': [{**conn, 'tenants': ['*']}]})
 
     def test_intent_create_and_status(self):
-        validator('intent-create.schema.json').validate({
-            'tool_key': 'demo.message.propose', 'tool_version': '1.0.0', 'connection_id': 'demo-main',
-            'resource_id': 'demo:demo-main/board/a-public', 'idempotency_key': 'cand-1:v1',
-            'canonical_args': {'recipient': 'alice_01', 'text': 'Привет!'}, 'canonical_args_hash': H,
-            'preview': PREVIEW, 'requester': {'principal': 'agent:t-alpha:actor', 'tenant_id': 't-alpha'}})
+        validator('intent-create.schema.json').validate(
+            {
+                'tool_key': 'demo.message.propose',
+                'tool_version': '1.0.0',
+                'connection_id': 'demo-main',
+                'resource_id': 'demo:demo-main/board/a-public',
+                'idempotency_key': 'cand-1:v1',
+                'canonical_args': {'recipient': 'alice_01', 'text': 'Привет!'},
+                'canonical_args_hash': H,
+                'preview': PREVIEW,
+                'requester': {'principal': 'agent:t-alpha:actor', 'tenant_id': 't-alpha'},
+            }
+        )
         v = validator('intent-status.schema.json')
-        status = {'intent_id': 'i-1', 'tenant_id': 't-alpha', 'tool_key': 'demo.message.propose',
-                  'status': 'succeeded', 'version': 4, 'created_at': '2026-11-20T10:00:00Z',
-                  'expires_at': '2026-11-21T10:00:00Z',
-                  'result': {'operation_id': 'op-1', 'status': 'succeeded', 'reconciliation_required': False}}
+        status = {
+            'intent_id': 'i-1',
+            'tenant_id': 't-alpha',
+            'tool_key': 'demo.message.propose',
+            'status': 'succeeded',
+            'version': 4,
+            'created_at': '2026-11-20T10:00:00Z',
+            'expires_at': '2026-11-21T10:00:00Z',
+            'result': {'operation_id': 'op-1', 'status': 'succeeded', 'reconciliation_required': False},
+        }
         v.validate(status)
-        for leak in ({'args': {}}, {'preview': PREVIEW}, {'execution_token': 'x'}):
+        leaks: list[dict[str, object]] = [{'args': {}}, {'preview': PREVIEW}, {'execution_token': 'x'}]
+        for leak in leaks:
             with self.assertRaises(ValidationError):
                 v.validate({**status, **leak})
         with self.assertRaises(ValidationError):
@@ -119,14 +138,34 @@ class SchemaArtifacts(unittest.TestCase):
             v.validate({'code': 'approval_required', 'message': 'x', 'retryable': False})
 
     def test_execution_token_and_decision(self):
-        validator('execution-token.schema.json').validate({
-            'iss': 'gxg-executor', 'aud': 'demo', 'sub': 'i-1', 'jti': 'e-1', 'ten': 't-alpha',
-            'req': 'agent:t-alpha:actor', 'tool': 'demo.message.propose@1.0.0', 'con': 'demo-main',
-            'res': 'demo:demo-main/board/a-public', 'ahs': H, 'idk': 'cand-1:v1', 'iat': 1, 'exp': 61})
+        validator('execution-token.schema.json').validate(
+            {
+                'iss': 'gxg-executor',
+                'aud': 'demo',
+                'sub': 'i-1',
+                'jti': 'e-1',
+                'ten': 't-alpha',
+                'req': 'agent:t-alpha:actor',
+                'tool': 'demo.message.propose@1.0.0',
+                'con': 'demo-main',
+                'res': 'demo:demo-main/board/a-public',
+                'ahs': H,
+                'idk': 'cand-1:v1',
+                'iat': 1,
+                'exp': 61,
+            }
+        )
         v = validator('approval-decision.schema.json')
-        d = {'decision_id': 'd-1', 'intent_id': 'i-1', 'tenant_id': 't-alpha',
-             'decided_by': 'policy:tg-partner-auto@abc123', 'decision': 'approve',
-             'decided_at': '2026-11-20T10:00:00Z', 'intent_version': 1, 'canonical_args_hash': H}
+        d = {
+            'decision_id': 'd-1',
+            'intent_id': 'i-1',
+            'tenant_id': 't-alpha',
+            'decided_by': 'policy:tg-partner-auto@abc123',
+            'decision': 'approve',
+            'decided_at': '2026-11-20T10:00:00Z',
+            'intent_version': 1,
+            'canonical_args_hash': H,
+        }
         v.validate(d)
         with self.assertRaises(ValidationError):
             v.validate({**d, 'decided_by': 'agent:t-alpha:actor'})
@@ -139,7 +178,7 @@ def _canon(v):
         if isinstance(x, str):
             return unicodedata.normalize('NFC', x)
         if isinstance(x, int):
-            if abs(x) > 2 ** 53 - 1:
+            if abs(x) > 2**53 - 1:
                 raise ValueError('int out of range')
             return x
         if isinstance(x, float):
@@ -147,6 +186,7 @@ def _canon(v):
         if isinstance(x, list):
             return [norm(i) for i in x]
         return {unicodedata.normalize('NFC', k): norm(i) for k, i in x.items()}
+
     return json.dumps(norm(v), ensure_ascii=False, sort_keys=True, separators=(',', ':'))
 
 
@@ -167,6 +207,7 @@ class OpenApi(unittest.TestCase):
     def test_openapi_document_is_valid(self):
         from openapi_spec_validator import validate
         from openapi_spec_validator.readers import read_from_filename
+
         spec, base_uri = read_from_filename(str(SCHEMAS / 'approval-service.openapi.yaml'))
         validate(spec, base_uri=base_uri)
 

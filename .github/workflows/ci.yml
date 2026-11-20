@@ -1,0 +1,127 @@
+# GxG Hub CI (milestone M0). Required status check for `main`: "ci-ok"
+# (see docs/setup/branch-protection.md).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_PYTHON: "3.12"
+  UV_LOCKED: "1"  # fail if uv.lock is out of date with pyproject.toml
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - name: mypy --strict (gxg-connector-kit, approval, CI scripts)
+        run: >-
+          uv run mypy --strict
+          packages/gxg-connector-kit/src packages/gxg-connector-kit/tests
+          approval/src approval/tests
+          scripts conftest.py tests/ci
+      - name: mypy (other packages and contract tests)
+        run: >-
+          uv run mypy
+          tools/gxg-policy/src tools/gxg-policy/tests
+          connectors/demo/src connectors/demo/tests
+          tests/contract
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Lockfiles are up to date
+        run: |
+          uv lock --check
+          (cd connectors/demo && uv lock --check)
+      - name: AC-M0-01 — uv sync && uv run pytest
+        run: uv sync && uv run pytest
+      - name: Schema lock is current
+        run: uv run python scripts/ci/schema_lock.py
+
+  schema-guard:
+    # AC-M0-02: proves that every schema mutation turns the contract tests red.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: uv run python scripts/ci/prove_schema_guard.py
+
+  secrets:
+    # AC-M0-04: reject secret-like files in the tree and in every pushed commit.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Scan tree
+        run: python scripts/ci/check_secrets.py --tree HEAD
+      - name: Scan every commit of the PR / push
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            python scripts/ci/check_secrets.py --range "$PR_BASE..$PR_HEAD"
+          elif [ "$EVENT" = "push" ]; then
+            python scripts/ci/check_secrets.py --range "${PUSH_BEFORE:-0000000000000000000000000000000000000000}..$PUSH_AFTER"
+          else
+            python scripts/ci/check_secrets.py --range "0000000000000000000000000000000000000000..HEAD"
+          fi
+
+  ci-ok:
+    # Single required check for branch protection: green only if every job is green.
+    if: always()
+    needs: [lint, types, tests, schema-guard, secrets]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = "success" ] || exit 1; done

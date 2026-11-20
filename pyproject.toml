@@ -1,0 +1,90 @@
+# GxG Hub Python workspace (M0). See docs/implementation-plan-v1.md, milestone M0.
+[project]
+name = "gxg-hub"
+version = "0.0.0"
+description = "GxG Hub monorepo root: dev tooling, contract tests, unit tests of all packages."
+requires-python = ">=3.12"
+dependencies = [
+    "gxg-connector-kit",
+    "gxg-approval",
+    "gxg-policy",
+    "gxg-connector-demo",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+    "ruff==0.17.6",
+    "mypy==2.4.1",
+    "types-PyYAML>=6,<7",
+    "types-jsonschema>=4.23,<5",
+    # tests/contract (mirrors tests/contract/requirements.txt)
+    "jsonschema>=4.23,<5",
+    "PyYAML>=6,<7",
+    "openapi-spec-validator>=0.7,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/gxg-connector-kit", "approval", "tools/gxg-policy"]
+# Connectors keep their own lockfile (docs/specs/mcp-toolkit-v1.md, demo-connector-v1.md);
+# the root pulls them in by path only to run their unit tests.
+exclude = ["connectors/*"]
+
+[tool.uv.sources]
+gxg-connector-kit = { workspace = true }
+gxg-approval = { workspace = true }
+gxg-policy = { workspace = true }
+gxg-connector-demo = { path = "connectors/demo", editable = true }
+
+[tool.pytest.ini_options]
+minversion = "8.3"
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+testpaths = [
+    "tests",
+    "packages/gxg-connector-kit/tests",
+    "approval/tests",
+    "tools/gxg-policy/tests",
+    "connectors/demo/tests",
+]
+# DoD-5: a skipped or xfailed test is a failure, not a pass.
+xfail_strict = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "S", "PL", "RUF"]
+ignore = [
+    "PLR2004",  # magic values are normal in tests and schema code
+    "PLR0913",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests and CI scripts run git/pytest subprocesses and use assert by design.
+"**/tests/**" = ["S101", "S603", "S607", "PLC0415"]
+"conftest.py" = ["S101"]
+"scripts/ci/**" = ["S603", "S607"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector"]
+
+[tool.mypy]
+# Baseline for every package; the strict set is enforced separately with
+# `mypy --strict` on gxg-connector-kit and approval (see .github/workflows/ci.yml).
+python_version = "3.12"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+
+[tool.ruff.format]
+quote-style = "preserve"
+# Specs are normative text: never rewrite code samples inside Markdown.
+exclude = ["*.md"]
