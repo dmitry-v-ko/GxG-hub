@@ -14,3 +14,5 @@
 | — | — | цель | — | — | — | Цель поставлена: [GOAL.md](GOAL.md), регулярная проверка раз в час | 2026-11-20 |
 | M0 | 2 | исполнитель | claude/m0-foundation | 77662af | — | дополнения применены: ponytail, план цикла, branch-protection по решению владельца | 2026-11-20 |
 | M0 | 2 | критик | claude/m0-foundation | 77662af | — | запущен (session_01V6d5AANLd1s3ZC9NJriZ8M), с ponytail-review | 2026-11-20 |
+| M0 | 2 | критик | claude/m0-foundation | 77662af (отчёт a0e3777) | **8.0** | < 9: 2× major (allowlist целиком на план; шаг CODEOWNERS ненаблюдаем при self-PR) → цикл 3; формулировка AC-M0-03 — на согласование владельцу | 2026-11-20 |
+| M0 | 3 | исполнитель | claude/m0-foundation | — | — | запущен | 2026-11-20 |
