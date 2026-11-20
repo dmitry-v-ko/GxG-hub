@@ -122,6 +122,10 @@ NAMES = [
     "Server.Key",
     "Client.P12",
     "Client.PFX",
+    # paths the default gitleaks allowlist skips
+    "node_modules/pkg/server.pem",
+    "venv/lib/.env",
+    "docs/key.pem.png",
 ]
 
 
@@ -159,6 +163,13 @@ def content_cases(keys: dict[str, str]) -> dict[str, tuple[str, str | bytes]]:
         "openssh": ("c.txt", header("OPENSSH") + "\n" + k + "\n"),
         "pgp": ("d.txt", header("PGP")[: -len("-----")] + " BLOCK-----\n"),
         "binary": ("data/blob.bin", b"\x00\x01" + h.encode() + b"\x00"),
+        "binary-dat": ("data/blob.dat", b"\x00\x01" + h.encode() + b"\x00"),
+        # paths the default gitleaks allowlist skips
+        "pdf": ("docs/scan.pdf", "%PDF-1.4\n" + h + "\n" + k + "\n"),
+        "png": ("img/logo.png", b"\x89PNG\r\n\x1a\n" + h.encode() + b"\n"),
+        "node_modules": ("node_modules/pkg/key.txt", h + "\n" + k + "\n"),
+        "venv-lib": ("venv/lib/site.txt", h + "\n"),
+        "named-gitleaks.toml": ("conf/my.gitleaks.toml", 'k = "' + h + '"\n'),
         "utf-16-le": ("win/key.txt", ("KEY=" + h + "\n").encode("utf-16-le")),
         "utf-16-be": ("win/key-be.txt", ("KEY=" + h + "\n").encode("utf-16-be")),
         "utf-16-bom": ("win/key-bom.txt", ("KEY=" + h + "\n").encode("utf-16")),

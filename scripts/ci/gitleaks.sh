@@ -4,15 +4,15 @@
 #   scripts/ci/gitleaks.sh tree [REV]   every file in the tree of REV (default HEAD)
 #   scripts/ci/gitleaks.sh range A..B   every commit in A..B; A = all-zero SHA or empty: all of B
 #
-# Rules: .gitleaks.toml; historical findings: .gitleaksignore (both next to this repo's root,
-# not taken from the scanned repository). Exit code: 0 clean, non-zero findings or error.
+# Two configs, both must pass: .gitleaks.toml (gitleaks defaults) and .gitleaks-strict.toml
+# (AC-M0-04 rules without the default path allowlist). Historical findings: .gitleaksignore.
+# All three come from this repository's root, not from the scanned repository. Exit code: 0 clean, non-zero findings or error.
 # GITLEAKS=/path/to/gitleaks uses that binary instead of downloading (it must be $VERSION).
 set -euo pipefail
 
 VERSION=8.30.1
 SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  # gitleaks_8.30.1_linux_x64.tar.gz
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CONFIG="$HERE/.gitleaks.toml"
 IGNORE="$HERE/.gitleaksignore"
 
 install_gitleaks() {
@@ -33,13 +33,16 @@ install_gitleaks() {
 GL="${GITLEAKS:-$(install_gitleaks)}"
 [ "$("$GL" version)" = "$VERSION" ] || { echo "gitleaks.sh: need gitleaks $VERSION, got $("$GL" version)" >&2; exit 2; }
 # --redact: never print the secret; --ignore-gitleaks-allow: an inline "gitleaks:allow" must not hide a finding.
-COMMON=(--no-banner --no-color --redact --ignore-gitleaks-allow -v --exit-code 1
-  --config "$CONFIG" --gitleaks-ignore-path "$IGNORE")
+COMMON=(--no-banner --no-color --redact --ignore-gitleaks-allow -v --exit-code 1 --gitleaks-ignore-path "$IGNORE")
 ZERO=0000000000000000000000000000000000000000
 
 scan_log() {
-  # --text: binary and UTF-16 diffs are scanned too; -m: diffs of merge commits.
-  "$GL" git "${COMMON[@]}" --log-opts="--text -m --full-history $1" .
+  local rc=0
+  for config in "$HERE/.gitleaks.toml" "$HERE/.gitleaks-strict.toml"; do
+    # --text: binary and UTF-16 diffs are scanned too; -m: diffs of merge commits.
+    "$GL" git "${COMMON[@]}" --config "$config" --log-opts="--text -m --full-history $1" . || rc=1
+  done
+  return "$rc"
 }
 
 case "${1:-}" in
