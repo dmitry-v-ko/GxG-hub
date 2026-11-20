@@ -1,0 +1,97 @@
+{
+  "milestone": "M2",
+  "branch": "claude/m2-policy-tooling",
+  "commit": "fbd522a702af591a2f247fbd7fcd00b035a1260b",
+  "cycle": 2,
+  "reviewed_at": "2026-11-20",
+  "score": 5.0,
+  "caps_applied": [
+    "ac_failed",
+    "critical",
+    "major"
+  ],
+  "dimensions": {
+    "spec": 2,
+    "tests": 1.5,
+    "security": 1,
+    "code": 1.5,
+    "ops": 0.5,
+    "evidence": 0.5
+  },
+  "acceptance": [
+    {
+      "id": "AC-M2-01",
+      "status": "passed",
+      "evidence": "Clean clone fbd522a, empty UV_CACHE_DIR, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1: `uv run gxg-policy validate policies/` -> exit 0, 0 errors; `lint policies/` -> exit 0, 2 warnings (unknown-tool, unknown-tenant t-beta). CI run 44797618586 job policy: success."
+    },
+    {
+      "id": "AC-M2-02",
+      "status": "passed",
+      "evidence": "19 fixtures via CLI `lint <case>/policies` (+ --manifest for 06/08/09/18): each exit 1 with exactly one `error: <file>: <path>: [<code>]`, e.g. 19 `tenants/t-alpha.yaml: grants[0].subjects[0]: [dangling-subject] group 'ghost' is not declared`; all 12 AC cases present."
+    },
+    {
+      "id": "AC-M2-03",
+      "status": "passed",
+      "evidence": "8 pairs: CLI `diff base head --json` equals expected.json for 01..08 (07 group membership in approval rules, 08 match/approvers). Group expansion in requesters/approvers verified in diff.py."
+    },
+    {
+      "id": "AC-M2-04",
+      "status": "failed",
+      "evidence": "Automated: tests/ci (gate, job script, workflow) pass; mutate_m2.py 39/39 killed; CI run 44797618586 (push, fbd522a) grants-widening/ci-ok red as designed. But three concrete paths to a green check on a widening head without the owner's label on that commit remain: (1) PR into an intermediate branch is green, base changed to main via API -> no re-run (`edited` not in types, diff uses event base.sha); (2) B ran on the PR, force-push to A, owner labels A, fast-forward to B -> gate passes B (reproduced with FakeApi: run(api,'synchronize',WIDE)==0, label kept); (3) tag `origin/main` -> push/dispatch run green (reproduced with grants_widening.sh: rc 1 -> 0). Owner end-to-end steps 1-7 pending and do not cover these."
+    },
+    {
+      "id": "AC-M2-05",
+      "status": "passed",
+      "evidence": "Two CLI builds in separate processes (PYTHONHASHSEED 1 and 7, built_at 2 s apart): JSON and bytes equal after removing built_at; bundle_smoke.sh cmp OK in check-all."
+    },
+    {
+      "id": "AC-M2-06",
+      "status": "passed",
+      "evidence": "`verify` on a fresh build -> `ok: bundle_version=fbd522a...`, exit 0; one bit flipped at byte 200 -> `bundle rejected: bad signature`, exit 1. Shape tests (schema_version 2 / extra / missing key) pass."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "critical",
+      "ref": "AC-M2-04, GR-10",
+      "where": ".github/workflows/ci.yml:7-8 (pull_request types without `edited`); scripts/ci/grants_widening.sh:7-8 (base = event base.sha)",
+      "problem": "Agent pushes widening W to claude/base and N (non-policy) on top to claude/w, opens PR claude/w -> claude/base: PR run diffs W..N, no widening, grants-widening and ci-ok green on N. Agent changes the PR base to main via API: no new run (edited not in types). N is up to date with main and has a green ci-ok from a pull_request run -> mergeable without the label. With a non-claude/** branch there is no red push run at all; with claude/** the PR run is the newer same-name check.",
+      "required_improvement": "In pull_request mode diff against main regardless of the PR base (merge-base of refs/remotes/origin/main and the PR head), or apply the no-label push rule when github.base_ref != main; add `edited` to types; test: PR event with non-main base and widening vs main -> red."
+    },
+    {
+      "severity": "critical",
+      "ref": "AC-M2-04, GR-10 (cycle-1 F2)",
+      "where": "scripts/ci/widening_gate.py:126-150 (head_arrival uses the earliest run; stale compares only with the latest force-push)",
+      "problem": "PR head B (widening) runs at 09:00; force-push to A at 09:30; owner labels A at 10:00; agent fast-forwards A -> B at 11:00 (no force-push event). Earliest run for B = 09:00 < label, last force-push 09:30 < label -> not stale, gate green on B with a label set on A. Reproduced with tests/ci FakeApi. Also: fork PR runs have empty pull_requests and pass the 'this PR' filter by branch name only.",
+      "required_improvement": "Arrival = earliest run for head SHA created after the latest head_ref_force_pushed event; also require head_repository.id == pr.head.repo.id; add the A/B/A/B test (must be red) and a mutation for it."
+    },
+    {
+      "severity": "major",
+      "ref": "AC-M2-04 (cycle-1 F1)",
+      "where": "scripts/ci/grants_widening.sh:14 (`git merge-base origin/main HEAD`)",
+      "problem": "Git resolves `origin/main` as refs/tags/origin/main before refs/remotes/origin/main, and actions/checkout fetch-depth 0 fetches tags. With a tag origin/main at the agent's head, push/dispatch runs print 'no widening against the merge-base with main' and pass (reproduced: rc 1 -> 0, git warns 'refname origin/main is ambiguous'). A green push/dispatch ci-ok then exists next to the red PR run on the head SHA.",
+      "required_improvement": "Use refs/remotes/origin/main explicitly (also in the fix for the first finding); test with a tag named origin/main -> red."
+    },
+    {
+      "severity": "minor",
+      "ref": "AC-M2-04 docs (cycle-1 F5)",
+      "where": "docs/setup/widening-approval.md «Как работает проверка», «Сквозная проверка на реальном PR»",
+      "problem": "States 'на head SHA агентского PR с расширением нет зелёного ci-ok без метки' — false given findings 1-3. The owner checklist has no step for base change, fast-forward back to an older SHA, or a tag named origin/main, and step 4 checks only one order of the two same-name ci-ok checks (older red, newer green).",
+      "required_improvement": "After fixes add checklist steps with exact expected results: retarget base to main -> red; B, force-push A, label, fast-forward B -> red and label removed; tag origin/main + workflow_dispatch -> red; record which ci-ok GitHub counts when the newer one is green."
+    }
+  ],
+  "required_improvements": [
+    "Base change: pull_request diff is against main (merge-base of refs/remotes/origin/main and the PR head), not the event base; `edited` added to pull_request types; test with a non-main base -> red.",
+    "F2 remainder: head arrival counts only runs created after the latest force-push; runs from another head repository ignored; A/B/A/B fast-forward test red; mutation added to mutate_m2.py.",
+    "Tag shadowing: refs/remotes/origin/main in grants_widening.sh; test with a tag named origin/main -> red.",
+    "docs/setup/widening-approval.md: remove the false claim or make it true; owner checklist extended with the three cases and both orders of same-name ci-ok; conformance report lists them under owner_pending/proven_by_tests."
+  ],
+  "ponytail_review": "reports/critic/M2-cycle-2.review.md",
+  "lean_lines": 0,
+  "notes": [
+    "Closed from cycle 1: F1 (plain push/dispatch red), F3, F4 (39/39 mutations reproduced), --built-at, MARKER, GR-13a (schedule 41 */6, bundle on schedule on main, docs, tests). F2 closed for the named cases, open for finding 2. F5 done but see the docs finding.",
+    "ci-ok on fbd522a (run 44797618586, push) is red by design: widening vs main outside a PR. Not counted as a separate DoD cap; DoD-1 (main via PR, CI green) is owner-pending. The score cap comes from ac_failed/critical.",
+    "Re-run: clean clone, UV_CACHE_DIR empty, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1, uv 0.11.32: pytest 202 passed, 136 subtests, 0 skipped; check-all OK.",
+    "Not checked: which of two same-name ci-ok checks on one SHA branch protection counts (needs a real PR)."
+  ]
+}
