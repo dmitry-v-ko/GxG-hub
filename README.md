@@ -17,6 +17,8 @@
 - [MCP Connector Contract v1](docs/specs/mcp-connector-contract-v1.md) — стандартизованные tools, identity, authorization, results, errors, effects.
 - [MCP Toolkit v1](docs/specs/mcp-toolkit-v1.md) — FastMCP/TypeScript SDK, будущий генератор и conformance-тесты.
 - [KB / Signals / Telegram / Voice](docs/specs/service-integration-v1.md) — существующие сервисы и особый двусторонний путь Signals.
+- [Human approvals](docs/APPROVALS.md) — отдельный GxG Approval Service и Action Gate.
+- [Connector integration profile](docs/MCP_CONNECTOR_CONTRACT.md) и [Toolkit implementation plan](docs/CONNECTOR_TOOLKIT.md) — практические дополнения к нормативным документам в `docs/specs/`.
 
 **Security stop:** имеющиеся `compose.yaml` и `.env.example` всё ещё указывают на prerelease ContextForge `1.0.0-RC-3`. **Не запускайте его с личными данными, в мультиарендной среде или в production.** Перед PoC выберите проверенный исправленный образ (IBM рекомендует минимум v1.1.1 для известных на 20.11.2026 проблем), закрепите digest и подтвердите identity, RBAC, resource scope и межтенантную изоляцию. Этот этап изменяет только документацию, не конфигурацию и не runtime.
 
@@ -29,6 +31,10 @@
 - `docs/MIGRATION.md` — постепенное подключение существующих сервисов GXG.
 - `connectors/README.md` — будущие доменные MCP-серверы; пока не реализованы.
 - `policies/README.md` — схема политики и важные security-инварианты.
+
+## Human approval (целевая архитектура)
+
+**GxG Action Gate** применяет политику перед эффектными вызовами. Если нужно решение человека, открывает запрос в отдельном **GxG Approval Service**, а не ждёт человека внутри MCP-вызова. Подтверждение действительно только для точного действия, получателя, аргументов и срока; коннектор дополнительно проверяет права и запрет обхода. До проверки end-to-end внешние эффекты остаются выключены. Подробнее: [APPROVALS.md](docs/APPROVALS.md).
 
 ## Локальный запуск (только разработка)
 
