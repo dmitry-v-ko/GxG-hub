@@ -10,6 +10,7 @@ from typing import Any
 
 import jsonschema
 import yaml
+from referencing import Registry, Resource
 
 # shortcut: schemas are read from the repository checkout (the nearest parent with schemas/; also works from
 # mutmut's copy under tools/gxg-policy/mutants/), upgrade to package data if gxg-policy is installed elsewhere.
@@ -41,6 +42,7 @@ class Policies:
     tenants: dict[str, tuple[str, dict[str, Any]]] = field(default_factory=dict)  # tenant -> (file, doc)
     approval: dict[str, tuple[str, dict[str, Any]]] = field(default_factory=dict)
     platform: tuple[str, dict[str, Any]] | None = None
+    manifests: dict[str, dict[str, Any]] = field(default_factory=dict)  # connector id -> gxg-manifest.yaml
     findings: list[Finding] = field(default_factory=list)
 
     @property
@@ -93,18 +95,21 @@ def json_path(parts: Any) -> str:
 _validators: dict[str, jsonschema.Draft202012Validator] = {}
 
 
-def validator(kind: str) -> jsonschema.Draft202012Validator:
-    if kind not in _validators:
-        schema = json.loads((SCHEMAS / KINDS[kind]).read_text(encoding="utf-8"))
-        _validators[kind] = jsonschema.Draft202012Validator(
-            schema, format_checker=jsonschema.Draft202012Validator.FORMAT_CHECKER
+def validator(schema_file: str) -> jsonschema.Draft202012Validator:
+    """Validator for `schemas/<schema_file>`; cross-file `$ref`s resolve through the schemas' `$id`s."""
+    if schema_file not in _validators:
+        docs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(SCHEMAS.glob("*.schema.json"))]
+        registry: Registry = Registry().with_resources((d["$id"], Resource.from_contents(d)) for d in docs)
+        schema = json.loads((SCHEMAS / schema_file).read_text(encoding="utf-8"))
+        _validators[schema_file] = jsonschema.Draft202012Validator(
+            schema, registry=registry, format_checker=jsonschema.Draft202012Validator.FORMAT_CHECKER
         )
-    return _validators[kind]
+    return _validators[schema_file]
 
 
-def _schema_findings(rel: str, kind: str, doc: Any) -> list[Finding]:
+def schema_findings(rel: str, schema_file: str, doc: Any) -> list[Finding]:
     out = []
-    for err in sorted(validator(kind).iter_errors(doc), key=lambda e: list(map(str, e.absolute_path))):
+    for err in sorted(validator(schema_file).iter_errors(doc), key=lambda e: list(map(str, e.absolute_path))):
         # RIDs with `*` anywhere but the last segment fail the RID pattern: name it (GR-04).
         mask = err.validator == "pattern" and isinstance(err.instance, str) and "*" in err.instance
         msg = (
@@ -133,7 +138,7 @@ def load(root: Path) -> Policies:
         except (yaml.YAMLError, UnicodeDecodeError) as exc:
             pol.findings.append(Finding(rel, "", "yaml", str(exc).replace("\n", " ")))
             continue
-        bad = _schema_findings(rel, kind, doc)
+        bad = schema_findings(rel, KINDS[kind], doc)
         for i, g in enumerate(doc.get("grants", []) if kind == "tenants" and not bad else []):
             try:
                 parse_ts(g.get("expires_at", "1970-01-01T00:00:00Z"))

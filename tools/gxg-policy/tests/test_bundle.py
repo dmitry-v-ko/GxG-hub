@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import os
 import re
@@ -241,3 +243,114 @@ def _strings(value: object) -> list[str]:
     if isinstance(value, list):
         return [s for v in value for s in _strings(v)]
     return []
+
+
+VECTOR = json.loads((REPO / "schemas/test-vectors/bundle-signature.json").read_text())
+
+
+def test_signature_vector_is_reproduced_by_build_and_accepted_by_verify(tmp_path: Path) -> None:
+    # GR-11a: policies + manifest that yield the vector's bundle -> `build` writes exactly its bytes and .sig.
+    vb = VECTOR["bundle"]
+    root = tmp_path / "policies"
+    (root / "tenants").mkdir(parents=True)
+    (root / "platform").mkdir()
+    (root / "tenants/t-alpha.yaml").write_text(json.dumps(vb["tenants"]["t-alpha"]["grants"]))
+    platform = json.loads(json.dumps(vb["platform"]))
+    vector_tools = platform["services"][0].pop("tools")
+    (root / "platform/registry.yaml").write_text(json.dumps(platform))
+    manifest = tmp_path / "gxg-manifest.yaml"
+    tools = [{**t, "resource": {"type": "board"}, "input_schema": "x.json", "title": "t"} for t in vector_tools]
+    manifest.write_text(
+        json.dumps({"connector": "demo", "version": "1.0.0", "contract": "gxg-mcp-connector/v1", "tools": tools})
+    )
+    seed_ = hashlib.sha256(b"gxg-hub test vector bundle key v1 - NOT A SECRET").digest()
+    assert public_key(seed_) == VECTOR["public_key"]
+    env = {**os.environ, "GXG_BUNDLE_SIGNING_KEY": b64url(seed_)}
+    cmd = [sys.executable, "-m", "gxg_policy.cli", "build", str(root), "--out", str(tmp_path / "out")]
+    cmd += ["--bundle-version", vb["bundle_version"], "--built-at", vb["built_at"], "--kid", VECTOR["kid"]]
+    r = subprocess.run([*cmd, "--manifest", str(manifest)], capture_output=True, text=True, env=env, check=False)
+    assert r.returncode == 0, r.stderr
+    assert (tmp_path / "out" / BUNDLE).read_bytes() == base64.b64decode(VECTOR["bundle_bytes_b64"])
+    assert json.loads((tmp_path / "out" / SIG).read_bytes()) == VECTOR["signature_file"]
+    assert (tmp_path / "out" / SIG).read_bytes() == jcs(VECTOR["signature_file"])
+    assert cli_verify(tmp_path / "out", seed_, VECTOR["kid"]).returncode == 0
+    vector_sig = jcs(VECTOR["signature_file"])
+    data = base64.b64decode(VECTOR["bundle_bytes_b64"])
+    assert verify(data, vector_sig, {VECTOR["kid"]: VECTOR["public_key"]}) == vb
+
+
+def _bundle(pol_root: Path, manifests: list[Path], tmp_path: Path) -> dict[str, object]:
+    build(
+        lint(pol_root, manifests), tmp_path, bundle_version=SHA, built_at="2026-11-20T10:00:00Z", seed=seed(), kid="k"
+    )
+    doc: dict[str, object] = json.loads((tmp_path / BUNDLE).read_bytes())
+    return doc
+
+
+def test_build_takes_connector_tools_from_manifests(tmp_path: Path) -> None:
+    # GR-11a / AS-26: only the projected fields, from the manifest whose `connector` is the service id.
+    doc = _bundle(GOOD / "policies", [GOOD / "manifest.yaml"], tmp_path)
+    services = {s["id"]: s for s in doc["platform"]["services"]}  # type: ignore[index]
+    assert services["demo"]["tools"] == [
+        {
+            "name": "demo.wire.propose",
+            "version": "1.0.0",
+            "effect_class": "high_risk",
+            "action": "propose",
+            "executes_via": "demo.wire.execute",
+            "preview": {"title": "Перевод", "fields": {"amount": "Сумма"}},
+        },
+        {
+            "name": "demo.message.propose",
+            "version": "1.0.0",
+            "effect_class": "external_effect",
+            "action": "propose",
+            "executes_via": "demo.message.execute",
+            "dispatch_timeout_s": 30,
+            "preview": {"title": "Сообщение", "fields": {"text": "Текст"}},
+        },
+    ]
+    assert all("tools" not in s for s in services.values() if s["kind"] != "connector")
+
+
+def test_build_without_manifest_gives_connectors_empty_tools(tmp_path: Path) -> None:
+    # The repo registry has hand-written tools; with no manifest the bundle carries [] (lint warns).
+    doc = _bundle(REPO / "policies", [], tmp_path)
+    connectors = [s for s in doc["platform"]["services"] if s["kind"] == "connector"]  # type: ignore[index]
+    assert connectors and all(s["tools"] == [] for s in connectors)
+    warnings = [f for f in lint(REPO / "policies", []).findings if f.code == "ignored-tools"]
+    assert [(f.file, f.path, f.level) for f in warnings] == [
+        ("platform/registry.example.yaml", "services[2].tools", "warning")
+    ]
+
+
+def test_build_rejects_a_bundle_outside_the_schema(tmp_path: Path) -> None:
+    with pytest.raises(BundleError, match=r"not a v1 bundle \(grants-bundle.schema.json\): bundle_version"):
+        build(
+            lint(GOOD / "policies"),
+            tmp_path,
+            bundle_version="v1",
+            built_at="2026-11-20T10:00:00Z",
+            seed=seed(),
+            kid="k",
+        )
+    assert not (tmp_path / BUNDLE).exists()
+
+
+@pytest.mark.parametrize(
+    ("text", "code", "path"),
+    [
+        ("connector: demo\nversion: 1.0.0\ncontract: gxg-mcp-connector/v1\ntools: []\n", "schema", "tools"),
+        ("connector: [\n", "manifest", ""),
+    ],
+)
+def test_bad_manifest_is_a_finding_with_file_and_path(tmp_path: Path, text: str, code: str, path: str) -> None:
+    m = tmp_path / "gxg-manifest.yaml"
+    m.write_text(text)
+    errors = lint(GOOD / "policies", [m]).errors
+    assert [(e.file, e.path, e.code) for e in errors] == [(str(m), path, code)]
+
+
+def test_second_manifest_for_one_connector_is_an_error() -> None:
+    errors = lint(GOOD / "policies", [GOOD / "manifest.yaml"] * 2).errors
+    assert [(e.path, e.code) for e in errors] == [("connector", "duplicate-id")]

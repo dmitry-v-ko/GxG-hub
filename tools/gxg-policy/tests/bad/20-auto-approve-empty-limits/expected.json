@@ -1,0 +1,6 @@
+{
+  "description": "auto_approve с пустыми limits (approval-policy: обязателен и непуст)",
+  "code": "schema",
+  "file": "approval/t-alpha.yaml",
+  "path": "rules[1].limits"
+}

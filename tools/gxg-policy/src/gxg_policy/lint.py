@@ -11,7 +11,9 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-from gxg_policy.load import REPO_ROOT, Finding, Policies, load, parse_ts, parse_yaml
+import yaml
+
+from gxg_policy.load import REPO_ROOT, Finding, Policies, load, parse_ts, parse_yaml, schema_findings
 
 # effects-and-approval-v1.md «Сроки по умолчанию»; a policy may only shorten them.
 SYSTEM_DEFAULTS = {"approval_ttl": 24 * 3600, "execution_window": 3600}
@@ -38,18 +40,25 @@ def expand(refs: Iterable[str], groups: dict[str, list[str]]) -> list[str]:
     return out
 
 
-def tool_classes(manifests: Iterable[Path]) -> dict[str, str]:
-    classes: dict[str, str] = {}
-    for m in manifests:
-        for tool in (parse_yaml(m.read_text(encoding="utf-8")) or {}).get("tools", []):
-            classes[tool["name"]] = tool["effect_class"]
-    return classes
-
-
 def default_manifests() -> list[Path]:
-    return sorted(REPO_ROOT.glob("connectors/*/gxg-manifest.yaml")) + sorted(
-        REPO_ROOT.glob("schemas/examples/*.gxg-manifest.yaml")
-    )
+    """The manifests whose tools go into the bundle (GR-11a): AP-02 checks the same classes AS-26 enforces."""
+    return sorted(REPO_ROOT.glob("connectors/*/gxg-manifest.yaml"))
+
+
+def load_manifests(pol: Policies, paths: Iterable[Path]) -> None:
+    """Schema-checked connector manifests into `pol.manifests` (connector id -> manifest); errors as findings."""
+    for path in paths:
+        try:
+            doc = parse_yaml(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError, UnicodeDecodeError) as exc:
+            pol.findings.append(Finding(str(path), "", "manifest", str(exc).replace("\n", " ")))
+            continue
+        bad = schema_findings(str(path), "gxg-manifest.schema.json", doc)
+        if not bad and doc["connector"] in pol.manifests:
+            bad = [Finding(str(path), "connector", "duplicate-id", f"second manifest for {doc['connector']!r}")]
+        pol.findings += bad
+        if not bad:
+            pol.manifests[doc["connector"]] = doc
 
 
 def rid_overlap(a: str, b: str) -> bool:
@@ -57,8 +66,9 @@ def rid_overlap(a: str, b: str) -> bool:
 
 
 class _Linter:
-    def __init__(self, pol: Policies, classes: dict[str, str], now: datetime) -> None:
-        self.pol, self.classes, self.now = pol, classes, now
+    def __init__(self, pol: Policies, now: datetime) -> None:
+        self.pol, self.now = pol, now
+        self.classes = {t["name"]: t["effect_class"] for m in pol.manifests.values() for t in m["tools"]}
         self.out: list[Finding] = []
 
     def err(self, file: str, path: str, code: str, msg: str, level: str = "error") -> None:
@@ -230,6 +240,9 @@ class _Linter:
             for j, t in enumerate(s["tenants"])
         ]
         refs += [(f"webhooks[{i}].tenant", w["tenant"]) for i, w in enumerate(hooks)]
+        for i, svc in enumerate(doc["services"]):
+            if "tools" in svc:
+                self.err(file, f"services[{i}].tools", "ignored-tools", "build takes tools from manifests", "warning")
         for path, t in refs:
             if t != "*" and t not in self.pol.tenants:
                 self.err(file, path, "unknown-tenant", f"no tenants/ file for {t!r}", "warning")
@@ -237,9 +250,8 @@ class _Linter:
 
 def lint(root: Path, manifests: Iterable[Path] | None = None, now: datetime | None = None) -> Policies:
     pol = load(root)
-    linter = _Linter(
-        pol, tool_classes(default_manifests() if manifests is None else manifests), now or datetime.now(UTC)
-    )
+    load_manifests(pol, default_manifests() if manifests is None else manifests)
+    linter = _Linter(pol, now or datetime.now(UTC))
     for file, doc in pol.tenants.values():
         linter.tenant_file(file, doc)
     for file, doc in pol.approval.values():

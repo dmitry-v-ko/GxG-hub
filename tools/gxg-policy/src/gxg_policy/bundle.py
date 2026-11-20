@@ -12,12 +12,14 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from gxg_policy.lint import expand
-from gxg_policy.load import Policies
+from gxg_policy.load import Policies, validator
 
 BUNDLE = "grants-bundle.json"
 SIG = BUNDLE + ".sig"
 MAX_SAFE_INT = 2**53 - 1
-BUNDLE_KEYS = {"schema_version", "bundle_version", "built_at", "tenants", "platform"}
+SCHEMA = "grants-bundle.schema.json"
+# GR-11a: what a bundle carries of each manifest tool (source of truth for AS-26).
+TOOL_KEYS = ("name", "version", "effect_class", "action", "executes_via", "dispatch_timeout_s", "preview")
 
 
 class BundleError(Exception):
@@ -68,13 +70,27 @@ def bundle_doc(pol: Policies, bundle_version: str, built_at: str) -> dict[str, A
             g["subjects"] = expand(g["subjects"], grants.get("groups", {}))
         approval = pol.approval.get(tenant)
         tenants[tenant] = {"grants": grants, "approval_policy": approval[1] if approval else None}
-    return {
+    platform = copy.deepcopy(pol.platform[1])
+    for svc in platform["services"]:
+        if svc["kind"] == "connector":
+            tools = pol.manifests.get(svc["id"], {}).get("tools", [])
+            svc["tools"] = [{k: t[k] for k in TOOL_KEYS if k in t} for t in tools]
+    doc = {
         "schema_version": 1,
         "bundle_version": bundle_version,
         "built_at": built_at,
         "tenants": tenants,
-        "platform": pol.platform[1],
+        "platform": platform,
     }
+    check_shape(doc)
+    return doc
+
+
+def check_shape(doc: Any) -> None:
+    err = next(iter(sorted(validator(SCHEMA).iter_errors(doc), key=lambda e: list(map(str, e.absolute_path)))), None)
+    if err is not None:
+        where = "/".join(map(str, err.absolute_path)) or "<root>"
+        raise BundleError(f"not a v1 bundle ({SCHEMA}): {where}: {err.message}")
 
 
 def sign(data: bytes, seed: bytes, kid: str) -> bytes:
@@ -111,8 +127,7 @@ def verify(data: bytes, sig_file: bytes, keys: dict[str, str]) -> dict[str, Any]
         raise BundleError("bad signature") from exc
     except (ValueError, TypeError) as exc:
         raise BundleError(f"malformed: {exc}") from exc
-    if not isinstance(doc, dict) or set(doc) != BUNDLE_KEYS or doc["schema_version"] != 1:
-        raise BundleError("not a v1 bundle")
+    check_shape(doc)
     if jcs(doc) != data:
         raise BundleError("bundle is not in JCS form")
     return doc
