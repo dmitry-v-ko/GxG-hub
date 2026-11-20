@@ -1,36 +1,49 @@
 {
   "milestone": "M2",
-  "cycle": 1,
+  "cycle": 2,
   "branch": "claude/m2-policy-tooling",
-  "base": "claude/m0-foundation@6b3fe48 + 8128dee (GR-11a spec from claude/admiring-planck-vzys0x, unchanged)",
-  "commit": "63d7c181ea4b8de4810c239a33055779fe2d7c26",
-  "commit_note": "Tested code commit. This report is added by the next commit on the same branch; that commit changes only reports/.",
-  "run_at": "2026-11-20T18:30:00Z",
-  "author": "Claude Code (executor, M2 cycle 1)",
-  "plan": "reports/plans/M2-cycle-1.md",
+  "base": "claude/m2-policy-tooling@409bf08 (cycle 1) + 8b616c4 (GR-13a, AS-06a specs from claude/admiring-planck-vzys0x, unchanged)",
+  "commit": "fbd522a702af591a2f247fbd7fcd00b035a1260b",
+  "commit_note": "Tested code commit (e10cf06 + merge of the critic addendum 9929a67, reports only). This report is added by the next commit, which changes only reports/.",
+  "run_at": "2026-11-20T19:05:00Z",
+  "author": "Claude Code (executor, M2 cycle 2)",
+  "plan": "reports/plans/M2-cycle-2.md",
   "environment": {
     "local": {
       "os": "linux x86_64",
       "python": "3.12.3",
       "uv": "0.11.32",
-      "command": "UV_PYTHON=3.12 UV_LOCKED=1 bash scripts/ci/check-all.sh -> check-all: OK; uv run pytest -> 165 passed, 0 skipped"
+      "command": "UV_PYTHON=3.12 UV_LOCKED=1 bash scripts/ci/check-all.sh -> check-all: OK; uv run pytest -> 202 passed, 136 subtests passed, 0 skipped (Python 3.12.3)"
     },
     "ci": {
       "runner": "ubuntu-latest",
       "python": "3.12",
       "workflow": ".github/workflows/ci.yml",
-      "run_id": 44792404466,
-      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44792404466",
-      "run_commit": "63d7c181ea4b8de4810c239a33055779fe2d7c26",
+      "run_id": 44797618586,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44797618586",
+      "run_commit": "fbd522a702af591a2f247fbd7fcd00b035a1260b",
       "event": "push",
-      "run_conclusion": "success: lint, types, tests, schema-guard, secrets, policy, grants-widening (push path: 'Not a pull request'), ci-ok; bundle skipped (runs only on push to main)"
+      "run_conclusion": "failure BY DESIGN (F1): lint, types, tests, schema-guard, secrets, policy — success; grants-widening — failure: '12 widening change(s) outside a pull request' (diff vs merge-base with origin/main = 9c6577f, where policies/ are the pre-M0 examples); ci-ok — failure (needs grants-widening); bundle — skipped (not main)",
+      "why_red": "main has not received M0/M2 yet, so every policy change on this branch is widening against main. A push run cannot be approved (no PR, no label), so it stays red until the policies reach main through a PR with the owner's widening-approved label. Making it green would mean bringing back the unconditional pass that cycle 1's critic rated critical."
     }
   },
   "contextforge_image_digest": null,
-  "sdk_versions": {"mcp": null, "fastmcp": null, "note": "M2 does not use MCP SDKs"},
-  "tool_versions": {"pytest": "9.2.0", "ruff": "0.17.6", "mypy": "2.4.1", "jsonschema": "4.26.0", "PyYAML": "6.0.3", "cryptography": "46.0.7"},
+  "sdk_versions": {
+    "mcp": null,
+    "fastmcp": null,
+    "note": "M2 does not use MCP SDKs"
+  },
+  "tool_versions": {
+    "pytest": "9.2.0",
+    "ruff": "0.17.6",
+    "mypy": "2.4.1",
+    "jsonschema": "4.26.0",
+    "PyYAML": "6.0.3",
+    "cryptography": "46.0.7",
+    "note": "CI and local check-all use uv.lock (UV_LOCKED=1)"
+  },
   "policy_version": null,
-  "bundle_version": "d4300c991c68a8431b6283dd9f932bd6f2b5339c (local smoke build of policies/ at the working tree; CI smoke builds at run_commit with a throw-away key)",
+  "bundle_version": "ca572573af47041122bc036f0952b72478b6406a (local smoke build in check-all at the plan commit; CI smoke builds at run_commit with a throw-away key)",
   "fixture_identity": "synthetic principals only (agent:t-alpha:*, oidc:https://idp.example.invalid:N); keys generated per test with os.urandom",
   "acceptance": [
     {
@@ -38,55 +51,99 @@
       "status": "passed",
       "expected": "`gxg-policy validate policies/` passes on the repository examples",
       "actual": "exit 0, 0 errors, 0 warnings; `lint policies/` also exit 0 (2 warnings: unknown-tool telegram.message.propose — no manifest in repo; unknown-tenant t-beta in registry example)",
-      "tests": ["tools/gxg-policy/tests/test_lint.py::test_ac_m2_01_validate_repo_policies", "tools/gxg-policy/tests/test_lint.py::test_repo_policies_lint_clean"],
-      "evidence": ["CI job `policy` steps validate and lint (run 44792404466)"]
+      "tests": [
+        "tools/gxg-policy/tests/test_lint.py::test_ac_m2_01_validate_repo_policies",
+        "tools/gxg-policy/tests/test_lint.py::test_repo_policies_lint_clean"
+      ],
+      "evidence": [
+        "CI job `policy` steps validate and lint (run 44792404466)"
+      ]
     },
     {
       "id": "AC-M2-02",
       "status": "passed",
       "expected": ">= 12 prepared errors in tools/gxg-policy/tests/bad/, each found with non-zero exit and file + path",
-      "actual": "18 fixtures (all 12 from the AC + dangling-connection, dangling-requester, duplicate YAML key, auto_approve by effect_classes high_risk, human in a subject group, defaults.execution_window over system default). For each: lint reports exactly one error equal to expected.json (file, path, code); CLI exit 1 and stderr contains `<file>: <path>: [<code>]`",
-      "tests": ["tools/gxg-policy/tests/test_lint.py::test_ac_m2_02_lint_finds_error[*] (18)", "tools/gxg-policy/tests/test_lint.py::test_ac_m2_02_has_all_required_cases"],
+      "actual": "19 fixtures (all 12 from the AC + dangling-connection, dangling-requester, duplicate YAML key, auto_approve by effect_classes high_risk, human in a subject group, defaults.execution_window over system default, dangling group: subject). For each: lint reports exactly one error equal to expected.json; CLI exit 1 and stderr `<file>: <path>: [<code>]`",
+      "tests": [
+        "tools/gxg-policy/tests/test_lint.py::test_ac_m2_02_lint_finds_error[*] (19)",
+        "tools/gxg-policy/tests/test_lint.py::test_ac_m2_02_has_all_required_cases"
+      ],
       "notes": "connector tenants ['*'], webhook non-HTTPS and credential without secret:// are rejected by the JSON Schemas (code `schema`); lint includes schema validation"
     },
     {
       "id": "AC-M2-03",
       "status": "passed",
       "expected": "added (subject, action, resource) pairs and new auto_approve marked widening, removed — narrowing; 6 fixture pairs with golden reports",
-      "actual": "6 pairs under tools/gxg-policy/tests/diff/ with expected.json (+ expected.md for 06-mixed); reports equal the goldens",
-      "tests": ["tools/gxg-policy/tests/test_diff.py::test_ac_m2_03_report_matches_golden[*] (6)", "tools/gxg-policy/tests/test_diff.py::test_ac_m2_03_core_classification", "tools/gxg-policy/tests/test_diff.py::test_markdown_golden"],
-      "notes": "Golden reports were generated by the tool and then reviewed entry by entry by the executor; test_ac_m2_03_core_classification asserts the AC's core cases independently of the goldens"
+      "actual": "8 pairs under tools/gxg-policy/tests/diff/ with expected.json; reports equal the goldens. New: 07-approval-groups (only group membership changes: new member of an auto_approve requester group -> requesters_added widening, new member of an approvers group -> approvers_added widening), 08-approval-match-approvers (auto_approve match resources widened -> match_changed widening, direct approvers added -> widening, auto_approve requester removed -> narrowing). 03-group-member-added golden gained requesters_added (the new group member is now auto-approved by msg-auto; cycle 1 missed it)",
+      "tests": [
+        "tools/gxg-policy/tests/test_diff.py::test_ac_m2_03_report_matches_golden[*] (8)",
+        "tools/gxg-policy/tests/test_diff.py::test_ac_m2_03_core_classification",
+        "tools/gxg-policy/tests/test_diff.py::test_group_membership_in_approval_rules_is_widening",
+        "tools/gxg-policy/tests/test_diff.py::test_direct_rule_edits",
+        "tools/gxg-policy/tests/test_diff.py::test_star_means_everyone_in_approvers_and_requesters",
+        "tools/gxg-policy/tests/test_diff.py::test_markdown_golden"
+      ],
+      "notes": "Goldens 07, 08 and the 03 change were generated by the tool and checked entry by entry; the two new tests assert the classification independently of the goldens"
     },
     {
       "id": "AC-M2-04",
       "status": "partial",
       "expected": "PR with widening not mergeable until `widening-approved` label added by a CODEOWNERS user; check `grants-widening` red until then",
-      "actual": "Job `grants-widening` is in ci-ok (already the required check). Gate logic (no label, non-owner, app-performed event, label removed then re-added, new push removes label, comment upsert) is unit-tested with a fake API. The PR path has not run on GitHub: no PR was opened in this cycle (not requested). Only the push path ran in CI.",
-      "tests": ["tests/ci/test_widening_gate.py (14 tests)"],
-      "evidence": ["docs/setup/widening-approval.md"],
-      "remaining": "End-to-end on a real PR: open a PR with a widening policy change → grants-widening red and the diff comment appears; owner adds the label by hand → green; push again → label removed, red. Owner-only label cannot be enforced by GitHub permissions; enforced by the gate (actor ∈ CODEOWNERS of the base commit)."
+      "proven_by_tests": [
+        "F1 outside pull_request: scripts/ci/grants_widening.sh in a temp git repo — push and workflow_dispatch to a branch with widening vs merge-base(origin/main) -> exit 1; merge-base, not main tip; narrowing only -> 0; main -> 0; no origin/main -> non-zero (tests/ci/test_grants_widening_job.py, 6)",
+        "F1 in real CI: run 44797618586 (push, this commit) — grants-widening and ci-ok red with '12 widening change(s) outside a pull request'",
+        "F2: label older than the server-side arrival of the head SHA (earliest pull_request run on this PR) is removed and red on synchronize, labeled (other label), reopened, unlabeled, opened; later label counts; force-push after the label -> stale; runs of other branches/PRs ignored; unknown arrival -> red; no widening -> label kept (tests/ci/test_widening_gate.py)",
+        "F2 wiring: PR runs have their own concurrency group (never cancelled or replaced), cancel-in-progress only for non-PR runs; grants-widening has no step that passes without deciding; actions: read (tests/ci/test_ci_workflow.py)",
+        "Gate decision: no label, non-owner, app-performed event, case-insensitive owner, CODEOWNERS of the base commit, own comment updated (not a forged one)",
+        "DoD-4: scripts/ci/mutate_m2.py — 39/39 mutations killed, incl. every gate/job condition above (reports/mutations/M2-cycle-2.txt)"
+      ],
+      "owner_pending": [
+        "Steps 1-7 of docs/setup/widening-approval.md «Сквозная проверка на реальном PR»: (1) widening PR from claude/** -> diff comment with widening: 1, every grants-widening and ci-ok on the head SHA red (PR run and push run), gh pr merge refuses; (2) workflow_dispatch on the PR branch -> red; (3) label added via the Claude GitHub App/MCP -> red with 'added via the GitHub App' (proves performed_via_github_app is set for these tokens; unproven until then); (4) owner adds the label by hand -> green, merge allowed (also shows which of the two same-name ci-ok checks GitHub counts); (5) new widening push + another label or reopen -> red, label removed with 'older than the head commit'; (6) label again -> green; (7) PR changing widening_gate.py to return 0 -> green = documented known limit",
+        "Whether actions/runs returns head_branch/pull_requests as expected for this repo (if not, approval never counts: fail closed, step 4 shows it)"
+      ],
+      "tests": [
+        "tests/ci/test_widening_gate.py",
+        "tests/ci/test_grants_widening_job.py",
+        "tests/ci/test_ci_workflow.py"
+      ],
+      "evidence": [
+        "docs/setup/widening-approval.md",
+        "CI run 44797618586 grants-widening log"
+      ]
     },
     {
       "id": "AC-M2-05",
       "status": "passed",
       "expected": "two build runs on one commit give byte-identical bundles (excluding signature and built_at)",
       "actual": "Separate processes with different PYTHONHASHSEED, keys and built_at: bundles equal after removing built_at; same built_at → byte-identical file",
-      "tests": ["tools/gxg-policy/tests/test_bundle.py::test_ac_m2_05_two_builds_are_byte_identical"],
-      "evidence": ["scripts/ci/bundle_smoke.sh in CI job `policy` (cmp of two builds)"]
+      "tests": [
+        "tools/gxg-policy/tests/test_bundle.py::test_ac_m2_05_two_builds_are_byte_identical",
+        "tools/gxg-policy/tests/test_bundle.py::test_gr_13a_rebuild_without_flag_only_changes_built_at"
+      ],
+      "evidence": [
+        "scripts/ci/bundle_smoke.sh in CI job `policy` (cmp of two builds)"
+      ]
     },
     {
       "id": "AC-M2-06",
       "status": "passed",
       "expected": "verify accepts a bundle from build and rejects it after one changed byte",
-      "actual": "accepted; flipping a bit at 0, middle, last and every 97th byte → rejected; also rejected: foreign key, unknown kid, alg none/ES256, missing .sig, signed but non-JCS bytes",
-      "tests": ["tools/gxg-policy/tests/test_bundle.py::test_ac_m2_06_verify_accepts_built_bundle", "tools/gxg-policy/tests/test_bundle.py::test_ac_m2_06_verify_rejects_any_changed_byte", "tools/gxg-policy/tests/test_bundle.py::test_verify_rejects_wrong_key_kid_alg_and_missing_sig", "tools/gxg-policy/tests/test_bundle.py::test_verify_rejects_signed_but_not_canonical"]
+      "actual": "accepted; flipping a bit at 0, middle, last and every 97th byte → rejected; also rejected: foreign key, unknown kid, alg none/ES256, missing .sig, signed but non-JCS bytes; also rejected: validly signed bundle with schema_version 2, an extra key or a missing key ('not a v1 bundle'); unknown kid named in the error",
+      "tests": [
+        "tools/gxg-policy/tests/test_bundle.py::test_ac_m2_06_verify_accepts_built_bundle",
+        "tools/gxg-policy/tests/test_bundle.py::test_ac_m2_06_verify_rejects_any_changed_byte",
+        "tools/gxg-policy/tests/test_bundle.py::test_verify_rejects_wrong_key_kid_alg_and_missing_sig",
+        "tools/gxg-policy/tests/test_bundle.py::test_verify_rejects_signed_but_not_canonical",
+        "tools/gxg-policy/tests/test_bundle.py::test_verify_rejects_validly_signed_wrong_shape[*] (3)",
+        "tools/gxg-policy/tests/test_bundle.py::test_verify_names_unknown_kid"
+      ]
     }
   ],
   "dod": {
-    "1_main_via_pr_ci_green": "CI green on the branch (run 44792404466); merge to main via PR is the owner's step",
-    "2_automated_tests": "AC-M2-01, 02, 03, 05, 06 automated; AC-M2-04 automated at the logic level, PR end-to-end pending",
+    "1_main_via_pr_ci_green": "Not yet: run 44797618586 is red only in grants-widening/ci-ok by design (see environment.ci.why_red); the PR into main with the owner's label is the owner's step",
+    "2_automated_tests": "AC-M2-01, 02, 03, 05, 06 automated; AC-M2-04 automated for the gate logic, job script and workflow wiring, end-to-end PR steps owner-pending",
     "3_report": "this file",
-    "4_tests_catch_mutation": "17/17 single-condition mutations turn tests red (diff: added pair → narrowing, auto_approve added → narrowing, no group expansion; lint: foreign, rid-domain, high_risk, approver role, system default ttl, duplicate id, YAML duplicate key; bundle: JCS check, signature check, group expansion, UTF-16 key order; gate: owner check, app check, label removal on push). Script was run ad hoc, not committed.",
+    "4_tests_catch_mutation": "39/39 single-condition mutations killed: scripts/ci/mutate_m2.py, output reports/mutations/M2-cycle-2.txt (re-run: uv run python scripts/ci/mutate_m2.py)",
     "5_no_skips": "0 skipped, 0 xfail (enforced by conftest.py)"
   },
   "gr_11a_format": {
@@ -99,14 +156,38 @@
     "platform registry: the single *.yaml in policies/platform/ (spec names registry.yaml, repo ships registry.example.yaml)",
     "tenant file name is not checked against `tenant` (repo example is example.yaml with tenant t-alpha)",
     "foreign principal detected by tenant segment of agent:<tenant>:<name> (spec marks the format VERIFY)",
-    "rewritten `match` of any rule is classified widening (fail closed)"
+    "rewritten `match` of a rule is widening (fail closed), except requesters of auto_approve rules, which are compared as expanded sets (added -> widening, removed -> narrowing)",
+    "'*' / absent approvers or requesters means everyone: '*' -> specific is narrowing"
   ],
   "known_limitations": [
-    "grants-widening runs from the PR's own workflow (pull_request): a PR that edits ci.yml or the gate script can disable it for itself; pull_request_target checks are not reliably counted as required, required workflows need an org ruleset",
-    "GitHub cannot restrict who adds a label (Triage+); the gate counts only labels added by CODEOWNERS users (base commit) and not via a GitHub App; an agent holding the owner's personal token is indistinguishable from the owner",
-    "bundle job (signed, main only) not exercised: needs the secret and a merge to main",
-    "unknown tools in auto_approve rules are a warning (no manifests in repo yet), so AP-02 is only enforced for tools with a manifest or for effect_classes: [high_risk]",
-    "GR-18 drift check and bundle distribution (GR-12/13) not in M2"
+    "grants-widening executes the PR's own ci.yml, scripts/ci/grants_widening.sh, scripts/ci/widening_gate.py, tools/gxg-policy/src/**, pyproject.toml/uv.lock (uv sync) and schemas/: a PR that edits them can disable the gate for itself; all are CODEOWNERS-owned without required review (AC-M0-03 decision)",
+    "push runs on claude/** stay red while the branch widens vs main; which same-name ci-ok GitHub counts for merge is owner checklist step 4",
+    "performed_via_github_app for Claude GitHub App tokens is unproven until owner checklist step 3; an agent with the owner's personal token is indistinguishable from the owner",
+    "head arrival time from actions/runs: if GitHub leaves head_branch/pull_requests empty, approvals never count (fail closed)",
+    "bundle job (signed, main, push+schedule) not exercised: needs the secret and main",
+    "unknown tools in auto_approve rules are a warning (no manifests in repo yet)",
+    "GR-18 drift check, bundle distribution (GR-12/13) and the loader's older-built_at rejection (GR-13a) not in M2"
   ],
-  "escalation": null
+  "escalation": "CI on the branch is red by design after F1 (grants-widening on push vs main). The task asks for green CI; I did not weaken the gate. Options for the orchestrator/owner: (a) accept the red push run until the PR into main gets the label (recommended); (b) drop `push: claude/**` and workflow_dispatch (critic's alternative) — branches then have no CI without a PR.",
+  "gr_13a": {
+    "schedule": "ci.yml `schedule: 41 */6 * * *` (every 6 h, UTC); job bundle runs on push or schedule when ref is refs/heads/main, same build+verify steps",
+    "tests": [
+      "tests/ci/test_ci_workflow.py::test_gr_13a_bundle_is_resigned_at_least_every_12_hours (max cron gap <= 12 h, bundle condition)",
+      "tools/gxg-policy/tests/test_bundle.py::test_gr_13a_rebuild_without_flag_only_changes_built_at (same content, fresh RFC 3339 UTC built_at)",
+      "tools/gxg-policy/tests/test_bundle.py::test_build_rejects_bad_built_at[*] (5)"
+    ],
+    "not_checked": "that GitHub actually fires the schedule (needs main + time); loader rejection of older built_at is M1",
+    "docs": "docs/setup/bundle-signing.md «Переподпись по расписанию»"
+  },
+  "critic_cycle_1": {
+    "F1": "done: fail closed outside pull_request (scripts/ci/grants_widening.sh, gate --no-pr), 'Not a pull request' step removed; tests + red CI run",
+    "F2": "done: staleness on every event by server time + force-push events; PR runs never cancelled; tests for labeled/reopened after an unprocessed push",
+    "F3": "done: group: expanded in requesters/approvers; fixtures 07 (+08), 03 golden corrected",
+    "F4": "done: fixtures 08, bad/19, verify shape tests, '*' test, mutation script + output",
+    "F5": "done: guide lists every executed path, remaining limits, owner checklist with exact expected results (app label rejected)",
+    "AC-M2-04 evidence": "done: proven_by_tests / owner_pending split above",
+    "minor --built-at": "done: RFC 3339 UTC with Z, round-trip check, exit 2",
+    "minor MARKER": "done: one constant in gxg_policy.diff; gate uses the first line of the Markdown report",
+    "GR-13a": "done: schedule every 6 h, bundle on schedule on main, docs, tests"
+  }
 }
