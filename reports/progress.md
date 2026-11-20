@@ -21,3 +21,6 @@
 | M0 | 3 | исполнитель | claude/m0-foundation | 2ab1faf (+88d3f1f отчёт) | — | согласованный AC-M0-03 применён, CI 44788073458 зелёный | 2026-11-20 |
 | M0 | 3 | критик | claude/m0-foundation | 2ab1faf | — | запущен | 2026-11-20 |
 | M0 | 3 | критик | claude/m0-foundation | 2ab1faf (отчёт 6b3fe48) | **9.5** | ≥ 9 — **веха закрыта** (AC-M0-03 ждёт ручной настройки владельцем, мерж в main — владелец); minor → backlog | 2026-11-20 |
+| M1 | 1 | исполнитель | claude/m1-connector-kit | — | — | запущен (session_01V6d5A8BqncdPhSaqQg4TJn), ponytail ultra | 2026-11-20 |
+| M2 | 1 | исполнитель | claude/m2-policy-tooling | — | — | запущен (session_01V6d5A6zfJPN82YUQCUJrgv), ponytail ultra | 2026-11-20 |
+| M4 | 1 | исполнитель | claude/m4-contextforge-spike | — | — | запущен (session_01V6d5AA9fNoSEufu9cHpFtc), спайк | 2026-11-20 |
