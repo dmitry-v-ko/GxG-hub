@@ -7,6 +7,7 @@
 # Two configs, both must pass: .gitleaks.toml (gitleaks defaults) and .gitleaks-strict.toml
 # (AC-M0-04 rules without the default path allowlist). Historical findings: .gitleaksignore.
 # All three come from this repository's root, not from the scanned repository. Exit code: 0 clean, non-zero findings or error.
+# Plus one check of file names outside gitleaks, because gitleaks skips empty files (owner decision, M0.1 cycle 2).
 # GITLEAKS=/path/to/gitleaks uses that binary instead of downloading (it must be $VERSION).
 set -euo pipefail
 
@@ -35,6 +36,14 @@ GL="${GITLEAKS:-$(install_gitleaks)}"
 # --redact: never print the secret; --ignore-gitleaks-allow: an inline "gitleaks:allow" must not hide a finding.
 COMMON=(--no-banner --no-color --redact --ignore-gitleaks-allow -v --exit-code 1 --gitleaks-ignore-path "$IGNORE")
 ZERO=0000000000000000000000000000000000000000
+# The file-name rule of .gitleaks-strict.toml, for empty files: gitleaks skips them (owner decision, cycle 2).
+NAMES='(?i)(?:^|/)(?!(?-i)\.env\.example$)(?:[^/]*\.(?:pem|key|p12|pfx)|\.env[^/]*|id_(?:rsa|dsa|ecdsa|ed25519))$'
+
+names() {
+  local bad
+  bad="$("$@" | { grep -zP "$NAMES" || true; } | tr '\0' '\n' | sort -u)" || return 2
+  [ -z "$bad" ] || { sed 's/^/gitleaks.sh: secret file name: /' <<<"$bad" >&2; return 1; }
+}
 
 scan_log() {
   local rc=0
@@ -53,7 +62,10 @@ case "${1:-}" in
     snapshot="$(GIT_AUTHOR_NAME=gitleaks GIT_AUTHOR_EMAIL=ci@example.invalid \
       GIT_COMMITTER_NAME=gitleaks GIT_COMMITTER_EMAIL=ci@example.invalid \
       git commit-tree -m "tree of $rev" "$rev^{tree}")"
-    scan_log "$snapshot"
+    rc=0
+    names git ls-tree -r -z --name-only "$rev" || rc=1
+    scan_log "$snapshot" || rc=1
+    exit "$rc"
     ;;
   range)
     spec="${2:?range A..B}"
@@ -67,7 +79,10 @@ case "${1:-}" in
       git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "gitleaks.sh: bad revision $base" >&2; exit 2; }
       revs="$base..$head"
     fi
-    scan_log "$revs"
+    rc=0
+    names git log -z --format= --name-only --diff-filter=d -m --full-history "$revs" || rc=1
+    scan_log "$revs" || rc=1
+    exit "$rc"
     ;;
   *)
     echo "usage: $0 tree [REV] | range A..B" >&2

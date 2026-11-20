@@ -109,6 +109,9 @@ NAMES = [
     "approval/.env",
     ".env.local",
     ".env.production",
+    ".envrc",
+    ".env-local",
+    ".ENV_PROD",
     "keys/service.key",
     "client.p12",
     "client.pfx",
@@ -128,22 +131,7 @@ NAMES = [
     "vendor/github.com/x/server.key",
 ]
 
-
-@pytest.mark.parametrize("path", NAMES)
-def test_forbidden_file_names_fail(repo: Path, path: str) -> None:
-    base = git(repo, "rev-parse", "HEAD")
-    commit(repo, {path: "placeholder\n"}, "add file")
-    assert_red_everywhere(repo, base, path)
-
-
-@pytest.mark.parametrize(
-    "kind",
-    ["pkcs8", "rsa", "ec", "encrypted"],
-)
-def test_generated_private_keys_fail(repo: Path, keys: dict[str, str], kind: str) -> None:
-    base = git(repo, "rev-parse", "HEAD")
-    commit(repo, {"config/key.txt": keys[kind]}, "add key")
-    assert_red_everywhere(repo, base, "config/key.txt", body(keys[kind]))
+KINDS = ["pkcs8", "rsa", "ec", "encrypted"]
 
 
 def content_cases(keys: dict[str, str]) -> dict[str, tuple[str, str | bytes]]:
@@ -177,25 +165,48 @@ def content_cases(keys: dict[str, str]) -> dict[str, tuple[str, str | bytes]]:
     }
 
 
-CONTENT_IDS = list(content_cases({"pkcs8": ""}))
+def test_every_history_free_case_fails(repo: Path, keys: dict[str, str], subtests: pytest.Subtests) -> None:
+    """Forbidden names, generated keys and the header anywhere: one commit, one tree and one range scan.
 
-
-@pytest.mark.parametrize("case", CONTENT_IDS)
-def test_private_key_header_anywhere_fails(repo: Path, keys: dict[str, str], case: str) -> None:
-    path, content = content_cases(keys)[case]
+    Each case has its own path, so every one must show up as its own `File:` line in both scans.
+    """
+    files: dict[str, str | bytes] = {path: "placeholder\n" for path in NAMES}
+    files |= {f"config/key-{kind}.txt": keys[kind] for kind in KINDS}
+    files |= dict(content_cases(keys).values())
+    assert len(files) == len(NAMES) + len(KINDS) + len(content_cases(keys)), "every case needs its own path"
     base = git(repo, "rev-parse", "HEAD")
-    commit(repo, {path: content}, "add key")
-    assert_red_everywhere(repo, base, path, body(keys["pkcs8"]))
+    commit(repo, files, "add everything")
+    secrets = [body(keys[kind]) for kind in KINDS]
+    for res in (scan(repo, "tree"), scan(repo, "range", f"{base}..HEAD")):
+        for path in files:
+            with subtests.test(path=path):
+                assert_red(res, path, *secrets)
+
+
+def test_empty_files_with_secret_names_fail(repo: Path, subtests: pytest.Subtests) -> None:
+    """gitleaks skips empty files; the name check in gitleaks.sh catches them."""
+    base = git(repo, "rev-parse", "HEAD")
+    commit(repo, dict.fromkeys(NAMES, ""), "add empty files")
+    for res in (scan(repo, "tree"), scan(repo, "range", f"{base}..HEAD")):
+        assert res.returncode == 1, res.stdout + res.stderr
+        for path in NAMES:
+            with subtests.test(path=path):
+                assert f"gitleaks.sh: secret file name: {path}\n" in res.stderr, res.stderr
 
 
 def test_key_added_and_removed_within_the_pr_fails(repo: Path, keys: dict[str, str]) -> None:
+    commit(repo, {"notes.txt": "x\n"}, "before the PR")
     base = git(repo, "rev-parse", "HEAD")
-    commit(repo, {"secrets.pem": "x\n", "cfg/app.txt": keys["rsa"]}, "oops")
-    head = commit(repo, {}, "remove", remove=("secrets.pem", "cfg/app.txt"))
+    commit(repo, {"secrets.pem": "x\n", "cfg/app.txt": keys["rsa"], "gone/.env": ""}, "oops")
+    git(repo, "mv", "notes.txt", "KEY.PEM")
+    git(repo, "commit", "-q", "-m", "pure rename to a secret name")
+    head = commit(repo, {}, "remove", remove=("secrets.pem", "cfg/app.txt", "gone/.env", "KEY.PEM"))
     assert scan(repo, "tree").returncode == 0  # the final tree is clean ...
     res = scan(repo, "range", f"{base}..{head}")  # ... the commits of the PR are not
     assert_red(res, "secrets.pem", body(keys["rsa"]))
     assert_red(res, "cfg/app.txt")
+    assert "gitleaks.sh: secret file name: gone/.env\n" in res.stderr  # empty: only the name check sees it
+    assert "gitleaks.sh: secret file name: KEY.PEM\n" in res.stderr
 
 
 def test_new_branch_range_from_zero_sha_scans_everything(repo: Path) -> None:

@@ -20,8 +20,8 @@ keywords = ["begin"]
 
 [[rules]]
 id = "gxg-secret-file-name"
-description = "Secret-like file name, any case: *.pem, *.key, *.p12, *.pfx, .env, .env.*, default SSH key names"
-path = '''(?i)(?:^|/)(?:[^/]*\.(?:pem|key|p12|pfx)|\.env(?:\.[^/]*)?|id_(?:rsa|dsa|ecdsa|ed25519))$'''
+description = "Secret-like file name, any case: *.pem, *.key, *.p12, *.pfx, .env*, default SSH key names"
+path = '''(?i)(?:^|/)(?:[^/]*\.(?:pem|key|p12|pfx)|\.env[^/]*|id_(?:rsa|dsa|ecdsa|ed25519))$'''
   [[rules.allowlists]]
   paths = ['''(?:^|/)\.env\.example$''']
 
