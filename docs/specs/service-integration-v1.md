@@ -50,7 +50,7 @@ Automation / Source schedule
 2. Со стороны **сбора** определяется typed port `CollectSource`: source+cursor+limit → MCP read tool → нормализованные items, а затем durable store/dedupe в Signals.
 3. Со стороны **действий** определяется typed port `ExecuteAction`: action contract+candidate_ref+idempotency → разрешённый MCP effect tool → domain `Outcome` и feedback. Действия не исполняются из коллектора напрямую.
 4. Исторические ActionCandidate и их версии должны оставаться неизменными. Операции, имеющие эффект, не исполняются параллельно старым и новым Hub: один авторитетный dispatcher на candidate при переключении.
-5. Human review остаётся во внешнем Human Inbox. Без подтверждения нет эффекта. Gateway не решает, какой сигнал «достаточно хороший».
+5. Для эффектов, требующих человека, **новый GxG Action Gate** перед выполнением запрашивает решение у **GxG Approval Service**. Отдельный Approval Service и UI владеют человеческим решением; Signals владеет своими доменными задачами и outcomes. До подтверждения нет эффекта. Gateway не решает, какой сигнал «достаточно хороший».
 6. Если другим агентам нужен самостоятельный доступ к Signal данным, опциональный `signals.search/get` MCP facade может быть добавлен отдельно. Он не заменяет двустороннее взаимодействие самого Signals с ContextForge.
 
 **Внимание к версиям:** новое [Scoring Workflows](https://github.com/dmitry-v-ko/gxg_agents_v2/blob/main/docs/specs/domains/signal-intelligence/scoring-workflows.md) — целевое изменение модели; в исходной документации помечено implementation:none. Не выдавать его за действующий production.
@@ -58,6 +58,10 @@ Automation / Source schedule
 ## Voice / Oscar
 
 Realtime голос остаётся своим сервисом (low latency, stream/audio). Он MAY вызывать KB/CRM/Signals через ContextForge как обычные tools, но аудио в ContextForge не проксируем «ради единообразия».
+
+## Общий механизм approval для доменных действий
+
+В новой платформе Telegram, CRM, публикации и действия Signals используют **один** [GxG Approval Service](../APPROVALS.md) и отдельный Action Gate. Это не зависимость от старого Human Inbox. Для effect tool: ContextForge проверяет grants → Action Gate определяет по policy, нужен ли человек → Approval Service сохраняет и маршрутизирует запрос → оркестратор возобновляет выполнение → коннектор проверяет неизменность параметров, scopes, срок, replay, idempotency и права на ресурс. Прямой вызов коннектора без gate не должен позволять effect. Реализация этой цепочки пока только целевая.
 
 ## Migration acceptance
 
