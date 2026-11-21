@@ -124,5 +124,7 @@ source_paths = ["scripts/ci/", "conftest.py"]
 # M2 bash/YAML mutation driver (scripts/ci/mutate_m2.py, not a key-condition module).
 do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py"]
 also_copy = ["schemas/", "policies/", "docs/", "tests/", ".github/"]
-pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider"]
+# test_grants_widening_job.py runs the M2 job script in temp repos (subprocesses, like the e2e tests):
+# in neither milestone's mutmut test selection.
+pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider", "--ignore=tests/ci/test_grants_widening_job.py"]
 pytest_add_cli_args_test_selection = ["tests/ci/", "tests/contract/"]
