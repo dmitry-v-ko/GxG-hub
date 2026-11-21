@@ -59,3 +59,13 @@ scripts.ci.widening_gate.x_main__mutmut_94  # encoding="UTF-8"/None/omitted: cod
 scripts.ci.widening_gate.x_main__mutmut_125  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 scripts.ci.widening_gate.x_main__mutmut_127  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 gxg_policy.diff.xǁ_Diffǁtools__mutmut_39  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_approval.mcp.x_create_server__mutmut_14  # "Authorization" -> "authorization": HTTP header names are case-insensitive (RFC 9110), httpx sends the same header
+gxg_approval.mcp.x_create_server__mutmut_15  # "Authorization" -> "AUTHORIZATION": HTTP header names are case-insensitive (RFC 9110)
+gxg_approval.mcp.x_create_server__mutmut_46  # "GET" -> "get": httpx upper-cases the method (Request.method = method.upper())
+gxg_approval.mcp.x_create_server__mutmut_62  # "POST" -> "post": httpx upper-cases the method
+gxg_approval.mcp.x_create_server__mutmut_87  # error=False -> error=None: _result only tests truthiness
+gxg_approval.api.x__error__mutmut_5  # "Retry-After" -> "retry-after": header names are case-insensitive; Starlette lower-cases them on the wire
+gxg_approval.api.x__error__mutmut_6  # "Retry-After" -> "RETRY-AFTER": header names are case-insensitive
+gxg_approval.api.x_create_app__mutmut_19  # partition -> rpartition: equal for "Bearer <jwt>" (a JWT has no space); with more spaces both forms fail verification -> the same 401
+gxg_approval.api.x_create_app__mutmut_25  # headers.get("authorization") -> "AUTHORIZATION": Starlette Headers.get is case-insensitive
+gxg_approval.api.x_create_app__mutmut_26  # missing header default "" -> "XXXX": no space, so scheme "XXXX" != bearer -> the same 401 "token rejected"

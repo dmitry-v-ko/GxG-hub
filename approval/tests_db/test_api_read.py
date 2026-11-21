@@ -108,12 +108,14 @@ def test_read_and_cancel_only_for_approval_mcp(propose: Callable[..., Any], clie
         world.auth("executor"),
         world.auth("approval-mcp", aud="x"),
     ]
+    rejected = {"code": "unauthenticated", "message": "token rejected", "retryable": False}
     for headers in refused:
-        assert client.get(f"/v1/intents/{intent}", params=q(), headers=headers).status_code == 401
+        r = client.get(f"/v1/intents/{intent}", params=q(), headers=headers)
+        assert (r.status_code, r.json()) == (401, rejected), headers
         r = client.post(
             f"/v1/intents/{intent}/cancel", headers=headers, json={"on_behalf_of": q(), "expected_version": 1}
         )
-        assert r.status_code == 401
+        assert (r.status_code, r.json()) == (401, rejected), headers
     missing = client.get(f"/v1/intents/{intent}", params={"tenant_id": "t-alpha"}, headers=world.auth("approval-mcp"))
     assert missing.status_code == 400  # AS-11a: on_behalf_of is mandatory
 
@@ -147,7 +149,10 @@ def test_cancel(propose: Callable[..., Any], client: TestClient, world: Any, own
         {"expected_version": 1},
         {"on_behalf_of": {**q(), "x": 1}, "expected_version": 1},
     ):
-        assert post(bad).status_code == 400, bad
+        r = post(bad)
+        assert (r.status_code, r.json()["message"]) == (400, "body does not match the API contract"), bad
+    r = client.post(url, content=b"{", headers={**world.auth("approval-mcp"), "content-type": "application/json"})
+    assert (r.status_code, r.json()["message"]) == (400, "body is not JSON")
     r = post({"on_behalf_of": q(), "expected_version": 1})
     assert r.status_code == 200 and r.json()["status"] == "cancelled" and r.json()["version"] == 2
     bad_id = client.post(
