@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | Reference (`demo`) | Синтетический FastMCP-коннектор: read + `propose` на fake provider ([спека](../docs/specs/demo-connector-v1.md)) | B, C | Read-only локально (M3): 3 tools, тестовый issuer, Docker ([README](demo/README.md)); `propose` — M8 |
 | Knowledge Base | Существующий KB MCP после gap-аудита; при необходимости тонкий wrapper | B | Не подключено |
-| Telegram | Фасад к существующему Telegram-сервису; сначала только чтение | D, E | Не реализован |
+| Telegram | Фасад к существующему Telegram-сервису; сначала только чтение | D, E | Read-only (M11): 3 tools на fake-порту сервиса, на стенде через ContextForge ([README](telegram/README.md)); сетевого порта у сервиса нет ([M11-ESCALATION](../reports/M11-ESCALATION.md)); `propose` — этап E |
 | Signal Intelligence | Существующий Mastra-процесс; Hub на сборе и на `propose` | D | Не интегрирован |
 | `signals.search/get` | Опциональный read-only фасад для других агентов | — | Не планируется до запроса |
 | Voice / Oscar | Отдельный realtime-сервис, потребитель tools | D | Не интегрирован |
