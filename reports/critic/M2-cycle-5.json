@@ -1,0 +1,66 @@
+{
+  "milestone": "M2",
+  "branch": "claude/m2-policy-tooling",
+  "commit": "6ffcaddc03c9dafc94d9961526f2dec905ebbcb1",
+  "executor_report": "e16915456eefa5393140d2b4affda3f562e262c7",
+  "cycle": 5,
+  "reviewed_at": "2026-11-21",
+  "score": 9.5,
+  "caps_applied": [],
+  "dimensions": {"spec": 3, "tests": 2, "security": 2, "code": 1.5, "ops": 1, "evidence": 0},
+  "acceptance": [
+    {"id": "AC-M2-01", "status": "passed", "evidence": "Clean clone 6ffcadd, empty UV_CACHE_DIR, UV_PYTHON=3.12, UV_LOCKED=1: `validate policies/` -> 0 error(s), exit 0; `lint policies/` -> exit 0, 2 warnings (unknown-tool telegram.message.propose, unknown-tenant t-beta). CI run 44895018401 job policy: success."},
+    {"id": "AC-M2-02", "status": "passed", "evidence": "CLI `lint bad/<case>/policies [--manifest manifest.yaml]`: 20/20 exit 1 with `error: <file>: <path>: [<code>]`. New: duplicate tool inside one manifest -> `tools[n].name: [duplicate-tool]` (test_lint.py::test_same_tool_name_twice_in_one_manifest_is_an_error)."},
+    {"id": "AC-M2-03", "status": "passed", "evidence": "CLI `diff base head` (10: with --base-connectors/--head-connectors) equals expected.json for 10/10 pairs; 10 reversed (head->base, connector dirs swapped) equals expected-reverse.json."},
+    {"id": "AC-M2-04", "status": "passed_automated_owner_manual_pending", "evidence": "Automated: tests/ci pass (gate from main, label by code owner from main's CODEOWNERS, not by an app, after head arrival; gate-path edit -> red; manifest weakening -> red); mutate_m2.py 24/24 killed; mutmut widening_gate.py 557/581, 24 equivalent. Both cycle-4 bypasses closed: duplicate inside one manifest -> diff exit 2 (reproduced with the cycle-4 input); raised effect_class -> widening (test with class-matched deny). CI run 44895018401 (push): grants-widening red by design. Real-PR checklist: owner, manual (owner decision)."},
+    {"id": "AC-M2-05", "status": "passed", "evidence": "Two `build policies/` runs in separate processes (PYTHONHASHSEED 1 and 7, built_at 10:42:58Z / 10:42:59Z): JSON equal after removing built_at; bundle_smoke.sh cmp OK in check-all."},
+    {"id": "AC-M2-06", "status": "passed", "evidence": "`verify` on a fresh build -> `ok: bundle_version=6ffcadd...`, exit 0; one bit flipped at byte 200 -> `bundle rejected: bad signature`, exit 1."}
+  ],
+  "findings": [
+    {"severity": "minor", "origin": "new_regression", "ref": "DoD-3",
+     "where": "reports/conformance/M2.json: bundle_version",
+     "problem": "Stale: says `dd0beb1 (local smoke build in check-all...)` while the report is for 6ffcadd and check-all on 6ffcadd prints `bundle_version=6ffcaddc...`. Not updated in cycle 5. No AC depends on it.",
+     "required_improvement": "Write the commit the smoke build used (backlog, M2)."}
+  ],
+  "required_improvements": [],
+  "threat_model": [
+    {"path": "Policy change (grants, approval rules, defaults, quotas, platform registry) not classified as widening by gxg-policy diff", "status": "closed", "evidence": "Code untouched this cycle; 10/10 goldens; mutmut gxg_policy 2555/2590 killed, 35 equivalent with reasons, 0 unexplained."},
+    {"path": "Duplicate tool name inside one manifest (lower-class copy wins in diff, bundle signs both) - cycle-4 major 1", "status": "closed", "evidence": "Reproduced the cycle-4 input: diff exit 2 `[duplicate-tool] ... declared twice`; same copy in another manifest -> exit 2; tests in test_lint.py and test_diff.py."},
+    {"path": "Raised effect_class drops a class-matched deny / quorum - cycle-4 major 2", "status": "closed", "evidence": "Any effect_class change -> widening `effect_class_changed`; test_raised_effect_class_under_a_class_matched_deny_is_widening; goldens both directions."},
+    {"path": "Manifest tricks: YAML duplicate key, YAML merge key, missing effect_class, renamed connector id, manifest in a hidden dir", "status": "closed", "evidence": "Own inputs on fixture 10: dup key / merge key / missing field -> exit 2; rename -> added widening; hidden dir -> added widening; build uses the same glob (default_manifests)."},
+    {"path": "Manifest fields not compared (version, dispatch_timeout_s, preview, resource)", "status": "closed", "evidence": "None of them is an input of AP-01 (class, tool, RID, requester) or a grant pair; one entry per name, so version only selects which version AS-26 accepts. Documented in widening-approval.md «Ограничения»."},
+    {"path": "PR edits gate code (grants_widening.sh, widening_gate.py, gxg-policy, uv.lock, pyproject.toml, schemas/)", "status": "closed", "evidence": "Gate runs from a worktree of refs/remotes/origin/main via uv run --locked --project; each changed gate path is a widening entry; tests/ci/test_grants_widening_job.py::test_pr_that_disables_its_gate_and_widens_is_red, ::test_gate_edit_alone_needs_the_label[*]."},
+    {"path": "PR rewrites .github/workflows/ci.yml (removes step, exit 0, drops grants-widening from ci-ok needs)", "status": "out_of_scope", "evidence": "Owner-accepted risk (8f6754e, 2026-11-21): owner reviews every such PR; CODEOWNERS /.github/; described in widening-approval.md."},
+    {"path": "Bootstrap: main has no gate, PR copy runs", "status": "out_of_scope", "evidence": "Only the M2 PR itself; it edits .github/workflows/, so it falls under the same owner review; warning in the log; test_without_a_gate_on_main_the_pr_copy_runs."},
+    {"path": "Label added by a non-owner, by an app, or CODEOWNERS changed in the PR", "status": "closed", "evidence": "CODEOWNERS from main (test_code_owners_come_from_main_not_from_the_pr); test_decide: mallory -> red, performed_via_github_app -> red. Real GitHub behaviour of performed_via_github_app: owner checklist step 3."},
+    {"path": "Stale label: pushed after the label, force-push, fast-forward back, runs of other PRs/branches/head repos", "status": "closed", "evidence": "test_widening_gate.py: force_push_after_the_label, fast_forward_back..., runs_of_other_prs..., another_head_repository, unknown_arrival_fails_closed, label_at_the_arrival_instant_is_stale."},
+    {"path": "PR into another branch / PR base changed / tag named origin/main", "status": "closed", "evidence": "Always merge-base with refs/remotes/origin/main: test_pull_request_into_another_branch_is_diffed_against_main, test_tag_named_origin_main_does_not_shadow_the_branch."},
+    {"path": "Push or workflow_dispatch run gives a green same-name ci-ok", "status": "closed", "evidence": "Outside a PR any widening is red (--no-pr): test_branch_with_widening_is_red_without_a_pr; CI run 44895018401 red. Which same-name ci-ok GitHub counts: owner checklist steps 4 and 11 (fail closed if the red one counts)."},
+    {"path": "Merge result differs from the reviewed head (main moved)", "status": "out_of_scope", "evidence": "Ruleset 'require branches up to date' (branch-protection.md), platform setting owned by the owner; documented."},
+    {"path": "Agent holds the owner's personal token and adds the label", "status": "out_of_scope", "evidence": "Indistinguishable from the owner; documented rule: no owner tokens for agents (widening-approval.md). Plan rule 4 (actions against the owner with the owner's account)."},
+    {"path": "Fork PR", "status": "closed", "evidence": "Read-only token: cannot remove a stale label -> job fails (fail closed), documented."},
+    {"path": "Invalid base or head policies/manifests make the diff silent", "status": "closed", "evidence": "_load raises PolicyError -> exit 2 -> red: test_invalid_manifest_is_an_input_error, test_duplicate_tool_inside_one_manifest_fails_the_diff."},
+    {"path": "Connector code or non-bundle manifest fields (resource.from_arg, input_schema) weaken runtime checks", "status": "out_of_scope", "evidence": "Not policy rights (GR-10 = pairs in the diff report); no connector manifest exists yet; connector contract tests are M3."}
+  ],
+  "ponytail_review": "reports/critic/M2-cycle-5.review.md",
+  "lean_lines": 0,
+  "existing_solutions": [
+    {"component": "duplicate tool name check inside one manifest (set while iterating)", "alternative": "JSON Schema uniqueItems compares whole objects, not one key; collections.Counter is the same rung", "verdict": "justified_custom"},
+    {"component": "effect_class change = widening", "alternative": "none needed: one comparison", "verdict": "justified_custom"},
+    {"component": "gate code from main (git worktree + uv run --locked --project)", "alternative": "pull_request_target (pwn-request, base not main); org required workflow (not on this plan)", "verdict": "use_existing"},
+    {"component": "changed gate paths", "alternative": "dorny/paths-filter, tj-actions/changed-files vs git diff --name-only (used)", "verdict": "use_existing"},
+    {"component": "manifest tools diff (_Diff.tools)", "alternative": "none: GR-11a/AS-26 projection is project-specific; manifests loaded by existing load_manifests (jsonschema)", "verdict": "justified_custom"},
+    {"component": "mutation testing of gxg_policy and widening_gate.py", "alternative": "mutmut 3.8.1 (used, DoD-4)", "verdict": "use_existing"},
+    {"component": "scripts/ci/mutmut.sh (equivalent allow-list, fail on survivors and stale entries)", "alternative": "mutmut alone exits 0 with survivors and has no allow-list", "verdict": "justified_custom"},
+    {"component": "scripts/ci/mutate_m2.py (24 bash/YAML mutations)", "alternative": "no maintained mutation tool for bash or GitHub Actions YAML (DoD-4 allows own check for non-Python with critic confirmation: confirmed)", "verdict": "justified_custom"},
+    {"component": "unchanged components (JCS, Ed25519, jsonschema checks, RFC 3339, merge-base, head arrival)", "alternative": "see M2-cycle-3.json existing_solutions", "verdict": "justified_custom"}
+  ],
+  "notes": [
+    "Re-run: clean clone of 6ffcadd, empty UV_CACHE_DIR, UV_PYTHON=3.12, UV_LOCKED=1, uv 0.11.32: check-all OK (pytest 307 passed, 0 skipped); scripts/ci/mutmut.sh exit 0 (gxg_policy 2555/2590, widening_gate.py 557/581, 59 not killed = 59 listed, no stale); mutate_m2.py 24/24 killed. Matches M2.json and reports/mutations/M2-cycle-5-*.",
+    "CI on 6ffcadd: run 44895018401 (push): lint, types, tests, schema-guard, secrets, policy success; grants-widening and ci-ok red by design (outside a PR, bootstrap, widening vs main); bundle skipped. DoD-1 (main via PR, green) is the owner's merge step with the label.",
+    "Cycle-4 majors: both closed, no regressions (no leftover effect_class_lowered/raised, EFFECT_ORDER or old message in the tree).",
+    "Origins: the only finding is new_regression (stale field). No missed_earlier, no new_scope findings.",
+    "evidence = 0 for the stale bundle_version in M2.json; every other dimension at full weight.",
+    "Not checked: the real-PR checklist (owner, manual); how the M7 Approval Service reads the bundle (outside M2)."
+  ]
+}
