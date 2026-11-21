@@ -1,7 +1,7 @@
 {
  "milestone": "M5",
  "commit": "feb5de0dab58e866df316060a1f363f0bfc12d4a",
- "commit_dirty": true,
+ "commit_dirty": false,
  "run_at": "2026-11-21T16:14:45Z",
  "contextforge_image": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
  "sdk_versions": {

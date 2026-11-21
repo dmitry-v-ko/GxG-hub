@@ -64,7 +64,7 @@ def main() -> None:
     report |= {
         "milestone": "M5",
         "commit": git("rev-parse", "HEAD"),
-        "commit_dirty": bool(git("status", "--porcelain", "--untracked-files=no")),
+        "commit_dirty": bool(git("status", "--porcelain", "--untracked-files=no", "--", ".", ":!reports")),
         "run_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "contextforge_image": image[1] if image else None,
         "sdk_versions": {"mcp": version("mcp"), "fastmcp (demo image)": "4.1.8", "PyJWT": version("PyJWT")},
