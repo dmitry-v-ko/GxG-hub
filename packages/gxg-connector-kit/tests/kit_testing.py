@@ -80,11 +80,11 @@ class BundleKit:
         return data, sign_bundle(self.ci_key, data)
 
 
-def jws(key: Ed25519PrivateKey | None, header: dict[str, Any], claims: dict[str, Any]) -> str:
-    """Compact JWS with an arbitrary header; `key=None` leaves the signature empty (alg none)."""
+def jws(signer: Ed25519PrivateKey | None, header: dict[str, Any], claims: dict[str, Any]) -> str:
+    """Compact JWS with an arbitrary header; `signer=None` leaves the signature empty (alg none)."""
     h = _jwt.b64url_encode(json.dumps(header).encode())
     p = _jwt.b64url_encode(json.dumps(claims).encode())
-    sig = _jwt.b64url_encode(key.sign(f"{h}.{p}".encode())) if key else ""
+    sig = _jwt.b64url_encode(signer.sign(f"{h}.{p}".encode())) if signer else ""
     return f"{h}.{p}.{sig}"
 
 

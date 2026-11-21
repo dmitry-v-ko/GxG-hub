@@ -1,0 +1,24 @@
+# Findings in commits already pushed to claude/m0-foundation, whose history must not be rewritten.
+# Format: commit:path:rule:line. Only that rule on that line of that commit is ignored; any other
+# finding in the same file, and the same text in any other commit, is reported.
+#
+# M0 cycle-1 conformance report and critic report quote AC-M0-04 in prose; no key material
+# (the two (path, blob) pairs of the former scripts/ci/check_secrets.py).
+9d346993626d3562552164c2828fc947ac6bf841:reports/conformance/M0.json:gxg-private-key-header:53
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:gxg-private-key-header:29
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:gxg-private-key-header:37
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:private-key:29
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:private-key:37
+# Default generic-api-key rule: the type name `Ed25519PrivateKey` in a signature, and the fake
+# 32-character key body constant of the deleted scanner tests. Neither is a secret.
+52874f53b81f64889122d13e7d53973fe390d761:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:76
+# The same `Ed25519PrivateKey` annotation after M1 moved it (line 81/83) and in the -m diffs of the
+# claude/integration merges of M1/M4; the tree no longer has it (parameter renamed at the M0.1 integration).
+4a5dd9f97723fe0fe3770a2c46adb8bb3428a841:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:81
+fe7441daa7bf3d044d1745919ec456b9e83c6c8b:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:83
+98287f6b1bf77a16d9fc6c2ffa09b7e69ee4df41:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:83
+f5cf832eda2c190089c02dfb0de3be154ac7ade8:tests/ci/test_check_secrets.py:generic-api-key:21
+# The same fake key body constant (line 23 after M0 cycle 3), reported in the -m diffs of the
+# claude/integration merge commits that brought in M1/M4 before M0.1 deleted the file.
+98287f6b1bf77a16d9fc6c2ffa09b7e69ee4df41:tests/ci/test_check_secrets.py:generic-api-key:23
+e7d245f8e2ef7d2a6bf52828e13b970a91cad980:tests/ci/test_check_secrets.py:generic-api-key:23

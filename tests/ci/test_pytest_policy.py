@@ -3,38 +3,95 @@ skipped or xfailed tests (DoD-5)."""
 
 from __future__ import annotations
 
-import shutil
+import errno
 import socket
-import subprocess
-import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from pytest_socket import SocketBlockedError
 
 ROOT = Path(__file__).resolve().parents[2]
+CONFTEST = (ROOT / "conftest.py").read_text(encoding="utf-8")
 
 
-def test_internet_socket_is_blocked() -> None:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        with pytest.raises(RuntimeError, match="network access is forbidden"):
-            s.connect(("192.0.2.1", 443))  # TEST-NET-1, never routed
-        with pytest.raises(RuntimeError, match="network access is forbidden"):
-            s.connect_ex(("192.0.2.1", 443))
-    finally:
-        s.close()
+def _tcp() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        s.connect(("192.0.2.1", 443))  # TEST-NET-1, never routed
 
 
-def _run_inner(tmp_path: Path, body: str) -> subprocess.CompletedProcess[str]:
-    shutil.copy(ROOT / "conftest.py", tmp_path / "conftest.py")
-    (tmp_path / "test_inner.py").write_text(body, encoding="utf-8")
-    return subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(tmp_path)],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def _tcp_connect_ex() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        s.connect_ex(("192.0.2.1", 443))
+
+
+def _udp_sendto() -> None:
+    # UDP needs no connect(): only blocking socket creation stops it.
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.sendto(b"x", ("192.0.2.1", 9))
+
+
+def _ipv6() -> None:
+    with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as s:
+        s.sendto(b"x", ("2001:db8::1", 9))  # documentation prefix
+
+
+def _create_connection() -> None:
+    socket.create_connection(("192.0.2.1", 443), timeout=1).close()
+
+
+@pytest.mark.parametrize("use_network", [_tcp, _tcp_connect_ex, _udp_sendto, _ipv6, _create_connection])
+def test_internet_socket_is_blocked(use_network: Callable[[], None]) -> None:
+    with pytest.raises(SocketBlockedError):
+        use_network()
+
+
+_UDP = "    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:\n        s.sendto(b'x', ('192.0.2.1', 9))\n"
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (
+            f"import socket\nimport pytest\n\n@pytest.mark.enable_socket\ndef test_a():\n{_UDP}",
+            "test_inner.py::test_a (network opt-out marker)",
+        ),
+        (
+            f"import socket\n\ndef test_a(socket_enabled):\n{_UDP}",
+            "test_inner.py::test_a (network opt-out fixture)",
+        ),
+        (
+            f"import socket\nimport pytest\n\n@pytest.mark.allow_hosts(['192.0.2.1'])\ndef test_a():\n{_UDP}",
+            "test_inner.py::test_a (network opt-out marker)",
+        ),
+        (  # network only in fixture setup, test body empty
+            f"import socket\nimport pytest\n\n@pytest.fixture\ndef net():\n{_UDP}\n"
+            "@pytest.mark.enable_socket\ndef test_a(net):\n    pass\n",
+            "test_inner.py::test_a (network opt-out marker)",
+        ),
+    ],
+    ids=["enable_socket-marker", "socket_enabled-fixture", "allow_hosts-marker", "marker-network-in-fixture"],
+)
+def test_no_per_test_network_opt_out(pytester: pytest.Pytester, body: str, expected: str) -> None:
+    """AC-M0-01, DoD-5 style: a test that asks for the network turns the run red."""
+    pytester.makeconftest(CONFTEST)
+    pytester.makepyfile(test_inner=body)
+    res = pytester.runpytest_inprocess("-q", "-p", "no:cacheprovider", "--disable-socket", "--allow-unix-socket")
+    assert res.ret == pytest.ExitCode.TESTS_FAILED, _out(res)
+    assert expected in _out(res)
+
+
+def _run_inner(pytester: pytest.Pytester, body: str) -> pytest.RunResult:
+    # In-process run with the repository conftest, so mutmut sees the code under test.
+    pytester.makeconftest(CONFTEST)
+    pytester.makepyfile(test_inner=body)
+    return pytester.runpytest_inprocess("-q", "-p", "no:cacheprovider")
+
+
+def _out(res: pytest.RunResult) -> str:
+    return res.stdout.str()
 
 
 @pytest.mark.parametrize(
@@ -76,20 +133,71 @@ def _run_inner(tmp_path: Path, body: str) -> subprocess.CompletedProcess[str]:
         "skip-in-fixture",
     ],
 )
-def test_skip_or_xfail_makes_run_red(tmp_path: Path, body: str) -> None:
-    res = _run_inner(tmp_path, body)
-    assert res.returncode != 0, res.stdout
-    assert "skipped/xfail tests are forbidden" in res.stdout
+def test_skip_or_xfail_makes_run_red(pytester: pytest.Pytester, body: str) -> None:
+    res = _run_inner(pytester, body)
+    assert res.ret == pytest.ExitCode.TESTS_FAILED, _out(res)
+    assert any(
+        line.startswith("FAILED: skip, xfail and network opt-out are forbidden (DoD-5, AC-M0-01): ")
+        for line in res.outlines
+    )
 
 
-def test_xpass_strict_false_overrides_ini(tmp_path: Path) -> None:
+def test_xpass_strict_false_overrides_ini(pytester: pytest.Pytester) -> None:
     """Even with xfail_strict=false in the inner run's config, an XPASS turns it red."""
-    (tmp_path / "pytest.ini").write_text("[pytest]\nxfail_strict = false\n", encoding="utf-8")
-    res = _run_inner(tmp_path, "import pytest\n\n@pytest.mark.xfail(reason='x')\ndef test_a():\n    pass\n")
-    assert res.returncode != 0, res.stdout
-    assert "xpassed" in res.stdout
+    pytester.makeini("[pytest]\nxfail_strict = false\n")
+    res = _run_inner(pytester, "import pytest\n\n@pytest.mark.xfail(reason='x')\ndef test_a():\n    pass\n")
+    assert res.ret == pytest.ExitCode.TESTS_FAILED, _out(res)
+    assert "test_inner.py::test_a (xpassed)" in _out(res)
 
 
-def test_clean_run_stays_green(tmp_path: Path) -> None:
-    res = _run_inner(tmp_path, "def test_a():\n    assert True\n")
-    assert res.returncode == 0, res.stdout
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("import pytest\n\ndef test_a():\n    pytest.skip('x')\n", "test_inner.py::test_a (skipped)"),
+        ("import pytest\n\ndef test_a():\n    pytest.xfail('x')\n", "test_inner.py::test_a (xfailed)"),
+        (
+            "import pytest\n\npytest.skip('x', allow_module_level=True)\n",
+            "test_inner.py (skipped at collection)",
+        ),
+    ],
+    ids=["skipped", "xfailed", "collection"],
+)
+def test_violation_is_named_in_summary(pytester: pytest.Pytester, body: str, expected: str) -> None:
+    assert expected in _out(_run_inner(pytester, body))
+
+
+def test_two_violations_are_listed_with_separator(pytester: pytest.Pytester) -> None:
+    body = "import pytest\n\ndef test_a():\n    pytest.skip('x')\n\ndef test_b():\n    pytest.skip('y')\n"
+    assert "test_inner.py::test_a (skipped), test_inner.py::test_b (skipped)" in _out(_run_inner(pytester, body))
+
+
+def test_failing_run_keeps_its_exit_code(pytester: pytest.Pytester) -> None:
+    """A usage error with a skip stays a usage error: the policy only turns OK/no-tests red."""
+    pytester.makeconftest(CONFTEST)
+    pytester.makepyfile(test_inner="import pytest\n\ndef test_a():\n    pytest.skip('x')\n")
+    res = pytester.runpytest_inprocess("-q", "-p", "no:cacheprovider", "--no-such-option")
+    assert res.ret == pytest.ExitCode.USAGE_ERROR
+
+
+def test_clean_run_stays_green(pytester: pytest.Pytester) -> None:
+    res = _run_inner(pytester, "def test_a():\n    assert True\n")
+    assert res.ret == pytest.ExitCode.OK, _out(res)
+    assert "forbidden" not in _out(res)
+
+
+def test_unix_socket_is_allowed() -> None:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        with pytest.raises(FileNotFoundError):  # pytest-socket let the call through to the OS
+            s.connect("/nonexistent/gxg.sock")
+        assert s.connect_ex("/nonexistent/gxg.sock") == errno.ENOENT
+    finally:
+        s.close()
+
+
+def test_violation_without_node_id_is_named_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    import conftest as policy
+
+    monkeypatch.setattr(policy, "_violations", [])
+    policy._record("", "skipped at collection")
+    assert policy._violations == ["<session> (skipped at collection)"]

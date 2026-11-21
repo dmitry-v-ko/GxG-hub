@@ -1,7 +1,9 @@
 """Repository-wide pytest policy.
 
-* AC-M0-01: tests must not need the network. Any attempt to open an
-  internet socket during a test fails that test.
+* AC-M0-01: tests must not need the network. pytest-socket (addopts in
+  pyproject.toml) fails any test that creates a non-Unix socket. No per-test
+  opt-out: a test with the enable_socket / allow_hosts marker or the
+  socket_enabled fixture turns the whole run red.
 * DoD-5: no test may be skipped or marked as expected to fail. Any skip
   (marker, call, unittest.skip, skipif, or at collection time: module-level
   skip, importorskip) and any xfail or XPASS (strict or not) turns the whole
@@ -10,46 +12,23 @@
 
 from __future__ import annotations
 
-import socket
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
-
-_ALLOWED_FAMILIES = {getattr(socket, "AF_UNIX", None)}
-
-
-class NetworkAccessError(RuntimeError):
-    pass
-
-
-@pytest.fixture(autouse=True)
-def _no_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    real_connect = socket.socket.connect
-    real_connect_ex = socket.socket.connect_ex
-
-    def guard(self: socket.socket, address: Any) -> None:
-        if self.family not in _ALLOWED_FAMILIES:
-            raise NetworkAccessError(f"network access is forbidden in tests: {address!r}")
-
-    def connect(self: socket.socket, address: Any) -> None:
-        guard(self, address)
-        real_connect(self, address)
-
-    def connect_ex(self: socket.socket, address: Any) -> int:
-        guard(self, address)
-        return real_connect_ex(self, address)
-
-    monkeypatch.setattr(socket.socket, "connect", connect)
-    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
-    yield
-
 
 _violations: list[str] = []
 
 
 def _record(nodeid: str, what: str) -> None:
     _violations.append(f"{nodeid or '<session>'} ({what})")
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    for item in items:
+        if item.get_closest_marker("enable_socket") or item.get_closest_marker("allow_hosts"):
+            _record(item.nodeid, "network opt-out marker")
+        elif isinstance(item, pytest.Function) and "socket_enabled" in item.fixturenames:
+            _record(item.nodeid, "network opt-out fixture")
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
@@ -75,6 +54,6 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 def pytest_terminal_summary(terminalreporter: Any) -> None:
     if _violations:
         terminalreporter.write_line(
-            "FAILED: skipped/xfail tests are forbidden (DoD-5): " + ", ".join(_violations),
-            red=True,
+            "FAILED: skip, xfail and network opt-out are forbidden (DoD-5, AC-M0-01): " + ", ".join(_violations),
+            red=True,  # pragma: no mutate (colour only)
         )

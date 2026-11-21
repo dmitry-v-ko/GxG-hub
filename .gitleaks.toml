@@ -1,0 +1,14 @@
+# gitleaks standard rules (AC-M0.1-01). Pinned binary and the second, strict config with
+# the AC-M0-04 rules: scripts/ci/gitleaks.sh, .gitleaks-strict.toml.
+title = "GxG Hub"
+
+[extend]
+useDefault = true
+
+# The schema lock stores SHA-256 digests under schema names; generic-api-key mistakes them for keys.
+[[allowlists]]
+description = "SHA-256 digests in the schema lock"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/contract/schema-lock\.json$''']
+regexes = ['''^[0-9a-f]{64}$''']

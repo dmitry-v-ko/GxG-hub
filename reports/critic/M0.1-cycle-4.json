@@ -1,0 +1,60 @@
+{
+  "milestone": "M0.1",
+  "branch": "claude/m0.1-standard-tools",
+  "commit": "3b7648eb40a8098b7a793bf42daf1b27bf02f03e",
+  "code_commit": "e52a20d8696e1e04a6175b0b40ce2df815e997cd",
+  "cycle": 4,
+  "reviewed_at": "2026-11-21",
+  "score": 9.0,
+  "caps_applied": [],
+  "dimensions": {"spec": 3, "tests": 2, "security": 1.5, "code": 1.5, "ops": 1, "evidence": 0},
+  "acceptance": [
+    {"id": "AC-M0.1-01", "status": "passed", "evidence": "Clean clone e52a20d, empty uv cache, Python 3.12.3: uv run pytest tests/secrets -> 21 passed (38 s, inside check-all.sh); CI run 44894082516 job secrets success. Spot checks via scripts/ci/gitleaks.sh (tree/range exit): empty .env 1/1, empty server.pem 1/1, KEY.PEM 1/1, inline key header 1/1, header after KEY= 1/1, .env.example 0/0. gitleaks.sh unchanged since cycle 3 (full case list in M0.1-cycle-3.json). No key material in output."},
+    {"id": "AC-M0.1-02", "status": "passed", "evidence": "No change this cycle; check_secrets.py and its tests stay deleted; only the owner-approved name check (gitleaks.sh:40-47) outside gitleaks."},
+    {"id": "AC-M0.1-03", "status": "passed", "evidence": "scripts/ci/mutmut.sh in clean clone -> 'mutmut: all mutants killed', 654/654; sorted result list identical to reports/mutmut/M0.1.txt (incl. 23 pytest_collection_modifyitems mutants killed). CI job mutmut success."},
+    {"id": "AC-M0.1-04", "status": "passed", "evidence": "prove_schema_guard.py unchanged; clean clone -> '59/59 schema mutations make the contract tests fail'; CI job schema-guard success."},
+    {"id": "AC-M0-01", "status": "passed", "evidence": "uv sync --locked && uv run pytest -> 107 passed, 136 subtests, 0 skipped; under unshare -rn with uv run --offline -> 107 passed. '--disable-socket' removed from addopts -> 5 failed (network tests), 102 passed; --force-enable-socket tests/ci/test_pytest_policy.py -> 5 failed, 28 passed. CI checks it only through pytest-socket (finding 2)."},
+    {"id": "AC-M0-02", "status": "passed", "evidence": "Drop top-level required in effect-intent schema -> tests/contract 16 failed, schema_lock.py exit 1. CI job schema-guard success."},
+    {"id": "AC-M0-04", "status": "passed", "evidence": "*.pem, .env, header anywhere red in tree and range, including empty files. See AC-M0.1-01."}
+  ],
+  "ci": {"run_id": 44894082516, "commit": "e52a20d8696e1e04a6175b0b40ce2df815e997cd", "ci_ok": "success", "jobs": "lint, types, tests, schema-guard, secrets, mutmut, ci-ok: success", "note": "run 44894296317 on 3b7648e (report only) also success; scripts/ci/check-all.sh in clean clone -> check-all: OK"},
+  "cycle3_items": [
+    {"item": "major: re-block hook hid the --disable-socket test", "status": "fixed", "check": "hook deleted; '--disable-socket' removed from addopts -> uv run pytest 5 failed, 102 passed"},
+    {"item": "minor: opt-out in fixtures", "status": "fixed for static opt-outs", "check": "marker, socket_enabled parameter, allow_hosts, marker + network only in fixture setup, module pytestmark -> red run naming the test. Dynamic forms still pass (finding 1)."},
+    {"item": "minor: --force-enable-socket claim", "status": "fixed", "check": "pytest --force-enable-socket tests/ci/test_pytest_policy.py -> 5 failed, 28 passed"}
+  ],
+  "findings": [
+    {"severity": "minor", "origin": "missed_earlier", "ref": "review #1; AC-M0-01; cycle-3 finding 2", "where": "conftest.py:3-6,26-31; tests/ci/test_pytest_policy.py:54-83; reports/conformance/M0.1.json AC-M0-01 actual",
+     "problem": "Opt-out check sees only markers and collection-time item.fixturenames. Probes (UDP to 192.0.2.1:9): request.getfixturevalue('socket_enabled') in the body -> 1 passed, exit 0; the same inside a fixture the test uses -> 1 passed; pytest_socket.enable_socket() in the body -> 1 passed; socket.socket = pytest_socket._true_socket -> 1 passed; control -> failed. Docstring and conformance report say there is no per-test opt-out. All four also pass at 91e6e09, so not introduced by this cycle.",
+     "required_improvement": "Backlog: state in conftest docstring and known_limitations that only static opt-outs are caught; close fully with finding 2."},
+    {"severity": "minor", "origin": "missed_earlier", "ref": "review #2; AC-M0-01", "where": ".github/workflows/ci.yml job tests, step 'AC-M0-01 — uv sync && uv run pytest'",
+     "problem": "CI runs the suite with full network; pytest-socket does not block import time or child processes. Probes: module sending UDP at import -> 1 passed (packet sent); test starting python -c that sends UDP -> 1 passed. Both green in CI, red in a really offline clone. AC-M0-01 is verified offline only by hand.",
+     "required_improvement": "Backlog: after uv sync, run the pytest step in an empty network namespace (e.g. sudo unshare --net ... uv run --offline pytest; runner form to be verified). Keep pytest-socket for local feedback."},
+    {"severity": "minor", "origin": "new_regression", "ref": "review #3; DoD-3", "where": "reports/conformance/M0.1.json fields base and mutmut actual",
+     "problem": "base still '88f8862 (M0.1 cycle 2 critic report)', copied from cycle 3; the cycle-4 plan names base d47d686. Mutmut note 'The drop from 669 ...' is a cycle-2 leftover.",
+     "required_improvement": "Set base to d47d686, drop the stale sentence."}
+  ],
+  "existing_solutions": [
+    {"component": "secret content scanning", "alternative": "gitleaks 8.30.1", "verdict": "use_existing"},
+    {"component": "file-name check for empty files (gitleaks.sh NAMES + names())", "alternative": "gitleaks/trufflehog/detect-secrets skip empty files or scan content only; owner decision 2026-11-21; unchanged", "verdict": "justified_custom"},
+    {"component": ".env* name rule", "alternative": "gitleaks path rule in .gitleaks-strict.toml", "verdict": "use_existing"},
+    {"component": "network block in tests", "alternative": "pytest-socket 0.8.1 (--disable-socket --allow-unix-socket)", "verdict": "use_existing"},
+    {"component": "ban on per-test network opt-out (conftest.py pytest_collection_modifyitems -> _record)", "alternative": "pytest-socket 0.8.1 has only --disable-socket, --force-enable-socket, --allow-hosts, --allow-unix-socket; no switch forbids opt-outs. Reuses the repository's _record (DoD-5); 5 lines, smaller than the deleted hook", "verdict": "justified_custom"},
+    {"component": "AC-M0-01 'no network' guarantee beyond pytest-socket (import time, subprocesses, dynamic opt-outs)", "alternative": "OS network namespace: unshare --net or docker run --network none around the pytest step; not used yet (findings 1-2)", "verdict": "use_existing"},
+    {"component": "scripts/ci/gitleaks.sh (download + SHA-256 + tree/range glue)", "alternative": "gitleaks-action cannot be driven by the fixture tests; unchanged", "verdict": "justified_custom"},
+    {"component": ".gitleaks-strict.toml second config, UTF-16 rules", "alternative": "gitleaks has no UTF-16 decoding; unchanged", "verdict": "justified_custom"},
+    {"component": "mutation testing of Python", "alternative": "mutmut 3.8.1", "verdict": "use_existing"},
+    {"component": "scripts/ci/mutmut.sh", "alternative": "mutmut run alone does not fail on survivors; ~10 lines glue; unchanged", "verdict": "justified_custom"},
+    {"component": "scripts/ci/prove_schema_guard.py", "alternative": "no tool mutates JSON Schemas against a test suite; unchanged", "verdict": "justified_custom"},
+    {"component": "scripts/ci/schema_lock.py", "alternative": "none for normative hash + required map; unchanged", "verdict": "justified_custom"},
+    {"component": "conftest.py skip/xfail policy (DoD-5)", "alternative": "xfail_strict / pytest-error-for-skips miss collection-time skips and XPASS; unchanged", "verdict": "justified_custom"}
+  ],
+  "required_improvements": [],
+  "backlog": [
+    "M0.1 finding 1: document that only static network opt-outs are caught (conftest docstring, known_limitations), or close with backlog item 2.",
+    "M0.1 finding 2: run the CI pytest step with no network at the OS level (network namespace, uv run --offline).",
+    "M0.1 finding 3: fix base and the stale mutmut sentence in reports/conformance/M0.1.json."
+  ],
+  "ponytail_review": "reports/critic/M0.1-cycle-4.review.md",
+  "lean_lines": 0
+}

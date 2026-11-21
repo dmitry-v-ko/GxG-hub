@@ -9,8 +9,9 @@ uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/tests \
-  approval/src approval/tests scripts tests/ci
-uv run mypy --strict conftest.py  # separate run: two conftest.py modules clash in one mypy run
+  approval/src approval/tests scripts tests/secrets
+# separate run: two conftest.py modules clash in one mypy run; tests/ci imports the root conftest
+uv run mypy --strict conftest.py tests/ci
 uv run mypy tools/gxg-policy/src tools/gxg-policy/tests connectors/demo/src connectors/demo/tests tests/contract
 uv run pytest
 uv run python scripts/ci/schema_lock.py
@@ -18,5 +19,8 @@ uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-
 uv run python scripts/ci/check_coverage.py coverage-kit.json
 (cd connectors/demo && uv sync --locked && uv run pytest -q)
 uv run python scripts/ci/prove_schema_guard.py
-uv run python scripts/ci/check_secrets.py --tree HEAD
+scripts/ci/gitleaks.sh tree HEAD
+scripts/ci/gitleaks.sh range "0000000000000000000000000000000000000000..HEAD"
+uv run pytest tests/secrets
+scripts/ci/mutmut.sh >/dev/null
 echo "check-all: OK"

@@ -34,6 +34,9 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from scripts.ci import schema_lock  # noqa: E402
+
 COPY = ("schemas", "policies", "tests/contract", "scripts/ci/schema_lock.py")
 
 Json = Any
@@ -49,9 +52,9 @@ class Mutation:
 def _edit_json(rel: str, change: Callable[[Json], None]) -> Mutate:
     def apply(root: Path) -> None:
         path = root / "schemas" / rel
-        doc = json.loads(path.read_text(encoding="utf-8"))
+        doc = json.loads(schema_lock.read_text(path))
         change(doc)
-        path.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+        schema_lock.write_text(path, json.dumps(doc))
 
     return apply
 
@@ -74,7 +77,7 @@ def _drop_required(pointer: str, field: str) -> Callable[[Json], None]:
 def _raw(rel: str, change: Callable[[str], str]) -> Mutate:
     def apply(root: Path) -> None:
         path = root / "schemas" / rel
-        path.write_text(change(path.read_text(encoding="utf-8")), encoding="utf-8")
+        schema_lock.write_text(path, change(schema_lock.read_text(path)))
 
     return apply
 
@@ -96,12 +99,8 @@ def _set(pointer: str, key: str, value: Json) -> Callable[[Json], None]:
 def _with_lock_rewrite(mutate: Mutate) -> Mutate:
     def apply(root: Path) -> None:
         mutate(root)
-        subprocess.run(
-            [sys.executable, str(root / "scripts" / "ci" / "schema_lock.py"), "--write"],
-            cwd=root,
-            check=True,
-            capture_output=True,
-        )
+        lock = root / "tests" / "contract" / "schema-lock.json"
+        schema_lock.write_text(lock, schema_lock.render(schema_lock.build_lock(root / "schemas")))
 
     return apply
 
@@ -111,11 +110,8 @@ def mutations() -> Iterator[Mutation]:
         "effect-intent: delete top-level required (AC-M0-02 example)",
         _edit_json("effect-intent.schema.json", lambda d: d.pop("required")),
     )
-    sys.path.insert(0, str(ROOT / "scripts" / "ci"))
-    import schema_lock  # noqa: PLC0415
-
     for path in sorted((ROOT / "schemas").glob("*.schema.json")):
-        doc = json.loads(path.read_text(encoding="utf-8"))
+        doc = json.loads(schema_lock.read_text(path))
         for pointer, fields in sorted(schema_lock.required_map(doc).items()):
             # one field per required array keeps the run short and still covers every array
             field = fields[0]
@@ -145,7 +141,7 @@ def mutations() -> Iterator[Mutation]:
     )
     yield Mutation(
         "error: widen code enum",
-        _edit_json("error.schema.json", lambda d: d["properties"]["code"].setdefault("enum", []).append("anything")),
+        _edit_json("error.schema.json", lambda d: d["properties"]["code"]["enum"].append("anything")),
     )
     yield Mutation("preview: invalid JSON", _raw("preview.schema.json", lambda s: s[: len(s) // 2]))
     yield Mutation(
@@ -162,9 +158,8 @@ def run_contract_tests(root: Path) -> int:
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", "tests/contract"],
         cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
+        capture_output=True,  # pragma: no mutate (only keeps the log short)
+        check=False,  # pragma: no mutate (the default)
     )
     return proc.returncode
 
@@ -181,8 +176,15 @@ def prepare(dst: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--only", action="append", default=[], help="substring of mutation names to run")
+    parser = argparse.ArgumentParser(
+        description=__doc__,  # pragma: no mutate (help text)
+        formatter_class=argparse.RawDescriptionHelpFormatter,  # pragma: no mutate (help text)
+    )
+    parser.add_argument(
+        "--only",
+        action="append",
+        help="run only mutations whose name contains this text (repeatable)",  # pragma: no mutate (help text)
+    )
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args(argv)
     selected = [m for m in mutations() if not args.only or any(o in m.name for o in args.only)]
@@ -192,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     if not selected:
         print("no mutation matched --only", file=sys.stderr)
         return 2
-    with tempfile.TemporaryDirectory(prefix="schema-guard-") as tmp:
+    with tempfile.TemporaryDirectory() as tmp:
         baseline = Path(tmp) / "baseline"
         prepare(baseline)
         if run_contract_tests(baseline) != 0:

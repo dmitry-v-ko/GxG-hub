@@ -14,6 +14,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.3,<10",
+    "pytest-socket==0.8.1",  # AC-M0-01: no internet socket in tests
     "ruff==0.17.6",
     "mypy==2.4.1",
     "types-PyYAML>=6,<7",
@@ -25,8 +26,8 @@ dev = [
     # gxg-connector-kit: property tests (AC-M1-02) and branch coverage gate (AC-M1-09)
     "hypothesis>=6.100,<7",
     "pytest-cov>=6,<8",
-    # DoD-4: mutation testing of the kit (config in packages/gxg-connector-kit/pyproject.toml)
-    "mutmut>=3.8,<4",
+    # DoD-4: mutation testing (root: [tool.mutmut] below; kit: packages/gxg-connector-kit/pyproject.toml)
+    "mutmut==3.8.1",
     "cryptography>=44,<51",
     # spikes/m4-contextforge verifier tests: the PyJWT version in the pinned ContextForge image
     "PyJWT==2.15.1",
@@ -49,11 +50,15 @@ gxg-connector-demo = { path = "connectors/demo", editable = true }
 
 [tool.pytest.ini_options]
 minversion = "8.3"
-addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
-# Test helpers of gxg-connector-kit (kit_testing.py); importlib mode does not add test dirs to sys.path.
-pythonpath = ["packages/gxg-connector-kit/tests"]
+# AC-M0-01: pytest-socket refuses to create any socket except Unix ones (TCP, UDP, IPv6).
+addopts = [
+    "-ra", "-p", "pytester", "--strict-markers", "--strict-config", "--import-mode=importlib",
+    "--disable-socket", "--allow-unix-socket",
+]
 testpaths = [
-    "tests",
+    # tests/secrets is not here: it downloads gitleaks (AC-M0-01); the `secrets` CI job runs it.
+    "tests/ci",
+    "tests/contract",
     "packages/gxg-connector-kit/tests",
     "approval/tests",
     "tools/gxg-policy/tests",
@@ -62,11 +67,17 @@ testpaths = [
 ]
 # DoD-5: a skipped or xfailed test is a failure, not a pass.
 xfail_strict = true
+# `from scripts.ci import ...` in tests: mutmut tracks code by its dotted module name.
+# Test helpers of gxg-connector-kit (kit_testing.py); importlib mode does not add test dirs to sys.path.
+pythonpath = [".", "packages/gxg-connector-kit/tests"]
+markers = [
+    "e2e: runs a CI script as a subprocess; mutmut deselects these (its trampolines do not reach child processes)",
+]
 
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-extend-exclude = [".venv"]
+extend-exclude = [".venv", "mutants"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "S", "PL", "RUF"]
@@ -94,8 +105,20 @@ warn_unused_ignores = true
 check_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true
+# scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
+explicit_package_bases = true
+mypy_path = ["packages/gxg-connector-kit/src", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
 
 [tool.ruff.format]
 quote-style = "preserve"
 # Specs are normative text: never rewrite code samples inside Markdown.
 exclude = ["*.md"]
+
+[tool.mutmut]
+# DoD-4 / AC-M0.1-03: modules with the key conditions of M0. Run: scripts/ci/mutmut.sh
+source_paths = ["scripts/ci/", "conftest.py"]
+# M1 coverage gate (AC-M1-09): outside the DoD-4 scope of M0.1 and M1, tested end to end only.
+do_not_mutate = ["scripts/ci/check_coverage.py"]
+also_copy = ["schemas/", "policies/", "docs/", "tests/"]
+pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider"]
+pytest_add_cli_args_test_selection = ["tests/ci/", "tests/contract/"]
