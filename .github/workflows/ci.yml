@@ -64,7 +64,7 @@ jobs:
           connectors/demo/src connectors/demo/tests
           tests/contract
       - name: mypy (dev stand and the ContextForge plugin; their own import roots)
-        run: MYPYPATH=stand/tests:stand:gateway/contextforge uv run mypy stand gateway/contextforge
+        run: MYPYPATH=stand/tests:stand:gateway/contextforge uv run mypy --exclude mutants stand gateway/contextforge
 
   tests:
     runs-on: ubuntu-latest
