@@ -69,3 +69,4 @@ gxg_approval.api.x__error__mutmut_6  # "Retry-After" -> "RETRY-AFTER": header na
 gxg_approval.api.x_create_app__mutmut_19  # partition -> rpartition: equal for "Bearer <jwt>" (a JWT has no space); with more spaces both forms fail verification -> the same 401
 gxg_approval.api.x_create_app__mutmut_25  # headers.get("authorization") -> "AUTHORIZATION": Starlette Headers.get is case-insensitive
 gxg_approval.api.x_create_app__mutmut_26  # missing header default "" -> "XXXX": no space, so scheme "XXXX" != bearer -> the same 401 "token rejected"
+gxg_approval.api.x__responses__mutmut_8  # (200, 201) -> (200, 202) in the `ok` branch: only dispatch passes an `ok` schema, and its only 2xx code is 200

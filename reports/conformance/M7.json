@@ -1,42 +1,47 @@
 {
   "milestone": "M7",
-  "cycle": 1,
+  "cycle": 2,
   "branch": "claude/m7-approval-core",
-  "base": "origin/claude/integration@6a75c62 + specs/plan from claude/admiring-planck-vzys0x (dd82753)",
-  "commit": "7c68ff8ea3019e8bb880b833b9872cc1b058ebd6",
-  "commit_note": "Tested code commit; this report is added by the next commit (reports/ only).",
-  "run_at": "2026-11-21T14:30:00Z",
-  "author": "Claude Code (executor, M7 cycle 1)",
-  "plan": "reports/plans/M7-cycle-1.md",
+  "base": "dd4f060 (cycle 1 + critic report) + docs/ and reports/GOAL.md merged from claude/admiring-planck-vzys0x",
+  "commit": "c6bb52f53cf7f71e52939f8261c2bc9db1d8b477",
+  "commit_note": "Final code commit of cycle 2 (c47b541 merges a reports-only commit of cycle 1). The report commit adds reports/ and one line of scripts/ci/mutmut-equivalent.txt; approval/src, tests, tests_db unchanged.",
+  "run_at": "2026-11-21T18:00:00Z",
+  "author": "Claude Code (milestone owner, M7 cycle 2)",
+  "plan": "reports/plans/M7-cycle-2.md",
   "environment": {
     "local": {
       "os": "linux x86_64",
       "python": "3.13 venv (CI: 3.12)",
-      "postgres": "postgres:16.6-alpine (Docker, network none, Unix socket)",
-      "command": "uv run pytest -> 739+ passed; uv run pytest approval/tests approval/tests_db -> 364 passed, 0 skipped"
+      "postgres": "PostgreSQL 16.15 (Ubuntu package, initdb, Unix socket only, GXG_TEST_PG_SOCKET_DIR); CI: postgres:16.6-alpine in Docker",
+      "command": "uv run pytest -> 743 passed; uv run pytest approval/tests approval/tests_db -> 372 passed, 0 skipped"
     },
     "ci": {
       "workflow": ".github/workflows/ci.yml",
-      "run_id": 44918795404,
-      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44918795404",
-      "status": "completed",
-      "commit": "dd4f060 (critic report on top of b752d31; code identical to 7c68ff8)",
-      "jobs": {
-        "lint": "success",
-        "types": "success",
-        "tests": "success",
-        "approval-db": "success",
-        "schema-guard": "success",
-        "secrets": "success",
-        "mutmut": "success (scripts/ci/mutmut.sh incl. approval, ~37 min)",
-        "policy": "success",
-        "grants-widening": "failure (by design)",
-        "ci-ok": "failure (only because of grants-widening)"
-      },
-      "grants_widening": "red by design: '226 widening change(s) outside a pull request' on push (M2 gate, policies differ from main); not a milestone failure",
-      "earlier_runs": {
-        "44913263210": "7c68ff8, cancelled by the push of b752d31",
-        "44914149094": "b752d31, all green except grants-widening; mutmut cancelled after 53 min by the push of dd4f060"
+      "commit": "c47b541 / report commit",
+      "status": "pushed; not observed from this session (no GitHub API here). grants-widening is red by M2 design on push without a PR",
+      "previous": {
+        "workflow": ".github/workflows/ci.yml",
+        "run_id": 44918795404,
+        "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44918795404",
+        "status": "completed",
+        "commit": "dd4f060 (critic report on top of b752d31; code identical to 7c68ff8)",
+        "jobs": {
+          "lint": "success",
+          "types": "success",
+          "tests": "success",
+          "approval-db": "success",
+          "schema-guard": "success",
+          "secrets": "success",
+          "mutmut": "success (scripts/ci/mutmut.sh incl. approval, ~37 min)",
+          "policy": "success",
+          "grants-widening": "failure (by design)",
+          "ci-ok": "failure (only because of grants-widening)"
+        },
+        "grants_widening": "red by design: '226 widening change(s) outside a pull request' on push (M2 gate, policies differ from main); not a milestone failure",
+        "earlier_runs": {
+          "44913263210": "7c68ff8, cancelled by the push of b752d31",
+          "44914149094": "b752d31, all green except grants-widening; mutmut cancelled after 53 min by the push of dd4f060"
+        }
       }
     }
   },
@@ -75,7 +80,8 @@
       "actual": "5/5 operations: operationId, parameters, request-body schemas (equal), response codes and schema refs present",
       "tests": [
         "approval/tests/test_openapi.py::test_operation[*] (5)",
-        "approval/tests/test_openapi.py::test_contract_has_the_five_operations"
+        "approval/tests/test_openapi.py::test_contract_has_the_five_operations",
+        "approval/tests/test_openapi.py::test_info_and_no_doc_pages"
       ]
     },
     {
@@ -85,7 +91,12 @@
       "actual": "12 states (executing split by execution state) x 18 events = 216 pairs through each owning role's SECURITY DEFINER function; disallowed -> conflict (not_found for an execution-scoped event on an intent that never had an execution), status/version/attempts/executions/audit/decisions unchanged; allowed -> version+1 and one audit row. Plus branch tests T2/T3, T12/T12a, T18, T1 targets, guards, T1 insert guard",
       "tests": [
         "approval/tests_db/test_state_machine.py::test_every_status_event_pair[*] (216)",
-        "approval/tests_db/test_state_machine.py (27 more)"
+        "approval/tests_db/test_state_machine.py (27 more)",
+        "approval/tests_db/test_state_machine.py::test_t1_insert_guard (11 rows)",
+        "test_t2_refuses_what_the_ui_must_never_get_through (agent approver)",
+        "test_t2_needs_the_quorum_t3_records_the_vote (rejection is no approval)",
+        "test_t7_t9_side_effects_and_guards (sub of another intent)",
+        "test_t7_t9_kill_switch_and_limits (cleared switch)"
       ]
     },
     {
@@ -123,7 +134,10 @@
       "actual": "exactly (approved, auto, 10), (pending_approval, human, 20); 10 policy decisions",
       "tests": [
         "approval/tests_db/test_propose.py::test_30_parallel_proposes_with_auto_limit_10",
-        "approval/tests_db/test_propose.py::test_auto_limits_use_sliding_hour_and_day"
+        "approval/tests_db/test_propose.py::test_auto_limits_use_sliding_hour_and_day",
+        "approval/tests_db/test_propose.py::test_auto_limit_counts_only_its_rule",
+        "test_propose.py::test_policy_decision_only_for_auto_intents",
+        "test_propose.py::test_t1_counts_use_indexes_on_a_long_history"
       ]
     },
     {
@@ -135,7 +149,9 @@
         "approval/tests_db/test_propose.py::test_31st_propose_within_an_hour_is_rate_limited",
         "approval/tests_db/test_propose.py::test_pending_caps",
         "approval/tests_db/test_propose.py::test_quota_window_is_one_hour",
-        "approval/tests/test_quotas.py"
+        "approval/tests/test_quotas.py",
+        "approval/tests_db/test_propose.py::test_quotas_count_only_the_tenant",
+        "approval/tests_db/test_api_read.py::test_pool_exhausted_is_temporarily_unavailable"
       ]
     },
     {
@@ -152,10 +168,12 @@
       "id": "AC-M7-09",
       "status": "passed",
       "expected": "effects.status on a foreign intent -> not_found byte-identical to a missing one",
-      "actual": "MCP client (FastMCP in memory) -> api -> PostgreSQL: other requester, other tenant, missing: identical text and structuredContent for status and cancel; same at the API incl. malformed id",
+      "actual": "MCP client (FastMCP in memory) -> api -> PostgreSQL: other requester, other tenant, missing: identical text and structuredContent for status and cancel; same at the API incl. malformed id; cycle 2: one principal ID registered in t-alpha and t-beta — GET and cancel from the other tenant give the byte-identical 404, row unchanged (API level; through MCP the identity is agent:<tenant>:<name>, TEN-06); crafted intent_id (../../readyz, JWKS path, healthz, empty) -> the same not_found bytes",
       "tests": [
         "approval/tests_db/test_mcp.py::test_foreign_intent_is_not_found_byte_for_byte",
-        "approval/tests_db/test_api_read.py::test_foreign_and_missing_intents_are_the_same_404"
+        "approval/tests_db/test_api_read.py::test_foreign_and_missing_intents_are_the_same_404",
+        "approval/tests_db/test_api_read.py::test_same_principal_in_another_tenant_is_not_found",
+        "approval/tests_db/test_mcp.py::test_intent_id_is_a_uuid_not_a_path"
       ]
     },
     {
@@ -202,9 +220,9 @@
     "DoD-1": "push to claude/m7-approval-core; PR into main is the owner's step",
     "DoD-2": "all 13 AC automated",
     "DoD-3": "this file",
-    "DoD-4": "mutmut on policy/transitions/quotas/intents: 1393/1393 killed (reports/mutmut/M7.txt); kit 978/988, same 10 M1 equivalents; scripts/ci/mutmut.sh includes approval",
-    "DoD-5": "0 skipped/xfailed (root conftest policy applies to approval/tests_db)",
-    "DoD-6": "reports/plans/M7-cycle-1.md table"
+    "DoD-4": "mutmut on policy/transitions/quotas/intents/api/mcp at c6bb52f: 1635 mutants, 1624 killed, 11 survived = all listed equivalents (scripts/ci/mutmut-equivalent.txt); SQL check scripts/ci/mutate_m7_sql.py at c6bb52f: 79 mutations, 75 killed, 4 listed equivalents, 0 not as expected; both run by scripts/ci/mutmut.sh (reports/mutmut/M7.txt)",
+    "DoD-5": "0 skipped/xfailed",
+    "DoD-6": "reports/plans/M7-cycle-1.md table + reports/plans/M7-cycle-2.md table (OpenAPI comparison vs oasdiff, SQL mutation driver, T1 counts, UUID check)"
   },
   "spec_interpretations": "reports/plans/M7-cycle-1.md, decisions 1-15 (AS-27 UPDATE cells as SECURITY DEFINER EXECUTE; EFF-03 auto decision via definer function; T9 in api via gxg_dispatch; gxg_mcp via api HTTP; execution_window_s column; T17 version+1; AC-M7-02 propose on existing row; dispatch/JWKS routes; T2 bundle role check left to ui; quota retry hints; AS-08 connector_attested; GR-02 at T1; terminal = no outgoing rule; AP-07 alert as Prometheus rule; tool without executes_via refused)",
   "known_limitations": [
@@ -214,6 +232,41 @@
     "T2 'approver role by bundle' and approver-initiated T6 are ui-side (M9); the DB function checks everything else",
     "pending-cap retry_after_s is a fixed 60 s",
     "ui, executor, notifier, admin processes and AS-29 separate images are M8-M10; their DB roles, grants and transition functions exist now",
-    "mutmut job now runs ~1 h on a 4-core runner (timeout 120 min)"
-  ]
+    "mutmut job now runs ~1 h on a 4-core runner (timeout 120 min)",
+    "Through MCP the same principal ID in two tenants cannot occur (IdentityVerifier requires agent:<tenant>:<name>, TEN-06); the api keeps the tenant in every key for any approval_mcp caller",
+    "SQL mutation list leaves locking clauses (FOR UPDATE, SKIP LOCKED) out: races are covered only by the parallel T1 tests (AC-M7-04/06)"
+  ],
+  "load_evidence": {
+    "what": "EXPLAIN ANALYZE of the T1 count queries, one tenant, history spread over one year, 20 requesters, 1/3 auto (scratch script, owner role); cycle-1 queries measured on the cycle-2 schema (so _SQL_AUTO_USED of cycle 1 already gets the new index)",
+    "results": [
+      "100000 rows | cycle 1 _SQL_COUNTS: 13.54 ms (best of 5) | ->  Parallel Seq Scan on intents (actual rows=33333 loops=3)",
+      "100000 rows | cycle 1 _SQL_AUTO_USED: 0.06 ms (best of 5) | ->  Index Scan using intents_tenant_id_created_at_idx on intents (actual rows=91 loops=1)",
+      "100000 rows | cycle 2 _SQL_COUNTS: 0.03 ms (best of 5) | ->  Index Only Scan using intents_tenant_id_requester_principal_created_at_idx on intents (actual rows=1 loops=1) ; ->  Index Scan using intents_tenant_id_status_expires_at_idx on intents intents_1 (actual rows=0 loops=1)",
+      "100000 rows | cycle 2 _SQL_AUTO_USED: 0.09 ms (best of 5) | ->  Index Scan using intents_tenant_id_created_at_idx on intents (actual rows=91 loops=1)",
+      "500000 rows | cycle 1 _SQL_COUNTS: 57.76 ms (best of 5) | ->  Parallel Seq Scan on intents (actual rows=166667 loops=3)",
+      "500000 rows | cycle 1 _SQL_AUTO_USED: 0.25 ms (best of 5) | ->  Index Scan using intents_tenant_id_created_at_idx on intents (actual rows=456 loops=1)",
+      "500000 rows | cycle 2 _SQL_COUNTS: 0.03 ms (best of 5) | ->  Index Only Scan using intents_tenant_id_requester_principal_created_at_idx on intents (actual rows=3 loops=1) ; ->  Index Scan using intents_tenant_id_status_expires_at_idx on intents intents_1 (actual rows=0 loops=1)",
+      "500000 rows | cycle 2 _SQL_AUTO_USED: 0.26 ms (best of 5) | ->  Index Scan using intents_tenant_id_created_at_idx on intents (actual rows=456 loops=1)"
+    ],
+    "guard": "approval/tests_db/test_propose.py::test_t1_counts_use_indexes_on_a_long_history: 100 000 rows, ANALYZE, EXPLAIN (FORMAT JSON) of both queries has no Seq Scan on intents; fails on the cycle-1 _SQL_COUNTS"
+  },
+  "self_check": {
+    "commit": "c6bb52f",
+    "tests": "uv run pytest -> 743 passed; approval/tests + approval/tests_db on real PostgreSQL 16.15 -> 372 passed, 0 skipped; connectors/demo 1 passed; kit 332 passed, _jwt branches 100%",
+    "lint_types": "ruff check, ruff format --check, mypy --strict (kit, approval, scripts, tests/secrets, conftest+tests/ci, approval/tests_db), mypy (gxg-policy, demo, contract): clean",
+    "mutmut": "approval 1635: 1624 killed, 11 equivalent (listed with reasons); survivors found on the way and handled: 5 in mcp error rebuild (code deleted), _responses descriptions (deleted, FastAPI supplies them), module-scoped OpenAPI fixture (made per test), title/version/doc pages, auth scheme, error messages, Retry-After, 500 path (tests added)",
+    "sql_mutations": "79 one-line mutations: first run 10 not as expected -> 8 killed by new tests, 2 explained equivalents; final run at c6bb52f: 0 not as expected",
+    "gitleaks": "scripts/ci/gitleaks.sh tree HEAD and range dd4f060..HEAD: no leaks found",
+    "ponytail_review": "reports/conformance/M7-cycle-2.self-review.md: no Must fix; 3 Should fix fixed in the cycle (CI mutmut timeout 240 min, mcp error passthrough, mutmut.sh summary line); 2 Nice to have left",
+    "check_all": "every step of scripts/ci/check-all.sh run individually and green (uv lock --check x2, schema_lock, prove_schema_guard 66/66, gxg-policy validate/lint, bundle_smoke, tests/secrets, coverage gate); the two Docker steps ran against the local PostgreSQL socket instead (no Docker daemon here); scripts/ci/mutmut.sh as a whole not run (Docker): its approval part and the SQL driver were run directly, kit/gxg-policy/root mutmut not re-run (code unchanged in cycle 2)",
+    "checklist": {
+      "1": "done: 8 survivors killed (test names in acceptance AC-M7-02/06/07/09)",
+      "2": "done: scripts/ci/mutate_m7_sql.py in mutmut.sh, results in reports/mutmut/M7.txt; api.py, mcp.py in only_mutate; live-execution check of gxg_cancel deleted (comment in the migration)",
+      "3": "done: mcp.py uuid.UUID before the URL, test_intent_id_is_a_uuid_not_a_path",
+      "4": "done: _SQL_COUNTS two index-bounded sub-selects, _SQL_AUTO_USED on new index (tenant_id, created_at); EXPLAIN at 100k/500k in load_evidence, guard test",
+      "5": "done: reports/plans/M7-cycle-2.md DoD-6 row (oasdiff considered, reason)",
+      "6": "done: both runs on c6bb52f (reports/mutmut/M7.txt)"
+    },
+    "minor_of_cycle_1": "ID_PATTERN deleted; PoolTimeout -> 503; mutmut evidence on the final commit; probes, body cap, mcp/signing_key until M5 -> docs/backlog.md"
+  }
 }
