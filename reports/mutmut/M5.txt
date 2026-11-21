@@ -20,3 +20,9 @@ packages/gxg-connector-kit (own [tool.mutmut], `uv run mutmut run` there; cf_ide
 
 gateway/contextforge/gxg_identity/plugin.py (cpex adapter) is not mutated: cpex exists only in the ContextForge
 image; it is exercised live on the stand (every stand test call passes through it).
+
+Cycle 2 (scripts/ci/mutmut.sh now also runs packages/gxg-connector-kit):
+  tools/gxg-policy 2555/2590 killed, connectors/demo 832/841 (7 survived + 2 no tests, all listed),
+  gateway/contextforge 132/133, packages/gxg-connector-kit 1066/1077 (10 M1 equivalents + cf_identity args_hash),
+  root 1211/1235. Not killed 80, listed 80 after renumbering the M3 duration mutant run__mutmut_130 -> 133
+  (the audit `reason` line moved it again; same mutant: duration_ms * 1001).
