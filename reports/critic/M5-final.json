@@ -1,0 +1,130 @@
+{
+ "milestone": "M5",
+ "role": "independent final critic (implementation plan, «Ускорение процесса», second edition, item 1)",
+ "branch": "claude/m5-readonly-poc",
+ "commit": "d39a1ff799a8713703476c66e94d6bfd383f1a11",
+ "code_commit": "9add475f2e4dab589d0fc9424af764cb5382d229",
+ "base": "6a75c62",
+ "reviewed_diff": "635caae..d39a1ff and c54346b (M5 code, stand, specs); the merged, closed M3 and M4.1 are not reviewed",
+ "threshold": 9,
+ "score": 9.5,
+ "caps_applied": [],
+ "dimensions": {"spec": 3, "tests": 1.5, "security": 2, "code": 1.5, "ops": 1, "evidence": 0.5},
+ "acceptance": [
+  {"id": "AC-M5-01", "status": "passed", "evidence": "critic: dockerd started by hand; fresh stand (no .env, no stand/secrets, no volumes): KEEP=1 DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,...' stand/run.sh -> exit 0, {fresh: 29/0, after-restart: 29/0, after-recreate: 29/0}; SC-01…SC-10 and MC-01…MC-04 present in every run; generated M5.json discarded, committed one untouched"},
+  {"id": "AC-M5-02", "status": "passed", "evidence": "test_sc01_each_agent_lists_only_its_team_tools and test_sc01_other_team_tool_is_refused_by_name_on_every_path passed x3 (/rpc, /mcp, /sse, own and other virtual server; demo audit empty); test_sc01_hidden_tool_and_default_deny_on_every_path x3"},
+  {"id": "AC-M5-03", "status": "passed", "evidence": "test_sc06_* x3; critic: curl http://10.250.0.10:8080/healthz from the docker host -> exit 7 (no connection); network connectors internal=true, inhibit_ipv4=true; demo has no published port; inside connectors without identity -> unauthenticated, backend +0"},
+  {"id": "AC-M5-04", "status": "passed", "evidence": "run.sh: docker compose restart, then down + up without -v and without bootstrap: 29/29 each"},
+  {"id": "AC-M5-05", "status": "passed", "evidence": "docs/specs/roadmap-v1.md «Решение: GO (2026-11-21, M5)»: date, conditions 1–4 with tests, link to reports/conformance/M5.json"}
+ ],
+ "dod": {
+  "1_ci": "NOT confirmed on GitHub (known: run 44932350759 got no runners). Critic reproduced every CI job locally on d39a1ff: uv lock --check x2, ruff check/format, 4 mypy runs, root pytest 798, kit 360 + coverage, demo 64, prove_schema_guard, gitleaks tree + range 6a75c62..HEAD, pytest tests/secrets 21 (after git fetch --unshallow; in the shallow clone test_this_repository_is_clean fails on 5 boundary-commit artefacts, identically on base 6a75c62), gxg-policy validate/lint, bundle_smoke, docker_smoke, stand/run.sh 3x29, mutmut.sh exit 0. grants-widening red on push by M2 design (known). A green CI run on the head is still needed before the PR to main",
+  "2_ac_automated": "yes",
+  "3_report": "reports/conformance/M5.json at code commit 9add475 (only reports on top); critic rerun reproduces it",
+  "4_mutmut": "scripts/ci/mutmut.sh exit 0: gxg-policy 2555/2590, demo 832/841 (7 survived + 2 no tests), gateway/contextforge 132/133, gxg-connector-kit 1066/1077, root 1211/1235; not killed 80, all 80 listed with reasons, no unexplained, no stale",
+  "5_no_skip": "yes (report.py counts a skip as failed; 0 skipped in all three runs)",
+  "6_existing_solutions": "reports/plans/M5-cycle-1.md DoD-6 table; checked below in existing_solutions"
+ },
+ "mutmut": {
+  "command": "scripts/ci/mutmut.sh <report> <all>",
+  "exit": 0,
+  "new_in_m5_equivalent": [
+   {"mutant": "gxg_identity.core.x_args_hash__mutmut_5", "verdict": "equivalent", "why": "ensure_ascii=None: json.dumps only tests truthiness, None == False here; same bytes, same hash"},
+   {"mutant": "gxg_connector_kit.cf_identity.x_args_hash__mutmut_5", "verdict": "equivalent", "why": "same as above"}
+  ],
+  "kit_m1_mutants_joined_the_loop": [
+   {"mutant": "gxg_connector_kit._jwt.x_verify__mutmut_41", "verdict": "equivalent", "why": "PyJWT rejects a non-string kid in the header (malformed); an empty kid reaches key_for and fails as 'kid' either way"},
+   {"mutant": "gxg_connector_kit._jwt.x_verify__mutmut_70..72", "verdict": "equivalent", "why": "verify_nbf falls back to the PyJWT default (checked only if nbf present); none of our issuers sets nbf"},
+   {"mutant": "gxg_connector_kit._jwt.x_verify__mutmut_76..78", "verdict": "equivalent", "why": "verify_iss default true but issuer=None makes PyJWT skip it; iss is checked by our allowlist"},
+   {"mutant": "gxg_connector_kit.exec_token (3)", "verdict": "equivalent", "why": "M1 reasons re-read; no M5 code involved"}
+  ],
+  "not_mutated": "gateway/contextforge/gxg_identity/plugin.py (needs cpex, runs only in the ContextForge image; thin adapter, covered live: a wrong field would fail SC-01/SC-03/SC-04 or every call). Its gc.tenant_id input is tautological on v1.1.1 (finding F5)"
+ },
+ "manual_checks": [
+  {"check": "plugins disabled (compose override PLUGINS_ENABLED=false)", "result": "closed: 4 calls (reader, nobody; /rpc, virtual server) -> demo unauthenticated, audit reason 'missing', backend +0"},
+  {"check": "plugin fails to load (adapter key is not a PEM)", "result": "closed: ContextForge in a restart loop, 'Plugin initialization failed: GxgIdentity', port 4444 refuses"},
+  {"check": "plugin crashes at call time (RSA key: loads, EdDSA signing raises)", "result": "closed: ContextForge blocks the call ('Plugin Error: InvalidKeyError ...'), demo audit empty, backend +0"},
+  {"check": "replay of a real ContextForge-issued X-GxG-Identity captured on the wire (AF_PACKET sniffer in demo's netns), sent straight to demo from the connectors network", "result": "closed: unauthenticated, reason 'replay'; same JWS on another tool refused too; backend +0"},
+  {"check": "token passthrough: headers ContextForge sends to demo (6 calls, both tenants, /rpc, virtual server, /sse)", "result": "closed: no Authorization header, no 'Bearer', no agent JWT; only X-GxG-Identity"},
+  {"check": "agent token against management API (t-alpha:nobody)", "result": "closed: PUT /v1/tools/{id}, PUT /v1/gateways/{id}, POST /v1/gateways, /v1/tools, /v1/servers, GET /v1/plugins -> 403; POST /v1/tokens -> 403 (API tokens cannot mint tokens)"},
+  {"check": "where the plugin's server_id and tenant_id come from (image source)", "result": "mcpgateway/services/tool_service.py:5704,5713: both from the tool record (gateway id, team id), not from the request"}
+ ],
+ "existing_solutions": [
+  {"component": "gxg_identity plugin (JWS signing in tool_pre_invoke)", "alternative": "ContextForge built-in identity propagation (HMAC over user_id:email only, no tenant, time, nonce: rejected in ADR-0001); header_injector, jwt_claims_extraction plugins in the image do not sign asymmetrically or bind to tool/arguments", "verdict": "justified_custom"},
+  {"component": "ContextForgeVerifier", "alternative": "PyJWT through the kit's _jwt.verify (reused); own part is only the tool/ahs/sub binding, which no library has", "verdict": "use_existing"},
+  {"component": "args_hash duplicated in core.py and cf_identity.py", "alternative": "import from the kit: impossible, the plugin runs in the ContextForge image without the kit; contract test test_adapter_and_kit_verifier_agree keeps them equal", "verdict": "justified_custom"},
+  {"component": "tool rules", "alternative": "unified_pdp native engine from the image", "verdict": "use_existing"},
+  {"component": "network isolation of demo", "alternative": "Docker internal network + com.docker.network.bridge.inhibit_ipv4", "verdict": "use_existing"},
+  {"component": "SSRF protection", "alternative": "ContextForge SSRF_* settings", "verdict": "use_existing"},
+  {"component": "stand/bootstrap.py (REST setup)", "alternative": "/admin/import and the mcpgateway CLI do not create users and tokens on v1.1.1 (recorded in the docstring)", "verdict": "justified_custom"},
+  {"component": "stand/init.py (secrets, keys, bundle)", "alternative": "secrets (stdlib), cryptography, gxg-policy build (reused)", "verdict": "use_existing"},
+  {"component": "stand/report.py (JUnit -> M5.json)", "alternative": "pytest --junitxml + xml.etree (stdlib); the output format is the Conformance Matrix record, no tool writes it", "verdict": "justified_custom"},
+  {"component": "Stand.probe (raw HTTP from inside a stand network)", "alternative": "docker run of the pinned python:3.12-slim with a stdlib script (no curl in the image)", "verdict": "use_existing"},
+  {"component": "Stand._sse", "alternative": "official mcp.client.sse", "verdict": "use_existing"},
+  {"component": "backend failure modes (testctl /_test/backend/fail)", "alternative": "toxiproxy breaks transport only; rate_limited/timeout_before_start are born in the connector; demo spec defines fake-provider modes", "verdict": "justified_custom"},
+  {"component": "tool timeout (asyncio.wait_for)", "alternative": "FastMCP does not enforce Tool.timeout for this run(); stdlib asyncio", "verdict": "use_existing"}
+ ],
+ "threat_model": [
+  {"path": "identity forgery: forged/foreign-key signature, unknown kid, expired, too-long ttl, other iss/aud/tool/arguments, sub of another tenant, garbage, test-issuer header", "status": "closed", "evidence": "test_sc04_bad_identity_is_refused_by_the_connector_before_the_backend x3 (13 cases, audit reasons asserted, backend +1 only for the control)"},
+  {"path": "identity forgery: replay of an assertion", "status": "closed", "evidence": "SC-04 'replayed'; critic replayed a real ContextForge-issued JWS captured on the wire: reason 'replay', backend +0. Shared jti store across replicas: out_of_scope on the stand (one replica, shortcut in cf_identity.py, SEC-03 MUST for production)"},
+  {"path": "identity forgery: identity in arguments, forwarded headers, _meta, even a correctly signed X-GxG-Identity from the client", "status": "closed", "evidence": "test_sc03_* x3 on /rpc, virtual server, /sse, virtual server SSE; the plugin replaces any incoming X-GxG-Identity (test_incoming_identity_header_is_replaced)"},
+  {"path": "identity forgery: plugin disabled, fails to load or crashes (fail closed)", "status": "closed", "evidence": "critic manual checks (see manual_checks); not in an automated test (F1)"},
+  {"path": "identity forgery: adapter key rotation, old kid after removal", "status": "closed", "evidence": "test_mc04_adapter_key_rotation_and_revocation_at_the_connector x3 (old kid refused directly and through ContextForge: fail closed)"},
+  {"path": "identity forgery: code execution inside ContextForge gives the adapter key", "status": "out_of_scope", "evidence": "SEC-03 and ADR-0001 accept it; mitigations (secret store, kid rotation, alert on unknown kid) are production items"},
+  {"path": "ContextForge bypass: direct connection from the agent host / docker host", "status": "closed", "evidence": "test_sc06_agent_host_cannot_connect_to_demo x3; critic: host curl to 10.250.0.10 -> no connection"},
+  {"path": "ContextForge bypass: from inside the connectors network without or with a bad identity", "status": "closed", "evidence": "test_sc06_inside_the_network_without_identity_is_unauthenticated, test_sc04_* x3"},
+  {"path": "ContextForge bypass: direct_proxy gateways, resources/read, prompts/get without the hook", "status": "closed", "evidence": "MCPGATEWAY_DIRECT_PROXY_ENABLED=false; demo has no resources/prompts and refuses without identity (SC-06)"},
+  {"path": "ContextForge bypass: agent changes its team's tools/gateways (rename to an allowed PDP name, register a gateway)", "status": "closed", "evidence": "critic manual: agent token -> 403 on PUT/POST tools, gateways, servers, tokens (role member = viewer); not in an automated test (F3); grants at demo still limit data"},
+  {"path": "other tenant: tools/list and call by name on every path", "status": "closed", "evidence": "test_sc01_* x3 (AC-M5-02); other team's virtual server over SSE probed 403 by the cycle-2 critic (backlog F11)"},
+  {"path": "other tenant: resource by exact id / search on other boards", "status": "closed", "evidence": "test_sc05_other_tenant_and_hidden_note_are_byte_identical_to_missing x3"},
+  {"path": "other tenant: token with several teams, no team, or team/email domain mismatch", "status": "closed", "evidence": "core.claims_for: teams must equal [tool_team], email domain must be the tenant's agent domain; test_fail_closed (19 cases) + mutmut 132/133"},
+  {"path": "token passthrough (SEC-05)", "status": "closed", "evidence": "ENABLE_HEADER_PASSTHROUGH=false; critic sniffer: no Authorization/Bearer/agent JWT in traffic to demo; SC-09 finds no agent token in logs. Automated check is weak (F2)"},
+  {"path": "SSRF: registration URLs, DNS to metadata/RFC1918, redirects, OAuth discovery and token URL", "status": "closed", "evidence": "test_sc07_ssrf_registration_urls_are_refused, test_sc07_redirects_are_not_followed x3 (target never reached); registration by agents refused (manual, F3)"},
+  {"path": "stale bundle: invalid signature, rollback, older than 24 h", "status": "closed", "evidence": "test_sc10_invalid_rolled_back_or_stale_bundle_means_not_ready_and_refused x3 (each reason in the not_ready log, backend +0); BundleStore.current() checks the age on every call"},
+  {"path": "stale bundle: stand idle for more than 24 h, then restarted", "status": "closed", "evidence": "fail closed by design (GR-13: demo not ready until stand/init.py re-signs); runbook does not say so (F6)"},
+  {"path": "agent token: anonymous, expired, other aud/iss/key, alg none; revocation", "status": "closed", "evidence": "test_sc02_* x3 (401 on /rpc, virtual server, /mcp, SSE streams); test_mc04_revoked_agent_token_stops_working_on_every_path (<= 5 s, owner question #3)"},
+  {"path": "logging an assertion or a secret", "status": "closed", "evidence": "test_sc09_* x3: no provider token, agent token, JWS header or note text in replies, demo and ContextForge logs"}
+ ],
+ "findings": [
+  {"id": "F1", "severity": "major", "origin": "missed_earlier", "ref": "SEC-03 (fail closed in ContextForge), ADR-0002 «M5: условие 4»", "where": "stand/tests/ (no test), compose.yaml:53-60",
+   "problem": "plugins disabled / plugin fails to load / plugin crashes at call time are 'closed' only by configuration; no stand test runs ContextForge that way. Critic verified all three by hand: closed. Removing PLUGINS_FAIL_ON_PLUGIN_ERROR or an upgrade (MC-05) would not turn any test red; data still protected by demo's own check (SC-06)",
+   "required_improvement": "one stand test with a compose override PLUGINS_ENABLED=false -> agent call gives unauthenticated, audit reason 'missing', backend +0; plus a broken key -> /health never answers (backlog)"},
+  {"id": "F2", "severity": "major", "origin": "missed_earlier", "ref": "SEC-05, SC-09", "where": "stand/tests/test_sc.py:460-489",
+   "problem": "SC-09 looks for agent tokens in demo's logs, but demo never logs headers, so a ContextForge that starts forwarding Authorization (ENABLE_HEADER_PASSTHROUGH=true, new version) keeps the test green. Today no Authorization reaches demo (critic sniffer)",
+   "required_improvement": "a test control in demo returns the header names of the last tools/call; SC-09 asserts 'authorization' is not among them (backlog)"},
+  {"id": "F3", "severity": "major", "origin": "missed_earlier", "ref": "SEC-15 (registration by the operator only), condition 4", "where": "stand/tests/test_sc.py:308-330",
+   "problem": "unified_pdp rules key on tool names; only ContextForge's default member role (viewer) stops an agent from renaming a tool of its team or registering a gateway. SC-07 tests registration only as admin; critic got 403 for the agent by hand",
+   "required_improvement": "4 agent-token requests in SC-07 (PUT /v1/tools/{id}, POST /v1/gateways, POST /v1/tools, POST /v1/tokens) -> 403 (backlog)"},
+  {"id": "F4", "severity": "minor", "origin": "missed_earlier", "ref": "SEC-17 (no internals to the agent)", "where": "gateway/contextforge/gxg_identity/plugin.py:34-62",
+   "problem": "tool_pre_invoke catches only Denied; any other exception reaches the agent as 'Plugin Error: InvalidKeyError(... RSAPrivateKey ...)'. Not a secret, fail closed holds",
+   "required_improvement": "catch Exception after Denied and return the same PluginViolation with a generic text; details to the log (backlog)"},
+  {"id": "F5", "severity": "minor", "origin": "missed_earlier", "ref": "code quality", "where": "gateway/contextforge/gxg_identity/core.py:76",
+   "problem": "context_tenant != tool_team can never fire on v1.1.1: ContextForge takes tenant_id from the same tool record (tool_service.py:5704); the message promises a second tenant check that is not there. The real check is teams == [tool_team], tested",
+   "required_improvement": "say in a comment that it is a guard for future versions, or drop the parameter (-3 lines) (backlog)"},
+  {"id": "F6", "severity": "minor", "origin": "missed_earlier", "ref": "ops, AC-M5-04 runbook", "where": "stand/README.md:54",
+   "problem": "runbook 'Рестарт хоста' promises docker compose up -d without further steps; after more than 24 h idle demo stays not ready (GR-13, correct fail closed) until stand/init.py re-signs the bundle. Same theme as cycle-2 F13 (README:32 'один раз')",
+   "required_improvement": "add 'if more than 24 h passed, run uv run python stand/init.py first' (backlog, together with F13)"}
+ ],
+ "owner_questions_review": [
+  {"ref": "M5-ESCALATION #1 (MC-04 scope)", "default_violates_must": false, "why": "demo has no provider credentials, SEC-16 has nothing to rotate; stage-B chain credentials (agent token, adapter kid, per-tenant connection) are tested in MC-04, SC-05, SC-09"},
+  {"ref": "#2 (-32603 instead of invalid_input)", "default_violates_must": false, "why": "MCC-05 binds the connector; demo answers invalid_input itself (MC-02, direct); the protocol error is produced upstream and the call never reaches the connector"},
+  {"ref": "#3 (revocation <= 5 s)", "default_violates_must": false, "why": "SEC-20 is the effects kill switch of stage C (EX-13 <= 30 s); read-only stage B within 5 s, measured by MC-04"},
+  {"ref": "#4 (read timeout after send -> temporarily_unavailable)", "default_violates_must": false, "why": "timeout_before_start is forbidden without proof (MCC-05); a read has no effect and is safe to repeat; the spec wording change is the owner's"}
+ ],
+ "backlog": [
+  "F1 (major, missed_earlier): stand test for ContextForge with plugins disabled / broken plugin",
+  "F2 (major, missed_earlier): assert no Authorization header reaches demo (SEC-05)",
+  "F3 (major, missed_earlier): agent token refused on management API in SC-07",
+  "F4 (minor, missed_earlier): generic violation for unexpected plugin exceptions",
+  "F5 (minor, missed_earlier): comment or drop the tautological context_tenant check",
+  "F6 (minor, missed_earlier): runbook 'Рестарт хоста' after > 24 h (with cycle-2 F13)",
+  "still open from cycle 2: F11, F12, F13; green CI run on the head before the PR to main"
+ ],
+ "required_improvements": [],
+ "blocking_rule_applied": "F1-F3 are major (ponytail Should fix: risky behaviour without a test) but origin missed_earlier: per «Ускорение процесса» item 3 and the task they go to docs/backlog.md and do not lower the score; F4-F6 minor; no critical, no new_regression or new_scope major against M5 AC",
+ "verdict": "M5 closed: score 9.5 >= 9, all AC-M5-01…05 passed on the critic's own fresh stand (3 x 29), no critical, no blocking major (no new_regression or new_scope major against M5 AC). Merge to main (DoD-1) still needs a green GitHub CI run of the head",
+ "ponytail_review": "reports/critic/M5-final.review.md",
+ "lean_lines": 3,
+ "stand_state_after_review": "stand stopped (docker compose down, volumes and git-ignored .env / stand/secrets kept); the generated reports/conformance/M5.json was reverted; no repository file other than the two critic reports changed",
+ "not_checked": "GitHub CI on d39a1ff (no runners, run 44932350759); a real 24 h wait (checked with a bundle built 25 h ago); ContextForge with several workers under load"
+}
