@@ -53,7 +53,7 @@ def test_stale_version_or_changed_hash(browser: Any, propose: Any, row_of: Any, 
     intent = new_intent(propose, row_of)
     browser.login(HUMAN1)
     assert browser.decide(intent, version=intent["version"] + 1).status_code == 409
-    assert browser.decide(intent, version=0).status_code == 409
+    assert browser.decide(intent, version=0).status_code == 400  # no intent has version 0
     assert browser.decide(intent, args_hash="0" * 64).status_code == 409
     assert browser.decide(intent, "reject", args_hash="f" * 64).status_code == 409
     assert browser.decide(intent, version="x").status_code == 400

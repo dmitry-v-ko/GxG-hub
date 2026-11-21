@@ -11,6 +11,7 @@ must match schemas/grants-bundle.schema.json.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import threading
@@ -314,3 +315,32 @@ class BundleStore:
         prefix = f"{domain}:{connection_id}/{rtype}/"
         rids = frozenset(r for g in live for r in g.exact if r.startswith(prefix))
         return AllowedSet(any((domain, connection_id, rtype) in g.masks for g in live), rids)
+
+
+BUNDLE_RELOAD_S = 60.0  # GR-13: a new bundle reaches the service well within 5 minutes
+_log = logging.getLogger("gxg_connector_kit")
+
+
+def bundle_store_from_env(environ: Mapping[str, str], *, reload_s: float = BUNDLE_RELOAD_S) -> BundleStore:
+    """The store of a service process: `GXG_BUNDLE_KEYS` (JSON kid → public key), `GXG_BUNDLE_STATE_FILE`,
+    `GXG_BUNDLE_DIR` (`grants-bundle.json` + `.sig`). Loaded now and again every `reload_s` in a daemon thread;
+    a failed load keeps the previous bundle and is logged (readiness reports it, GR-12)."""
+    keys = {kid: _jwt.parse_public_key(k) for kid, k in json.loads(environ["GXG_BUNDLE_KEYS"]).items()}
+    store = BundleStore(keys, state_file=Path(environ["GXG_BUNDLE_STATE_FILE"]))
+    directory = Path(environ["GXG_BUNDLE_DIR"])
+
+    def reload() -> None:
+        try:
+            store.load(
+                (directory / "grants-bundle.json").read_bytes(), (directory / "grants-bundle.json.sig").read_bytes()
+            )
+        except (OSError, BundleError) as exc:
+            _log.warning("bundle not loaded: %s", exc)
+
+    def loop() -> None:
+        while not threading.Event().wait(reload_s):
+            reload()
+
+    reload()
+    threading.Thread(target=loop, name="bundle-reload", daemon=True).start()
+    return store

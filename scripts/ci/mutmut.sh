@@ -7,7 +7,8 @@
 # tools.py, backend.py. gateway/contextforge (M5, setup.cfg): gxg_identity/core.py. packages/gxg-connector-kit
 # (M1, its own [tool.mutmut]; in this loop since M5): _jwt, exec_token, svc_jwt, grants, canonical, cf_identity.
 # approval/ui, approval/notifier (M9, own lockfiles and [tool.mutmut]; run with the root environment, where their
-# DB tests find the Approval Service fixtures): app, stepup, render, cli; bot.
+# DB tests find the Approval Service fixtures): ui app, stepup, render, config, cli; notifier bot (its cli.py is
+# the two endless loops of the process, run by the compose stand).
 # approval (its own [tool.mutmut]): M7 policy, transitions, quotas, intents (T1), api, mcp. Its DB tests need one
 # PostgreSQL for all mutants: a container without network, reached over a Unix socket (needs Docker).
 # mutmut exits 0 with survivors, so this script fails on any survivor, untested or timed-out mutant not

@@ -18,8 +18,14 @@ Approval Web UI ([approval-service-v1 «Web UI»](../../docs/specs/approval-serv
 | `/healthz`, `/readyz` | — | `readyz`: БД и свежий bundle |
 
 Все записи идут через функции `SECURITY DEFINER` роли `gxg_ui` (`gxg_decide`, `gxg_resolve_manual`, `gxg_link_code`)
-и таблицу passkey. БД сама проверяет статус, `version`, `args_hash`, срок, requester ≠ approver и набор approver'ов,
+и таблицу passkey. Повтор step-up-assertion из старой копии cookie нового решения не даёт: один голос на человека
+обеспечивает БД (`UNIQUE (intent_id, decided_by)`); одноразовость на сервере — с `decider` (AS-30, M10). БД сама проверяет статус, `version`, `args_hash`, срок, requester ≠ approver и набор approver'ов,
 замороженный при T1; ui дополнительно проверяет роль по текущему bundle и step-up.
+
+## Ограничения
+
+- `oidc-egress` — TCP-реле на один хост. IdP, у которых discovery, token и JWKS на разных хостах (например, Google),
+  требуют по реле на хост; до выбора провайдера (backlog M9-F11).
 
 ## Конфигурация
 

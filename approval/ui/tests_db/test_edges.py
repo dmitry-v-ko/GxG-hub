@@ -278,3 +278,50 @@ def test_purged_row_in_the_list(browser: Any, propose: Any, owner: Any) -> None:
     page = browser.login(HUMAN1).client.get("/").text
     row = page.split(f'href="/intents/{doc["intent_id"]}">')[1].split(" · t-alpha")[0]
     assert row == "—</a> · —"
+
+
+def test_one_unreadable_preview_does_not_hide_the_list(browser: Any, propose: Any, owner: Any) -> None:
+    """Critic M9-1 F4: the bad row says «превью недоступно», the others are listed, the card of the bad one is 503."""
+    bad, good = propose().json(), propose(args={"text": "good", "n": 2}).json()
+    owner.execute("UPDATE intents SET preview_ciphertext = '\\x00ff' WHERE intent_id = %s", (bad["intent_id"],))
+    page = browser.login(HUMAN1).client.get("/")
+    assert page.status_code == 200 and good["intent_id"] in page.text
+    row = page.text.split(f'href="/intents/{bad["intent_id"]}">')[1].split(" · t-alpha")[0]
+    assert row == f"{ui.PREVIEW_UNAVAILABLE}</a> · —"
+    assert browser.client.get(f"/intents/{bad['intent_id']}").status_code == 503
+
+
+def test_version_out_of_range(browser: Any, propose: Any, row_of: Any, execute: Any, owner: Any) -> None:
+    """Critic M9-1 F9: the functions take a PostgreSQL integer; anything else is the form's fault (400)."""
+    row = intent(propose, row_of)
+    browser.login(HUMAN1)
+    for bad in (2**31, -1, 0):
+        assert browser.decide(row, version=bad).status_code == 400, bad
+    assert browser.decide(row, version=2**31 - 1).status_code == 409  # in range, just stale
+    url = f"/intents/{row['intent_id']}/resolve"
+    data = {"csrf": browser.csrf, "outcome": "executed", "reason": "a long enough reason"}
+    assert browser.client.post(url, data=data | {"version": 2**31}).status_code == 400
+    assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)
+
+
+def test_step_up_replay_with_a_zero_counter(
+    browser: Any, make_browser: Any, soft_authenticator: Any, world: Any, propose: Any, row_of: Any, owner: Any
+) -> None:
+    """Critic M9-1 F5: a synced passkey (counter always 0) replayed from an old cookie gives no second decision."""
+    world.set_policy("t-alpha", [{"id": "two", "match": {"tools": [WIRE]}, "decision": "require_approval",
+                                  "approvals": 2}])  # fmt: skip
+    row = intent(propose, row_of, tool=WIRE)
+    browser.login(HUMAN1)
+    key = soft_authenticator(zero_counter=True)
+    options = browser.client.get("/passkeys/options").text
+    browser.client.post("/passkeys", content=key.register(options), headers={"X-CSRF-Token": browser.csrf})
+    options = browser.client.get(f"/intents/{row['intent_id']}/step-up").text
+    assertion = key.assertion(options)
+    old_cookie = [c for c in browser.client.cookies.jar]
+    assert browser.decide(row, assertion=assertion).status_code == 303
+    replay = make_browser()
+    for c in old_cookie:
+        replay.client.cookies.jar.set_cookie(c)
+    replay.session = browser.session
+    assert replay.decide(row_of(row["intent_id"]), assertion=assertion).status_code == 409  # the DB's one vote
+    assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (1,)

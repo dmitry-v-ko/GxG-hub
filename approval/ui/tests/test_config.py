@@ -12,6 +12,7 @@ from kit_testing import BUNDLE_KID, BundleKit, format_public_key
 from nacl.public import PrivateKey, SealedBox
 
 from gxg_approval_ui import cli, config
+from gxg_connector_kit.grants import bundle_store_from_env
 
 
 def test_env_and_secret(tmp_path: Path) -> None:
@@ -48,7 +49,7 @@ def test_bundle_store_loads_a_signed_bundle(tmp_path: Path) -> None:
         "GXG_BUNDLE_STATE_FILE": str(tmp_path / "state.json"),
         "GXG_BUNDLE_DIR": str(tmp_path / "b"),
     }
-    store = cli.bundle_store(environ)
+    store = bundle_store_from_env(environ)
     assert store.readiness().ready and "t-alpha" in store.current.tenants
 
 
@@ -59,7 +60,7 @@ def test_bundle_store_without_a_bundle_is_not_ready(tmp_path: Path) -> None:
         "GXG_BUNDLE_STATE_FILE": str(tmp_path / "state.json"),
         "GXG_BUNDLE_DIR": str(tmp_path / "missing"),
     }
-    assert cli.bundle_store(environ).readiness().ready is False
+    assert bundle_store_from_env(environ).readiness().ready is False
 
 
 def test_tls_error_names_the_variable() -> None:

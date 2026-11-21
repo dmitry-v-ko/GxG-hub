@@ -15,20 +15,17 @@ file (Docker/Kubernetes secrets). Everything else is public configuration.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-import threading
 from collections.abc import Mapping
 from pathlib import Path
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from gxg_connector_kit import _jwt
-from gxg_connector_kit.grants import BundleError, BundleStore
+from gxg_connector_kit.grants import BundleStore, bundle_store_from_env
 
 log = logging.getLogger("gxg_approval")
-BUNDLE_RELOAD_S = 60  # GR-13: a new bundle reaches the service well within 5 minutes
 
 
 def env(name: str, default: str | None = None) -> str:
@@ -49,24 +46,4 @@ def signing_key(name: str) -> Ed25519PrivateKey:
 
 
 def bundle_store(environ: Mapping[str, str] = os.environ) -> BundleStore:
-    keys: dict[str, Ed25519PublicKey] = {
-        kid: _jwt.parse_public_key(k) for kid, k in json.loads(environ["GXG_BUNDLE_KEYS"]).items()
-    }
-    store = BundleStore(keys, state_file=Path(environ["GXG_BUNDLE_STATE_FILE"]))
-    directory = Path(environ["GXG_BUNDLE_DIR"])
-
-    def reload() -> None:
-        try:
-            store.load(
-                (directory / "grants-bundle.json").read_bytes(), (directory / "grants-bundle.json.sig").read_bytes()
-            )
-        except (OSError, BundleError) as exc:  # keep the previous bundle; /readyz reports it (GR-12)
-            log.warning("bundle not loaded: %s", exc)
-
-    def loop() -> None:
-        while not threading.Event().wait(BUNDLE_RELOAD_S):
-            reload()
-
-    reload()
-    threading.Thread(target=loop, name="bundle-reload", daemon=True).start()
-    return store
+    return bundle_store_from_env(environ)

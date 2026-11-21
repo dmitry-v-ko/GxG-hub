@@ -150,12 +150,15 @@ def _b64(data: bytes) -> str:
 class SoftAuthenticator:
     """A software passkey (ES256, attestation `none`) producing the JSON the browser's `toJSON()` sends."""
 
-    def __init__(self, rp_id: str = "ui.example.test", origin: str = PUBLIC_URL, user_verified: bool = True) -> None:
+    def __init__(
+        self, rp_id: str = "ui.example.test", origin: str = PUBLIC_URL, user_verified: bool = True,
+        zero_counter: bool = False,
+    ) -> None:  # fmt: skip
         import os
 
         from cryptography.hazmat.primitives.asymmetric import ec
 
-        self.rp_id, self.origin, self.user_verified = rp_id, origin, user_verified
+        self.rp_id, self.origin, self.user_verified, self.zero_counter = rp_id, origin, user_verified, zero_counter
         self.key = ec.generate_private_key(ec.SECP256R1())
         self.credential_id = os.urandom(16)
         self.count = 0
@@ -188,7 +191,7 @@ class SoftAuthenticator:
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import ec
 
-        self.count += 1
+        self.count += 0 if self.zero_counter else 1
         auth = (
             hashlib.sha256(self.rp_id.encode()).digest()
             + bytes([0x05 if self.user_verified else 0x01])

@@ -5,12 +5,13 @@ from __future__ import annotations
 import base64
 import copy
 import json
+import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from kit_testing import BUNDLE_KID, REPO, T0, BundleKit, Clock, iso, load_yaml, sign_bundle
+from kit_testing import BUNDLE_KID, REPO, T0, BundleKit, Clock, format_public_key, iso, load_yaml, sign_bundle
 
 from gxg_connector_kit import _jwt, canonical
 from gxg_connector_kit.errors import GxgError
@@ -20,6 +21,7 @@ from gxg_connector_kit.grants import (
     BundleStore,
     Decision,
     GrantResolver,
+    bundle_store_from_env,
     load_bundle,
     parse_tenant,
 )
@@ -473,3 +475,47 @@ def test_groups_and_roles_are_kept_for_approval_policies() -> None:
     assert alpha.roles == {APPROVER: frozenset({"approver"})}
     assert alpha.groups["researchers"] == frozenset({HERMES, ANALYST})
     assert parse_tenant({**T_BETA, "groups": None}).groups == {}
+
+
+def _dir_env(tmp_path: Path, kit: BundleKit) -> dict[str, str]:
+    return {
+        "GXG_BUNDLE_KEYS": json.dumps({BUNDLE_KID: format_public_key(kit.ci_key.public_key())}),
+        "GXG_BUNDLE_STATE_FILE": str(tmp_path / "state.json"),
+        "GXG_BUNDLE_DIR": str(tmp_path / "bundle"),
+    }
+
+
+def _publish(tmp_path: Path, signed: tuple[bytes, bytes]) -> None:
+    (tmp_path / "bundle").mkdir(exist_ok=True)
+    (tmp_path / "bundle/grants-bundle.json").write_bytes(signed[0])
+    (tmp_path / "bundle/grants-bundle.json.sig").write_bytes(signed[1])
+
+
+def test_bundle_store_from_env_loads_and_reloads(tmp_path: Path) -> None:
+    """GR-13: the service picks a new bundle up from the directory on its own (shared by approval api and ui)."""
+    import threading
+
+    kit = BundleKit(tmp_path / "state.json")
+    now = time.time()
+    _publish(tmp_path, kit.signed(built_at=now - 60, version="a" * 40))
+    store = bundle_store_from_env(_dir_env(tmp_path, kit), reload_s=0.05)
+    assert store.version == "a" * 40
+    (reloader,) = [t for t in threading.enumerate() if t.name == "bundle-reload" and t.is_alive()][-1:]
+    assert reloader.daemon is True
+    _publish(tmp_path, kit.signed(built_at=now - 30, version="b" * 40))
+    deadline = time.time() + 5
+    while store.version != "b" * 40 and time.time() < deadline:
+        time.sleep(0.02)
+    assert store.version == "b" * 40
+
+
+def test_bundle_store_from_env_keeps_running_without_a_bundle(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    kit = BundleKit(tmp_path / "state.json")
+    store = bundle_store_from_env(_dir_env(tmp_path, kit), reload_s=3600)
+    assert store.readiness().ready is False
+    assert any(r.name == "gxg_connector_kit" and r.levelname == "WARNING" and r.getMessage().startswith(
+        "bundle not loaded: ") for r in caplog.records)  # fmt: skip
+    _publish(tmp_path, (b"{}", b"{}"))
+    caplog.clear()
+    store2 = bundle_store_from_env(_dir_env(tmp_path, kit), reload_s=3600)
+    assert store2.readiness().ready is False and caplog.records

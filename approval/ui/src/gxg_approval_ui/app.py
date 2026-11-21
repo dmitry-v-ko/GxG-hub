@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 import uuid
@@ -61,6 +62,7 @@ NOT_RESOLVER = (403, "Нужна роль approver или tenant_admin")
 TELEGRAM_APPROVERS = (403, "Привязка Telegram — только для approver'ов")
 NO_CODE = (503, "Не удалось выдать код, попробуйте ещё раз")
 LONG_COMMENT = (400, f"Комментарий длиннее {COMMENT_MAX} символов")
+PREVIEW_UNAVAILABLE = "превью недоступно"
 SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
@@ -74,6 +76,8 @@ SESSION_COOKIE_FLAGS = {"session_cookie": SESSION_COOKIE, "max_age": SESSION_MAX
                         "https_only": True, "path": "/"}  # fmt: skip
 OIDC_CLIENT = {"scope": "openid", "code_challenge_method": "S256"}  # code flow with PKCE; authlib adds the nonce
 OIDC_DISCOVERY = "/.well-known/openid-configuration"
+for _name in ("httpx", "httpx2", "httpcore"):  # SEC-17: no request URLs at INFO (authlib's IdP calls)
+    logging.getLogger(_name).setLevel(logging.WARNING)
 TEMPLATES = Jinja2Templates(
     env=Environment(loader=PackageLoader("gxg_approval_ui"), autoescape=True)  # AS-15: every value escaped
 )
@@ -124,6 +128,17 @@ class Refused(Exception):
         self.status, self.message = status, message
 
 
+def _version(form: Mapping[str, Any]) -> int:
+    """The intent version of the screen: a PostgreSQL integer (the functions take `integer`), else 400."""
+    try:
+        version = int(_field(form, "version"))
+    except ValueError:
+        raise Refused(*NO_VERSION) from None
+    if not 0 < version < 2**31:
+        raise Refused(*NO_VERSION)
+    return version
+
+
 def _field(form: Mapping[str, Any], name: str) -> str:
     """A form value as text; a missing or file field is empty."""
     value = form.get(name)
@@ -140,7 +155,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         "oidc",
         client_id=deps.oidc_client_id,
         client_secret=deps.oidc_client_secret,
-        server_metadata_url=deps.oidc_issuer.rstrip("/") + OIDC_DISCOVERY,
+        server_metadata_url=deps.oidc_issuer.removesuffix("/") + OIDC_DISCOVERY,
         client_kwargs=OIDC_CLIENT | deps.oidc_client_kwargs,
     )
 
@@ -150,6 +165,8 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         response.headers.update(SECURITY_HEADERS)
         return response
 
+    # shortcut: signed cookie, no server-side revocation (logout clears this browser only; a copied cookie lives until
+    # the idle/absolute limit); add a session table when «log out everywhere» is needed. Rotating the key ends all.
     app.add_middleware(SessionMiddleware, secret_key=deps.session_key, **SESSION_COOKIE_FLAGS)  # type: ignore[arg-type]
     app.mount("/static", StaticFiles(packages=[("gxg_approval_ui", "static")]))
 
@@ -225,7 +242,10 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         return doc["preview"], args, recomputed == row["canonical_args_hash"]
 
     def summary(row: Mapping[str, Any]) -> dict[str, Any]:
-        opened = envelope(row)
+        try:
+            opened = envelope(row)
+        except Refused:  # one unreadable preview must not hide the rest of the list (EFF-14: the list is the source)
+            opened = ({"title": PREVIEW_UNAVAILABLE, "target": {"label": "—"}}, None, False)
         title, label = ("—", "—") if opened is None else (opened[0]["title"], opened[0]["target"]["label"])
         group = hashlib.sha256(canonical.dumps([row["requester_principal"], opened and opened[0]])).hexdigest()
         return {
@@ -293,7 +313,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     async def logout(request: Request) -> Response:
         form = await request.form()
         check_csrf(request, _field(form, "csrf"))
-        request.session.clear()
+        request.session.clear()  # shortcut: this browser only (see SessionMiddleware)
         return RedirectResponse("/signed-out", status_code=303)
 
     @app.get("/signed-out")
@@ -385,10 +405,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
 
     def _decide(request: Request, who: str, intent_id: str, form: Mapping[str, Any]) -> Response:
         decision, args_hash, comment = _field(form, "decision"), _field(form, "args_hash"), _field(form, "comment")
-        try:
-            version = int(_field(form, "version"))
-        except ValueError:
-            raise Refused(*NO_VERSION) from None
+        version = _version(form)
         if len(comment) > COMMENT_MAX:
             raise Refused(*LONG_COMMENT)
         with deps.pool.connection() as conn:
@@ -417,10 +434,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         check_csrf(request, _field(form, "csrf"))
 
         def work() -> Response:
-            try:
-                version = int(_field(form, "version"))
-            except ValueError:
-                raise Refused(*NO_VERSION) from None
+            version = _version(form)
             with deps.pool.connection() as conn:
                 row = load(conn, intent_id)
                 if not roles(who).get(row["tenant_id"], frozenset()) & {"approver", "tenant_admin"}:

@@ -19,6 +19,13 @@ AS-18…AS-20, AP-08), веха M9. Отдельный образ и lockfile (A
 `GXG_TELEGRAM_API_URL` (по умолчанию `https://api.telegram.org`), `GXG_NOTIFY_INTERVAL_S` (2). Входящих соединений нет,
 порт не слушается; health-эндпоинта нет: живость видна по логам `outbox`/`getUpdates` (как у `sweeper`, backlog).
 
+## Runbook
+
+| Симптом | Что делать |
+| --- | --- |
+| Токен бота мог попасть в логи (сборки до M9 цикла 2 писали URL `…/bot<token>/…` через httpx на INFO) | Отозвать токен у BotFather, выдать новый, заменить секрет `telegram_bot_token`, удалить старые логи из хранилища |
+| `/link` не отвечает | Логи `getUpdates: …`; один экземпляр на токен (второй получает 409 от Telegram) |
+
 ## Тесты
 
 `uv run pytest approval/notifier/tests_db`: PostgreSQL и fake Bot API (`testing/fake_bot_api.py`, контракт Bot API для

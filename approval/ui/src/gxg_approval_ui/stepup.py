@@ -1,7 +1,10 @@
 """WebAuthn (py_webauthn): passkey registration and the step-up assertion of a decision (AS-16, AS-17, SEC-08).
 
-The step-up challenge contains the intent id and its args hash and lives in the signed session for 5 minutes.
-It is popped on the first verification attempt, so one assertion serves one decision.
+The step-up challenge contains the intent id and its args hash and lives in the signed session for 5 minutes. It is
+popped on the first verification attempt — but the session is a client-side cookie, so an old copy of it still holds
+the challenge, and passkeys with a zero signature counter do not show a replay. What stops a replay from counting is
+the database: one vote per human per intent (decisions UNIQUE (intent_id, decided_by)) and the hash/intent binding of
+the challenge. Server-side single use comes with the decider (AS-30, M10).
 """
 
 from __future__ import annotations

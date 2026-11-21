@@ -22,6 +22,10 @@ import httpx
 import psycopg
 
 log = logging.getLogger("gxg_approval_notifier")
+# SEC-17: httpx logs every request URL at INFO, and a Bot API URL is /bot<token>/<method>. Set where Bot lives, so
+# no entry point can forget it.
+for _name in ("httpx", "httpcore"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
 WINDOW_S = 600  # AP-08: «больше 5 новых заявок за 10 минут» → one digest
 MAX_SINGLE = 5
 POLL_TIMEOUT_S = 25
@@ -131,7 +135,7 @@ class Notifier:
 
     def _notify(self, chat: int, event: Mapping[str, Any]) -> None:
         kind = self.throttle.offer(chat, self.clock())
-        base = self.ui_url.rstrip("/")
+        base = self.ui_url.removesuffix("/")
         try:
             if kind == "single":
                 url = f"{base}/intents/{event['intent_id']}"

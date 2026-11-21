@@ -375,3 +375,55 @@ def test_refused_claims_are_counted_on_an_index(owner: Any) -> None:
     finally:
         owner.execute("RESET enable_seqscan")
     assert any("audit_events_at_idx" in r[0] for r in plan), plan
+
+
+def test_bot_token_is_in_no_log_record(caplog: Any) -> None:
+    """SEC-17 (critic M9-1 F1): httpx logs request URLs at INFO; a Bot API URL carries the token."""
+    import logging
+
+    import httpx
+
+    from gxg_approval_notifier.bot import Bot
+
+    token = "123:SECRET-TOKEN-VALUE"
+    caplog.set_level(logging.DEBUG)  # everything the root logger would let through
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # as bot.py sets it at import
+    ok = httpx.MockTransport(lambda r: httpx.Response(200, json={"ok": True, "result": []}))
+    Bot(httpx.Client(base_url="https://api.telegram.org", transport=ok), token).call("getUpdates", timeout=0)
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert [r for r in caplog.records if token in r.getMessage()] == []
+    logging.getLogger("httpx").setLevel(logging.NOTSET)  # control: without the setting httpx does log the URL
+    Bot(httpx.Client(base_url="https://api.telegram.org", transport=ok), token).call("getUpdates", timeout=0)
+    assert any(token in r.getMessage() for r in caplog.records)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def test_bot_module_sets_the_httpx_level() -> None:
+    import importlib
+    import logging
+
+    from gxg_approval_notifier import bot
+
+    logging.getLogger("httpx").setLevel(logging.NOTSET)
+    importlib.reload(bot)
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("httpcore").level == logging.WARNING
+
+
+def test_link_for_two_tenants(notifier: Any, telegram: Any, propose: Any, owner: Any, pg: Any) -> None:
+    """A code issued for every tenant of the approver links them all; notifications of both reach the chat."""
+    with pg.connect("gxg_ui") as ui:
+        assert ui.execute("SELECT gxg_link_code(%s, %s, '424242')", (HUMAN1, ["t-alpha", "t-beta"])).fetchone() == (
+            True,
+        )
+    telegram.push_text(TG1, "/link 424242")
+    notifier.poll(None)
+    rows = owner.execute("SELECT tenant_id, telegram_user_id FROM approver_links ORDER BY tenant_id").fetchall()
+    assert rows == [("t-alpha", TG1), ("t-beta", TG1)]
+    a = propose().json()
+    owner.execute("UPDATE outbox SET payload = jsonb_set(payload, '{tenant_id}', '\"t-beta\"') WHERE intent_id = %s",
+                  (a["intent_id"],))  # fmt: skip
+    b = propose(args={"text": "alpha", "n": 2}).json()
+    notifier.deliver()
+    urls = {m["reply_markup"]["inline_keyboard"][0][0]["url"] for m in sent_to(telegram, TG1) if "reply_markup" in m}
+    assert urls == {f"{UI_URL}/intents/{a['intent_id']}", f"{UI_URL}/intents/{b['intent_id']}"}

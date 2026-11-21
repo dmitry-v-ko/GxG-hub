@@ -183,6 +183,8 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      "a code is never used up"),
     (MIG2, "DO UPDATE SET telegram_user_id = excluded.telegram_user_id,", "DO UPDATE SET telegram_user_id = "
      "approver_links.telegram_user_id,", "a new link does not replace the old Telegram account"),
+    (MIG2, "FOREACH t IN ARRAY c.tenant_ids LOOP", "FOREACH t IN ARRAY c.tenant_ids[1:1] LOOP",
+     "a code links only the first tenant"),
     (MIG2, "REVOKE INSERT ON outbox FROM gxg_ui;", "", "ui writes outbox rows"),
     (MIG2, "REVOKE INSERT, UPDATE ON approver_links FROM gxg_ui;", "", "ui writes links directly"),
     (MIG2, "ON FUNCTION gxg_link_claim(text, bigint) TO gxg_notifier;",

@@ -94,7 +94,5 @@ gxg_approval.api.x_create_app__mutmut_19  # partition -> rpartition: equal for "
 gxg_approval.api.x_create_app__mutmut_25  # headers.get("authorization") -> "AUTHORIZATION": Starlette Headers.get is case-insensitive
 gxg_approval.api.x_create_app__mutmut_26  # missing header default "" -> "XXXX": no space, so scheme "XXXX" != bearer -> the same 401 "token rejected"
 gxg_approval.api.x__responses__mutmut_8  # (200, 201) -> (200, 202) in the `ok` branch: only dispatch passes an `ok` schema, and its only 2xx code is 200
-gxg_approval_notifier.bot.xǁNotifierǁ_notify__mutmut_9  # M9: rstrip("XX/XX") strips the same "/" (a set of characters); a UI URL never ends in "X"
 gxg_approval_ui.stepup.x_registration_options__mutmut_2  # M9: token_bytes(None) draws secrets.DEFAULT_ENTROPY = 32 bytes, the same as CHALLENGE_BYTES
 gxg_approval_ui.render.x_card__mutmut_6  # M9: ensure_ascii=None is falsy, json.dumps treats it exactly like False
-gxg_approval_ui.app.x_create_app__mutmut_27  # M9: rstrip("XX/XX") strips the character set {X, /}; an issuer URL never ends in "X"
