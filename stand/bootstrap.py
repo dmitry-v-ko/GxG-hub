@@ -3,8 +3,8 @@
 `uv run python stand/bootstrap.py` after `docker compose up -d`:
   teams t-alpha, t-beta (private); agents reader and nobody in each (<name>@<tenant>.agents.gxg.example.com,
   role member, one API token bound to its team: SEC-02); gateway `demo-<tenant>` -> http://demo:8080/mcp in each
-  team (visibility team); a virtual server per team; an alias on t-alpha's demo.boards.list; a REST tool
-  `demo.message.execute` in t-alpha that unified_pdp must refuse to every agent (EFF-02). Then the identity adapter
+  team (visibility team); a virtual server per team; an alias on t-alpha's demo.boards.list. No `*.execute` tool is
+  registered (EFF-02); one left by an earlier (M5) bootstrap is deleted. Then the identity adapter
   gets the team and gateway ids (stand/secrets/plugins.yaml) and ContextForge restarts if they changed.
 State for the tests (ids, agent tokens) -> stand/secrets/state.json (git-ignored).
 shortcut: REST calls instead of config as code; ContextForge v1.1.1 has no import for users and tokens.
@@ -158,27 +158,10 @@ def main() -> None:
     boards = alpha["tools"]["demo.boards.list"]
     if boards["name"] != ALIAS:
         boards["name"] = api("PUT", f"/v1/tools/{boards['id']}", {"customName": ALIAS})["name"]
-    execute = next((x for x in tools if x.get("originalName") == EXECUTE or x.get("name") == EXECUTE), None)
-    if execute is None:
-        execute = api(
-            "POST",
-            "/v1/tools",
-            {
-                "tool": {
-                    "name": EXECUTE,
-                    "url": "http://demo:8080/healthz",
-                    "integration_type": "REST",
-                    "request_type": "GET",
-                    "description": "EFF-02 probe: must never be callable by an agent",
-                    "visibility": "team",  # the API reads it here for tools, not next to team_id
-                },
-                "team_id": alpha["id"],
-                "visibility": "team",
-            },
-        )
-    if execute.get("visibility") != "team":
-        execute = api("PUT", f"/v1/tools/{execute['id']}", {"visibility": "team"})
-    alpha["execute"] = {"id": execute["id"], "name": execute["name"]}
+    for x in tools:  # EFF-02: execute is never registered in ContextForge (the M5 stand had a decoy here)
+        if EXECUTE in (x.get("originalName"), x.get("name")):
+            api("DELETE", f"/v1/tools/{x['id']}", ok=(200, 204))
+    alpha.pop("execute", None)
     STATE.write_text(json.dumps(state, indent=1))
     STATE.chmod(0o600)
     plugins = plugins_yaml(

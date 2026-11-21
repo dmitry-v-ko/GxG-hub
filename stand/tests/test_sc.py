@@ -48,14 +48,11 @@ def reached(stand: Stand, before: int) -> list[dict[str, Any]]:
 
 
 def test_sc01_each_agent_lists_only_its_team_tools(stand: Stand) -> None:
-    execute = stand.state["teams"]["t-alpha"]["execute"]["name"]  # team t-alpha, not on its virtual server
     for agent in (ALPHA_READER, ALPHA_NOBODY, BETA_READER, BETA_NOBODY):
         tenant = stand.state["agents"][agent]["team"]
         own = {stand.tool(tenant, t) for t in ("demo.boards.list", "demo.notes.search", "demo.note.get")}
         paths = stand.paths(agent)
-        for path in ("/rpc", paths["sse"]):
-            assert {t["name"] for t in stand.tools(agent, path)} == own | ({execute} if tenant == "t-alpha" else set())
-        for path in (paths["virtual_server"], paths["virtual_server_sse"]):
+        for path in ("/rpc", paths["sse"], paths["virtual_server"], paths["virtual_server_sse"]):
             assert {t["name"] for t in stand.tools(agent, path)} == own, (agent, path)
 
 
@@ -76,9 +73,8 @@ def test_sc01_other_team_tool_is_refused_by_name_on_every_path(stand: Stand) -> 
 
 
 def test_sc01_hidden_tool_and_default_deny_on_every_path(stand: Stand) -> None:
-    """unified_pdp, deny by default (GO/NO-GO condition 4): nobody may only list boards; *execute* never."""
+    """unified_pdp, deny by default (GO/NO-GO condition 4): nobody may only list boards (*execute*: test_ex.py)."""
     before = len(stand.audit())
-    alpha = stand.state["teams"]["t-alpha"]
     search, get = stand.tool("t-alpha", "demo.notes.search"), stand.tool("t-alpha", "demo.note.get")
     for name, path in stand.paths(ALPHA_NOBODY).items():
         if name == "mcp":
@@ -88,10 +84,6 @@ def test_sc01_hidden_tool_and_default_deny_on_every_path(stand: Stand) -> None:
             # SSE carries no reason (result {}); that the call never reached demo is checked on the audit below
             assert "PDP_DENY" in why or (name.endswith("sse") and why), (name, tool, why)
         assert ok(stand.call(ALPHA_NOBODY, stand.tool("t-alpha", "demo.boards.list"), path=path)) == {"boards": []}
-    # the rules allow demo-message-execute to t-alpha:reader by mistake; the deny rule wins (EFF-02)
-    resp = stand.call(ALPHA_READER, alpha["execute"]["name"])
-    assert "PDP_DENY" in denied(resp) and "EFF-02" in denied(resp), resp
-    assert denied(stand.call(ALPHA_READER, alpha["execute"]["name"], path="/sse"))
     # an agent missing from the rules (here: platform admin's own token) is refused too
     admin = stand.admin().headers["Authorization"].split()[1]
     resp = stand.call(ALPHA_READER, stand.tool("t-alpha", "demo.boards.list"), token=admin)

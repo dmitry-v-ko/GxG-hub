@@ -1,4 +1,5 @@
-"""The three read tools of `demo` and the checks every call goes through.
+"""The tools of `demo` (three reads; `demo.message.propose` when effects are configured, effects.py) and the checks
+every call goes through.
 
 Order for every call: identity from the trusted channel (SEC-03, MCC-02) -> input schema ->
 grants (allowed() narrows the backend query, check() on every item: GR-16; a named resource
@@ -36,6 +37,7 @@ from gxg_connector_kit.identity import IdentityVerifier, VerifiedIdentity
 from gxg_connector_kit.redact import redact
 
 from .backend import Backend, Note
+from .effects import Effects
 
 ROOT = Path(__file__).resolve().parents[2]  # connectors/demo
 MANIFEST = ROOT / "gxg-manifest.yaml"  # the one source of tool names, schemas and timeouts
@@ -113,6 +115,7 @@ class Connector:
         self.grants = grants
         self.search_budget_s = search_budget_s
         self._cursor_key = secrets.token_bytes()
+        self.effects: Effects | None = None  # stage C, set by server.build when configured; else no propose tool
 
     def tools(self, verifier: IdentityVerifier, refresh: Callable[[], None]) -> list[DemoTool]:
         handlers: dict[str, Handler] = {
@@ -120,6 +123,8 @@ class Connector:
             "demo.notes.search": self.notes_search,
             "demo.note.get": self.note_get,
         }
+        if self.effects is not None:
+            handlers["demo.message.propose"] = self.effects.propose
 
         def ready() -> None:
             refresh()
@@ -138,6 +143,7 @@ class Connector:
                 refresh=ready,
             )
             for t in manifest["tools"]
+            if t["name"] in handlers
         ]
 
     def _readable(self, ident: VerifiedIdentity) -> dict[str, tuple[str, str]]:

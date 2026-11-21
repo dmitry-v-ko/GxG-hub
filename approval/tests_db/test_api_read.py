@@ -197,9 +197,10 @@ def test_dispatch(
     """T9 over HTTP: connector JWT = token aud, jti = execution, only once; JWKS from configuration (AS-09)."""
     executor_key = Ed25519PrivateKey.generate()
     deps = world.deps(api_pool)
-    deps.exec_jwks = make_jwks(executor_key)
+    published = make_jwks(executor_key)
+    deps.exec_jwks = lambda: published
     with TestClient(create_app(deps)) as client:
-        assert client.get("/.well-known/gxg-exec-jwks.json").json() == deps.exec_jwks
+        assert client.get("/.well-known/gxg-exec-jwks.json").json() == published
         created = client.post("/v1/intents", json=world.body(tool="demo.note.propose"), headers=world.auth()).json()
         cur = owner.cursor(row_factory=psycopg.rows.dict_row)
         intent = cur.execute("SELECT * FROM intents WHERE intent_id = %s", (created["intent_id"],)).fetchone()

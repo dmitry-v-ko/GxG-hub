@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "demo.message.propose output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent_id", "status"],
+  "properties": {
+    "intent_id": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["pending_approval", "approved"]}
+  }
+}

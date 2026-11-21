@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -28,6 +29,7 @@ from gxg_approval.api import Deps, create_app
 from gxg_connector_kit import _jwt, canonical, svc_jwt
 from gxg_connector_kit.grants import BundleStore
 
+sys.path.insert(0, str(Path(__file__).parent))  # effects_stack (M8), also from mutmut's copy; importlib mode
 IMAGE = "postgres:16.6-alpine"
 BUNDLE_KID = "ci-test"
 ADMIN = "test"  # superuser of the test container; trust auth on the Unix socket
@@ -312,7 +314,7 @@ class World:
         return doc
 
     def deps(self, pool: ConnectionPool[Any]) -> Deps:
-        return Deps(API_ID, pool, self.store, self.encryptor, {"keys": []})
+        return Deps(API_ID, pool, self.store, self.encryptor, lambda: {"keys": []})
 
 
 @pytest.fixture

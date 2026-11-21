@@ -25,6 +25,9 @@ _FILES = (
     "preview",
     "intent-status",
     "effect-result",
+    # connector internal HTTP (M8)
+    "execute-request",
+    "reconcile-result",
 )
 
 

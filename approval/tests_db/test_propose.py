@@ -19,6 +19,8 @@ from gxg_approval.api import create_app
 from gxg_approval.crypto import Decryptor
 from gxg_connector_kit import _schema
 
+BOT, SIGNALS = "agent:t-alpha:bot", "agent:t-alpha:signals"
+
 
 def stored_hash(owner: psycopg.Connection[Any]) -> str:
     row = owner.execute("SELECT canonical_args_hash FROM intents").fetchone()
@@ -116,6 +118,30 @@ def test_idempotent_repeat(client: TestClient, world: Any, owner: psycopg.Connec
     assert r.status_code == 409
     assert r.json()["message"] == "idempotency_key is already used with other parameters"
     assert count(owner) == 1 and count(owner, "outbox") == 1
+
+
+def test_another_requesters_key_is_a_conflict_without_its_intent(
+    client: TestClient, world: Any, owner: psycopg.Connection[Any]
+) -> None:
+    """new_scope M7-final #2: two agents of one tenant. Same key and args → 409, nothing of the other's intent."""
+    mine = client.post("/v1/intents", json=world.body(key="signals:cand-1:v1", requester=SIGNALS), headers=world.auth())
+    assert mine.status_code == 201
+    for args in (None, {"text": "other text"}):  # same args (same hash) and other args
+        theirs = client.post(
+            "/v1/intents", json=world.body(key="signals:cand-1:v1", requester=BOT, args=args), headers=world.auth()
+        )
+        assert theirs.status_code == 409
+        assert theirs.json() == {
+            "code": "conflict",
+            "message": "idempotency_key is already used with other parameters",
+            "retryable": False,
+        }
+        assert mine.json()["intent_id"] not in theirs.text
+    again = client.post(
+        "/v1/intents", json=world.body(key="signals:cand-1:v1", requester=SIGNALS), headers=world.auth()
+    )
+    assert again.status_code == 200 and again.json() == mine.json()  # AC-M7-04 for the owner is unchanged
+    assert count(owner) == 1
 
 
 def test_same_key_in_another_tenant_is_another_intent(

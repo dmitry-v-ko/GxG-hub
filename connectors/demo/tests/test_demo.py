@@ -322,14 +322,16 @@ def test_no_verifier_refuses_with_a_reason() -> None:
 async def test_three_tools_with_the_schema_files(demo: Demo) -> None:
     manifest = yaml.safe_load((DEMO / "gxg-manifest.yaml").read_text(encoding="utf-8"))
     listed = {t.name: t for t in (await demo.session.list_tools()).tools}
-    assert sorted(listed) == ["demo.boards.list", "demo.note.get", "demo.notes.search"]  # no propose before M8
-    assert sorted(t["name"] for t in manifest["tools"]) == sorted(listed)
-    for t in manifest["tools"]:
+    # read-only configuration (no DEMO_APPROVAL_URL): no propose; with effects: test_effects.py
+    assert sorted(listed) == ["demo.boards.list", "demo.note.get", "demo.notes.search"]
+    reads = [t for t in manifest["tools"] if t["effect_class"] == "read"]
+    assert sorted(t["name"] for t in reads) == sorted(listed)
+    for t in reads:
         assert listed[t["name"]].input_schema == schema(t["input_schema"])
         assert listed[t["name"]].output_schema == schema(t["output_schema"])
         assert listed[t["name"]].description == schema(t["input_schema"])["description"]
     timeouts = {t.name: t.timeout for t in demo.connector.tools(server.NoVerifier(), lambda: None)}
-    limits = {t["name"]: float(t["limits"]["timeout_s"]) for t in manifest["tools"]}
+    limits = {t["name"]: float(t["limits"]["timeout_s"]) for t in reads}
     assert timeouts == limits == {"demo.boards.list": 10.0, "demo.notes.search": 20.0, "demo.note.get": 10.0}
     for f in (DEMO / "schemas").glob("*.json"):
         jsonschema.Draft202012Validator.check_schema(schema(f"schemas/{f.name}"))
@@ -343,7 +345,8 @@ async def test_results_match_the_output_schemas(demo: Demo) -> None:
         "demo.note.get": await demo.ok("demo.note.get", {"note_id": note.id}),
     }
     for t in yaml.safe_load((DEMO / "gxg-manifest.yaml").read_text(encoding="utf-8"))["tools"]:
-        jsonschema.validate(out[t["name"]], schema(t["output_schema"]))
+        if t["effect_class"] == "read":
+            jsonschema.validate(out[t["name"]], schema(t["output_schema"]))
     err = await demo.call("demo.note.get", {"note_id": "missing"})
     jsonschema.validate(err["structuredContent"], json.loads((REPO / "schemas/error.schema.json").read_text()))
     assert json.loads(err["content"][0]["text"]) == err["structuredContent"]  # MCC-04: duplicate in content

@@ -92,13 +92,15 @@ class Deps:
     pool: ConnectionPool[Any]
     store: BundleStore
     encryptor: Encryptor
-    exec_jwks: dict[str, Any]  # AS-09: executor public keys (configuration, no secret)
+    # AS-09: executor public keys (configuration, no secret), the current version of the JWKS file
+    exec_jwks: Callable[[], dict[str, Any]]
     _exec_verifiers: dict[str, ExecTokenVerifier] = field(default_factory=dict)
 
     def exec_verifier(self, connector_id: str) -> ExecTokenVerifier:
         if connector_id not in self._exec_verifiers:
-            jwks = json.dumps(self.exec_jwks).encode()
-            self._exec_verifiers[connector_id] = ExecTokenVerifier(connector_id, ExecutorJwks(lambda: jwks))
+            # max_age 0: dispatch always checks the current JWKS, so a removed `kid` stops at once (AS-10)
+            jwks = ExecutorJwks(lambda: json.dumps(self.exec_jwks()).encode(), max_age_s=0)
+            self._exec_verifiers[connector_id] = ExecTokenVerifier(connector_id, jwks)
         return self._exec_verifiers[connector_id]
 
 
@@ -219,7 +221,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (route table)
 
     @app.get("/.well-known/gxg-exec-jwks.json", operation_id="getExecutorJwks")
     def jwks() -> dict[str, Any]:
-        return deps.exec_jwks
+        return deps.exec_jwks()
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

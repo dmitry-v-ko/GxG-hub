@@ -1,7 +1,7 @@
 [project]
 name = "gxg-connector-demo"
 version = "0.1.0"
-description = "Reference connector `demo`: read-only tools over synthetic boards and notes (M3)."
+description = "Reference connector `demo`: read tools (M3), demo.message.propose with internal execute (M8)."
 requires-python = ">=3.12"
 dependencies = [
     "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn
@@ -32,11 +32,11 @@ testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
 xfail_strict = true
 
-# DoD-4: modules with the M3 key conditions (grant filtering, not_found, fallback).
+# DoD-4: modules with the M3 key conditions (grant filtering, not_found, fallback) and M8 (execute checks, provider).
 # Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh does it in CI).
 [tool.mutmut]
 source_paths = ["src/demo_connector/"]
-only_mutate = ["*/tools.py", "*/backend.py", "*/server.py"]
+only_mutate = ["*/tools.py", "*/backend.py", "*/server.py", "*/effects.py", "*/provider.py"]
 also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml"]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]

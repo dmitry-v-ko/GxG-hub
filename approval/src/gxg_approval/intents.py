@@ -53,7 +53,7 @@ SELECT count(*) FILTER (WHERE created_at > now() - interval '1 hour'), count(*)
   FROM intents WHERE tenant_id = %s AND created_at > now() - interval '1 day'
    AND approval_mode = 'auto' AND %s = ANY(rule_ids)"""  # index (tenant_id, created_at)
 _SQL_LOCK = "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))"
-_SQL_BY_KEY = f"SELECT {STATUS_COLUMNS} FROM intents WHERE tenant_id = %s AND idempotency_key = %s"  # noqa: S608
+_SQL_BY_KEY = f"SELECT {STATUS_COLUMNS}, requester_principal FROM intents WHERE tenant_id = %s AND idempotency_key = %s"  # noqa: S608
 _SQL_OWN = f"SELECT {STATUS_COLUMNS} FROM intents WHERE intent_id = %s AND tenant_id = %s AND requester_principal = %s"  # noqa: S608
 _SQL_INSERT = f"""
 INSERT INTO intents (intent_id, tenant_id, requester_principal, business_task_id, tool_key, tool_version,
@@ -211,7 +211,8 @@ def propose(conn: psycopg.Connection[Any], bundle: Bundle, caller: Service, body
             (tenant, req["idempotency_key"]),
         ).fetchone()
         if existing is not None:  # EFF-08
-            if existing["canonical_args_hash"] != args_hash:
+            # Another requester's key: conflict without its intent (AS-11a: only own intents are visible).
+            if existing["requester_principal"] != requester or existing["canonical_args_hash"] != args_hash:
                 raise GxgError("conflict", "idempotency_key is already used with other parameters")
             return Created(status_doc(conn, existing), http_status=200)
         if _blocked(conn, tenant, req["tool_key"]):  # AS-05: inside the transaction

@@ -1,0 +1,752 @@
+"""M8: executor ↔ `demo` ↔ Approval Service end to end on PostgreSQL, HTTP over Unix sockets. AC-M8-01…12, 14.
+
+Every case counts provider calls in the fake provider's journal (conformance matrix: «ноль обращений к провайдеру»)
+and reads the database as the owner role. Executors are real `Executor` objects, each on its own connection of
+the `gxg_executor` role; races use threads against one PostgreSQL (EX-10).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import os
+import shutil
+import tempfile
+import threading
+import time
+import uuid
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import httpx
+import psycopg
+import pytest
+import yaml
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from effects_stack import (
+    ACTOR_A,
+    ACTOR_B,
+    API_ID,
+    CONNECTOR,
+    DEMO,
+    EXECUTOR_ID,
+    KID,
+    MCP_ID,
+    DemoClient,
+    DemoConfig,
+    Keys,
+    Servers,
+    auto_policy,
+    bundle,
+    demo_process,
+    jwks,
+    pub,
+    seed,
+    serve_demo,
+    write_bundle,
+)
+from fastmcp import Client
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
+
+from demo_connector.effects import args_hash
+from gxg_approval import keys as keymgmt
+from gxg_approval.api import Deps, create_app
+from gxg_approval.crypto import Decryptor, Encryptor
+from gxg_approval.executor import Executor, Reserved, SigningKeys
+from gxg_approval.mcp import create_server
+from gxg_connector_kit import _jwt, _schema, canonical, exec_token, svc_jwt
+from gxg_connector_kit.grants import BundleStore
+from gxg_connector_kit.identity import StubVerifier
+
+TEXT, RECIPIENT = "hello partner", "partner_1"
+PAST = "2020-01-01T00:00:00Z"
+
+
+@dataclass
+class Stack:
+    pg: Any
+    owner: psycopg.Connection[Any]
+    keys: Keys
+    dir: Path
+    api_pool: ConnectionPool[Any]
+    published: dict[str, Any] = field(default_factory=dict)  # the JWKS file of `api` (AS-09)
+    built_at: float = field(default_factory=lambda: time.time() - 120)
+    executors: list[Executor] = field(default_factory=list)
+    signing: list[dict[str, str]] = field(default_factory=list)  # GXG_EXEC_SIGNING_KEYS_FILE content
+    clock: list[float] = field(default_factory=lambda: [0.0])  # offset of the connector's JWKS clock
+
+    def __post_init__(self) -> None:
+        self.api_sock = str(self.dir / "api.sock")
+        data = bundle(self.keys, built_at=self.built_at)
+        write_bundle(self.keys, self.dir / "bundle", data)
+        (self.dir / "demo-svc.seed").write_text(seed(self.keys.services[CONNECTOR]))
+        self.store = BundleStore({KID: self.keys.ci.public_key()}, state_file=self.dir / "api-state.json")
+        self.store.load(data, (self.dir / "bundle" / "grants-bundle.json.sig").read_bytes())
+        self.published = jwks(self.keys.executor)
+        self.signing = [{"seed": seed(self.keys.executor), "not_before": PAST}]
+        encryptor = Encryptor({t: {p: pk for p, (_, pk) in v.items()} for t, v in self.keys.payload.items()})
+        self.deps = Deps(API_ID, self.api_pool, self.store, encryptor, lambda: self.published)
+        self.api = Servers([(create_app(self.deps), self.api_sock)])
+        self.cfg = DemoConfig(str(self.dir), f"{KID}={pub(self.keys.ci)}", pub_issuer(self.keys), self.api_sock)
+        self.demo = DemoClient(self.cfg, self.keys)
+        self.demo_servers, self.connector = serve_demo(self.cfg, lambda: time.time() + self.clock[0])
+
+    # --- bundle ---------------------------------------------------------------------------------
+    def reload(self, **kw: Any) -> None:
+        """A newer bundle on both sides (api: loaded; demo: files, picked up on the next call, GR-12)."""
+        self.built_at += 1
+        data = bundle(self.keys, built_at=self.built_at, **kw)
+        write_bundle(self.keys, self.dir / "bundle", data)
+        self.store.load(data, (self.dir / "bundle" / "grants-bundle.json.sig").read_bytes())
+
+    # --- executors --------------------------------------------------------------------------------
+    def executor(self, name: str = "ex-1", keys_now: Callable[[], float] = time.time) -> Executor:
+        """keys_now: the clock of the key choice only (AS-10 `not_before`); tokens carry the real time."""
+        client = self.demo.internal()
+        ex = Executor(
+            self.pg.connect("gxg_executor"),
+            instance=name,
+            service_id=EXECUTOR_ID,
+            store=self.store,
+            decryptor=Decryptor("args", {t: v["args"][0] for t, v in self.keys.payload.items()}),
+            keys=SigningKeys(lambda: self.signing, keys_now),
+            svc_key=self.keys.services[EXECUTOR_ID],
+            http=lambda _service: client,
+        )
+        self.executors.append(ex)
+        return ex
+
+    def drain(self, ex: Executor, until: Callable[[], bool], timeout: float = 10.0) -> None:
+        deadline = time.time() + timeout
+        while not until():
+            assert time.time() < deadline, "condition not reached"
+            if not ex.run_once():
+                time.sleep(0.05)
+
+    # --- reading the database as the owner --------------------------------------------------------
+    def intent(self, intent_id: str) -> dict[str, Any]:
+        row = (
+            self.owner.cursor(row_factory=dict_row)
+            .execute("SELECT * FROM intents WHERE intent_id = %s", (intent_id,))
+            .fetchone()
+        )
+        assert row is not None
+        return row
+
+    def status(self, intent_id: str) -> str:
+        return str(self.intent(intent_id)["status"])
+
+    def executions(self, intent_id: str) -> list[tuple[Any, ...]]:
+        return self.owner.execute(
+            "SELECT attempt, state, error_code FROM executions WHERE intent_id = %s ORDER BY attempt", (intent_id,)
+        ).fetchall()
+
+    def dispatches(self, intent_id: str) -> int:
+        row = self.owner.execute(
+            "SELECT count(*) FROM audit_events WHERE intent_id = %s AND action = 'dispatch'", (intent_id,)
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    # --- helpers for direct `execute` calls (as an attacker or a broken executor would) ---------------
+    def propose(self, principal: str = ACTOR_A, board: str = "a-public", **args: Any) -> dict[str, Any]:
+        out = self.demo.propose(principal, {"board_id": board, "recipient": RECIPIENT, "text": TEXT, **args})
+        assert out.get("isError") is not True, out
+        doc: dict[str, Any] = out["structuredContent"]
+        return doc
+
+    def claims(self, r: Reserved, **over: Any) -> dict[str, Any]:
+        i = self.intent(str(r.intent_id))
+        base = {
+            "aud": CONNECTOR,
+            "sub": str(r.intent_id),
+            "jti": str(r.execution_id),
+            "ten": i["tenant_id"],
+            "req": i["requester_principal"],
+            "tool": f"{i['tool_key']}@{i['tool_version']}",
+            "con": i["connection_id"],
+            "res": i["resource_id"],
+            "ahs": i["canonical_args_hash"],
+            "idk": i["idempotency_key"],
+        }
+        return {**base, **over}
+
+    def execute(self, r: Reserved, token: str, args: dict[str, Any] | None = None) -> httpx.Response:
+        auth = svc_jwt.sign(self.keys.services[EXECUTOR_ID], iss=EXECUTOR_ID, aud=CONNECTOR)
+        body = {
+            "intent_id": str(r.intent_id),
+            "execution_id": str(r.execution_id),
+            "execution_token": token,
+            "args": {"recipient": RECIPIENT, "text": TEXT} if args is None else args,
+        }
+        with self.demo.internal() as c:
+            resp: httpx.Response = c.post(
+                "/internal/v1/execute/demo.message.execute", json=body, headers={"Authorization": f"Bearer {auth}"}
+            )
+        return resp
+
+    def close(self) -> None:
+        self.demo_servers.stop()
+        self.api.stop()
+        for ex in self.executors:
+            ex.conn.close()
+
+
+def pub_issuer(keys: Keys) -> str:
+    return "ed25519:" + _jwt.b64url_encode(_jwt.raw_public_key(keys.issuer.public_key))
+
+
+def jws(signer: Ed25519PrivateKey | None, header: dict[str, Any], claims: dict[str, Any]) -> str:
+    h = _jwt.b64url_encode(json.dumps(header).encode())
+    p = _jwt.b64url_encode(json.dumps(claims).encode())
+    return f"{h}.{p}." + (_jwt.b64url_encode(signer.sign(f"{h}.{p}".encode())) if signer else "")
+
+
+@pytest.fixture
+def stack(pg: Any, owner: psycopg.Connection[Any], api_pool: ConnectionPool[Any]) -> Iterator[Stack]:
+    os.environ["GXG_PROFILE"] = "test"  # the test identity issuer of `demo` (demo-connector-v1 «Identity в тестах»)
+    directory = Path(tempfile.mkdtemp(prefix="m8", dir="/tmp"))  # short: a Unix socket path has ~100 bytes
+    s = Stack(pg, owner, Keys(), directory, api_pool)
+    try:
+        yield s
+    finally:
+        s.close()
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+# --- AC-M8-01 -------------------------------------------------------------------------------------
+
+
+def test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so(stack: Stack) -> None:
+    """propose → auto-approved → executor → demo → provider: `effects.status` = succeeded within 10 s."""
+    started = time.time()
+    created = stack.propose(idempotency_key="cand-1:v1")
+    assert created["status"] == "approved"  # EFF-22
+    ex = stack.executor()
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "succeeded")
+    issuer = stack.keys.issuer
+    api = httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds=stack.api_sock), base_url="http://api")
+    mcp = create_server(
+        api,
+        lambda: svc_jwt.sign(stack.keys.services[MCP_ID], iss=MCP_ID, aud=API_ID),
+        StubVerifier(MCP_ID, issuer.public_key),
+        lambda: issuer.headers(tenant_id="t-alpha", principal=ACTOR_A, audience=MCP_ID),
+    )
+
+    async def status() -> Any:
+        async with Client(mcp) as c:
+            return await c.call_tool("effects.status", {"intent_id": created["intent_id"]}, raise_on_error=False)
+
+    res = asyncio.run(status())
+    assert not res.is_error and res.structured_content["status"] == "succeeded"
+    assert time.time() - started <= 10
+    calls = stack.demo.calls()
+    assert len(calls) == 1
+    assert calls[0]["idempotency_key"] == "cand-1:v1" and calls[0]["outcome"] == "ok"
+    assert calls[0]["text_hash"] == hashlib.sha256(TEXT.encode()).hexdigest()
+    assert stack.intent(created["intent_id"])["attempts"] == 1
+    assert stack.executions(created["intent_id"]) == [(1, "succeeded", None)]
+
+
+def test_propose_is_listed_and_execute_is_not(stack: Stack) -> None:
+    """EX-01 at the connector: `execute`/`reconcile` are internal HTTP only, never MCP tools (EFF-02, MCC-07)."""
+    assert stack.demo.tools() == ["demo.boards.list", "demo.message.propose", "demo.note.get", "demo.notes.search"]
+
+
+def test_human_approval_path(stack: Stack, pg: Any) -> None:
+    """Without an auto rule: pending_approval → a human approves (T2) → executed."""
+    stack.reload(policies={"t-alpha": {"tenant": "t-alpha", "schema_version": 1, "rules": []}})
+    created = stack.propose()
+    assert created["status"] == "pending_approval"
+    ex = stack.executor()
+    assert ex.run_once() is False  # nothing to execute (the outbox row is a `notify`)
+    i = stack.intent(created["intent_id"])
+    with pg.connect("gxg_ui") as ui:
+        ui.execute(
+            "SELECT gxg_decide(%s, %s, 'approve', %s, %s, false, null)",
+            (created["intent_id"], "oidc:https://idp.example.invalid:9", i["version"], i["canonical_args_hash"]),
+        )
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "succeeded")
+    assert len(stack.demo.calls()) == 1
+
+
+# --- AC-M8-02 -------------------------------------------------------------------------------------
+
+
+def test_ac02_50_intents_10_executors_no_dedupe_one_call_each(stack: Stack) -> None:
+    """EX-10: real threads, one PostgreSQL; the provider does not dedupe and answers in 200 ms."""
+    ids = [stack.propose(idempotency_key=f"race-{n:04d}")["intent_id"] for n in range(50)]
+    stack.demo.mode("ok,no_dedupe,slow:200")
+    stop = threading.Event()
+    executors = [stack.executor(f"ex-{n}") for n in range(10)]
+    threads = [threading.Thread(target=ex.run, args=(stop,), kwargs={"poll_s": 0.05}) for ex in executors]
+    for t in threads:
+        t.start()
+    try:
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            row = stack.owner.execute(
+                "SELECT count(*) FROM intents WHERE status = 'succeeded' AND intent_id = ANY(%s)",
+                ([uuid.UUID(i) for i in ids],),
+            ).fetchone()
+            if row and row[0] == 50:
+                break
+            time.sleep(0.1)
+    finally:
+        stop.set()
+        for t in threads:
+            t.join()
+    calls = stack.demo.calls()
+    assert len(calls) == 50
+    assert sorted(c["idempotency_key"] for c in calls) == [f"race-{n:04d}" for n in range(50)]
+    assert {c["outcome"] for c in calls} == {"ok"}
+    reserved_by = stack.owner.execute("SELECT count(DISTINCT reserved_by) FROM executions").fetchone()
+    assert reserved_by is not None and reserved_by[0] > 1  # really concurrent
+    assert stack.owner.execute("SELECT count(*) FROM executions").fetchone() == (50,)
+
+
+# --- AC-M8-03, 04, 05 -------------------------------------------------------------------------------
+
+
+def reserve_one(stack: Stack, **propose: Any) -> tuple[Reserved, Executor]:
+    created = stack.propose(**propose)
+    ex = stack.executor()
+    taken = ex.take()
+    assert isinstance(taken, Reserved) and str(taken.intent_id) == created["intent_id"]
+    return taken, ex
+
+
+def test_ac03_invalid_execution_tokens_are_401_without_dispatch(stack: Stack) -> None:
+    """The 9 cases of AC-M1-03 on `execute`: 401, provider untouched, `dispatch` never called (EX-03)."""
+    r, _ = reserve_one(stack)
+    key = stack.keys.executor
+    kid = _jwt.thumbprint(key.public_key())
+    other = Ed25519PrivateKey.generate()
+    now = int(time.time())
+    header = {"alg": "EdDSA", "typ": "gxg-exec+jwt", "kid": kid}
+
+    def full(**over: Any) -> dict[str, Any]:
+        doc = {**stack.claims(r), "iss": "gxg-executor", "iat": now, "exp": now + 60, **over}
+        return {k: v for k, v in doc.items() if v is not None}
+
+    replayed = exec_token.sign(key, stack.claims(r))
+    first = stack.execute(r, replayed, {"recipient": RECIPIENT, "text": TEXT + "!"})  # spends the jti (422)
+    assert first.status_code == 422
+    cases = {
+        "foreign signature": jws(other, header, full()),
+        "unknown kid": jws(other, {**header, "kid": _jwt.thumbprint(other.public_key())}, full()),
+        "iss": jws(key, header, full(iss="someone-else")),
+        "aud": jws(key, header, full(aud="rogue")),
+        "exp in the past > 5 s": jws(key, header, full(iat=now - 66, exp=now - 6)),
+        "iat in the future > 5 s": jws(key, header, full(iat=now + 10, exp=now + 60)),
+        "missing claim": jws(key, header, full(idk=None)),
+        "alg none": jws(None, {**header, "alg": "none"}, full()),
+        "replayed jti": replayed,
+    }
+    for why, token in cases.items():
+        resp = stack.execute(r, token)
+        assert resp.status_code == 401, (why, resp.text)
+        assert resp.json() == {"code": "unauthenticated", "message": "token rejected", "retryable": False}
+    no_auth = stack.demo.internal().post("/internal/v1/execute/demo.message.execute", json={})
+    assert no_auth.status_code == 401  # no service JWT of an executor (AS-06)
+    assert stack.demo.calls() == []
+    assert stack.dispatches(str(r.intent_id)) == 0
+    assert stack.executions(str(r.intent_id)) == [(1, "reserved", None)]
+
+
+def test_ac04_replay_after_success_is_409_and_the_provider_is_called_once(stack: Stack) -> None:
+    r, ex = reserve_one(stack)
+    token = exec_token.sign(stack.keys.executor, stack.claims(r))
+    ok = stack.execute(r, token)
+    assert ok.status_code == 200 and ok.json()["status"] == "succeeded"
+    again = stack.execute(r, token)
+    assert again.status_code == 409 and again.json()["code"] == "conflict"
+    # EX-04: the same token straight at `dispatch` again (as a second connector instance would): refused
+    resp = httpx.Client(transport=httpx.HTTPTransport(uds=stack.api_sock), base_url="http://api").post(
+        f"/v1/executions/{r.execution_id}/dispatch",
+        json={"execution_token": token},
+        headers={"Authorization": "Bearer " + svc_jwt.sign(stack.keys.services[CONNECTOR], iss=CONNECTOR, aud=API_ID)},
+    )
+    assert resp.status_code in (401, 409)  # api's jti cache, or the CAS: never a second dispatch
+    assert len(stack.demo.calls()) == 1
+    assert stack.dispatches(str(r.intent_id)) == 1
+    assert ex.run_once() is False  # and the executor has nothing left to do
+
+
+@pytest.mark.parametrize(
+    "args",
+    [{"recipient": RECIPIENT, "text": "hello partneR"}, {"recipient": "partner_2", "text": TEXT}],
+    ids=["text", "recipient"],
+)
+def test_ac05_changed_args_are_422(stack: Stack, args: dict[str, Any]) -> None:
+    r, _ = reserve_one(stack)
+    resp = stack.execute(r, exec_token.sign(stack.keys.executor, stack.claims(r)), args)
+    assert resp.status_code == 422 and resp.json()["code"] == "invalid_input"
+    assert stack.demo.calls() == [] and stack.dispatches(str(r.intent_id)) == 0
+
+
+@pytest.mark.parametrize(
+    "over",
+    [{"res": "demo:demo-main/board/b-public", "ten": "t-beta"}, {"res": "demo:demo-main/board/nope"}],
+    ids=["other-tenant", "no-such-board"],
+)
+def test_token_for_another_target_is_refused(stack: Stack, over: dict[str, str]) -> None:
+    """EFF-18 п.3: a token (validly signed, hash over its own claims) for a target this connector does not serve."""
+    r, _ = reserve_one(stack)
+    claims = stack.claims(r, **over)
+    target = (claims["tool"].split("@")[0], "1.0.0", claims["ten"], claims["con"], claims["res"])
+    claims["ahs"] = args_hash(target, {"recipient": RECIPIENT, "text": TEXT})
+    resp = stack.execute(r, exec_token.sign(stack.keys.executor, claims))
+    assert resp.status_code == 403, resp.text
+    assert stack.demo.calls() == [] and stack.dispatches(str(r.intent_id)) == 0
+
+
+# --- AC-M8-06 -------------------------------------------------------------------------------------
+
+
+def test_ac06_commit_then_drop_is_unknown_then_reconciled_succeeded(stack: Stack) -> None:
+    """EX-11: the provider executed and the answer was lost: outcome_unknown, reconcile → reconciled_succeeded."""
+    stack.demo.mode("commit_then_drop", count=1)
+    created = stack.propose()
+    ex = stack.executor()
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "reconciled_succeeded")
+    assert len(stack.demo.calls()) == 1
+    assert stack.executions(created["intent_id"]) == [(1, "reconciled_executed", None)]
+    actions = stack.owner.execute(
+        "SELECT action, to_status FROM audit_events WHERE intent_id = %s ORDER BY id", (created["intent_id"],)
+    ).fetchall()
+    assert ("complete_outcome_unknown", "outcome_unknown") in actions
+    assert actions[-1] == ("reconcile_executed", "reconciled_succeeded")
+
+
+# --- AC-M8-07 -------------------------------------------------------------------------------------
+
+
+def test_ac07_connector_killed_after_dispatch(stack: Stack) -> None:
+    """Kill the connector process after `dispatch`, before its answer: outcome_unknown well within
+    dispatch_timeout_s + 30 s, no new provider call; reconcile once the connector is back (T13, T15)."""
+    stack.demo_servers.stop()
+    with demo_process(stack.cfg) as proc:
+        stack.demo.mode("ok,slow:30000")  # the provider got it, the answer would take 30 s
+        created = stack.propose()
+        ex = stack.executor()
+        taken = ex.take()
+        assert isinstance(taken, Reserved)
+        worker = threading.Thread(target=ex.execute, args=(taken,))
+        worker.start()
+        deadline = time.time() + 20
+        while stack.executions(created["intent_id"])[0][1] != "dispatching":
+            assert time.time() < deadline
+            time.sleep(0.05)
+        while not stack.demo.calls():
+            assert time.time() < deadline
+            time.sleep(0.05)
+        killed_at = time.time()
+        proc.kill()
+        worker.join(timeout=30)
+        assert not worker.is_alive()
+    assert stack.status(created["intent_id"]) == "outcome_unknown"
+    assert time.time() - killed_at < 60 + 30  # dispatch_timeout_s of the tool (bundle) + 30 s
+    provider_calls = 1
+    # the connector is down: reconcile finds nothing out and tries again later (T17); dispatched 2 h ago → 1 h
+    stack.owner.execute("UPDATE executions SET dispatched_at = now() - interval '2 hours'")
+    version = stack.intent(created["intent_id"])["version"]
+    stack.drain(ex, lambda: stack.intent(created["intent_id"])["version"] > version)
+    assert stack.status(created["intent_id"]) == "outcome_unknown"
+    pending = stack.owner.execute(
+        "SELECT round(extract(epoch FROM available_at - created_at)) FROM outbox WHERE intent_id = %s "
+        "AND topic = 'reconcile' AND delivered_at IS NULL",
+        (created["intent_id"],),
+    ).fetchone()
+    assert pending == (3600,)
+    stack.owner.execute("UPDATE outbox SET available_at = now() WHERE intent_id = %s", (created["intent_id"],))
+    stack.demo_servers, stack.connector = serve_demo(stack.cfg)  # back, same provider journal
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "reconciled_succeeded")
+    assert len(stack.demo.calls()) == provider_calls
+
+
+def test_reconcile_gives_up_after_24_hours(stack: Stack, caplog: pytest.LogCaptureFixture) -> None:
+    """T17: after 24 h of `unknown` no further reconcile is queued; the intent waits for a human (T18), with an alert."""
+    stack.demo.mode("commit_then_drop", count=1)
+    created = stack.propose()
+    ex = stack.executor()
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "outcome_unknown")
+    stack.demo_servers.stop()  # the connector cannot tell
+    stack.owner.execute("UPDATE executions SET dispatched_at = now() - interval '25 hours'")
+    version = stack.intent(created["intent_id"])["version"]
+    stack.drain(ex, lambda: stack.intent(created["intent_id"])["version"] > version)
+    assert ex.run_once() is False
+    assert stack.status(created["intent_id"]) == "outcome_unknown"
+    left = stack.owner.execute(
+        "SELECT count(*) FROM outbox WHERE intent_id = %s AND topic = 'reconcile' AND delivered_at IS NULL",
+        (created["intent_id"],),
+    ).fetchone()
+    assert left == (0,)
+    assert any("ALERT executor" in r.getMessage() and created["intent_id"] in r.getMessage() for r in caplog.records)
+    stack.demo_servers, stack.connector = serve_demo(stack.cfg)  # for the fixture's teardown
+
+
+def test_ac07_t14_when_the_executor_dies_too(stack: Stack, pg: Any) -> None:
+    """Nobody completes the dispatched execution: the sweeper's T14 makes it outcome_unknown after the lease."""
+    r, _ = reserve_one(stack)
+    stack.demo.mode("ok,slow:30000")
+
+    def call() -> None:
+        try:
+            stack.execute(r, exec_token.sign(stack.keys.executor, stack.claims(r)))
+        except httpx.HTTPError:
+            pass
+
+    threading.Thread(target=call, daemon=True).start()
+    deadline = time.time() + 20
+    while stack.executions(str(r.intent_id))[0][1] != "dispatching":
+        assert time.time() < deadline
+        time.sleep(0.05)
+    lease = stack.owner.execute(
+        "SELECT round(extract(epoch FROM dispatch_lease_until - dispatched_at)) FROM executions"
+    ).fetchone()
+    assert lease == (90,)  # dispatch_timeout_s 60 (manifest via bundle) + 30
+    stack.owner.execute("UPDATE executions SET dispatch_lease_until = now() - interval '1 second'")
+    with pg.connect("gxg_sweeper") as sweeper:
+        sweeper.execute("SELECT gxg_sweep(100)")
+    assert stack.status(str(r.intent_id)) == "outcome_unknown"
+    assert len(stack.demo.calls()) == 1
+
+
+# --- AC-M8-08 -------------------------------------------------------------------------------------
+
+
+def test_ac08_timeout_before_start_twice_then_ok(stack: Stack) -> None:
+    """EX-12, EX-23: failed_before_effect is retried with a new execution and the same idempotency key."""
+    stack.demo.mode("timeout_before_start", count=2)
+    created = stack.propose(idempotency_key="retry-key-1")
+    ex = stack.executor()
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) in ("succeeded", "failed"))
+    assert stack.status(created["intent_id"]) == "succeeded"
+    assert stack.intent(created["intent_id"])["attempts"] == 3
+    calls = stack.demo.calls("retry-key-1")
+    assert [c["outcome"] for c in calls] == ["timeout_before_start", "timeout_before_start", "ok"]
+    assert len({c["execution_id"] for c in calls}) == 3  # a new execution_id per attempt
+    assert [e[1] for e in stack.executions(created["intent_id"])] == [
+        "failed_before_effect",
+        "failed_before_effect",
+        "succeeded",
+    ]
+
+
+def test_ac08_max_attempts_2_ends_failed(stack: Stack) -> None:
+    stack.demo.mode("timeout_before_start", count=2)
+    created = stack.propose(idempotency_key="retry-key-2")
+    stack.owner.execute("UPDATE intents SET max_attempts = 2 WHERE intent_id = %s", (created["intent_id"],))
+    ex = stack.executor()
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) in ("succeeded", "failed"))
+    assert stack.status(created["intent_id"]) == "failed"
+    assert stack.intent(created["intent_id"])["attempts"] == 2
+    assert len(stack.demo.calls("retry-key-2")) == 2
+
+
+def test_rejecting_provider_fails_before_effect(stack: Stack) -> None:
+    stack.demo.mode("reject")
+    created = stack.propose()
+    ex = stack.executor()
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "failed")
+    assert [c["outcome"] for c in stack.demo.calls()] == ["reject"] * 3
+
+
+# --- AC-M8-09 -------------------------------------------------------------------------------------
+
+
+def test_ac09_executor_dies_between_reserve_and_dispatch(stack: Stack, pg: Any) -> None:
+    """T10: after the 60 s lease the execution is released, the intent approved again and then executed;
+    `attempts` counts only the dispatched attempt."""
+    created = stack.propose()
+    dead = stack.executor("dead")
+    assert isinstance(dead.take(), Reserved)  # reserved, then the process «dies»: no execute
+    lease = stack.owner.execute(
+        "SELECT round(extract(epoch FROM reserve_lease_until - reserved_at)) FROM executions"
+    ).fetchone()
+    assert lease == (60,)
+    stack.owner.execute("UPDATE executions SET reserve_lease_until = now() - interval '1 second'")
+    with pg.connect("gxg_sweeper") as sweeper:
+        sweeper.execute("SELECT gxg_sweep(100)")
+    assert stack.status(created["intent_id"]) == "approved"
+    stack.drain(stack.executor("alive"), lambda: stack.status(created["intent_id"]) == "succeeded")
+    assert stack.executions(created["intent_id"]) == [(1, "released", None), (2, "succeeded", None)]
+    assert stack.intent(created["intent_id"])["attempts"] == 1
+    assert len(stack.demo.calls()) == 1
+
+
+# --- AC-M8-10 -------------------------------------------------------------------------------------
+
+
+def test_ac10_kill_switch_after_reserve_before_dispatch(stack: Stack, pg: Any) -> None:
+    """EX-13: `dispatch` → 423, the provider is not called; the other tenant's intents still run."""
+    alpha = stack.propose()
+    beta = stack.propose(ACTOR_B, board="b-public")
+    ex = stack.executor()
+    r = ex.take()
+    assert isinstance(r, Reserved) and str(r.intent_id) == alpha["intent_id"]
+    with pg.connect("gxg_admin") as admin:
+        admin.execute("INSERT INTO switches VALUES ('tenant:t-alpha', true, 'incident', 'oidc:op', now())")
+    resp = stack.execute(r, exec_token.sign(stack.keys.executor, stack.claims(r)))
+    assert resp.status_code == 423 and resp.json()["code"] == "effect_disabled"
+    assert stack.demo.calls() == []
+    ex.execute(r)  # the executor's own call of the same reservation: refused at dispatch as well (T12a)
+    assert stack.executions(alpha["intent_id"])[0][1] == "failed_before_effect"
+    stack.drain(ex, lambda: stack.status(beta["intent_id"]) == "succeeded")
+    for _ in range(10):  # the refused row is tried once, then waits ≥ 5 s (backoff): nothing else is due
+        if not ex.run_once():
+            break
+    assert stack.status(alpha["intent_id"]) == "approved"  # waits: T7 refuses while the switch is on
+    assert [c["tenant"] for c in stack.demo.calls()] == ["t-beta"]
+    deferred = stack.owner.execute(
+        "SELECT attempts FROM outbox WHERE intent_id = %s AND topic = 'execute' AND delivered_at IS NULL",
+        (alpha["intent_id"],),
+    ).fetchone()
+    assert deferred == (1,)  # kept, one refusal, then the backoff
+    with pg.connect("gxg_admin") as admin:
+        admin.execute("UPDATE switches SET blocked = false WHERE scope = 'tenant:t-alpha'")
+    stack.owner.execute("UPDATE outbox SET available_at = now() - interval '1 hour'")
+    stack.drain(ex, lambda: stack.status(alpha["intent_id"]) == "succeeded")
+
+
+# --- AC-M8-11 -------------------------------------------------------------------------------------
+
+
+def test_ac11_propose_grant_revoked_between_approve_and_execute(stack: Stack) -> None:
+    """EX-14: a new bundle without the requester's `propose` grant → the connector refuses, no provider call."""
+    created = stack.propose()
+    grants = yaml.safe_load((DEMO / "fixtures" / "grants" / "t-alpha.yaml").read_text())
+    for g in grants["grants"]:
+        if g["id"] == "alpha-actor-public":
+            g["actions"] = ["read"]
+    stack.reload(grants={"t-alpha": grants})
+    ex = stack.executor()
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    ex.execute(r)
+    assert stack.executions(created["intent_id"])[0][1:] == ("failed_before_effect", "http_403")
+    r2 = ex.take()  # T12a sent it back to approved: the next attempt is refused the same way
+    assert isinstance(r2, Reserved)
+    resp = stack.execute(r2, exec_token.sign(stack.keys.executor, stack.claims(r2)))
+    assert resp.status_code == 403 and resp.json()["code"] == "permission_denied"
+    assert stack.demo.calls() == [] and stack.dispatches(created["intent_id"]) == 0
+
+
+# --- AC-M8-12 -------------------------------------------------------------------------------------
+
+
+def test_ac12_approval_service_unavailable(stack: Stack) -> None:
+    """EX-16: propose → temporarily_unavailable and no intent; execute without a reachable dispatch → no call."""
+    warm = stack.propose()
+    stack.drain(stack.executor("warm"), lambda: stack.status(warm["intent_id"]) == "succeeded")  # JWKS cached
+    r, _ = reserve_one(stack)
+    token = exec_token.sign(stack.keys.executor, stack.claims(r))
+    stack.api.stop()
+    out = stack.demo.propose(ACTOR_A, {"board_id": "a-public", "recipient": RECIPIENT, "text": TEXT})
+    assert out["isError"] is True and out["structuredContent"]["code"] == "temporarily_unavailable"
+    assert out["structuredContent"]["retryable"] is True
+    assert stack.owner.execute("SELECT count(*) FROM intents").fetchone() == (2,)  # no new intent
+    resp = stack.execute(r, token)
+    assert resp.status_code == 503 and resp.json()["code"] == "temporarily_unavailable"
+    assert len(stack.demo.calls()) == 1  # only the warm-up
+    assert stack.executions(str(r.intent_id)) == [(1, "reserved", None)]
+
+
+# --- AC-M8-14 -------------------------------------------------------------------------------------
+
+
+def test_ac14_rotation_without_downtime_and_removal_of_a_compromised_kid(stack: Stack) -> None:
+    """EX-24: a new `kid` is accepted ≤ 10 min after publication; a removed one is refused ≤ 10 min (AS-09, AS-10)."""
+    t0 = time.time()
+    clock = {"executor": 0.0}
+    old_kid = _jwt.thumbprint(stack.keys.executor.public_key())
+    first = stack.propose()
+    ex = stack.executor(keys_now=lambda: time.time() + clock["executor"])
+    stack.drain(ex, lambda: stack.status(first["intent_id"]) == "succeeded")  # the connector cached JWKS {old}
+    keys_file, jwks_file = stack.dir / "exec-keys.json", stack.dir / "exec-jwks.json"
+    keys_file.write_text(json.dumps(stack.signing))
+    jwks_file.write_text(json.dumps(stack.published))
+    new_kid = keymgmt.rotate(keys_file, jwks_file, now=t0)
+    stack.signing, stack.published = json.loads(keys_file.read_text()), json.loads(jwks_file.read_text())
+    assert {k["kid"] for k in stack.published["keys"]} == {old_kid, new_kid}
+    assert oct(keys_file.stat().st_mode & 0o777) == "0o600"
+    # before not_before (publication + 15 min) the executor keeps signing with the old key
+    assert _jwt.thumbprint(ex.keys.current().public_key()) == old_kid
+    clock["executor"] = 15 * 60
+    assert _jwt.thumbprint(ex.keys.current().public_key()) == new_kid
+    # the connector's JWKS cache (10 min) has not seen the new kid yet: refused before dispatch, no call
+    second = stack.propose()
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    ex.execute(r)
+    assert stack.executions(second["intent_id"])[0][1:] == ("failed_before_effect", "http_401")
+    stack.clock[0] = 10 * 60  # 10 minutes later the connector refetches: the new kid is accepted
+    stack.drain(ex, lambda: stack.status(second["intent_id"]) == "succeeded")
+    assert len(stack.demo.calls()) == 2
+    # compromise of the new key: removed from both files; api refuses it at once, every reservation released
+    third = stack.propose()
+    r3 = ex.take()
+    assert isinstance(r3, Reserved)
+    keymgmt.remove(keys_file, jwks_file, new_kid)
+    stack.signing, stack.published = json.loads(keys_file.read_text()), json.loads(jwks_file.read_text())
+    assert ex.release_reserved() == 1  # AS-10
+    assert stack.executions(third["intent_id"])[0][1] == "released"
+    assert stack.status(third["intent_id"]) == "approved"
+    # the old key is still published and active: the executor falls back to it, the next attempt runs
+    stack.drain(ex, lambda: stack.status(third["intent_id"]) == "succeeded")
+    assert len(stack.demo.calls()) == 3
+
+
+def test_ac14_removed_kid_is_refused_at_dispatch_at_once_and_by_the_connector_within_10_min(stack: Stack) -> None:
+    warm = stack.propose()
+    stack.drain(stack.executor("warm"), lambda: stack.status(warm["intent_id"]) == "succeeded")  # JWKS cached
+    r, _ = reserve_one(stack)
+    token = exec_token.sign(stack.keys.executor, stack.claims(r))
+    stack.published = {"keys": []}  # compromised kid removed from the JWKS file
+    resp = stack.execute(r, token)  # the connector's cache still trusts it; `api` (current file) does not
+    assert resp.status_code == 409 and len(stack.demo.calls()) == 1
+    r2, _ = reserve_one(stack)
+    stack.clock[0] = 10 * 60  # after the connector's cache age the token is refused at the token check
+    resp = stack.execute(r2, exec_token.sign(stack.keys.executor, stack.claims(r2)))
+    assert resp.status_code == 401 and stack.dispatches(str(r2.intent_id)) == 0
+    assert len(stack.demo.calls()) == 1
+
+
+# --- executor details -----------------------------------------------------------------------------
+
+
+def test_connector_not_registered_for_the_tenant_gets_no_token(stack: Stack) -> None:
+    """AS-25: the connector lost t-alpha in the bundle: the attempt is refused without any HTTP call."""
+    r, ex = reserve_one(stack)
+    stack.store.load(*_bundle_without_tenant(stack))
+    ex.execute(r)
+    assert stack.executions(str(r.intent_id))[0][1:] == ("failed_before_effect", "no_response")
+    assert stack.demo.calls() == []
+
+
+def _bundle_without_tenant(stack: Stack) -> tuple[bytes, bytes]:
+    data = json.loads(bundle(stack.keys, built_at=stack.built_at + 5))
+    for s in data["platform"]["services"]:
+        if s["id"] == CONNECTOR:
+            s["tenants"] = ["t-beta"]
+    raw = canonical.dumps(data)
+    sig = json.dumps({"alg": "EdDSA", "kid": KID, "sig": _jwt.b64url_encode(stack.keys.ci.sign(raw))}).encode()
+    return raw, sig
+
+
+def test_logs_carry_no_text_and_no_token(stack: Stack, caplog: pytest.LogCaptureFixture) -> None:
+    """SEC-18, EFF-21: the audit lines of `execute` hold ids and outcomes, never the text or the token."""
+    caplog.set_level("INFO")
+    created = stack.propose(text="very secret words")
+    stack.drain(stack.executor(), lambda: stack.status(created["intent_id"]) == "succeeded")
+    logs = "\n".join(r.getMessage() for r in caplog.records)
+    assert created["intent_id"] in logs
+    assert "very secret words" not in logs and "eyJ" not in logs and "demo-secret-test" not in logs
+
+
+def test_policy_used_by_the_stack_is_valid() -> None:
+    assert _schema.validator("approval-policy").is_valid(auto_policy("t-alpha", ACTOR_A))

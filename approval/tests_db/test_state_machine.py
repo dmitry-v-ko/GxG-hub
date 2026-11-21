@@ -321,6 +321,18 @@ def test_t2_needs_the_quorum_t3_records_the_vote(machine: Machine) -> None:
     assert machine.call("api", "SELECT gxg_received_approvals(%s)", rejected) == 1  # a rejection is no approval
 
 
+def test_t2_deadline_is_the_window_frozen_at_t1(machine: Machine, world: Any) -> None:
+    """M7-final #3 (AP-04): T2 uses the intent's own window (10 min here), not 1 h and not today's policy."""
+    rule = {"id": "short", "match": {"tools": ["demo.message.propose"]}, "decision": "require_approval"}
+    world.set_policy("t-alpha", [{**rule, "execution_window": "10m"}])
+    intent, _ = machine.make("pending_approval")
+    world.set_policy("t-alpha", [{**rule, "execution_window": "20m"}])  # a later policy does not apply (AP-04)
+    machine.approve(intent)
+    r = machine.row(intent)
+    assert r["execution_window_s"] == 600
+    assert (r["execution_deadline"] - r["approved_at"]).total_seconds() == 600
+
+
 def test_t2_refuses_what_the_ui_must_never_get_through(machine: Machine) -> None:
     intent, _ = machine.make("pending_approval")
     r = machine.row(intent)

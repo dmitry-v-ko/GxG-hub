@@ -21,6 +21,7 @@ import os
 import threading
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
@@ -46,6 +47,29 @@ def secret(name: str) -> str:
 def signing_key(name: str) -> Ed25519PrivateKey:
     """Ed25519 seed, base64url without padding (the format of the M2 bundle signing key)."""
     return Ed25519PrivateKey.from_private_bytes(_jwt.b64url_decode(secret(name)))
+
+
+class JsonFile:
+    """A JSON file re-read whenever it changes (rotation without restart, AS-10). A bad file keeps the last good."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._stamp: int | None = None
+        self._doc: Any = None
+        self._lock = threading.Lock()
+        self()  # the first read must succeed: fail at start, not at the first call
+
+    def __call__(self) -> Any:
+        with self._lock:
+            try:
+                stamp = self.path.stat().st_mtime_ns
+                if stamp != self._stamp:
+                    self._doc, self._stamp = json.loads(self.path.read_text("utf-8")), stamp
+            except (OSError, ValueError) as exc:
+                if self._stamp is None:
+                    raise SystemExit(f"cannot read {self.path}: {exc}") from None
+                log.warning("keeping the previous %s: %s", self.path.name, exc)
+            return self._doc
 
 
 def bundle_store(environ: Mapping[str, str] = os.environ) -> BundleStore:

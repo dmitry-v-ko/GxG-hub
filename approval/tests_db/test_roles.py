@@ -66,7 +66,12 @@ MATRIX: dict[str, dict[str, dict[str, set[str] | str]]] = {
 FUNCTIONS = {
     "gxg_api": {"gxg_record_auto_decision", "gxg_received_approvals", "gxg_cancel", "gxg_dispatch"},  # T1, T6, T9
     "gxg_ui": {"gxg_decide", "gxg_resolve_manual"},  # T2-T4, T18
-    "gxg_executor": {"gxg_reserve", "gxg_complete", "gxg_reconcile"},  # T7, T11-T13, T12a, T15-T17
+    "gxg_executor": {
+        "gxg_reserve",
+        "gxg_complete",
+        "gxg_reconcile",
+        "gxg_release_reserved",
+    },  # T7, T11-T13, T12a, T15-T17; T10 at AS-10
     "gxg_sweeper": {
         "gxg_expire_approval",
         "gxg_expire_execution",

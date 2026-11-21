@@ -10,6 +10,7 @@ connections:
 principals:
   agents:
     - id: agent:t-beta:reader
+    - id: agent:t-beta:actor
 
 grants:
   - id: beta-reader-all-boards
@@ -17,3 +18,8 @@ grants:
     actions: [read]
     resources:
       - demo:demo-main/board/*   # every board of the connection: b-public, b-ops (GR-04 type mask)
+  - id: beta-actor-public   # stage C: propose on one board (kill switch of another tenant, AC-M8-10)
+    subjects: [agent:t-beta:actor]
+    actions: [read, propose]
+    resources:
+      - demo:demo-main/board/b-public

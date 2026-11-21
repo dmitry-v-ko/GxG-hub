@@ -10,13 +10,15 @@ import yaml
 
 REPO = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())  # also from mutmut's copy
 COMPOSE = REPO / "approval/deploy/compose.yaml"
-# AS-28 «Свои секреты на процесс», for the processes of M7. A secret not in this table is a finding.
+# AS-28 «Свои секреты на процесс», for the processes of M7 and M8. A secret not in this table is a finding.
 AS28 = {
     "postgres": {"db_superuser_password"},  # the DBA side, not a process of the service
     "migrate": {"db_dsn_owner"},  # password of the owner role: only the migration job
     "api": {"db_dsn_api"},  # its role; payload *public* keys and JWKS are configuration
     "mcp": {"svc_key_mcp"},  # its service JWT key; no database role in use
     "sweeper": {"db_dsn_sweeper"},
+    # its role, its service JWT key, the execution-token signing keys, the args (not preview) payload keys
+    "executor": {"db_dsn_executor", "svc_key_executor", "exec_signing_keys", "payload_args_keys"},
 }
 SECRETISH = re.compile(r"(?i)(password|passwd|secret|token|private|dsn|seed)")
 
@@ -60,9 +62,11 @@ def test_secret_files_are_mounted_where_the_process_reads_them() -> None:
 def test_internal_processes_have_no_egress() -> None:
     doc = load()
     assert doc["networks"]["internal"]["internal"] is True
+    assert doc["networks"]["connectors"]["internal"] is True
     for name, s in doc["services"].items():
-        assert s["networks"] == ["internal"], name
-        assert "ports" not in s, name  # nothing of M7 is published outside (SEC-13)
+        # only the executor reaches the connectors' network (SEC-14)
+        assert s["networks"] == (["internal", "connectors"] if name == "executor" else ["internal"]), name
+        assert "ports" not in s, name  # nothing is published outside (SEC-13)
 
 
 def test_db_tests_gate_ci_ok() -> None:

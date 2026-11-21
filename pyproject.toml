@@ -115,7 +115,7 @@ no_implicit_optional = true
 strict_equality = true
 # scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
 explicit_package_bases = true
-mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
+mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", ".", "approval/tests_db"]
 
 [[tool.mypy.overrides]]
 # gateway/contextforge/gxg_identity/plugin.py runs inside the ContextForge image, where cpex is installed

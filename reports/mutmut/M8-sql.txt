@@ -1,0 +1,16 @@
+killed      0001_core.py: T2 deadline from 1 h, not the window frozen at T1
+killed      0001_core.py: unknown outcome never reconciled again
+killed      0002_executor.py: AS-10 release leaves the execution reserved
+killed      0002_executor.py: released intent never re-queued
+killed      0002_executor.py: executor cannot release after a key removal
+equivalent  0002_executor.py: equivalent: the CONTINUE WHEN after the row lock skips every execution that is not reserved
+equivalent  0002_executor.py: equivalent: the loop selects only reserved executions; the guard is for one dispatched between that SELECT and the lock, a race no deterministic test pins
+killed      executor.py: delivered outbox rows handled again
+killed      executor.py: outcome_unknown never reconciled
+killed      executor.py: executor eats the notifier's rows
+killed      executor.py: a kill-switched row is retried without backoff
+killed      executor.py: rows are never delivered
+killed      executor.py: kill-switched row without backoff count
+killed      executor.py: reconcile backoff ignores the time waited
+96 mutations listed: 0 not as expected (survivor, stale text, killed 'equivalent')
+exit 0

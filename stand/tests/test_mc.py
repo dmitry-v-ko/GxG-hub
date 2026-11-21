@@ -33,6 +33,8 @@ from standlib import (
 from demo_connector.tools import load_schema
 
 MANIFEST = yaml.safe_load((REPO / "connectors" / "demo" / "gxg-manifest.yaml").read_text(encoding="utf-8"))
+# The stand runs `demo` read-only (no Approval Service, no DEMO_APPROVAL_URL): only the read tools are published.
+MANIFEST["tools"] = [t for t in MANIFEST["tools"] if t["effect_class"] == "read"]
 SEARCH_RESULT = json.loads((REPO / "schemas" / "search-result.schema.json").read_text())
 ERROR = json.loads((REPO / "schemas" / "error.schema.json").read_text())
 
