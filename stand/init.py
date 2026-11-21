@@ -4,7 +4,7 @@ Writes (all git-ignored, never commit them):
   .env                         stand secrets for compose.yaml (kept if it exists)
   stand/secrets/adapter_ed25519.pem   identity adapter signing key (ContextForge only); public half in .env
   stand/secrets/bundle.seed    grants bundle signing seed; public half in .env
-  stand/secrets/bundle/        grants bundle of connectors/demo/fixtures/grants, signed (GR-11)
+  stand/secrets/bundle/        grants bundle of connectors/*/fixtures/grants (merged per tenant), signed (GR-11)
   stand/secrets/plugins.yaml   ContextForge plugins; bootstrap.py fills in the team and gateway ids
 Synthetic only: the stand never holds a real credential.
 """
@@ -18,7 +18,9 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
+import yaml
 from cryptography.hazmat.primitives import serialization as ser
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -26,6 +28,7 @@ REPO = Path(__file__).resolve().parents[1]
 SECRETS = REPO / "stand" / "secrets"
 ENV = REPO / ".env"
 KID_ADAPTER, KID_BUNDLE = "stand-adapter-1", "stand-bundle-1"
+CONNECTORS = ("demo", "kb")  # their fixtures/grants and gxg-manifest.yaml go into the stand bundle
 
 
 def b64(raw: bytes) -> str:
@@ -45,8 +48,27 @@ def env_values() -> dict[str, str]:
     return dict(line.split("=", 1) for line in ENV.read_text().splitlines() if "=" in line and line[0] != "#")
 
 
+def merged_grants(tenant_files: list[Path]) -> dict[str, Any]:
+    """One tenant file from the fixtures of several connectors: connections, agents and grants side by side."""
+    docs = [yaml.safe_load(f.read_text()) for f in tenant_files]
+    principals = {
+        kind: list({p["id"]: p for d in docs for p in d["principals"].get(kind, [])}.values())
+        for kind in ("agents", "humans")
+    }
+    groups = {k: v for d in docs for k, v in d.get("groups", {}).items()}
+    return (
+        docs[0]
+        | {
+            "connections": [c for d in docs for c in d["connections"]],
+            "principals": {k: v for k, v in principals.items() if v},
+            "grants": [g for d in docs for g in d["grants"]],
+        }
+        | ({"groups": groups} if groups else {})
+    )
+
+
 def build_bundle(seed: bytes, out: Path, built_at: str | None = None) -> None:
-    """`gxg-policy build` over the demo fixtures (+ the example platform registry), signed, into `out`.
+    """`gxg-policy build` over the connectors' fixtures (+ the example platform registry), signed, into `out`.
 
     Built in a temporary directory and moved in file by file: `demo` reloads on change (GR-12) and keeps the
     previous bundle if it ever reads a half-written pair. `bundle_version` is the commit (GR-11, GR-14).
@@ -55,14 +77,17 @@ def build_bundle(seed: bytes, out: Path, built_at: str | None = None) -> None:
     shutil.rmtree(work, ignore_errors=True)
     (work / "tenants").mkdir(parents=True)
     (work / "platform").mkdir()
-    for f in (REPO / "connectors" / "demo" / "fixtures" / "grants").glob("t-*.yaml"):
-        shutil.copy(f, work / "tenants" / f.name)
+    files = sorted(f for c in CONNECTORS for f in (REPO / "connectors" / c / "fixtures" / "grants").glob("t-*.yaml"))
+    for name in sorted({f.name for f in files}):
+        doc = merged_grants([f for f in files if f.name == name])
+        (work / "tenants" / name).write_text(yaml.safe_dump(doc, sort_keys=False))
     shutil.copy(REPO / "policies" / "platform" / "registry.example.yaml", work / "platform")
     version = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True)
     tmp = SECRETS / "bundle.new"
     shutil.rmtree(tmp, ignore_errors=True)
     cmd = [sys.executable, "-m", "gxg_policy.cli", "build", str(work), "--out", str(tmp), "--kid", KID_BUNDLE]
-    cmd += ["--manifest", str(REPO / "connectors" / "demo" / "gxg-manifest.yaml")]
+    for c in CONNECTORS:
+        cmd += ["--manifest", str(REPO / "connectors" / c / "gxg-manifest.yaml")]
     cmd += ["--bundle-version", version.stdout.strip()] + (["--built-at", built_at] if built_at else [])
     subprocess.run(cmd, check=True, env=os.environ | {"GXG_BUNDLE_SIGNING_KEY": b64(seed)}, stdout=subprocess.DEVNULL)
     out.mkdir(exist_ok=True)

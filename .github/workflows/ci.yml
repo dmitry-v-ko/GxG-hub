@@ -62,6 +62,7 @@ jobs:
           uv run mypy
           tools/gxg-policy/src tools/gxg-policy/tests
           connectors/demo/src connectors/demo/tests
+          connectors/kb/src connectors/kb/tests
           tests/contract
       - name: mypy (dev stand and the ContextForge plugin; their own import roots)
         run: MYPYPATH=stand/tests:stand:gateway/contextforge uv run mypy --exclude mutants stand gateway/contextforge
@@ -78,6 +79,7 @@ jobs:
         run: |
           uv lock --check
           (cd connectors/demo && uv lock --check)
+          (cd connectors/kb && uv lock --check)
       - name: AC-M0-01 — uv sync && uv run pytest
         run: uv sync && uv run pytest
       - name: Schema lock is current
@@ -89,6 +91,9 @@ jobs:
           uv run python scripts/ci/check_coverage.py coverage-kit.json
       - name: connectors/demo tests from its own lockfile
         working-directory: connectors/demo
+        run: uv sync && uv run pytest
+      - name: connectors/kb tests from its own lockfile (M6)
+        working-directory: connectors/kb
         run: uv sync && uv run pytest
 
   schema-guard:

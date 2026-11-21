@@ -1,0 +1,20 @@
+# Test grants of the KB wrapper (M6). Synthetic, no secrets. t-beta has its own `sales` collection (SC-05).
+tenant: t-beta
+schema_version: 1
+
+connections:
+  - id: kb-main
+    domain: kb
+    credential_ref: secret://t-beta/kb/service
+
+principals:
+  agents:
+    - id: agent:t-beta:reader
+    - id: agent:t-beta:nobody
+
+grants:
+  - id: beta-reader-kb-all
+    subjects: [agent:t-beta:reader]
+    actions: [read]
+    resources:
+      - kb:kb-main/collection/*

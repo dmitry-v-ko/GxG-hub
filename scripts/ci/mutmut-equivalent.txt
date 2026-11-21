@@ -82,3 +82,8 @@ gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4  # M1: `_keys =
 gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8  # M1: `float("-INF")`: Python parses it case-insensitively, same value
 gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27  # M1: `cast(None, claims)`: typing.cast is a no-op at runtime
 gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is falsy: the same output as ensure_ascii=False
+kb_connector.tools.x_load_schema__mutmut_4  # M6: as demo_connector.tools.x_load_schema__mutmut_4: keeping `..` in the tail still finds the same file by the parent walk
+kb_connector.tools.xǁKbToolǁrun__mutmut_134  # M6: as demo's run__mutmut_133: duration_ms * 1001 instead of * 1000, 0.1 % off a log field, no observable behaviour
+kb_connector.tools.xǁConnectorǁtools__mutmut_11  # M6: as demo: encoding None = locale encoding, UTF-8 on the CI runner; the manifest is ASCII
+kb_connector.tools.xǁConnectorǁtools__mutmut_13  # M6: as demo: codec names are case-insensitive
+kb_connector.tools.xǁConnectorǁ_readable__mutmut_11  # M6: the connection returned with an empty set is never used: no search, no item, no source_ref

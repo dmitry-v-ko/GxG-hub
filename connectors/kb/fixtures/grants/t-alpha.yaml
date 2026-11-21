@@ -1,0 +1,26 @@
+# Test grants of the KB wrapper (M6). Synthetic, no secrets. Merged with other connectors' grants on the stand.
+tenant: t-alpha
+schema_version: 1
+
+connections:
+  - id: kb-main
+    domain: kb
+    credential_ref: secret://t-alpha/kb/service
+
+principals:
+  agents:
+    - id: agent:t-alpha:reader
+    - id: agent:t-alpha:nobody
+
+grants:
+  - id: alpha-reader-kb-sales      # AC-M6-02: only the `sales` collection
+    subjects: [agent:t-alpha:reader]
+    actions: [read]
+    resources:
+      - kb:kb-main/collection/sales
+  - id: alpha-reader-kb-hr-expired  # GR-06: expired, gives nothing (SC-10)
+    subjects: [agent:t-alpha:reader]
+    actions: [read]
+    resources:
+      - kb:kb-main/collection/hr
+    expires_at: "2026-01-01T00:00:00Z"

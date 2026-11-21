@@ -227,9 +227,9 @@ class Stand:
         return httpx.Client(base_url=CF, timeout=60, headers={"Authorization": "Bearer " + r.json()["access_token"]})
 
     # ---- demo, from the inside
-    def audit(self) -> list[dict[str, Any]]:
-        """demo's JSON audit lines (one per tools/call that reached it), oldest first."""
-        out = sh("docker", "compose", "logs", "--no-log-prefix", "demo")
+    def audit(self, service: str = "demo") -> list[dict[str, Any]]:
+        """A connector's JSON audit lines (one per tools/call that reached it), oldest first."""
+        out = sh("docker", "compose", "logs", "--no-log-prefix", service)
         return [json.loads(ln) for ln in out.splitlines() if ln.startswith('{"') and '"tool"' in ln]
 
     def ctl(self, method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:

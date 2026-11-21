@@ -1,0 +1,34 @@
+# Manifest of the KB wrapper connector (M6, MCC-01). Read tools only; kb.documents.create/update (curator) later.
+# The KB itself (gxg_agents_v2 KB Access Layer) is behind kb_connector.backend; until the gap audit
+# (docs/audits/kb-gap-audit.md) it is a synthetic fake-KB.
+connector: kb
+version: 0.1.0
+contract: gxg-mcp-connector/v1
+tools:
+  - name: kb.documents.search
+    version: 1.0.0
+    title: "Поиск документов KB"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: list }
+    input_schema: schemas/documents-search.input.json
+    output_schema: ../../schemas/search-result.schema.json
+    limits: { max_results: 50, timeout_s: 15 }
+  - name: kb.documents.get
+    version: 1.0.0
+    title: "Документ KB"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: single, from_arg: document_id, resolve: backend }
+    input_schema: schemas/document-get.input.json
+    output_schema: schemas/document-get.output.json
+    limits: { timeout_s: 10 }
+  - name: kb.context.get
+    version: 1.0.0
+    title: "Контекст из KB"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: list }
+    input_schema: schemas/context-get.input.json
+    output_schema: schemas/context-get.output.json
+    limits: { max_results: 10, timeout_s: 15 }

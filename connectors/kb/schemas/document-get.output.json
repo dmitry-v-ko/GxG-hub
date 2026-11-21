@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kb.documents.get output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "collection", "title", "content", "updated_at", "source_ref"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "collection": {"type": "string", "minLength": 1, "maxLength": 64},
+    "title": {"type": "string", "maxLength": 300},
+    "content": {"type": "string", "maxLength": 20000},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "source_ref": {"type": "string", "maxLength": 512}
+  }
+}

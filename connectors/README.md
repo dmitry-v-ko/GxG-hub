@@ -5,7 +5,7 @@
 | Интеграция | Целевой путь | Этап | Статус |
 | --- | --- | --- | --- |
 | Reference (`demo`) | Синтетический FastMCP-коннектор: read + `propose` на fake provider ([спека](../docs/specs/demo-connector-v1.md)) | B, C | Read-only локально (M3): 3 tools, тестовый issuer, Docker ([README](demo/README.md)); `propose` — M8 |
-| Knowledge Base | Существующий KB MCP после gap-аудита; при необходимости тонкий wrapper | B | Не подключено |
+| Knowledge Base | Существующий KB MCP после gap-аудита; при необходимости тонкий wrapper | B | Каркас wrapper'а на fake-KB (M6, [README](kb/README.md)); gap-аудит не выполнен — нет доступа к `gxg_agents_v2` |
 | Telegram | Фасад к существующему Telegram-сервису; сначала только чтение | D, E | Не реализован |
 | Signal Intelligence | Существующий Mastra-процесс; Hub на сборе и на `propose` | D | Не интегрирован |
 | `signals.search/get` | Опциональный read-only фасад для других агентов | — | Не планируется до запроса |

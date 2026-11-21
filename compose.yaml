@@ -3,6 +3,7 @@
 # ContextForge is an external OCI dependency, not forked; pinned by digest (SEC-22, ADR-0001).
 # Networks: agents reach only ContextForge (edge, published on 127.0.0.1); `demo` has no port and sits on the
 # internal `connectors` network that only ContextForge shares (SEC-04, SEC-13); PostgreSQL only on `db`.
+# M6: `kb` (KB wrapper over the in-process fake-KB until the gap audit) on the same network, no port.
 name: gxg-stand
 
 x-contextforge-image: &contextforge-image
@@ -62,7 +63,7 @@ services:
       SSRF_PROTECTION_ENABLED: "true"
       SSRF_ALLOW_PRIVATE_NETWORKS: "false"
       SSRF_ALLOW_LOCALHOST: "false"
-      SSRF_ALLOWED_NETWORKS: '["10.250.0.8/30"]'
+      SSRF_ALLOWED_NETWORKS: '["10.250.0.8/29"]'  # demo .10, kb .12
       TOOL_TIMEOUT: "25"  # above the slowest demo tool (20 s, gxg-manifest.yaml): MC-03 times out here
       # The live suite makes a few hundred tool calls a minute from one agent; ContextForge's default is 100/min
       # with a 15 min lockout. Stand only; the limiter itself stays on.
@@ -112,6 +113,26 @@ services:
     networks:
       connectors: {ipv4_address: 10.250.0.10}
 
+  kb:
+    image: gxg-kb:stand
+    build:
+      context: .
+      dockerfile: connectors/kb/Dockerfile
+    restart: unless-stopped
+    environment:
+      # the same identity adapter and bundle keys as demo: one ContextForge, one CI bundle
+      KB_IDENTITY_KEYS: ${DEMO_IDENTITY_KEYS:?run stand/init.py}
+      KB_BUNDLE_KEYS: ${DEMO_BUNDLE_KEYS:?run stand/init.py}
+    volumes:
+      - ./stand/secrets/bundle:/bundle:ro
+      - kb-state:/var/lib/kb
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]
+      interval: 3s
+      retries: 30
+    networks:
+      connectors: {ipv4_address: 10.250.0.12}
+
 networks:
   edge: {}
   db: {internal: true}
@@ -125,3 +146,4 @@ networks:
 volumes:
   pgdata:
   demo-state:
+  kb-state:

@@ -15,11 +15,14 @@
       "tools.invoke.demo-t-alpha-alpha-boards",
       "tools.invoke.demo-t-alpha-demo-notes-search",
       "tools.invoke.demo-t-alpha-demo-note-get",
-      "tools.invoke.demo-message-execute"
+      "tools.invoke.demo-message-execute",
+      "tools.invoke.kb-t-alpha-kb-documents-search",
+      "tools.invoke.kb-t-alpha-kb-documents-get",
+      "tools.invoke.kb-t-alpha-kb-context-get"
     ],
     "resource_types": ["tool"],
     "resource_ids": ["*"],
-    "reason": "t-alpha reader: the demo read tools. demo-message-execute is a deliberate mistake: the deny rule above must win"
+    "reason": "t-alpha reader: the demo and kb read tools. demo-message-execute is a deliberate mistake: the deny rule above must win"
   },
   {
     "id": "t-alpha.nobody",
@@ -37,11 +40,14 @@
     "actions": [
       "tools.invoke.demo-t-beta-demo-boards-list",
       "tools.invoke.demo-t-beta-demo-notes-search",
-      "tools.invoke.demo-t-beta-demo-note-get"
+      "tools.invoke.demo-t-beta-demo-note-get",
+      "tools.invoke.kb-t-beta-kb-documents-search",
+      "tools.invoke.kb-t-beta-kb-documents-get",
+      "tools.invoke.kb-t-beta-kb-context-get"
     ],
     "resource_types": ["tool"],
     "resource_ids": ["*"],
-    "reason": "t-beta reader: the demo read tools"
+    "reason": "t-beta reader: the demo and kb read tools"
   },
   {
     "id": "t-beta.nobody",

@@ -2,7 +2,7 @@
 «Фиксация результатов»). Keys written here are replaced; everything else in the file (acceptance, self_check,
 known limits) is kept, so the hand-written evidence survives a rerun.
 
-  uv run python stand/report.py <label>=<junit.xml> ...
+  uv run python stand/report.py [--milestone M6] <label>=<junit.xml> ...   (default M5)
 """
 
 from __future__ import annotations
@@ -19,8 +19,7 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
-OUT = REPO / "reports" / "conformance" / "M5.json"
-MATRIX_ID = re.compile(r"test_(sc|mc)(\d\d)_")
+MATRIX_ID = re.compile(r"test_(sc|mc|ac_m\d+)_?(\d\d)_")  # test_sc05_… -> SC-05, test_ac_m6_02_… -> AC-M6-02
 
 
 def git(*args: str) -> str:
@@ -42,7 +41,7 @@ def run_of(path: Path) -> dict[str, Any]:
         skipped = case.find("skipped") is not None
         status = "failed" if failed or skipped else "passed"  # a skip is a failure (DoD-5)
         m = MATRIX_ID.search(case.get("name", ""))
-        mid = f"{m[1].upper()}-{m[2]}" if m else None
+        mid = f"{m[1].upper().replace('_', '-')}-{m[2]}" if m else None
         tests.append(
             {
                 "id": mid,
@@ -61,15 +60,19 @@ def run_of(path: Path) -> dict[str, Any]:
 
 
 def main() -> None:
-    report = json.loads(OUT.read_text()) if OUT.exists() else {}
+    args = sys.argv[1:]
+    milestone = args[1] if args[:1] == ["--milestone"] else "M5"
+    args = args[2:] if args[:1] == ["--milestone"] else args
+    out = REPO / "reports" / "conformance" / f"{milestone}.json"
+    report = json.loads(out.read_text()) if out.exists() else {}
     compose = (REPO / "compose.yaml").read_text()
     image = re.search(r"(ghcr\.io/ibm/mcp-context-forge:\S+@sha256:[0-9a-f]{64})", compose)
     runs = {}
-    for arg in sys.argv[1:]:
+    for arg in args:
         label, _, path = arg.partition("=")
         runs[label] = run_of(Path(path))
     report |= {
-        "milestone": "M5",
+        "milestone": milestone,
         "commit": git("rev-parse", "HEAD"),
         "commit_dirty": bool(git("status", "--porcelain", "--untracked-files=no", "--", ".", ":!reports")),
         "run_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -82,7 +85,7 @@ def main() -> None:
         "runs": runs,
         "all_passed": all(r["summary"]["failed"] == 0 and r["summary"]["passed"] > 0 for r in runs.values()),
     }
-    OUT.write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n")
+    out.write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n")
     print(json.dumps({k: v["summary"] for k, v in runs.items()}))
     sys.exit(0 if report["all_passed"] else 1)
 

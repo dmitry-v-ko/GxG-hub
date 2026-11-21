@@ -4,7 +4,8 @@
   teams t-alpha, t-beta (private); agents reader and nobody in each (<name>@<tenant>.agents.gxg.example.com,
   role member, one API token bound to its team: SEC-02); gateway `demo-<tenant>` -> http://demo:8080/mcp in each
   team (visibility team); a virtual server per team; an alias on t-alpha's demo.boards.list; a REST tool
-  `demo.message.execute` in t-alpha that unified_pdp must refuse to every agent (EFF-02). Then the identity adapter
+  `demo.message.execute` in t-alpha that unified_pdp must refuse to every agent (EFF-02). M6: the same for the KB
+  wrapper: gateway `kb-<tenant>` -> http://kb:8080/mcp and virtual server `vs-kb-<tenant>`. Then the identity adapter
   gets the team and gateway ids (stand/secrets/plugins.yaml) and ContextForge restarts if they changed.
 State for the tests (ids, agent tokens) -> stand/secrets/state.json (git-ignored).
 shortcut: REST calls instead of config as code; ContextForge v1.1.1 has no import for users and tokens.
@@ -31,6 +32,7 @@ TENANTS = ("t-alpha", "t-beta")
 AGENTS = ("reader", "nobody")
 ALIAS = "alpha_boards"
 EXECUTE = "demo.message.execute"
+CONNECTORS = {"demo": "http://demo:8080/mcp", "kb": "http://kb:8080/mcp"}  # gateway `<id>-<tenant>` in each team
 
 
 def email(tenant: str, name: str) -> str:
@@ -77,6 +79,29 @@ def login(env: dict[str, str]) -> str:
     )
     r.raise_for_status()
     return str(r.json()["access_token"])
+
+
+def virtual_servers(api: Api, state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Each team's tools by upstream name, and a virtual server per connector gateway; returns all tools."""
+    tools = items(api("GET", "/v1/tools?include_inactive=true&limit=0"), "tools")
+    servers = {s["name"]: s for s in items(api("GET", "/v1/servers?include_inactive=true&limit=0"), "servers")}
+    for tenant, t in state["teams"].items():
+        t["tools"] = {}
+        for connector, gateway_id in t["gateways"].items():
+            own = [x for x in tools if x.get("gatewayId") == gateway_id]
+            t["tools"] |= {x["originalName"]: {"id": x["id"], "name": x["name"]} for x in own}
+            name = f"vs-{tenant}" if connector == "demo" else f"vs-{connector}-{tenant}"
+            srv = servers.get(name) or api(
+                "POST",
+                "/v1/servers",
+                {
+                    "server": {"name": name, "associated_tools": [x["id"] for x in own]},
+                    "team_id": t["id"],
+                    "visibility": "team",
+                },
+            )
+            t["server_id" if connector == "demo" else f"{connector}_server_id"] = srv["id"]
+    return tools
 
 
 def main() -> None:
@@ -127,33 +152,21 @@ def main() -> None:
                     },
                 )
                 agent["token"] = tok.get("access_token") or tok.get("token")
-        gw = gateways.get(f"demo-{tenant}") or api(
-            "POST",
-            "/v1/gateways",
-            {
-                "name": f"demo-{tenant}",
-                "url": "http://demo:8080/mcp",
-                "transport": "STREAMABLEHTTP",
-                "teamId": team["id"],
-                "visibility": "team",
-            },
-        )
-        t["gateway_id"] = gw["id"]
-    tools = items(api("GET", "/v1/tools?include_inactive=true&limit=0"), "tools")
-    servers = {s["name"]: s for s in items(api("GET", "/v1/servers?include_inactive=true&limit=0"), "servers")}
-    for tenant, t in state["teams"].items():
-        own = [x for x in tools if x.get("gatewayId") == t["gateway_id"]]
-        t["tools"] = {x["originalName"]: {"id": x["id"], "name": x["name"]} for x in own}
-        srv = servers.get(f"vs-{tenant}") or api(
-            "POST",
-            "/v1/servers",
-            {
-                "server": {"name": f"vs-{tenant}", "associated_tools": [x["id"] for x in own]},
-                "team_id": t["id"],
-                "visibility": "team",
-            },
-        )
-        t["server_id"] = srv["id"]
+        for connector, url in CONNECTORS.items():
+            gw = gateways.get(f"{connector}-{tenant}") or api(
+                "POST",
+                "/v1/gateways",
+                {
+                    "name": f"{connector}-{tenant}",
+                    "url": url,
+                    "transport": "STREAMABLEHTTP",
+                    "teamId": team["id"],
+                    "visibility": "team",
+                },
+            )
+            t.setdefault("gateways", {})[connector] = gw["id"]
+        t["gateway_id"] = t["gateways"]["demo"]
+    tools = virtual_servers(api, state)
     alpha = state["teams"]["t-alpha"]
     boards = alpha["tools"]["demo.boards.list"]
     if boards["name"] != ALIAS:
@@ -183,7 +196,7 @@ def main() -> None:
     STATE.chmod(0o600)
     plugins = plugins_yaml(
         {t["id"]: tenant for tenant, t in state["teams"].items()},
-        {t["gateway_id"]: "demo" for t in state["teams"].values()},
+        {g: connector for t in state["teams"].values() for connector, g in t["gateways"].items()},
     )
     if (SECRETS / "plugins.yaml").read_text() != plugins:
         (SECRETS / "plugins.yaml").write_text(plugins)
