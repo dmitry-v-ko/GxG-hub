@@ -1,13 +1,13 @@
 {
  "milestone": "M4.1",
- "cycle": 2,
+ "cycle": 3,
  "branch": "claude/m4.1-gateway-comparison",
- "base": "cycle 1 @ 5e3540f (critic 8.0)",
- "commit": "28fba915d8e4a4d35a7d4e91a39ef21d8c9af3f3",
+ "base": "cycle 2 @ 190786d (critic 8.0)",
+ "commit": "(set by the next commit)",
  "commit_note": "Tested commit; this report's commit field is set by the next commit, which changes only reports/.",
- "run_at": "2026-11-21T13:00:00Z",
- "author": "Claude Code (executor, M4.1 cycle 2)",
- "plan": "reports/plans/M4.1-cycle-2.md",
+ "run_at": "2026-11-21T15:00:00Z",
+ "author": "Claude Code (executor, M4.1 cycle 3)",
+ "plan": "reports/plans/M4.1-cycle-3.md",
  "environment": {
   "where": "Claude Code cloud container, linux x86_64; dockerd 29.10.0 started manually",
   "live": true,
@@ -67,7 +67,21 @@
      "what": "tool filter (thv run --tools / MCPToolConfig) passes unfiltered tools/list on decode type error or case-folded tools key"
     }
    ],
-   "affects_v0.67.0": false
+   "affects_v0.67.0": false,
+   "webhook_middleware_bypasses": [
+    {
+     "id": "GHSA-g7gq-2r4g-3qw8",
+     "published": "2026-10-07",
+     "severity": "high",
+     "what": "POST with non-JSON Content-Type bypasses webhooks and rate limit"
+    },
+    {
+     "id": "GHSA-wj8g-gmv2-mpmv",
+     "published": "2026-11-04",
+     "what": "BOM at body start: fail-open webhooks let the request through"
+    }
+   ],
+   "webhook_bypass_conclusion": "for path W a webhook bypass = request to the connector without JWS, rejected only by the connector (missing); JWS is mandatory on the connector for all methods"
   },
   "docker_mcp_gateway": {
    "github": "https://github.com/docker/mcp-gateway/security/advisories",
@@ -108,9 +122,9 @@
    "toolhive": {
     "status": "passed",
     "variant_c": "path W (mutating webhook of thv run proxy behind vMCP, failure_policy fail, JWS in params._meta[gxg.dev/identity]): passed live, all 8 agent calls accepted by the M4 verifier, all 7 direct attacks rejected with check_verdicts.EXPECTED; path G (own vMCP Strategy via RegisterOBOStrategy, own build): not_run; operator MCPServer+MCPWebhookConfig: not_run (no cluster)",
-    "token_exchange": "failed per SEC-03: IdP-signed, new token and jti per call (no cache), jti store rejects all 5 direct replays, exp is the IdP's (stand 3600 s); no tool/ahs binding",
-    "costs": "JWS in _meta -> SEC-03/IdentityVerifier change; client headers reach the connector via the proxy; direct access to the proxy bypasses vMCP Cedar -> network isolation or IdP aud required",
-    "evidence": "spikes/m4.1-gateways/toolhive/evidence/webhook-c/summary.json, webhook.log; token-exchange/verify_tx.json"
+    "token_exchange": "failed per SEC-03: IdP-signed, new token and jti per call (no cache); jti store per connector, key (path, jti), rejects 4 of 5 direct replays; replay to another connector passes signature and store, closed only by aud; exp is the IdP's (stand 3600 s); no tool/ahs binding",
+    "costs": "JWS in _meta -> SEC-03/IdentityVerifier change; client headers AND the caller's Authorization reach the connector (direct path: agent token aud=vmcp; via vMCP: exchange token) -> aud at exchange + --oidc-audience per proxy, network, strip-auth (only with embedded auth server, compatibility not checked); direct access to the proxy bypasses vMCP Cedar -> network, aud + --oidc-audience, or thv run --authz-config (Cedar on the proxy, after the mutating webhook, TH/pkg/runner/middleware.go#L202-L242); webhook-middleware bypasses (GHSA-g7gq, GHSA-wj8g) -> JWS mandatory on the connector for all methods; topology: thv needs a container runtime (docker socket = root on host) or Kubernetes + operator",
+    "evidence": "spikes/m4.1-gateways/toolhive/evidence/webhook-c/summary.json, webhook.log; token-exchange/verify_tx.json (cycle 3 rerun)"
    },
    "docker_mcp_gateway": {
     "status": "failed",
@@ -127,8 +141,8 @@
    },
    "toolhive": {
     "status": "passed",
-    "evidence": "spikes/m4.1-gateways/toolhive/evidence/fail-closed/vmcp-bad-cedar-policy.log, vmcp-sts-down.log, token-exchange-sts-down/observations.jsonl, webhook-c-down/observations.jsonl",
-    "note": "no authz section = allow all (admission.go#L85-L87); webhook failure_policy ignore = fail open; webhook down: direct 500 Webhook error, via vMCP tool not found, nothing reached the connector"
+    "evidence": "spikes/m4.1-gateways/toolhive/evidence/fail-closed/vmcp-bad-cedar-policy.log, vmcp-sts-down.log, token-exchange-sts-down/observations.jsonl, webhook-c-down/observations.jsonl, webhook-c-mid-down/observations.jsonl",
+    "note": "no authz section = allow all (admission.go#L85-L87); webhook failure_policy ignore = fail open; webhook down: direct 500 Webhook error, via vMCP tool not found, nothing reached the connector; webhook stopped mid-session (cycle 3, live): 8 calls in open sessions accepted, then in the same sessions direct 500 Webhook error, via vMCP isError (backend re-initialize fails on the webhook); fresh sessions refused too; no tools/call reached the connector after the stop"
    },
    "docker_mcp_gateway": {
     "status": "n/a",
@@ -162,7 +176,7 @@
    "toolhive": {
     "status": "passed",
     "scope": "vMCP aggregated prefixed path; thv run proxy with webhook (live)",
-    "note": "thv proxy forwards client headers (forged X-Forwarded-User-*, X-GxG-Identity reached echo); identity correct because taken only from the JWS; direct path to the proxy bypasses Cedar",
+    "note": "thv proxy forwards client headers (forged X-Forwarded-User-*, X-GxG-Identity reached echo) and the caller's Authorization; identity correct because taken only from the JWS; direct path to the proxy bypasses vMCP Cedar (mitigations: network, aud + --oidc-audience, --authz-config); thv run needs a docker socket = root on the host",
     "not_run": "tool overrides"
    },
    "docker_mcp_gateway": {
@@ -197,7 +211,7 @@
    },
    "toolhive": {
     "status": "passed",
-    "note": "Apache-2.0; weekly pre-1.0 releases with breaking changes; 55 GHSA, all fixed before v0.67.0 per published ranges; the two newest (2026-11-06) are list-filter bypasses"
+    "note": "Apache-2.0; weekly pre-1.0 releases with breaking changes; 55 GHSA, all fixed before v0.67.0 per published ranges; the two newest (2026-11-06) are list-filter bypasses; GHSA-g7gq-2r4g-3qw8 and GHSA-wj8g-gmv2-mpmv bypass the webhook middleware path W relies on"
    },
    "docker_mcp_gateway": {
     "status": "failed",
@@ -229,7 +243,7 @@
    },
    "toolhive": {
     "status": "n/a",
-    "note": "path W ~7-10 days, no own build (IdentityVerifier/SEC-03 to _meta 1-2, Python signer 2, IdP tenant_id + Cedar generation 3-4, topology/NetworkPolicy 1-2); path G ~8-12 days + rebuild per release; ContextForge 0"
+    "note": "path W, no own build: (a) Kubernetes + operator ~12-17 days + ongoing cluster operations (IdentityVerifier/SEC-03 to _meta 1-2, Python signer 2, IdP tenant_id + Cedar for vMCP and per-proxy --authz-config 3.5-5, cluster + operator + NetworkPolicy 5-8); (b) thv run + docker socket ~9-12 days (same + isolated VM / rootless Podman / socket-proxy 2-3, none verified; rejected for production without a proven mitigation); path G ~8-12 days + rebuild per release; ContextForge 0. Cycle 2's ~7-10 counted topology at 1-2 days without cluster or docker socket"
    },
    "docker_mcp_gateway": {
     "status": "n/a",
@@ -241,15 +255,15 @@
   "script": "spikes/m4.1-gateways/attacks.py (imports spikes/m4-contextforge/spike.py helpers and check_verdicts.EXPECTED)",
   "toolhive": "spikes/m4.1-gateways/toolhive/evidence/default/summary.json, spikes/m4.1-gateways/toolhive/evidence/token-exchange/summary.json + verify_tx.json",
   "docker_mcp_gateway": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/default/summary.json",
-  "result": "forged headers did not reach the connector via vMCP/Docker, did via the thv proxy (identity still only from the JWS); forged _meta and arguments reach the connector on both; no token 401; cross-tenant 403 (ToolHive, also from the webhook on the direct proxy path), 401 per-instance / reached on shared instance (Docker); admin 403 (ToolHive), n/a (Docker); direct replays: with the ToolHive webhook all 7 rejected with the M4 expected reasons; token_exchange bearers verify by signature but a jti store rejects them; Docker: nothing to replay",
+  "result": "forged headers did not reach the connector via vMCP/Docker, did via the thv proxy (identity still only from the JWS); forged _meta and arguments reach the connector on both; no token 401; cross-tenant 403 (ToolHive, also from the webhook on the direct proxy path), 401 per-instance / reached on shared instance (Docker); admin 403 (ToolHive), n/a (Docker); direct replays: with the ToolHive webhook all 7 rejected with the M4 expected reasons; token_exchange bearers verify by signature; a per-connector jti store rejects 4 of 5, the other-connector replay needs aud; Docker: nothing to replay",
   "toolhive_webhook": "spikes/m4.1-gateways/toolhive/evidence/webhook-c/summary.json"
  },
- "recommendation": "unchanged: keep ContextForge with variant C (cost 0, verified on all M4 paths); ToolHive is now a real fallback with path C verified without a fork (~7-10 days, SEC-03 channel change to _meta, proxy per connector); reject Docker MCP Gateway",
+ "recommendation": "unchanged: keep ContextForge with variant C (cost 0, verified on all M4 paths); ToolHive stays a fallback with the path C mechanism verified without a fork but its production topology unverified: Kubernetes + operator (~12-17 days + cluster operations) or thv run with a docker socket per proxy (~9-12 days, root on host, rejected without a proven mitigation); reject Docker MCP Gateway",
  "acceptance_criteria": [
   {
    "id": "AC-M4.1-01",
    "status": "passed",
-   "evidence": "docs/adr/0002-gateway-choice.md section Матрица; this file matrix (not_run items with reasons); cycle 2: item 2/9 ToolHive path W live, path G not_run"
+   "evidence": "docs/adr/0002-gateway-choice.md section Матрица; this file matrix (not_run items with reasons); cycle 2: item 2/9 ToolHive path W live, path G not_run; cycle 3: item 3 webhook mid-session live (webhook-c-mid-down)"
   },
   {
    "id": "AC-M4.1-02",
@@ -259,12 +273,12 @@
   {
    "id": "AC-M4.1-03",
    "status": "passed",
-   "evidence": "docs/adr/0002-gateway-choice.md, status Proposed; cost table with paths W/G, recommendation section 'Что изменилось после цикла 2'"
+   "evidence": "docs/adr/0002-gateway-choice.md, status Proposed; cost table with path W topologies (a) Kubernetes + operator, (b) thv run + docker socket, and path G; recommendation section 'Что изменилось после цикла 2' + 'После цикла 3'"
   },
   {
    "id": "AC-M4.1-04",
    "status": "passed",
-   "evidence": "pinned digests in run.sh and ADR-0002; advisories section with links; ToolHive 55 GHSA, two newest added (patched 0.63.0)"
+   "evidence": "pinned digests in run.sh and ADR-0002; advisories section with links; ToolHive 55 GHSA, two newest added (patched 0.63.0); webhook-middleware bypasses GHSA-g7gq-2r4g-3qw8, GHSA-wj8g-gmv2-mpmv tied to path W"
   }
  ],
  "dod": {
@@ -273,7 +287,7 @@
   "3_report": "this file",
   "4_mutmut": "n/a: verifier unchanged (verify_jws.py, mutmut M4); webhook.py has a self-check (spikes/m4.1-gateways/tests/test_webhook.py), not mutated (shortcut)",
   "5_no_skip": "passed: uv run pytest -> 134 passed, 0 skipped",
-  "6_existing_solutions": "reports/plans/M4.1-cycle-2.md DoD-6: webhook reuses verify_jws.canonical and the gxg_identity claim set; thv run instead of the operator"
+  "6_existing_solutions": "reports/plans/M4.1-cycle-2.md DoD-6; cycle 3: midsession step reuses attacks.call and spike.call_tool('rpc') with held session headers; --authz-config / --oidc-audience are stock thv run flags (recorded, not run)"
  },
  "tests": [
   {
@@ -288,9 +302,40 @@
   }
  ],
  "lint": "uv run ruff check spikes/ && ruff format --check spikes/: passed",
- "recommendation_change": "reason changed, conclusion not: ToolHive cost was estimated from the worst path in cycle 1",
+ "recommendation_change": "conclusion unchanged and strengthened: ToolHive cost rose from ~7-10 to ~12-17 (+ Kubernetes) or ~9-12 (root on host); 'real alternative' downgraded to 'fallback with verified mechanism, unverified topology'",
  "stand_variants_rerun": [
-  "toolhive: default, token-exchange (+verify_tx), token-exchange-sts-down, upgrade-from-v0.66.0, webhook-c, webhook-c-down, bad policy",
-  "docker: default, previous-v0.44.2, interceptors.sh"
+  "toolhive (cycle 3): token-exchange (+verify_tx with per-connector jti store), webhook-c-mid-down (new); other variants unchanged since cycle 2"
+ ],
+ "path_w_threats": [
+  {
+   "path": "compromised connector reuses the caller's Bearer forwarded by thv run (direct: agent token aud=vmcp, 3600 s; via vMCP: exchange token)",
+   "status": "open",
+   "mitigation": "aud = proxy at exchange + --oidc-audience per proxy; network (connector cannot reach vMCP / other proxies); strip-auth only with embedded auth server (not checked)"
+  },
+  {
+   "path": "agent calls the proxy directly, bypassing vMCP Cedar (incl. hidden tools of that connector)",
+   "status": "open",
+   "mitigation": "network (only vMCP reaches proxies), aud + --oidc-audience, thv run --authz-config (code only)"
+  },
+  {
+   "path": "webhook-middleware bypass (GHSA-g7gq-2r4g-3qw8, GHSA-wj8g-gmv2-mpmv class)",
+   "status": "closed by the connector",
+   "mitigation": "request arrives without JWS -> connector rejects (missing); JWS required on all methods"
+  },
+  {
+   "path": "RCE in a thv run proxy holding the docker socket",
+   "status": "open",
+   "mitigation": "Kubernetes + operator instead, or isolated VM / rootless Podman / socket-proxy (none verified); topology (b) rejected for production without one"
+  },
+  {
+   "path": "webhook dies mid-session",
+   "status": "closed",
+   "evidence": "spikes/m4.1-gateways/toolhive/evidence/webhook-c-mid-down/observations.jsonl"
+  },
+  {
+   "path": "token_exchange token replayed to another connector",
+   "status": "open without aud",
+   "evidence": "token-exchange/verify_tx.json: per-connector jti store misses it"
+  }
  ]
 }
