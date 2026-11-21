@@ -858,6 +858,9 @@ def test_log_handlers_split_audit_and_frames(capsys: pytest.CaptureFixture[str])
                 h.handle(record)
     captured = capsys.readouterr()
     assert captured.out == '{"a": 1}\n' and captured.err == "internal_error x\nf.py:1 in g\n"
+    # basicConfig gives a handler without a formatter "LEVEL:name:message": each one has its own, message only
+    record = logging.LogRecord("kb_connector.audit", logging.INFO, __file__, 1, '{"b": 2}', None, None)
+    assert [h.formatter is not None and h.formatter.format(record) for h in (out, err)] == ['{"b": 2}'] * 2
 
 
 def test_main_starts_the_app_with_logging(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:

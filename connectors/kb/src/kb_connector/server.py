@@ -161,9 +161,11 @@ def build(settings: Settings, backend: Backend | None = None) -> tuple[Starlette
 
 def log_handlers() -> list[logging.Handler]:
     """JSON log lines (audit, events) to stdout; stack frames of internal errors to stderr only (SEC-18)."""
-    out, err = logging.StreamHandler(sys.stdout), logging.StreamHandler()  # stderr; the default format: message only
+    out, err = logging.StreamHandler(sys.stdout), logging.StreamHandler()  # stderr
     out.addFilter(lambda r: r.name != errors.name)
     err.addFilter(lambda r: r.name == errors.name)
+    for h in (out, err):
+        h.setFormatter(logging.Formatter())  # the message only; without it basicConfig adds "LEVEL:name:"
     return [out, err]
 
 
