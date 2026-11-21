@@ -59,7 +59,7 @@ connections:                       # что есть у tenant'а; секрет�
 
 principals:
   agents:
-    - id: agent:t-alpha:hermes      # agent:<tenant>:<name>: <tenant> = slug team, <name> = local-part email агента в ContextForge (<name>@<домен агентов tenant'а>); это `sub` из X-GxG-Identity (ADR-0001)
+    - id: agent:t-alpha:hermes      # точный формат — по итогам спайка ContextForge (VERIFY)
     - id: agent:t-alpha:analyst
   humans:
     - id: oidc:https://accounts.google.com:1234567890
