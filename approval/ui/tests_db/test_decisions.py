@@ -267,3 +267,21 @@ def test_no_passkey_is_shown(browser: Any, propose: Any, row_of: Any) -> None:
     intent = new_intent(propose, row_of, tool=WIRE)
     page = browser.login(HUMAN1).client.get(f"/intents/{intent['intent_id']}").text
     assert 'id="no-passkey"' in page and 'id="approve"' not in page
+
+
+def test_database_refuses_rows_t1_would_never_build(pg: Any, propose: Any, row_of: Any, owner: Any) -> None:
+    """Defence in depth for gxg_decide: no frozen set (NULL) means nobody; an agent in the set is still no human."""
+    intent = new_intent(propose, row_of)
+    cases = [(None, HUMAN2), (["agent:t-alpha:other"], "agent:t-alpha:other")]
+    for allowed, who in cases:
+        owner.execute("UPDATE intents SET allowed_approvers = %s WHERE intent_id = %s", (allowed, intent["intent_id"]))
+        with pg.connect("gxg_ui") as ui:
+            try:
+                ui.execute(
+                    "SELECT gxg_decide(%s, %s, 'approve', 1, %s, false, null)",
+                    (intent["intent_id"], who, intent["canonical_args_hash"]),
+                )
+                raise AssertionError(f"{who} decided with allowed_approvers={allowed}")
+            except psycopg.Error as exc:
+                assert exc.sqlstate == "GX403"
+    assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)
