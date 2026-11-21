@@ -303,6 +303,7 @@ def test_same_tool_name_in_two_manifests_is_an_error(tmp_path: Path) -> None:
         (str(other), "tools[0].name", "duplicate-tool"),
         (str(other), "tools[1].name", "duplicate-tool"),
     ]
+    assert pol.errors[0].message == "tool 'demo.wire.propose' is in another manifest"
     assert list(pol.manifests) == ["demo"]
     r = cli("lint", str(GOOD / "policies"), "--manifest", str(GOOD / "manifest.yaml"), "--manifest", str(other))
     assert r.returncode == 1 and "[duplicate-tool]" in r.stderr

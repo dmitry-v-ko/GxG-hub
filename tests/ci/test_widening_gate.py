@@ -472,6 +472,7 @@ def test_help_lists_modes(capsys: Any) -> None:
     out = capsys.readouterr().out
     assert re.search(r"  CODEOWNERS of the PR base commit \(PR mode\)\n", out)
     assert re.search(r"  not a pull_request event: any widening fails\n", out)
+    assert re.search(r"  changed gate files, one per line: each counts as\s+widening\n", out)
     # The module docstring is the description, kept verbatim (RawDescriptionHelpFormatter).
     assert "Usage (both modes also take --gate-paths FILE):\n  widening_gate.py --report diff.json" in out
 
