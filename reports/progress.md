@@ -73,3 +73,6 @@
 | M2 | 4 | решение владельца | — | — | — | Остаточный риск: PR, правящий .github/workflows/, может отключить gate — риск принят, владелец смотрит такие PR сам (CODEOWNERS) | 2026-11-21 |
 | M4 | 3 | критик | claude/m4-contextforge-spike | 27c676a | **9.5** | ≥ 9 — **веха закрыта**: GO ContextForge v1.1.1 + вариант C (PyJWT); minor → backlog | 2026-11-21 |
 | — | — | интеграция | claude/integration | 98287f6 | — | влиты закрытые M1 и M4 + спеки оркестратора; check-all зелёный; база для M3/M5/M7 | 2026-11-21 |
+| M0.1 | 3 | исполнитель | claude/m0.1-standard-tools | 91e6e09 (+9dd74c1) | — | merge-коммит, grep fail closed, без opt-out сети; CI 44887393111 | 2026-11-21 |
+| M2 | 4 | исполнитель | claude/m2-policy-tooling | dd0beb1 (+40c6595, 8f6754e) | — | gate из main, manifest = widening, duplicate-tool lint, mutmut | 2026-11-21 |
+| M0.1, M2 | — | критики | — | — | — | запущены (M0.1 ц3, M2 ц4) | 2026-11-21 |
