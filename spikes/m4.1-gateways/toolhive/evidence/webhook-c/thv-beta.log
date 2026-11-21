@@ -1,0 +1,13 @@
+{"time":"2026-11-21T12:33:14Z","level":"WARN","msg":"could not check for updates: failed to check for updates: failed to send request to update API: Get \"https://updates.stacklok.com/api/v1/version\": tls: failed to verify certificate: x509: certificate signed by unknown authority"}
+{"time":"2026-11-21T12:33:14Z","level":"WARN","msg":"insecure HTTP is enabled - HTTP OIDC URLs are allowed - this is INSECURE and should NEVER be used in production","issuer":"http://127.0.0.1:8080/gxg"}
+{"time":"2026-11-21T12:33:14Z","level":"WARN","msg":"Secret manager not available, OAuth tokens will not be persisted","error":"secrets provider not configured. Please run 'thv secret setup' to configure a secrets provider first"}
+{"time":"2026-11-21T12:33:14Z","level":"INFO","msg":"Waiting for MCP server to be ready","endpoint":"http://localhost:8092/mcp/t-beta","timeout":300000000000}
+{"time":"2026-11-21T12:33:14Z","level":"INFO","msg":"workload started successfully, press Ctrl+C to stop"}
+{"time":"2026-11-21T12:33:16Z","level":"ERROR","msg":"failed to convert claims to identity","error":"missing or invalid 'sub' claim (required by OIDC Core 1.0 § 5.1)"}
+{"time":"2026-11-21T12:33:16Z","level":"ERROR","msg":"failed to convert claims to identity","error":"missing or invalid 'sub' claim (required by OIDC Core 1.0 § 5.1)"}
+{"time":"2026-11-21T12:33:17Z","level":"ERROR","msg":"failed to convert claims to identity","error":"missing or invalid 'sub' claim (required by OIDC Core 1.0 § 5.1)"}
+{"time":"2026-11-21T12:33:24Z","level":"INFO","msg":"Mutating webhook denied request","webhook":"gxg-identity","reason":"caller tenant is not the tenant of this connector"}
+{"time":"2026-11-21T12:33:46Z","level":"ERROR","msg":"failed to convert claims to identity","error":"missing or invalid 'sub' claim (required by OIDC Core 1.0 § 5.1)"}
+{"time":"2026-11-21T12:33:46Z","level":"ERROR","msg":"failed to convert claims to identity","error":"missing or invalid 'sub' claim (required by OIDC Core 1.0 § 5.1)"}
+{"time":"2026-11-21T12:34:16Z","level":"ERROR","msg":"failed to convert claims to identity","error":"missing or invalid 'sub' claim (required by OIDC Core 1.0 § 5.1)"}
+{"time":"2026-11-21T12:34:16Z","level":"ERROR","msg":"failed to convert claims to identity","error":"missing or invalid 'sub' claim (required by OIDC Core 1.0 § 5.1)"}

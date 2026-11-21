@@ -1,0 +1,8 @@
+# thv run --webhook-config: the path C signer (webhook.py); fail closed on any webhook error
+mutating:
+  - name: gxg-identity
+    url: http://127.0.0.1:9100/mutate
+    failure_policy: fail
+    timeout: 5s
+    tls_config: {insecure_skip_verify: true}  # loopback HTTP on the stand only
+    hmac_secret_ref: /run/gxg/webhook-hmac

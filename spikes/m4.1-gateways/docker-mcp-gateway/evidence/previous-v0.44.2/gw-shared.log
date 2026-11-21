@@ -1,0 +1,184 @@
+Note: dynamic-tools disabled when using --servers flag
+- Reading configuration...
+  - Reading catalog from [gxg.yaml]
+Warning: Failed to fetch secrets from secrets engine: secrets engine is not available: unavailable: dial unix /root/.cache/docker-secrets-engine/engine.sock: connect: no such file or directory
+- Configuration read in 605.875µs
+- Those servers are enabled: echo-alpha, echo-beta
+- Listing MCP tools...
+! no Docker config found
+! No credential helper found
+! Install a credential helper from: https://github.com/docker/docker-credential-helpers
+! Then configure Docker to use it (see repo for platform-specific instructions)
+- Using credential helper: docker-credential-notfound
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-beta (transport=http)
+! no Docker config found
+! No credential helper found
+! Install a credential helper from: https://github.com/docker/docker-credential-helpers
+! Then configure Docker to use it (see repo for platform-specific instructions)
+- Using credential helper: docker-credential-notfound
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
+    - Connected successfully to: echo-alpha
+    - Connected successfully to: echo-beta
+  > echo-alpha: (1 tools)
+  > echo-beta: (1 tools)
+> 2 tools listed in 185.789912ms
+> Initialized in 186.778754ms
+> Start streaming server on port 8813
+> Gateway URL: http://localhost:8813/mcp
+> Use Bearer <redacted> from MCP_GATEWAY_AUTH_TOKEN environment variable
+- Client initialized spike@0 
+- Current working directory: /
+- Initialize request:
+  {
+    "capabilities": {
+      "roots": {}
+    },
+    "clientInfo": {
+      "name": "spike",
+      "version": "0"
+    },
+    "protocolVersion": "2025-06-18"
+  }
+  - Scanning tool call arguments for secrets...
+  > No secret found in arguments.
+  - Calling tool alpha__echo with arguments: object with 2 field(s)
+! no Docker config found
+! No credential helper found
+! Install a credential helper from: https://github.com/docker/docker-credential-helpers
+! Then configure Docker to use it (see repo for platform-specific instructions)
+- Using credential helper: docker-credential-notfound
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
+    - Connected successfully to: echo-alpha
+  > Calling tool alpha__echo took: 43.749006ms
+  - Scanning tool call response for secrets...
+  > No secret found in response.
+- Client initialized spike@0 
+- Current working directory: /
+- Initialize request:
+  {
+    "capabilities": {
+      "roots": {}
+    },
+    "clientInfo": {
+      "name": "spike",
+      "version": "0"
+    },
+    "protocolVersion": "2025-06-18"
+  }
+  - Scanning tool call arguments for secrets...
+  > No secret found in arguments.
+  - Calling tool alpha__echo with arguments: object with 2 field(s)
+! no Docker config found
+! No credential helper found
+! Install a credential helper from: https://github.com/docker/docker-credential-helpers
+! Then configure Docker to use it (see repo for platform-specific instructions)
+- Using credential helper: docker-credential-notfound
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
+    - Connected successfully to: echo-alpha
+  > Calling tool alpha__echo took: 44.038825ms
+  - Scanning tool call response for secrets...
+  > No secret found in response.
+- Client initialized spike@0 
+- Current working directory: /
+- Initialize request:
+  {
+    "capabilities": {
+      "roots": {}
+    },
+    "clientInfo": {
+      "name": "spike",
+      "version": "0"
+    },
+    "protocolVersion": "2025-06-18"
+  }
+  - Scanning tool call arguments for secrets...
+  > No secret found in arguments.
+  - Calling tool beta__echo with arguments: object with 2 field(s)
+! no Docker config found
+! No credential helper found
+! Install a credential helper from: https://github.com/docker/docker-credential-helpers
+! Then configure Docker to use it (see repo for platform-specific instructions)
+- Using credential helper: docker-credential-notfound
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-beta (transport=http)
+    - Connected successfully to: echo-beta
+  > Calling tool beta__echo took: 44.388788ms
+  - Scanning tool call response for secrets...
+  > No secret found in response.
+- Client initialized spike@0 
+- Current working directory: /
+- Initialize request:
+  {
+    "capabilities": {
+      "roots": {}
+    },
+    "clientInfo": {
+      "name": "spike",
+      "version": "0"
+    },
+    "protocolVersion": "2025-06-18"
+  }
+  - Scanning tool call arguments for secrets...
+  > No secret found in arguments.
+  - Calling tool beta__echo with arguments: object with 2 field(s)
+! no Docker config found
+! No credential helper found
+! Install a credential helper from: https://github.com/docker/docker-credential-helpers
+! Then configure Docker to use it (see repo for platform-specific instructions)
+- Using credential helper: docker-credential-notfound
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-beta (transport=http)
+    - Connected successfully to: echo-beta
+  > Calling tool beta__echo took: 47.714217ms
+  - Scanning tool call response for secrets...
+  > No secret found in response.
+- Client initialized spike@0 
+- Current working directory: /
+- Initialize request:
+  {
+    "capabilities": {
+      "roots": {}
+    },
+    "clientInfo": {
+      "name": "spike",
+      "version": "0"
+    },
+    "protocolVersion": "2025-06-18"
+  }
+  - Scanning tool call arguments for secrets...
+  > No secret found in arguments.
+  - Calling tool alpha__echo with arguments: object with 3 field(s)
+! no Docker config found
+! No credential helper found
+! Install a credential helper from: https://github.com/docker/docker-credential-helpers
+! Then configure Docker to use it (see repo for platform-specific instructions)
+- Using credential helper: docker-credential-notfound
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
+    - Connected successfully to: echo-alpha
+  > Calling tool alpha__echo took: 47.440446ms
+  - Scanning tool call response for secrets...
+  > No secret found in response.
+- Client initialized spike@0 
+- Current working directory: /
+- Initialize request:
+  {
+    "capabilities": {
+      "roots": {}
+    },
+    "clientInfo": {
+      "name": "spike",
+      "version": "0"
+    },
+    "protocolVersion": "2025-06-18"
+  }
+  - Scanning tool call arguments for secrets...
+  > No secret found in arguments.
+  - Calling tool beta__echo with arguments: object with 2 field(s)
+! no Docker config found
+! No credential helper found
+! Install a credential helper from: https://github.com/docker/docker-credential-helpers
+! Then configure Docker to use it (see repo for platform-specific instructions)
+- Using credential helper: docker-credential-notfound
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-beta (transport=http)
+    - Connected successfully to: echo-beta
+  > Calling tool beta__echo took: 45.94538ms
+  - Scanning tool call response for secrets...
+  > No secret found in response.

@@ -64,6 +64,7 @@ testpaths = [
     "tools/gxg-policy/tests",
     "connectors/demo/tests",
     "spikes/m4-contextforge/tests",
+    "spikes/m4.1-gateways/tests",
 ]
 # DoD-5: a skipped or xfailed test is a failure, not a pass.
 xfail_strict = true

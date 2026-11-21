@@ -29,7 +29,8 @@ CF = "http://127.0.0.1:4444"
 ECHO_DIRECT = "http://127.0.0.1:9000"
 STATE = HERE / "secrets" / "state.json"
 OBS = HERE / "secrets" / "observations.jsonl"
-ENV = dict(line.split("=", 1) for line in (HERE / ".env").read_text().split() if "=" in line)
+_ENV = HERE / ".env"  # optional: M4.1 imports the generic helpers below without a ContextForge stand
+ENV = dict(line.split("=", 1) for line in _ENV.read_text().split() if "=" in line) if _ENV.exists() else {}
 PROTO = "2025-06-18"
 
 

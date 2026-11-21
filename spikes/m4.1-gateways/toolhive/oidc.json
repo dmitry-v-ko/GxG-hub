@@ -1,0 +1,16 @@
+{
+  "interactiveLogin": false,
+  "tokenCallbacks": [
+    {
+      "issuerId": "gxg",
+      "tokenExpiry": 3600,
+      "requestMappings": [
+        {"requestParam": "client_id", "match": "hermes-alpha", "claims": {"sub": "hermes@t-alpha.spike.example.com", "email": "hermes@t-alpha.spike.example.com", "tenant_id": "t-alpha", "aud": ["vmcp"]}},
+        {"requestParam": "client_id", "match": "analyst-alpha", "claims": {"sub": "analyst@t-alpha.spike.example.com", "email": "analyst@t-alpha.spike.example.com", "tenant_id": "t-alpha", "aud": ["vmcp"]}},
+        {"requestParam": "client_id", "match": "hermes-beta", "claims": {"sub": "hermes@t-beta.spike.example.com", "email": "hermes@t-beta.spike.example.com", "tenant_id": "t-beta", "aud": ["vmcp"]}},
+        {"requestParam": "client_id", "match": "analyst-beta", "claims": {"sub": "analyst@t-beta.spike.example.com", "email": "analyst@t-beta.spike.example.com", "tenant_id": "t-beta", "aud": ["vmcp"]}},
+        {"requestParam": "client_id", "match": "platform-admin", "claims": {"sub": "admin@spike.example.com", "email": "admin@spike.example.com", "roles": ["admin"], "aud": ["vmcp"]}}
+      ]
+    }
+  ]
+}
