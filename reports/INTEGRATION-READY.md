@@ -18,6 +18,6 @@
 | gitleaks tree HEAD and full range | no leaks found |
 | `connectors/demo/docker_smoke.sh` | OK |
 | `stand/run.sh` (M5) | fresh 29/0, after-restart 29/0, after-recreate 29/0 |
-| `scripts/ci/mutmut.sh` | running (~2 h); result will be added to this file in a separate commit |
+| `scripts/ci/mutmut.sh` (on `fc87e27`) | OK, rc=0: gxg-policy 2555/2590, demo 832/841, gateway 132/133, kit 1099/1110, approval 1624/1635, root 1211/1235 killed; not killed 91 = listed as equivalent 91, stale entries none; M7 SQL mutations: 83 as expected |
 
 GitHub CI was not checked (runners may be unavailable); everything is local. `grants-widening` is red on a push without a PR by M2 design.

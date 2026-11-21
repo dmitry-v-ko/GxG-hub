@@ -78,7 +78,7 @@ Docker: `dockerd` started by hand, Docker 29.10.0. Image builds in the sandbox g
 | policy | `gxg-policy validate policies/`; `lint`; `bash scripts/ci/bundle_smoke.sh` | 0 errors (lint: 2 warnings, as before); bundle OK |
 | demo image | `connectors/demo/docker_smoke.sh` (with `DOCKER_BUILD_FLAGS`) | docker_smoke: OK |
 | **M5 stand** | `stand/run.sh` (with `DOCKER_BUILD_FLAGS`) | **fresh 29/0, after-restart 29/0, after-recreate 29/0**; run record: `reports/integration/2026-11-21-m3-m5-m7-stand.json` |
-| mutmut | `scripts/ci/mutmut.sh` | see `INTEGRATION-READY.md` (the run takes ~2 h, started after the other checks) |
+| mutmut | `scripts/ci/mutmut.sh` | OK (rc=0): not killed 91 = listed as equivalent 91, no stale entries (incl. M7 `x_create_server__mutmut_*` after the fastmcp 4 port); M7 SQL: 83/83 as expected. Per directory: gxg-policy 2555/2590, demo 832/841, gateway 132/133, kit 1099/1110, approval 1624/1635, root 1211/1235 killed |
 
 Notes on the runs, without hiding anything:
 
