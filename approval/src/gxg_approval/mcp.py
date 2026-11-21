@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools.base import ToolResult  # fastmcp 4 (integration): was fastmcp.tools.tool
 from mcp.types import CallToolResult
 
 from gxg_connector_kit.errors import GxgError
@@ -26,7 +26,7 @@ class ErrorResult(ToolResult):
     """MCC-05: a tool error is `isError: true` with the error envelope as `structuredContent`."""
 
     def to_mcp_result(self) -> CallToolResult:
-        return CallToolResult(content=self.content, structuredContent=self.structured_content, isError=True)
+        return CallToolResult(content=self.content, structured_content=self.structured_content, is_error=True)
 
 
 class Refused(Exception):
@@ -38,7 +38,8 @@ class Refused(Exception):
 
 def _result(doc: dict[str, Any], *, error: bool) -> ToolResult:
     """The text content is FastMCP's compact JSON of the same document."""
-    return ErrorResult(structured_content=doc) if error else ToolResult(structured_content=doc)
+    # fastmcp 4: BaseModel dataclass_transform hides ToolResult.__init__ from mypy in subclasses (integration)
+    return ErrorResult(structured_content=doc) if error else ToolResult(structured_content=doc)  # type: ignore[call-arg]
 
 
 def create_server(

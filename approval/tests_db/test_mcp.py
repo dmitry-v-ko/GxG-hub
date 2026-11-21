@@ -53,7 +53,8 @@ def call(server: Any, tool: str, intent_id: str) -> Any:
 def test_tools_are_listed(mcp: tuple[Any, Agent]) -> None:
     async def run() -> Any:
         async with Client(mcp[0]) as c:
-            assert c.initialize_result is not None and c.initialize_result.serverInfo.name == "gxg-approval"
+            # fastmcp 4 (integration): initialize_result is None outside the legacy handshake
+            assert c.server_info is not None and c.server_info.name == "gxg-approval"
             return await c.list_tools()
 
     tools = {t.name: t for t in asyncio.run(run())}
