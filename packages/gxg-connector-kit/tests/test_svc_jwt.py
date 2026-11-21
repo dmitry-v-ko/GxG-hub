@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 import jwt
@@ -245,3 +246,14 @@ def test_parse_registry_rejects_bad_documents(bundle_kit: BundleKit) -> None:
         parse_registry({**doc, "services": bad_key})
     with pytest.raises(ValueError, match="ed25519:"):
         parse_registry({**doc, "services": [{**doc["services"][0], "public_keys": ["rsa:x"]}]})
+
+
+def test_registry_keeps_bundle_tools_by_name_and_version(bundle_kit: BundleKit) -> None:
+    """AS-26: effect_class, executes_via and dispatch_timeout_s come only from the bundle."""
+    tool = {"name": "demo.message.propose", "version": "1.0.0", "effect_class": "external_effect",
+            "action": "propose", "executes_via": "demo.message.execute", "dispatch_timeout_s": 30}  # fmt: skip
+    platform = copy.deepcopy(bundle_kit.platform)
+    platform["services"][2]["tools"] = [tool]
+    services = parse_registry(platform)
+    assert services["demo"].tools == {("demo.message.propose", "1.0.0"): tool}
+    assert services["executor"].tools == {}

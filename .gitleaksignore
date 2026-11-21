@@ -25,3 +25,8 @@ e7d245f8e2ef7d2a6bf52828e13b970a91cad980:tests/ci/test_check_secrets.py:generic-
 # The first push of reports/integration/2026-11-21.md quoted that annotation verbatim (reworded since).
 4756ad3a0b3dd255bca36cdc1bcec5a346c78e69:reports/integration/2026-11-21.md:generic-api-key:27
 4756ad3a0b3dd255bca36cdc1bcec5a346c78e69:reports/integration/2026-11-21.md:generic-api-key:29
+# M7: the same `Ed25519PrivateKey` annotation of test parameters (`ci_key`, `key`) in the first push of
+# approval/tests_db/conftest.py; renamed to `ci_signer`/`signer` in the next commit. No key material.
+43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:185
+43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:244
+43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:252

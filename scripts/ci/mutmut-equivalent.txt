@@ -82,3 +82,15 @@ gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4  # M1: `_keys =
 gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8  # M1: `float("-INF")`: Python parses it case-insensitively, same value
 gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27  # M1: `cast(None, claims)`: typing.cast is a no-op at runtime
 gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is falsy: the same output as ensure_ascii=False
+# M7 (approval)
+gxg_approval.mcp.x_create_server__mutmut_14  # "Authorization" -> "authorization": HTTP header names are case-insensitive (RFC 9110), httpx sends the same header
+gxg_approval.mcp.x_create_server__mutmut_15  # "Authorization" -> "AUTHORIZATION": HTTP header names are case-insensitive (RFC 9110)
+gxg_approval.mcp.x_create_server__mutmut_46  # "GET" -> "get": httpx upper-cases the method (Request.method = method.upper())
+gxg_approval.mcp.x_create_server__mutmut_62  # "POST" -> "post": httpx upper-cases the method
+gxg_approval.mcp.x_create_server__mutmut_87  # error=False -> error=None: _result only tests truthiness
+gxg_approval.api.x__error__mutmut_5  # "Retry-After" -> "retry-after": header names are case-insensitive; Starlette lower-cases them on the wire
+gxg_approval.api.x__error__mutmut_6  # "Retry-After" -> "RETRY-AFTER": header names are case-insensitive
+gxg_approval.api.x_create_app__mutmut_19  # partition -> rpartition: equal for "Bearer <jwt>" (a JWT has no space); with more spaces both forms fail verification -> the same 401
+gxg_approval.api.x_create_app__mutmut_25  # headers.get("authorization") -> "AUTHORIZATION": Starlette Headers.get is case-insensitive
+gxg_approval.api.x_create_app__mutmut_26  # missing header default "" -> "XXXX": no space, so scheme "XXXX" != bearer -> the same 401 "token rejected"
+gxg_approval.api.x__responses__mutmut_8  # (200, 201) -> (200, 202) in the `ok` branch: only dispatch passes an `ok` schema, and its only 2xx code is 200

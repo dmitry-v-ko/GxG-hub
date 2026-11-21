@@ -24,3 +24,9 @@
 | M5 | reports/critic/M5-cycle-2.json | F12: в `reports/conformance/M5.json` ссылка на CI-прогон цикла 1; зелёного CI на голове цикла 2 нет (сбой раннеров GitHub) | Перезапустить CI на голове до PR в main, записать run id |
 | M5 | reports/critic/M5-cycle-2.json | F13: `stand/README.md:32` — «один раз» про `init.py`, а bundle переподписывается при каждом запуске | Поправить формулировку |
 | M5 | reports/critic/M5-cycle-1.json | F6: код таймаута read после отправки (MCC-05) — вопрос владельцу (`reports/M5-ESCALATION.md` #4) | После решения владельца |
+| M7 | reports/critic/M7-cycle-1.json | У `sweeper` и `mcp` нет `/healthz` и `/readyz` (спека «Развёртывание»: у каждого процесса) | Файловый heartbeat или маленький HTTP-probe — M10/M14 |
+| M7 | reports/critic/M7-cycle-1.json | Нет предела размера тела запроса в `api` (зарегистрированный коннектор может прислать тело любого размера) | Потоковый предел ~1 MiB до разбора; в `error.schema.json` нет кода 413 — `invalid_input` |
+| M7 | reports/critic/M7-cycle-1.json | `signing_key()`, `GXG_API_URL`/`GXG_API_AUDIENCE` и сервис `mcp` в compose не работают до M5 (нет production `IdentityVerifier`) | Подключить в M5 вместе с ADR-0001 вариант C или удалить до него |
+| M7 | reports/critic/M7-cycle-1.json | Сгенерированный OpenAPI объявляет `422` и `HTTPValidationError`, а API отвечает `400 invalid_input` | Убрать 422 из схемы FastAPI (`responses`/`openapi()` override) при следующем касании |
+| M7 | reports/critic/M7-cycle-2.json | Не-JSON ответ `api` (например, HTML от прокси) роняет инструмент mcp: `ValueError` не ловится как `temporarily_unavailable` | Ловить `ValueError` в `mcp.call()` → `temporarily_unavailable` |
+| M7 | reports/critic/M7-cycle-2.json | `_responses(ok=…)` и `code in (200, 201)` обслуживают одного вызывающего (dispatch) и дают эквивалентного мутанта | Встроить схему ответа dispatch, упростить ветку (~-3 строки) |

@@ -57,6 +57,8 @@ jobs:
           scripts tests/secrets
       - name: mypy --strict (root conftest.py and tests/ci, which imports it; separate run, the kit has its own conftest.py)
         run: uv run mypy --strict conftest.py tests/ci
+      - name: mypy --strict (approval DB tests; separate run, own conftest.py)
+        run: uv run mypy --strict approval/tests_db
       - name: mypy (other packages and contract tests)
         run: >-
           uv run mypy
@@ -90,6 +92,21 @@ jobs:
       - name: connectors/demo tests from its own lockfile
         working-directory: connectors/demo
         run: uv sync && uv run pytest
+
+  approval-db:
+    # M7: Approval Service on a real PostgreSQL 16 in Docker, reached only over a Unix socket (the container
+    # has no network), so the no-TCP rule of AC-M0-01 holds. Not in `tests`: it needs Docker and the image.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: docker pull postgres:16.6-alpine
+      - name: AC-M7-02, 04, 06…13 — approval/tests_db
+        run: uv run pytest approval/tests_db
 
   schema-guard:
     # AC-M0-02: proves that every schema mutation turns the contract tests red.
@@ -145,9 +162,11 @@ jobs:
         run: uv sync && uv run pytest tests/secrets
 
   mutmut:
-    # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed; M1, M2, M3 and M5 modules too.
+    # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed; M1, M2, M3, M5 and M7 modules too.
+    # M7 adds approval (~1700 mutants, DB tests on PostgreSQL in Docker) and its SQL mutation check
+    # (scripts/ci/mutate_m7_sql.py, ~80 runs of approval/tests_db): about two hours on a 4-core runner.
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # M5: the kit joined the loop
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -242,7 +261,7 @@ jobs:
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
     if: always()
-    needs: [lint, types, tests, schema-guard, secrets, mutmut, policy, demo-image, m5-stand, grants-widening]
+    needs: [lint, types, tests, approval-db, schema-guard, secrets, mutmut, policy, demo-image, m5-stand, grants-widening]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

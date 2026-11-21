@@ -31,6 +31,8 @@ dev = [
     "cryptography>=44,<51",
     # spikes/m4-contextforge verifier tests: the PyJWT version in the pinned ContextForge image
     "PyJWT==2.15.1",
+    "httpx>=0.27,<1",
+    "docker>=7.1,<8",
 ]
 
 [tool.uv]
@@ -91,9 +93,12 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Tests and CI scripts run git/pytest subprocesses and use assert by design.
 "**/tests/**" = ["S101", "S603", "S607", "PLC0415"]
+"**/tests_db/**" = ["S101", "S603", "S607", "PLC0415", "S608"]  # S608: SQL built from test constants
 "conftest.py" = ["S101"]
 "scripts/ci/**" = ["S603", "S607"]
 "stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
+"approval/src/gxg_approval/cli.py" = ["PLC0415"]  # each process imports only what it runs
+"approval/src/gxg_approval/migrations/**" = ["S101", "S608", "E501"]  # static DDL from code constants
 
 [tool.ruff.lint.isort]
 known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector"]
@@ -110,7 +115,7 @@ no_implicit_optional = true
 strict_equality = true
 # scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
 explicit_package_bases = true
-mypy_path = ["packages/gxg-connector-kit/src", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
+mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
 
 [[tool.mypy.overrides]]
 # gateway/contextforge/gxg_identity/plugin.py runs inside the ContextForge image, where cpex is installed
@@ -129,8 +134,8 @@ exclude = ["*.md"]
 # M2: scripts/ci/widening_gate.py; survivors only if listed in scripts/ci/mutmut-equivalent.txt.
 source_paths = ["scripts/ci/", "conftest.py"]
 # Outside every DoD-4 scope, tested end to end only: the M1 coverage gate (AC-M1-09) and the
-# M2 bash/YAML mutation driver (scripts/ci/mutate_m2.py, not a key-condition module).
-do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py"]
+# M2 bash/YAML and M7 SQL mutation drivers (scripts/ci/mutate_m*.py, not key-condition modules).
+do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py", "scripts/ci/mutate_m7_sql.py"]
 also_copy = ["schemas/", "policies/", "docs/", "tests/", ".github/"]
 # test_grants_widening_job.py runs the M2 job script in temp repos (subprocesses, like the e2e tests):
 # in neither milestone's mutmut test selection.

@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from kit_testing import BUNDLE_KID, REPO, T0, BundleKit, Clock, iso, sign_bundle
+from kit_testing import BUNDLE_KID, REPO, T0, BundleKit, Clock, iso, load_yaml, sign_bundle
 
 from gxg_connector_kit import _jwt, canonical
 from gxg_connector_kit.errors import GxgError
@@ -463,3 +463,13 @@ def test_expiry_without_time_zone_is_rejected_without_a_format_checker() -> None
     doc["grants"][0]["expires_at"] = "2027-03-01T00:00:00"
     with pytest.raises(ValueError, match="time zone"):
         parse_tenant(doc)
+
+
+def test_groups_and_roles_are_kept_for_approval_policies() -> None:
+    """M7: approval `requesters`/`approvers` reference groups and human roles of the same file."""
+    t = parse_tenant(T_BETA)
+    assert t.groups == {"operators": frozenset({OPS})}
+    alpha = parse_tenant(load_yaml("policies/tenants/example.yaml"))
+    assert alpha.roles == {APPROVER: frozenset({"approver"})}
+    assert alpha.groups["researchers"] == frozenset({HERMES, ANALYST})
+    assert parse_tenant({**T_BETA, "groups": None}).groups == {}

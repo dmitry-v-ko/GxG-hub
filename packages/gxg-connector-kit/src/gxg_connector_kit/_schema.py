@@ -20,6 +20,11 @@ _FILES = (
     "platform-registry",
     "gxg-manifest",
     "execution-token",
+    # Approval Service request/response bodies (M7)
+    "intent-create",
+    "preview",
+    "intent-status",
+    "effect-result",
 )
 
 

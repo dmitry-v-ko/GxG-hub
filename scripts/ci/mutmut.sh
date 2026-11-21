@@ -6,6 +6,8 @@
 # to module names, so it runs from that directory. connectors/demo (M3, its own lockfile and [tool.mutmut]):
 # tools.py, backend.py. gateway/contextforge (M5, setup.cfg): gxg_identity/core.py. packages/gxg-connector-kit
 # (M1, its own [tool.mutmut]; in this loop since M5): _jwt, exec_token, svc_jwt, grants, canonical, cf_identity.
+# approval (its own [tool.mutmut]): M7 policy, transitions, quotas, intents (T1), api, mcp. Its DB tests need one
+# PostgreSQL for all mutants: a container without network, reached over a Unix socket (needs Docker).
 # mutmut exits 0 with survivors, so this script fails on any survivor, untested or timed-out mutant not
 # listed in scripts/ci/mutmut-equivalent.txt (each with a reason; the list has no M0.1 mutant, so every
 # M0.1 mutant must be killed), and on any listed mutant that is killed now (stale list).
@@ -16,7 +18,14 @@ report="${1:-/dev/stdout}"
 all="${2:-/dev/null}"
 equivalent=scripts/ci/mutmut-equivalent.txt
 tmp=$(mktemp -d)
-for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit .; do
+pgsock=$(mktemp -d)
+chmod 777 "$pgsock"
+pg=$(docker run -d --rm --network none -e POSTGRES_USER=test -e POSTGRES_HOST_AUTH_METHOD=trust \
+  -v "$pgsock:/var/run/postgresql" postgres:16.6-alpine)
+trap 'docker stop "$pg" > /dev/null 2>&1 || true' EXIT
+for _ in $(seq 240); do docker logs "$pg" 2>&1 | grep -q "PostgreSQL init process complete" && break; sleep 0.5; done
+export GXG_TEST_PG_SOCKET_DIR="$pgsock"
+for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit approval .; do
   (
     cd "$dir"
     rm -rf mutants  # no stale results from an earlier run
@@ -27,6 +36,9 @@ for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-co
     uv run --quiet mutmut results --all true 2> /dev/null | sed 's/^ *//' >> "$tmp/all.txt"
   ) >> "$tmp/results.txt"
 done
+# M7 SQL (migration PL/pgSQL, SQL constants of intents.py): mutmut does not mutate SQL text.
+sql_ok=true
+uv run --quiet python scripts/ci/mutate_m7_sql.py > "$tmp/sql.txt" 2>&1 || sql_ok=false
 sort "$tmp/all.txt" > "$all"
 grep -E '^\s+\S+: ' "$tmp/results.txt" | sed -E 's/^\s+//; s/: .*//' | sort > "$tmp/left.txt" || true
 { grep -oE "^[^ #]+" "$equivalent" || true; } | sort > "$tmp/allowed.txt"
@@ -37,10 +49,13 @@ stale=$(comm -13 "$tmp/left.txt" "$tmp/allowed.txt")
   echo "not killed: $(wc -l < "$tmp/left.txt"), listed as equivalent: $(comm -12 "$tmp/left.txt" "$tmp/allowed.txt" | wc -l)"
   grep -F -f "$tmp/left.txt" "$equivalent" || true
   [ -z "$stale" ] || printf 'listed but killed now (remove from the list):\n%s\n' "$stale"
+  echo "== M7 SQL mutations (scripts/ci/mutate_m7_sql.py)"
+  cat "$tmp/sql.txt"
   if [ -n "$unexplained" ]; then
     printf 'SURVIVED, not equivalent:\n%s\n' "$unexplained"
   else
     echo "mutmut: OK, no surviving non-equivalent mutants"
   fi
+  $sql_ok && echo "SQL mutations: OK" || echo "SQL mutations: FAILED (see above)"
 } | tee "$report"
-[ -z "$unexplained" ] && [ -z "$stale" ]
+[ -z "$unexplained" ] && [ -z "$stale" ] && $sql_ok

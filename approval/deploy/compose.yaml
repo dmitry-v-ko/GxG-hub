@@ -1,0 +1,84 @@
+# Approval Service, M7 processes: migrate, api, mcp, sweeper (approval-service-v1.md «Процессы», AS-27…AS-29).
+# Local/staging layout. Secrets are files (Docker secrets), one per process (AS-28); no secret is an
+# environment value. The secret files are created by the operator from the secret store and never committed.
+# `ui` and `notifier` (M9) get separate images and networks (AS-29); `executor` (M8) joins `internal`.
+name: gxg-approval
+
+x-image: &image ${GXG_APPROVAL_IMAGE:?Set GXG_APPROVAL_IMAGE to the pinned image (tag@digest)}
+x-bundle: &bundle
+  GXG_BUNDLE_DIR: /run/gxg/bundle
+  GXG_BUNDLE_KEYS: ${GXG_BUNDLE_KEYS:?Set GXG_BUNDLE_KEYS, e.g. {"ci-2026-11":"ed25519:..."} (public keys)}
+  GXG_BUNDLE_STATE_FILE: /var/lib/gxg/bundle-state.json
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_superuser_password
+    secrets: [db_superuser_password]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [internal]
+
+  migrate:  # owner role gxg_owner; not a long-running process
+    image: *image
+    command: ["gxg-approval", "migrate"]
+    environment:
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_owner
+    secrets: [db_dsn_owner]
+    networks: [internal]
+    depends_on: [postgres]
+
+  api:
+    image: *image
+    command: ["gxg-approval", "api"]
+    environment:
+      <<: *bundle
+      GXG_SERVICE_ID: approval-api
+      GXG_LISTEN: 0.0.0.0:8090
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_api
+      GXG_PAYLOAD_PUBLIC_KEYS_FILE: /etc/gxg/payload-public-keys.json  # public keys: encrypt only
+      GXG_EXEC_JWKS_FILE: /etc/gxg/exec-jwks.json  # executor public keys (AS-09)
+    secrets: [db_dsn_api]
+    volumes:
+      - ./config:/etc/gxg:ro
+      - ./bundle:/run/gxg/bundle:ro
+      - api-state:/var/lib/gxg
+    networks: [internal]
+    depends_on: [migrate]
+
+  mcp:  # no database access: reads and cancels through api (AS-06, AS-11a)
+    image: *image
+    command: ["gxg-approval", "mcp"]
+    environment:
+      GXG_SERVICE_ID: approval-mcp
+      GXG_API_URL: https://api:8090
+      GXG_API_AUDIENCE: approval-api
+      GXG_SVC_KEY_FILE: /run/secrets/svc_key_mcp
+    secrets: [svc_key_mcp]
+    networks: [internal]
+    depends_on: [api]
+
+  sweeper:
+    image: *image
+    command: ["gxg-approval", "sweeper"]
+    environment:
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_sweeper
+      GXG_SWEEP_INTERVAL_S: "5"
+    secrets: [db_dsn_sweeper]
+    networks: [internal]
+    depends_on: [migrate]
+
+networks:
+  internal:
+    internal: true  # SEC-13, AS-29: no route to the internet
+
+volumes:
+  pgdata:
+  api-state:
+
+secrets:
+  db_superuser_password: {file: ./secrets/db_superuser_password}
+  db_dsn_owner: {file: ./secrets/db_dsn_owner}
+  db_dsn_api: {file: ./secrets/db_dsn_api}
+  db_dsn_sweeper: {file: ./secrets/db_dsn_sweeper}
+  svc_key_mcp: {file: ./secrets/svc_key_mcp}
