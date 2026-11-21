@@ -71,7 +71,8 @@ def test_machine_credentials_cannot_decide(browser: Any, world: Any, propose: An
     """AC-M9-03, SEC-06: the agent's service JWT (and no session at all) → 403."""
     intent = new_intent(propose, row_of)
     body = {"version": 1, "args_hash": intent["canonical_args_hash"], "decision": "approve", "csrf": "x"}
-    for headers in (world.auth("demo"), world.auth("approval-mcp"), {}):
+    no_session: list[dict[str, str]] = [world.auth("demo"), world.auth("approval-mcp"), {}]
+    for headers in no_session:
         r = browser.client.post(f"/intents/{intent['intent_id']}/decision", data=body, headers=headers)
         assert r.status_code == 403
     assert decisions(owner) == 0
@@ -112,7 +113,7 @@ def test_approver_removed_from_bundle_after_t1(
     original = names["tenant_file"]
 
     def without_human2(tenant: str, agents: list[str], connection: str) -> dict[str, Any]:
-        doc = original(tenant, agents, connection)
+        doc: dict[str, Any] = original(tenant, agents, connection)
         doc["principals"]["humans"] = [h for h in doc["principals"]["humans"] if h["id"] != HUMAN2]
         return doc
 

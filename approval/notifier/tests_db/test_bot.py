@@ -121,17 +121,6 @@ def test_digest_after_five(notifier: Any, telegram: Any, propose: Any, owner: An
     assert len(sent_to(telegram, TG1)) == 7 and "/intents/" in telegram.sent[-1]["text"]
 
 
-def test_digest_per_approver(notifier: Any, telegram: Any, propose: Any, owner: Any) -> None:
-    link(owner, HUMAN1, TG1)
-    for i in range(6):
-        propose(args={"text": f"a{i}", "n": i})
-    notifier.deliver()
-    link(owner, HUMAN2, TG2)
-    propose(args={"text": "b", "n": 100})
-    notifier.deliver()
-    assert len(sent_to(telegram, TG1)) == 6 and len(sent_to(telegram, TG2)) == 1
-
-
 def code_for(browser_human: str, owner: psycopg.Connection[Any], pg: Any) -> str:
     code = f"{secrets.randbelow(10**6):06d}"
     with pg.connect("gxg_ui") as ui:
@@ -213,3 +202,164 @@ def test_live_code_digits_are_not_given_twice(owner: Any, pg: Any) -> None:
                 raise AssertionError(bad)
             except psycopg.Error as exc:
                 assert exc.sqlstate == "GX400"
+
+
+def test_relink_moves_notifications_to_the_new_account(notifier: Any, telegram: Any, owner: Any, pg: Any) -> None:
+    for tg in (TG1, TG2):
+        telegram.push_text(tg, f"/link {code_for(HUMAN1, owner, pg)}")
+        notifier.poll(None if tg == TG1 else 2)
+    assert owner.execute("SELECT telegram_user_id FROM approver_links").fetchall() == [(TG2,)]
+
+
+def test_exact_texts(notifier: Any, telegram: Any, propose: Any, owner: Any, pg: Any) -> None:
+    """AS-19 message shape, digest, replies: compared whole."""
+    from gxg_approval_notifier import bot
+
+    link(owner, HUMAN1, TG1)
+    doc = propose().json()
+    notifier.deliver()
+    url = f"{UI_URL}/intents/{doc['intent_id']}"
+    assert telegram.sent[-1]["text"] == (
+        f"{bot.TEXT_NEW}\nTenant: t-alpha\nЧто: Send a message\nКому: Board b1\nЗапросил: agent:t-alpha:bot\n"
+        f"Срок решения: {doc['expires_at']}\n{url}"
+    )
+    telegram.push_text(TG2, "/start")
+    telegram.push_text(TG2, "/link 000000")
+    telegram.push_text(TG2, f"/link {code_for(HUMAN2, owner, pg)}")
+    notifier.poll(None)
+    assert [m["text"] for m in telegram.sent[-3:]] == [bot.TEXT_START, bot.TEXT_NOT_LINKED, bot.TEXT_LINKED]
+    for _ in range(6):
+        propose(args={"text": random_text(), "n": 1})
+    notifier.deliver()
+    assert telegram.sent[-1]["text"] == f"Новых заявок больше 5 за 10 минут. Список: {UI_URL}/"
+
+
+UI_URL = "https://ui.example.test"
+
+
+def test_trailing_slash_of_the_ui_url(notifier: Any, telegram: Any, propose: Any, owner: Any) -> None:
+    notifier.ui_url = UI_URL + "/"
+    link(owner, HUMAN1, TG1)
+    doc = propose().json()
+    notifier.deliver()
+    assert telegram.sent[-1]["reply_markup"]["inline_keyboard"][0][0]["url"] == f"{UI_URL}/intents/{doc['intent_id']}"
+
+
+def test_window_boundary(notifier: Any, telegram: Any, propose: Any, owner: Any) -> None:
+    """AP-08: «за 10 минут» — exactly 600 s later the first message has left the window; so has the digest."""
+    link(owner, HUMAN1, TG1)
+    for i in range(6):
+        propose(args={"text": f"w{i}", "n": i})
+        notifier.deliver()
+    assert len(telegram.sent) == 6 and telegram.sent[-1]["reply_markup"]["inline_keyboard"][0][0]["url"] == UI_URL + "/"
+    notifier.clock.now += 600
+    for i in range(6):
+        propose(args={"text": f"v{i}", "n": i})
+        notifier.deliver()
+    urls = [m["reply_markup"]["inline_keyboard"][0][0]["url"] for m in telegram.sent[6:]]
+    assert len(urls) == 6 and urls[-1] == UI_URL + "/" and all("/intents/" in u for u in urls[:5])
+
+
+def test_windows_are_per_chat(notifier: Any, telegram: Any, propose: Any, owner: Any) -> None:
+    link(owner, HUMAN1, TG1)
+    for i in range(6):
+        propose(args={"text": f"a{i}", "n": i})
+    notifier.deliver()
+    link(owner, HUMAN2, TG2)
+    doc = propose(args={"text": "b", "n": 100}).json()
+    notifier.deliver()
+    (m,) = sent_to(telegram, TG2)
+    assert m["reply_markup"]["inline_keyboard"][0][0]["url"] == f"{UI_URL}/intents/{doc['intent_id']}"
+
+
+def test_failed_send_is_logged_once(notifier: Any, telegram: Any, propose: Any, owner: Any, caplog: Any) -> None:
+    """EFF-14: a refused send (user blocked the bot) is logged; others still get theirs; the row is done."""
+    link(owner, HUMAN1, TG1)
+    link(owner, HUMAN2, TG2)
+    telegram.blocked_chats.add(TG1)
+    doc = propose().json()
+    assert notifier.deliver() == 1
+    assert [m["chat_id"] for m in telegram.sent] == [TG2]
+    assert ("gxg_approval_notifier", 30, f"notify failed for intent {doc['intent_id']}: sendMessage: 403 Forbidden: "
+            "bot was blocked by the user") in caplog.record_tuples  # fmt: skip
+    assert notifier.deliver() == 0
+
+
+def test_bot_api_errors_do_not_leak_the_token(pg: Any, caplog: Any) -> None:
+    import httpx
+
+    from gxg_approval_notifier.bot import Bot, BotError
+
+    def broken(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom", request=request)
+
+    bot = Bot(httpx.Client(base_url="https://api.telegram.org", transport=httpx.MockTransport(broken)), "1:secret")
+    try:
+        bot.call("getMe")
+        raise AssertionError("no error")
+    except BotError as exc:
+        assert str(exc) == "getMe: ConnectError"
+    bad = Bot(
+        httpx.Client(base_url="https://x", transport=httpx.MockTransport(lambda r: httpx.Response(200, text="<"))), "t"
+    )
+    try:
+        bad.call("getMe")
+        raise AssertionError("no error")
+    except BotError as exc:
+        assert str(exc) == "getMe: JSONDecodeError"
+    long = "x" * 300
+    api = Bot(httpx.Client(base_url="https://x", transport=httpx.MockTransport(
+        lambda r: httpx.Response(400, json={"ok": False, "error_code": 400, "description": long}))), "t")  # fmt: skip
+    try:
+        api.call("sendMessage", chat_id=1, text="t")
+        raise AssertionError("no error")
+    except BotError as exc:
+        assert str(exc) == "sendMessage: 400 " + "x" * 100
+    api = Bot(httpx.Client(base_url="https://x", transport=httpx.MockTransport(
+        lambda r: httpx.Response(400, json={"ok": False}))), "t")  # fmt: skip
+    try:
+        api.call("getMe")
+        raise AssertionError("no error")
+    except BotError as exc:
+        assert str(exc) == "getMe: None "
+
+
+def test_timeouts(notifier: Any, telegram: Any) -> None:
+    """Long poll: Telegram holds the request 25 s, the HTTP client waits 10 s longer; other calls 10 s."""
+    import httpx
+
+    seen: list[tuple[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.path.rsplit("/", 1)[1], request.extensions["timeout"]["read"]))
+        status, doc = telegram.handle(request.url.path, __import__("json").loads(request.content or b"{}"))
+        return httpx.Response(status, json=doc)
+
+    notifier.bot._client = httpx.Client(base_url="https://api.telegram.org", transport=httpx.MockTransport(handler))
+    telegram.push_text(TG1, "/start")
+    notifier.poll(1)
+    assert seen == [("getUpdates", 35), ("sendMessage", 10)]
+    assert telegram.bodies[0] == ("getUpdates", {"timeout": 25, "allowed_updates": ["message"], "offset": 1})
+
+
+def test_update_failure_is_logged_and_skipped(notifier: Any, telegram: Any, caplog: Any) -> None:
+    import psycopg
+
+    def down() -> Any:
+        raise psycopg.OperationalError("db down")
+
+    notifier.connect = down
+    telegram.push_text(TG1, "/link 123456")
+    telegram.push_text(TG1, "/start")
+    assert notifier.poll(None) == 3  # the failed update is confirmed too: it is not retried forever
+    assert ("gxg_approval_notifier", 30, "update 1 not handled: OperationalError") in caplog.record_tuples
+    assert telegram.sent[-1]["chat_id"] == TG1  # the next update was still answered
+
+
+def test_messages_without_text_are_ignored(notifier: Any, telegram: Any) -> None:
+    telegram.push({"message": {"message_id": 1, "date": 0, "chat": {"id": TG1, "type": "private"},
+                               "from": {"id": TG1, "is_bot": False, "first_name": "T"}, "sticker": {}}})  # fmt: skip
+    telegram.push({"message": {"message_id": 2, "date": 0, "chat": {"id": TG1, "type": "private"},
+                               "from": {"id": "1001"}, "text": "/start"}})  # fmt: skip
+    notifier.poll(None)
+    assert telegram.sent == []

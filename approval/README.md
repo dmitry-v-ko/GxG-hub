@@ -1,6 +1,6 @@
 # gxg-approval
 
-Approval Service ([спека](../docs/specs/approval-service-v1.md)), веха M7: модель данных, роли БД, переходы T1–T18 + T12a, движок политики и квоты, процессы `api`, `mcp`, `sweeper`, шифрование payload. Executor, UI и бот — M8, M9.
+Approval Service ([спека](../docs/specs/approval-service-v1.md)), веха M7: модель данных, роли БД, переходы T1–T18 + T12a, движок политики и квоты, процессы `api`, `mcp`, `sweeper`, шифрование payload. Executor — M8. Web UI и бот (M9) — отдельные deployable со своими lockfile (AS-29): [`ui/`](ui/README.md), [`notifier/`](notifier/README.md).
 
 ## Как устроено
 
@@ -14,6 +14,7 @@ Approval Service ([спека](../docs/specs/approval-service-v1.md)), веха 
 | `api` (8090) | `api.py` | `schemas/approval-service.openapi.yaml`. Service JWT по реестру bundle, допуск по `kind` (AS-06) |
 | `mcp` (8091) | `mcp.py` | `effects.status`, `effects.cancel` через `api` с `on_behalf_of` (AS-11a). Своей роли БД не использует |
 | `sweeper` | `sweeper.py` | `gxg_sweep()` раз в 5 с: T5, T8, T10, T14 (`SKIP LOCKED`) |
+| M9: БД для ui и бота | `migrations/versions/0002_ui_notifier.py` | Коды привязки Telegram и passkey (таблиц нет в AS-27, `pending_owner_decision`); `gxg_link_code` (ui), `gxg_link_claim` (notifier); `gxg_ui` без `INSERT outbox` и прямой записи `approver_links`. T1 замораживает набор approver'ов в `allowed_approvers`, кладёт канонические args в preview-конверт (EFF-33) и поля AS-19 в строку `notify` |
 | Шифрование | `crypto.py` | Sealed box (libsodium) на tenant: ключ `args` — только у executor, `preview` — только у ui, у `api` — открытые ключи (AS-28) |
 
 ## Развёртывание

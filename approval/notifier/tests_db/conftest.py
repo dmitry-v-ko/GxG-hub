@@ -28,7 +28,7 @@ def _load(name: str, path: Path) -> Any:
 
 _load("approval_db_fixtures", ROOT / "approval/tests_db/conftest.py")
 fake = _load("fake_bot_api", ROOT / "approval/notifier/testing/fake_bot_api.py")
-from approval_db_fixtures import *  # noqa: E402, F403
+from approval_db_fixtures import *  # type: ignore[import-not-found]  # noqa: E402, F403
 from approval_db_fixtures import Pg  # noqa: E402
 
 from gxg_approval_notifier.bot import Bot, Notifier  # noqa: E402

@@ -496,3 +496,18 @@ def test_t1_counts_use_indexes_on_a_long_history(owner: psycopg.Connection[Any])
         if sql is intents._SQL_AUTO_USED:  # the day window needs its own index, not the tenant part of another
             assert any(s.endswith(":intents_tenant_id_created_at_idx") for s in scans), scans
     owner.execute("TRUNCATE intents CASCADE")
+
+
+def test_no_approver_can_decide_alert(
+    propose: Callable[..., Any], world: Any, owner: psycopg.Connection[Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    """A human intent whose frozen approver set is empty can only expire: the operator is told (M9)."""
+    outsider = "oidc:https://not-an-approver:9"
+    world.set_policy("t-alpha", [{"id": "nobody", "match": {"tools": ["demo.message.propose"]},
+                                  "decision": "require_approval", "approvers": [outsider]}])  # fmt: skip
+    doc = propose().json()
+    assert owner.execute("SELECT allowed_approvers FROM intents").fetchall() == [([],)]
+    assert ("gxg_approval", 30, f"ALERT policy tenant=t-alpha: no approver of the tenant may decide intent "
+            f"{doc['intent_id']}") in caplog.record_tuples  # fmt: skip
+    payload = owner.execute("SELECT payload FROM outbox").fetchone()
+    assert payload is not None and payload[0]["approvers"] == []

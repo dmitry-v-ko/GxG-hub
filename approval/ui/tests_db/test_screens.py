@@ -9,12 +9,13 @@ import psycopg
 
 HUMAN1, HUMAN2 = "oidc:https://idp.example.invalid:1", "oidc:https://idp.example.invalid:2"
 VIEWER, ADMIN = "oidc:https://idp.example.invalid:viewer", "oidc:https://idp.example.invalid:admin"
+RLO, ZWSP = chr(0x202E), chr(0x200B)  # written as code points: formatters keep them visible
 HOSTILE = [
     "<script>alert(1)</script>",
     "**md** _x_ <b>bold</b>",
     "[x](javascript:alert(1)) https://evil.example",
-    "abc\u202edcba",
-    "zero\u200bwidth",
+    f"abc{RLO}dcba",
+    f"zero{ZWSP}width",
 ]
 LONG = "x" * 20000
 TEMPLATE_TAGS = {"section", "h2", "p", "span", "code", "dl", "dt", "dd", "pre", "details", "summary", "table", "tr",
@@ -79,7 +80,7 @@ def test_preview_is_plain_text(browser: Any, propose: Any) -> None:
         "zero⟦U+200B⟧width",
     ]
     assert len(parser.values[5]) == 20000
-    assert "\u202e" not in page and "\u200b" not in page
+    assert f"{RLO}" not in page and f"{ZWSP}" not in page
     assert 'id="hidden-warning"' in page
     assert page.count("<script") == 1  # only the static script in <head>
 
@@ -164,8 +165,8 @@ def test_history_shows_terminal(browser: Any, propose: Any) -> None:
 
 
 def rejected_hash(browser: Any, doc: dict[str, Any]) -> str:
-    page = browser.client.get(f"/intents/{doc['intent_id']}").text
-    return page.split('name="args_hash" value="')[1].split('"')[0]
+    page: str = browser.client.get(f"/intents/{doc['intent_id']}").text
+    return page.split('name="args_hash" value="')[1].split('"', maxsplit=1)[0]
 
 
 def unknown_intent(propose: Any, row_of: Any, browser: Any, execute: Any) -> dict[str, Any]:
@@ -253,3 +254,64 @@ def test_unknown_or_malformed_intent(browser: Any) -> None:
 def test_signed_out_page_offers_login(browser: Any) -> None:
     page = browser.client.get("/")
     assert page.status_code == 200 and 'id="login" href="/login"' in page.text
+
+
+def test_args_not_matching_the_hash_cannot_be_approved(
+    browser: Any, propose: Any, row_of: Any, world: Any, owner: Any
+) -> None:
+    """EFF-33: canonical args that contradict the intent's hash → warning, no approve (409), reject still works."""
+    from gxg_connector_kit import canonical
+
+    intent = row_of(propose().json()["intent_id"])
+    forged = {"preview": world.body()["preview"], "canonical_args": {"text": "something else", "n": 1}}
+    owner.execute(
+        "UPDATE intents SET preview_ciphertext = %s WHERE intent_id = %s",
+        (world.encryptor.seal("t-alpha", "preview", canonical.dumps(forged)), intent["intent_id"]),
+    )
+    page = browser.login(HUMAN1).client.get(f"/intents/{intent['intent_id']}").text
+    assert 'id="hash-warning"' in page and 'id="approve"' not in page and 'id="reject"' in page
+    assert browser.decide(intent).status_code == 409
+    assert row_of(intent["intent_id"])["status"] == "pending_approval"
+    assert browser.decide(intent, "reject").status_code == 303
+
+
+def test_purged_payload(browser: Any, propose: Any, row_of: Any, owner: Any) -> None:
+    """RET-01: after purge the card says so and nothing can be approved."""
+    intent = row_of(propose().json()["intent_id"])
+    owner.execute("ALTER TABLE intents DISABLE TRIGGER USER")
+    owner.execute("UPDATE intents SET preview_ciphertext = NULL WHERE intent_id = %s", (intent["intent_id"],))
+    owner.execute("ALTER TABLE intents ENABLE TRIGGER USER")
+    page = browser.login(HUMAN1).client.get(f"/intents/{intent['intent_id']}").text
+    assert "очищены" in page and 'id="decide"' not in page
+    assert browser.decide(intent).status_code == 409
+    assert "—" in browser.client.get("/").text
+
+
+def test_passkey_registration_is_checked(browser: Any, soft_authenticator: Any, clock: Any, owner: Any) -> None:
+    """AS-17: a passkey is stored only from a fresh, matching attestation of the signed-in human."""
+    browser.login(HUMAN1)
+    key = soft_authenticator()
+
+    def post(body: str, csrf: str | None = None) -> Any:
+        return browser.client.post("/passkeys", content=body, headers={"X-CSRF-Token": csrf or browser.csrf})
+
+    assert post(key.register('{"challenge": "AAAA"}')).status_code == 400  # no options were issued
+    options = browser.client.get("/passkeys/options").text
+    assert post(key.register(options), csrf="wrong").status_code == 403  # refused before the challenge is used
+    wrong_origin = soft_authenticator(origin="https://evil.example")
+    assert post(wrong_origin.register(options)).status_code == 400
+    assert post(key.register(options)).status_code == 400  # one challenge, one attempt
+    options = browser.client.get("/passkeys/options").text
+    clock.now += 301
+    assert post(key.register(options)).status_code == 400
+    assert owner.execute("SELECT count(*) FROM webauthn_credentials").fetchone() == (0,)
+    options = browser.client.get("/passkeys/options").text
+    assert post(key.register(options)).json() == {"registered": True}
+    assert owner.execute("SELECT human_principal FROM webauthn_credentials").fetchall() == [(HUMAN1,)]
+    assert "Passkey зарегистрирован" in browser.client.get("/passkeys").text
+
+
+def test_no_preview_key_is_unavailable(browser: Any, propose: Any, ui_deps: Any) -> None:
+    intent = propose().json()["intent_id"]
+    ui_deps.preview_keys.pop("t-alpha")
+    assert browser.login(HUMAN1).client.get(f"/intents/{intent}").status_code == 503

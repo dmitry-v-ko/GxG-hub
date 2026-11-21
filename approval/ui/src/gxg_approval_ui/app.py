@@ -27,7 +27,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from nacl.public import SealedBox
+from nacl.public import PrivateKey, SealedBox
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 from starlette.concurrency import run_in_threadpool
@@ -47,6 +47,22 @@ TERMINAL = ("succeeded", "failed", "reconciled_succeeded", "reconciled_failed", 
 LIST_LIMIT = 200
 COMMENT_MAX = 500  # approval-decision.schema.json
 LINK_CODE_TRIES = 5
+
+# Texts for people (module constants: mutation testing leaves them alone, tests check the status codes).
+MSG_UNAVAILABLE = "Сервис временно недоступен"
+MSG_SIGN_IN = "Войдите заново"
+MSG_STALE_FORM = "Форма устарела: обновите страницу"
+MSG_NOT_FOUND = "Заявка не найдена"
+MSG_LOGIN_FAILED = "Вход не удался"
+MSG_NOT_APPROVER = "Нет роли approver в этом tenant'е"
+MSG_NO_VERSION = "Нет версии заявки"
+MSG_HASH_MISMATCH = "Параметры не совпадают с хешем: заявку нужно отклонить (EFF-33)"
+MSG_STEP_UP = "Нужно подтверждение passkey (step-up) для этой заявки"
+MSG_NOT_RESOLVER = "Нужна роль approver или tenant_admin"
+MSG_TELEGRAM_APPROVERS = "Привязка Telegram — только для approver'ов"
+MSG_NO_CODE = "Не удалось выдать код, попробуйте ещё раз"
+MSG_LONG_COMMENT = f"Комментарий длиннее {COMMENT_MAX} символов"
+MSG_REFUSED = "отказано"
 
 _COLUMNS = (
     "intent_id, tenant_id, requester_principal, business_task_id, tool_key, tool_version, connection_id, "
@@ -79,7 +95,7 @@ _HTTP = {"GX400": 400, "GX403": 403, "GX404": 404, "GX409": 409, "GX423": 423}  
 class Deps:
     pool: ConnectionPool[Any]
     bundles: BundleStore
-    preview_keys: Mapping[str, SealedBox]  # tenant → preview private key (AS-28: only the ui)
+    preview_keys: Mapping[str, SealedBox[PrivateKey]]  # tenant → preview private key (AS-28: only the ui)
     session_key: str
     public_url: str  # https://approve.example.com (the OIDC redirect and the WebAuthn origin)
     oidc_issuer: str
@@ -146,7 +162,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
 
     @app.exception_handler(GxgError)
     def unavailable(request: Request, exc: GxgError) -> Response:  # bundle not ready, no payload key
-        return page(request, "error.html", {"message": "Сервис временно недоступен"}, status=503)
+        return page(request, "error.html", {"message": MSG_UNAVAILABLE}, status=503)
 
     def page(request: Request, name: str, ctx: dict[str, Any], status: int = 200) -> Response:
         session = request.session
@@ -159,14 +175,14 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         sub = session.get("sub")
         if not sub or now - session.get("iat", 0) > SESSION_MAX_S or now - session.get("seen", 0) > SESSION_IDLE_S:
             session.clear()
-            raise Refused(403, "Войдите заново")
+            raise Refused(403, MSG_SIGN_IN)
         session["seen"] = now
         return str(sub)
 
     def check_csrf(request: Request, token: str | None) -> None:
         expected = request.session.get("csrf")
         if not expected or not token or not hmac.compare_digest(token, expected):
-            raise Refused(403, "Форма устарела: обновите страницу")
+            raise Refused(403, MSG_STALE_FORM)
 
     def roles(who: str) -> dict[str, frozenset[str]]:
         return {t: g.roles[who] for t, g in deps.bundles.current.tenants.items() if who in g.roles}
@@ -178,10 +194,10 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         try:
             key = uuid.UUID(intent_id)
         except ValueError:
-            raise Refused(404, "Заявка не найдена") from None
+            raise Refused(404, MSG_NOT_FOUND) from None
         row = conn.cursor(row_factory=dict_row).execute(_SQL_INTENT, (key,)).fetchone()
         if row is None:
-            raise Refused(404, "Заявка не найдена")
+            raise Refused(404, MSG_NOT_FOUND)
         return row
 
     def envelope(row: Mapping[str, Any]) -> tuple[dict[str, Any], Any, bool] | None:
@@ -261,10 +277,10 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             token = await oauth.oidc.authorize_access_token(request)
         except OAuthError:
             request.session.clear()
-            raise Refused(403, "Вход не удался") from None
+            raise Refused(403, MSG_LOGIN_FAILED) from None
         claims = token.get("userinfo") or {}
         if not claims.get("iss") or not claims.get("sub"):
-            raise Refused(403, "Вход не удался")
+            raise Refused(403, MSG_LOGIN_FAILED)
         now = deps.clock()
         request.session.clear()
         request.session.update(
@@ -325,7 +341,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             row = load(conn, intent_id)
             mine = roles(who).get(row["tenant_id"], frozenset())
             if not mine & {"approver", "viewer", "tenant_admin"}:
-                raise Refused(404, "Заявка не найдена")  # another tenant's intent looks like a missing one
+                raise Refused(404, MSG_NOT_FOUND)  # another tenant's intent looks like a missing one
             opened = envelope(row)
             preview, args_json, hidden = render.card(*opened[:2]) if opened else (None, None, False)
             decisions = conn.execute(_SQL_DECISIONS, (row["intent_id"],)).fetchall()
@@ -352,7 +368,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         with deps.pool.connection() as conn:
             row = load(conn, intent_id)
             if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
-                raise Refused(403, "Нет роли approver в этом tenant'е")
+                raise Refused(403, MSG_NOT_APPROVER)
             options = stepup.authentication_options(
                 rp, conn, request.session, human=who, intent_id=str(row["intent_id"]),
                 args_hash=row["canonical_args_hash"], now=deps.clock(),
@@ -371,25 +387,25 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         try:
             version = int(form.get("version", ""))
         except ValueError:
-            raise Refused(400, "Нет версии заявки") from None
+            raise Refused(400, MSG_NO_VERSION) from None
         if comment is not None and len(comment) > COMMENT_MAX:
-            raise Refused(400, f"Комментарий длиннее {COMMENT_MAX} символов")
+            raise Refused(400, MSG_LONG_COMMENT)
         with deps.pool.connection() as conn:
             row = load(conn, intent_id)  # EFF-15: re-read before the decision
             if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
-                raise Refused(403, "Нет роли approver в этом tenant'е")  # current bundle (T2)
+                raise Refused(403, MSG_NOT_APPROVER)  # current bundle (T2)
             step_up = False
             if decision == "approve":
                 opened = envelope(row)
                 if opened is None or not opened[2]:
-                    raise Refused(409, "Параметры не совпадают с хешем: заявку нужно отклонить (EFF-33)")
+                    raise Refused(409, MSG_HASH_MISMATCH)
                 if row["step_up_required"]:
                     step_up = stepup.verify(
                         rp, conn, request.session, human=who, intent_id=str(row["intent_id"]), args_hash=args_hash,
                         assertion_json=form.get("assertion", ""), now=deps.clock(),
                     )  # fmt: skip
                     if not step_up:
-                        raise Refused(403, "Нужно подтверждение passkey (step-up) для этой заявки")
+                        raise Refused(403, MSG_STEP_UP)
             call(conn, _SQL_DECIDE, (row["intent_id"], who, decision, version, args_hash, step_up, comment))
         return RedirectResponse(f"/intents/{row['intent_id']}", status_code=303)
 
@@ -404,11 +420,11 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             try:
                 version = int(data.get("version", ""))
             except ValueError:
-                raise Refused(400, "Нет версии заявки") from None
+                raise Refused(400, MSG_NO_VERSION) from None
             with deps.pool.connection() as conn:
                 row = load(conn, intent_id)
                 if not roles(who).get(row["tenant_id"], frozenset()) & {"approver", "tenant_admin"}:
-                    raise Refused(403, "Нужна роль approver или tenant_admin")
+                    raise Refused(403, MSG_NOT_RESOLVER)
                 call(conn, _SQL_RESOLVE, (row["intent_id"], who, data.get("outcome", ""), version, data.get("reason")))
             return RedirectResponse(f"/intents/{row['intent_id']}", status_code=303)
 
@@ -450,14 +466,14 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         check_csrf(request, str(form.get("csrf", "")))
         tenants = tenants_with(who, "approver")
         if not tenants:
-            raise Refused(403, "Привязка Telegram — только для approver'ов")
+            raise Refused(403, MSG_TELEGRAM_APPROVERS)
         with deps.pool.connection() as conn:
             for _ in range(LINK_CODE_TRIES):
                 code = f"{secrets.randbelow(10**6):06d}"
                 if call(conn, _SQL_LINK_CODE, (who, tenants, code)):
                     links = conn.execute(_SQL_LINKS, (who,)).fetchall()
                     return page(request, "telegram.html", {"links": links, "code": code})
-        raise Refused(503, "Не удалось выдать код, попробуйте ещё раз")
+        raise Refused(503, MSG_NO_CODE)
 
     def call(conn: psycopg.Connection[Any], sql: str, params: tuple[Any, ...]) -> Any:
         """A transition function; its refusal (SQLSTATE GXnnn) becomes the HTTP status, nothing is written."""
@@ -468,6 +484,6 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             status = _HTTP.get(exc.sqlstate or "")
             if status is None:
                 raise
-            raise Refused(status, (exc.diag.message_primary or "отказано")[:200]) from None
+            raise Refused(status, (exc.diag.message_primary or MSG_REFUSED)[:200]) from None
 
     return app

@@ -1,0 +1,5 @@
+*
+!approval/notifier/pyproject.toml
+!approval/notifier/uv.lock
+!approval/notifier/src
+**/__pycache__

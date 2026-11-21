@@ -6,6 +6,8 @@
 # to module names, so it runs from that directory. connectors/demo (M3, its own lockfile and [tool.mutmut]):
 # tools.py, backend.py. gateway/contextforge (M5, setup.cfg): gxg_identity/core.py. packages/gxg-connector-kit
 # (M1, its own [tool.mutmut]; in this loop since M5): _jwt, exec_token, svc_jwt, grants, canonical, cf_identity.
+# approval/ui, approval/notifier (M9, own lockfiles and [tool.mutmut]; run with the root environment, where their
+# DB tests find the Approval Service fixtures): app, stepup, render, cli; bot.
 # approval (its own [tool.mutmut]): M7 policy, transitions, quotas, intents (T1), api, mcp. Its DB tests need one
 # PostgreSQL for all mutants: a container without network, reached over a Unix socket (needs Docker).
 # mutmut exits 0 with survivors, so this script fails on any survivor, untested or timed-out mutant not
@@ -25,15 +27,18 @@ pg=$(docker run -d --rm --network none -e POSTGRES_USER=test -e POSTGRES_HOST_AU
 trap 'docker stop "$pg" > /dev/null 2>&1 || true' EXIT
 for _ in $(seq 240); do docker logs "$pg" 2>&1 | grep -q "PostgreSQL init process complete" && break; sleep 0.5; done
 export GXG_TEST_PG_SOCKET_DIR="$pgsock"
-for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit approval .; do
+root=$(pwd)
+for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit approval approval/ui \
+  approval/notifier .; do
   (
     cd "$dir"
+    case "$dir" in approval/ui | approval/notifier) uvr=(uv run --quiet --project "$root") ;; *) uvr=(uv run --quiet) ;; esac
     rm -rf mutants  # no stale results from an earlier run
-    uv run --quiet mutmut run > "$tmp/run.log" 2>&1 || { cat "$tmp/run.log"; exit 1; }
-    uv run --quiet mutmut export-cicd-stats > /dev/null
+    "${uvr[@]}" mutmut run > "$tmp/run.log" 2>&1 || { cat "$tmp/run.log"; exit 1; }
+    "${uvr[@]}" mutmut export-cicd-stats > /dev/null
     echo "== $dir: $(tr -d ' \n' < mutants/mutmut-cicd-stats.json)"
-    uv run --quiet mutmut results 2> /dev/null
-    uv run --quiet mutmut results --all true 2> /dev/null | sed 's/^ *//' >> "$tmp/all.txt"
+    "${uvr[@]}" mutmut results 2> /dev/null
+    "${uvr[@]}" mutmut results --all true 2> /dev/null | sed 's/^ *//' >> "$tmp/all.txt"
   ) >> "$tmp/results.txt"
 done
 # M7 SQL (migration PL/pgSQL, SQL constants of intents.py): mutmut does not mutate SQL text.

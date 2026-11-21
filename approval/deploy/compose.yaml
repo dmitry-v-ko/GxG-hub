@@ -1,7 +1,14 @@
-# Approval Service, M7 processes: migrate, api, mcp, sweeper (approval-service-v1.md «Процессы», AS-27…AS-29).
+# Approval Service: migrate, api, mcp, sweeper (M7), ui, notifier (M9) (approval-service-v1.md «Процессы», AS-27…AS-29).
 # Local/staging layout. Secrets are files (Docker secrets), one per process (AS-28); no secret is an
 # environment value. The secret files are created by the operator from the secret store and never committed.
-# `ui` and `notifier` (M9) get separate images and networks (AS-29); `executor` (M8) joins `internal`.
+# `executor` (M8) joins `internal`.
+#
+# AS-29 network policy: every network is `internal` (no route out) except `edge` (inbound) and `egress` (outbound).
+# - ui: `ui_ingress` (only the TLS relay `ingress` publishes its port), `ui_db`, `ui_oidc`. It reaches the IdP only
+#   through `oidc-egress`, a TCP relay to exactly one host that answers on `ui_oidc` under the IdP's own name.
+# - notifier: `notifier_db`, `notifier_telegram` (relay `telegram-egress` → api.telegram.org only),
+#   `notifier_webhooks` (allowlisted webhook relays, M10). No published port, nothing listens.
+# Profiles: `egress` = the production relays; `test` = the test issuer and the fake Bot API in their place.
 name: gxg-approval
 
 x-image: &image ${GXG_APPROVAL_IMAGE:?Set GXG_APPROVAL_IMAGE to the pinned image (tag@digest)}
@@ -17,7 +24,7 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/db_superuser_password
     secrets: [db_superuser_password]
     volumes: [pgdata:/var/lib/postgresql/data]
-    networks: [internal]
+    networks: [internal, ui_db, notifier_db]
 
   migrate:  # owner role gxg_owner; not a long-running process
     image: *image
@@ -68,17 +75,113 @@ services:
     networks: [internal]
     depends_on: [migrate]
 
+  ui:  # M9; its own image (approval/ui/Dockerfile) and lockfile (AS-29)
+    image: ${GXG_UI_IMAGE:?Set GXG_UI_IMAGE to the pinned ui image (tag@digest)}
+    environment:
+      <<: *bundle
+      GXG_LISTEN: 0.0.0.0:8443
+      GXG_UI_PUBLIC_URL: ${GXG_UI_PUBLIC_URL:?Set GXG_UI_PUBLIC_URL, e.g. https://approve.example.com}
+      GXG_OIDC_ISSUER: ${GXG_OIDC_ISSUER:?Set GXG_OIDC_ISSUER (https)}
+      GXG_OIDC_CLIENT_ID: ${GXG_OIDC_CLIENT_ID:?Set GXG_OIDC_CLIENT_ID}
+      GXG_UI_TLS_CERT_FILE: /etc/gxg/ui-tls.crt  # certificate: public
+      GXG_UI_TLS_KEY_FILE: /run/secrets/ui_tls_key
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_ui
+      GXG_UI_SESSION_KEY_FILE: /run/secrets/ui_session_key
+      GXG_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret_ui
+      GXG_PREVIEW_KEYS_FILE: /run/secrets/preview_keys_ui  # preview private keys only (AS-28)
+    secrets: [db_dsn_ui, ui_session_key, oidc_client_secret_ui, preview_keys_ui, ui_tls_key]
+    volumes:
+      - ${GXG_CONFIG_DIR:-./config}:/etc/gxg:ro
+      - ${GXG_BUNDLE_HOST_DIR:-./bundle}:/run/gxg/bundle:ro
+      - ui-state:/var/lib/gxg
+    networks: [ui_ingress, ui_db, ui_oidc]
+
+  ingress:  # inbound HTTPS only: TLS passthrough to ui (the ui terminates TLS); nothing else is published
+    image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
+    command: ["TCP-LISTEN:8443,fork,reuseaddr", "TCP:ui:8443"]
+    ports: ["${GXG_UI_PUBLISH:-443}:8443"]
+    networks: [edge, ui_ingress]
+
+  notifier:  # M9; its own image (approval/notifier/Dockerfile) and lockfile (AS-29)
+    image: ${GXG_NOTIFIER_IMAGE:?Set GXG_NOTIFIER_IMAGE to the pinned notifier image (tag@digest)}
+    environment:
+      GXG_UI_PUBLIC_URL: ${GXG_UI_PUBLIC_URL:?Set GXG_UI_PUBLIC_URL}
+      GXG_TELEGRAM_API_URL: ${GXG_TELEGRAM_API_URL:-https://api.telegram.org}
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_notifier
+      GXG_TELEGRAM_TOKEN_FILE: /run/secrets/telegram_bot_token
+    secrets: [db_dsn_notifier, telegram_bot_token]
+    networks: [notifier_db, notifier_telegram, notifier_webhooks]
+
+  oidc-egress:  # the only way out of ui: a relay to the IdP host, reachable under the IdP's name
+    profiles: [egress]
+    image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
+    command: ["TCP-LISTEN:443,fork,reuseaddr", "TCP:${GXG_OIDC_HOST:-set-GXG_OIDC_HOST.invalid}:443"]
+    networks:
+      egress: {}
+      ui_oidc: {aliases: ["${GXG_OIDC_HOST:-set-GXG_OIDC_HOST.invalid}"]}
+
+  telegram-egress:  # the only way out of notifier to Telegram
+    profiles: [egress]
+    image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
+    command: ["TCP-LISTEN:443,fork,reuseaddr", "TCP:api.telegram.org:443"]
+    networks:
+      egress: {}
+      notifier_telegram: {aliases: [api.telegram.org]}
+
+  oidc:  # test profile: the test issuer in place of oidc-egress
+    profiles: [test]
+    build: {context: ../.., dockerfile: approval/deploy/test-oidc.Dockerfile}
+    image: gxg-test-oidc:m9
+    networks: [ui_oidc]
+
+  fake-telegram:  # test profile: the fake Bot API in place of telegram-egress
+    profiles: [test]
+    image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+    command: ["python", "/opt/fake_bot_api.py", "/opt/token", "8081"]
+    volumes:
+      - ../notifier/testing/fake_bot_api.py:/opt/fake_bot_api.py:ro
+      - ${GXG_SECRETS_DIR:-./secrets}/telegram_bot_token:/opt/token:ro
+    networks: [notifier_telegram]
+
 networks:
   internal:
     internal: true  # SEC-13, AS-29: no route to the internet
+  ui_ingress: {internal: true}
+  ui_db: {internal: true}
+  ui_oidc: {internal: true}
+  notifier_db: {internal: true}
+  notifier_telegram: {internal: true}
+  notifier_webhooks: {internal: true}
+  edge: {}  # inbound: only `ingress` is on it
+  egress: {}  # outbound: only the egress relays are on it
 
 volumes:
   pgdata:
   api-state:
+  ui-state:
 
 secrets:
-  db_superuser_password: {file: ./secrets/db_superuser_password}
-  db_dsn_owner: {file: ./secrets/db_dsn_owner}
-  db_dsn_api: {file: ./secrets/db_dsn_api}
-  db_dsn_sweeper: {file: ./secrets/db_dsn_sweeper}
-  svc_key_mcp: {file: ./secrets/svc_key_mcp}
+  db_superuser_password:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_superuser_password"
+  db_dsn_owner:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_owner"
+  db_dsn_api:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_api"
+  db_dsn_sweeper:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_sweeper"
+  svc_key_mcp:
+    file: "${GXG_SECRETS_DIR:-./secrets}/svc_key_mcp"
+  db_dsn_ui:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_ui"
+  ui_session_key:
+    file: "${GXG_SECRETS_DIR:-./secrets}/ui_session_key"
+  oidc_client_secret_ui:
+    file: "${GXG_SECRETS_DIR:-./secrets}/oidc_client_secret_ui"
+  preview_keys_ui:
+    file: "${GXG_SECRETS_DIR:-./secrets}/preview_keys_ui"
+  ui_tls_key:
+    file: "${GXG_SECRETS_DIR:-./secrets}/ui_tls_key"
+  db_dsn_notifier:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_notifier"
+  telegram_bot_token:
+    file: "${GXG_SECRETS_DIR:-./secrets}/telegram_bot_token"

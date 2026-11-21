@@ -27,7 +27,7 @@ if "approval_db_fixtures" not in sys.modules:  # one copy per session (the notif
     assert _spec and _spec.loader
     sys.modules["approval_db_fixtures"] = _base = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_base)
-from approval_db_fixtures import *  # noqa: E402, F403  (pg, owner, world, propose, …)
+from approval_db_fixtures import *  # type: ignore[import-not-found]  # noqa: E402, F403  (pg, owner, world, propose, …)
 from approval_db_fixtures import Pg, World  # noqa: E402
 
 from gxg_approval_ui.app import SESSION_COOKIE, Deps, create_app  # noqa: E402 (after the *: it has another Deps)
@@ -194,6 +194,11 @@ class SoftAuthenticator:
         return json.dumps({"id": _b64(self.credential_id), "rawId": _b64(self.credential_id), "type": "public-key",
                            "response": {"clientDataJSON": _b64(client), "authenticatorData": _b64(auth),
                                         "signature": _b64(signature)}})  # fmt: skip
+
+
+@pytest.fixture
+def soft_authenticator() -> type[SoftAuthenticator]:
+    return SoftAuthenticator
 
 
 @pytest.fixture

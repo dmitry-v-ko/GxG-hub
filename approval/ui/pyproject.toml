@@ -32,10 +32,16 @@ module-name = "gxg_approval_ui"
 [tool.uv.sources]
 gxg-connector-kit = { path = "../../packages/gxg-connector-kit", editable = true }
 
-[dependency-groups]
-dev = ["pytest>=8.3,<10"]
+# Tests run from the repository root (its pytest config: no TCP, no skips), with the root environment.
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
-xfail_strict = true
+# DoD-4: from this directory with the root environment and a PostgreSQL (scripts/ci/mutmut.sh starts one):
+#   GXG_TEST_PG_SOCKET_DIR=<dir> uv run --project ../.. mutmut run
+# Key conditions of M9: session, CSRF, roles, step-up, decision and reconcile handlers, preview rendering.
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = ["src/gxg_approval_ui/app.py", "src/gxg_approval_ui/stepup.py", "src/gxg_approval_ui/render.py",
+               "src/gxg_approval_ui/config.py"]
+also_copy = ["tests/", "tests_db/"]
+pytest_add_cli_args_test_selection = ["tests", "tests_db"]
+pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider", "-q"]
+timeout_constant = 60.0

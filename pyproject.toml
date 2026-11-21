@@ -70,6 +70,7 @@ testpaths = [
     "tests/contract",
     "packages/gxg-connector-kit/tests",
     "approval/tests",
+    "approval/ui/tests",
     "tools/gxg-policy/tests",
     "connectors/demo/tests",
     "spikes/m4-contextforge/tests",
@@ -107,7 +108,7 @@ ignore = [
 "approval/src/gxg_approval/cli.py" = ["PLC0415"]  # each process imports only what it runs
 "approval/ui/src/gxg_approval_ui/cli.py" = ["PLC0415"]
 # the UI and the bot speak Russian to people: Cyrillic letters are not look-alikes there
-"approval/{ui,notifier}/src/**" = ["RUF001"]
+"approval/{ui,notifier}/**" = ["RUF001"]
 "approval/src/gxg_approval/migrations/**" = ["S101", "S608", "E501"]  # static DDL from code constants
 
 [tool.ruff.lint.isort]
@@ -125,7 +126,12 @@ no_implicit_optional = true
 strict_equality = true
 # scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
 explicit_package_bases = true
-mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
+mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "approval/ui/src", "approval/notifier/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
+
+[[tool.mypy.overrides]]
+# authlib ships no type information (types-Authlib is a separate, lagging stub package)
+module = ["authlib.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # gateway/contextforge/gxg_identity/plugin.py runs inside the ContextForge image, where cpex is installed

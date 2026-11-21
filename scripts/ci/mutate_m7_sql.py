@@ -19,7 +19,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MIG = "approval/src/gxg_approval/migrations/versions/0001_core.py"
 INT = "approval/src/gxg_approval/intents.py"
-TESTS = ["approval/tests_db"]
+MIG2 = "approval/src/gxg_approval/migrations/versions/0002_ui_notifier.py"  # M9
+TESTS = ["approval/tests_db", "approval/ui/tests_db", "approval/notifier/tests_db", "-m", "not e2e"]
 EQUIVALENT = "equivalent: "  # prefix of `what` for a mutant that cannot change behaviour (reason follows)
 
 # (file, exact text, replacement, what the mutation breaks)
@@ -161,6 +162,33 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      "auto hour limit counts the day"),
     (INT, "AND approval_mode = 'auto' AND %s", "AND %s", "auto limit counts human intents of the rule"),
     (INT, "AND %s = ANY(rule_ids)", "AND (%s = ANY(rule_ids) OR true)", "auto limit counts other rules"),
+    # M9: Telegram link codes (0002), narrowing of gxg_ui
+    (MIG2, "IF NOT p_human LIKE 'oidc:%' OR p_code", "IF p_code", "a code for a machine principal"),
+    (MIG2, "OR p_code !~ '^[0-9]{{6}}$' OR", "OR", "a code that is not six digits"),
+    (MIG2, " OR coalesce(cardinality(p_tenants), 0) = 0 THEN", " THEN", "a code for no tenant"),
+    (MIG2, "IF EXISTS (SELECT 1 FROM link_codes WHERE code_hash = _gxg_code_hash(p_code) AND used_at IS NULL",
+     "IF false AND EXISTS (SELECT 1 FROM link_codes WHERE code_hash = _gxg_code_hash(p_code) AND used_at IS NULL",
+     "the same digits live twice"),
+    (MIG2, "  UPDATE link_codes SET expires_at = now() WHERE human_principal = p_human AND used_at IS NULL AND "
+     "expires_at > now();\n", "", "an older code keeps working"),
+    (MIG2, "make_interval(secs => {CODE_TTL_S})", "make_interval(secs => 10 * {CODE_TTL_S})", "code lives too long"),
+    (MIG2, "AND at > now() - interval '10 minutes'", "AND at > now()", "wrong guesses never counted"),
+    (MIG2, ">= {MAX_FAILED_CLAIMS} THEN", ">= {MAX_FAILED_CLAIMS} + 1 THEN", "one more guess allowed"),
+    (MIG2, "AND details->>'telegram_user_id' = p_telegram_user::text", "", "one sender's guesses block everyone"),
+    (MIG2, "AND used_at IS NULL\n                                     AND expires_at > now() FOR UPDATE",
+     "AND expires_at > now() FOR UPDATE", "a used code works again"),
+    (MIG2, "\n                                     AND expires_at > now() FOR UPDATE", " FOR UPDATE",
+     "an expired code works"),
+    (MIG2, "  UPDATE link_codes SET used_at = now(), telegram_user_id = p_telegram_user WHERE id = c.id;\n", "",
+     "a code is never used up"),
+    (MIG2, "DO UPDATE SET telegram_user_id = excluded.telegram_user_id,", "DO UPDATE SET telegram_user_id = "
+     "approver_links.telegram_user_id,", "a new link does not replace the old Telegram account"),
+    (MIG2, "REVOKE INSERT ON outbox FROM gxg_ui;", "", "ui writes outbox rows"),
+    (MIG2, "REVOKE INSERT, UPDATE ON approver_links FROM gxg_ui;", "", "ui writes links directly"),
+    (MIG2, "ON FUNCTION gxg_link_claim(text, bigint) TO gxg_notifier;",
+     "ON FUNCTION gxg_link_claim(text, bigint) TO gxg_notifier, gxg_ui;", "ui claims codes"),
+    (MIG2, "GRANT SELECT, INSERT, UPDATE (sign_count) ON webauthn_credentials TO gxg_ui;",
+     "GRANT SELECT, INSERT, UPDATE ON webauthn_credentials TO gxg_ui;", "ui rewrites a passkey's key"),
 ]  # fmt: skip
 
 

@@ -23,6 +23,8 @@ class FakeBotApi:
         self.max_wait_s = max_wait_s  # None: honour the client's long-poll timeout
         self.sent: list[dict[str, Any]] = []
         self.calls: list[str] = []
+        self.bodies: list[tuple[str, dict[str, Any]]] = []
+        self.blocked_chats: set[int] = set()  # chats that blocked the bot: sendMessage → 403
         self._updates: list[dict[str, Any]] = []
         self._next_update = 1
         self._next_message = 1
@@ -46,12 +48,13 @@ class FakeBotApi:
         sender = {"id": user_id, "is_bot": False, "first_name": "Test"}
         return self.push({"callback_query": {"id": "1", "from": sender, "data": data, "chat_instance": "1"}})
 
-    def handle(self, path: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    def handle(self, path: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:  # noqa: PLR0911 (one per answer)
         prefix = f"/bot{self.token}/"
         if not path.startswith(prefix):
             return 401, {"ok": False, "error_code": 401, "description": "Unauthorized"}
         method = path[len(prefix) :]
         self.calls.append(method)
+        self.bodies.append((method, body))
         if method == "getMe":
             return 200, {"ok": True, "result": {"id": 1, "is_bot": True, "first_name": "gxg", "username": "gxg_bot"}}
         if method == "getUpdates":
@@ -60,6 +63,8 @@ class FakeBotApi:
             text, chat = body.get("text"), body.get("chat_id")
             if not isinstance(text, str) or not 1 <= len(text) <= MAX_TEXT or not isinstance(chat, int | str):
                 return 400, {"ok": False, "error_code": 400, "description": "Bad Request: message text is empty"}
+            if chat in self.blocked_chats:
+                return 403, {"ok": False, "error_code": 403, "description": "Forbidden: bot was blocked by the user"}
             with self._cond:
                 message = {"message_id": self._next_message, "date": 0, "chat": {"id": chat}, "text": text}
                 self._next_message += 1

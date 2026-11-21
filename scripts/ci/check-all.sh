@@ -5,6 +5,8 @@ cd "$(dirname "$0")/../.."
 
 uv lock --check
 (cd connectors/demo && uv lock --check)
+(cd approval/ui && uv lock --check)  # AS-29: own lockfiles
+(cd approval/notifier && uv lock --check)
 uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
@@ -13,10 +15,15 @@ uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/t
 # separate run: two conftest.py modules clash in one mypy run; tests/ci imports the root conftest
 uv run mypy --strict conftest.py tests/ci
 uv run mypy --strict approval/tests_db
+uv run mypy --strict approval/ui/src approval/ui/tests approval/notifier/src approval/notifier/testing approval/deploy/tests
+uv run mypy --strict approval/ui/tests_db
+uv run mypy --strict approval/notifier/tests_db
 uv run mypy tools/gxg-policy/src tools/gxg-policy/tests connectors/demo/src connectors/demo/tests tests/contract
 MYPYPATH=stand/tests:stand:gateway/contextforge uv run mypy --exclude mutants stand gateway/contextforge
 uv run pytest
 uv run pytest approval/tests_db  # needs Docker (M7)
+uv run pytest approval/ui/tests_db approval/notifier/tests_db  # M9; Docker, node + Playwright Chromium (E2E)
+uv run pytest approval/deploy/tests  # AC-M9-12: images and networks; extra build flags: DOCKER_BUILD_FLAGS
 uv run python scripts/ci/schema_lock.py
 uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-branch --cov-report=json:coverage-kit.json
 uv run python scripts/ci/check_coverage.py coverage-kit.json

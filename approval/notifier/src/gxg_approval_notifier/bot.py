@@ -11,14 +11,11 @@ Two loops of one process:
 from __future__ import annotations
 
 import logging
-import os
 import re
-import threading
 import time
 from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -30,6 +27,17 @@ MAX_SINGLE = 5
 POLL_TIMEOUT_S = 25
 LINK = re.compile(r"/link(?:@\w+)?\s+(\d{6})")
 START = re.compile(r"/start(?:@\w+)?(?:\s.*)?", re.DOTALL)
+
+# Texts for people (module constants: mutation testing leaves them alone; tests compare them whole).
+TEXT_NEW = "Новая заявка на согласование"
+TEXT_DIGEST = "Новых заявок больше {n} за 10 минут. Список: {url}"
+TEXT_LINKED = "Аккаунт привязан, уведомления придут сюда."
+TEXT_NOT_LINKED = "Код не подошёл: он неверный, истёк или уже использован."
+TEXT_START = (
+    "Это бот уведомлений GxG Approval. Решения принимаются только в веб-интерфейсе. "
+    "Чтобы получать уведомления, получите код на странице «Telegram» и пришлите /link <код>."
+)
+BUTTON = "Открыть в GxG Approval"
 
 _SQL_PENDING = (
     "SELECT id, payload FROM outbox WHERE topic = 'notify' AND delivered_at IS NULL AND available_at <= now() "
@@ -63,7 +71,7 @@ class Bot:
         return doc["result"]
 
     def send(self, chat_id: int, text: str, url: str) -> None:
-        button = {"text": "Открыть в GxG Approval", "url": url}  # AS-20: a URL, never callback_data
+        button = {"text": BUTTON, "url": url}  # AS-20: a URL, never callback_data
         self.call("sendMessage", chat_id=chat_id, text=text, reply_markup={"inline_keyboard": [[button]]})
 
 
@@ -93,7 +101,7 @@ class Throttle:
 def message(event: Mapping[str, Any]) -> str:
     """AS-19: tenant, title, target label, requester, deadline, link. No fields, changes, amounts or args."""
     return (
-        "Новая заявка на согласование\n"
+        f"{TEXT_NEW}\n"
         f"Tenant: {event['tenant_id']}\n"
         f"Что: {event['title']}\n"
         f"Кому: {event['target_label']}\n"
@@ -129,31 +137,22 @@ class Notifier:
                 url = f"{base}/intents/{event['intent_id']}"
                 self.bot.send(chat, message(event) + f"\n{url}", url)
             elif kind == "digest":
-                self.bot.send(chat, f"Новых заявок больше {MAX_SINGLE} за 10 минут. Список: {base}/", f"{base}/")
+                self.bot.send(chat, TEXT_DIGEST.format(n=MAX_SINGLE, url=f"{base}/"), f"{base}/")
         except BotError as exc:
             log.warning("notify failed for intent %s: %s", event.get("intent_id"), exc)
 
     def handle(self, update: Mapping[str, Any]) -> None:
         msg = update.get("message") or {}
-        chat, sender, text = msg.get("chat") or {}, msg.get("from") or {}, (msg.get("text") or "").strip()
-        if chat.get("type") != "private" or not isinstance(sender.get("id"), int):
-            return  # a link is only for a private chat with the person
+        chat, sender, text = msg.get("chat") or {}, msg.get("from") or {}, msg.get("text")
+        if chat.get("type") != "private" or not isinstance(sender.get("id"), int) or not isinstance(text, str):
+            return  # a link is only for a private chat with the person; stickers, photos… are ignored
+        text = text.strip()
         if m := LINK.fullmatch(text):
             with self.connect() as conn:
                 human = (conn.execute(_SQL_CLAIM, (m[1], sender["id"])).fetchone() or (None,))[0]
-            reply = (
-                "Аккаунт привязан, уведомления придут сюда."
-                if human
-                else "Код не подошёл: он неверный, истёк или уже использован."
-            )
-            self.bot.call("sendMessage", chat_id=chat["id"], text=reply)
+            self.bot.call("sendMessage", chat_id=chat["id"], text=TEXT_LINKED if human else TEXT_NOT_LINKED)
         elif START.fullmatch(text):
-            self.bot.call(
-                "sendMessage",
-                chat_id=chat["id"],
-                text="Это бот уведомлений GxG Approval. Решения принимаются только в веб-интерфейсе. "
-                "Чтобы получать уведомления, получите код на странице «Telegram» и пришлите /link <код>.",
-            )
+            self.bot.call("sendMessage", chat_id=chat["id"], text=TEXT_START)
 
     def poll(self, offset: int | None) -> int | None:
         """One long poll; returns the next offset."""
@@ -167,36 +166,3 @@ class Notifier:
             except (BotError, psycopg.Error) as exc:
                 log.warning("update %s not handled: %s", update.get("update_id"), type(exc).__name__)
         return offset
-
-
-def main() -> None:  # pragma: no cover (process wiring; exercised by the compose stand)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-
-    def env(name: str, default: str | None = None) -> str:
-        value = os.environ.get(name, default)
-        if not value:
-            raise SystemExit(f"missing configuration: {name}")
-        return value
-
-    dsn = Path(env("GXG_DB_DSN_FILE")).read_text("utf-8").strip()
-    token = Path(env("GXG_TELEGRAM_TOKEN_FILE")).read_text("utf-8").strip()
-    interval = float(env("GXG_NOTIFY_INTERVAL_S", "2"))
-    client = httpx.Client(base_url=env("GXG_TELEGRAM_API_URL", "https://api.telegram.org"))
-    notifier = Notifier(Bot(client, token), lambda: psycopg.connect(dsn, autocommit=True), env("GXG_UI_PUBLIC_URL"))
-
-    def updates() -> None:
-        offset = None
-        while True:
-            try:
-                offset = notifier.poll(offset)
-            except BotError as exc:
-                log.warning("getUpdates: %s", exc)
-                time.sleep(5)
-
-    threading.Thread(target=updates, name="telegram-updates", daemon=True).start()
-    while True:
-        try:
-            notifier.deliver()
-        except psycopg.Error as exc:
-            log.warning("outbox: database error %s", type(exc).__name__)
-        time.sleep(interval)
