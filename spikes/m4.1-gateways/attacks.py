@@ -33,9 +33,11 @@ FORGED = {  # the same forged identity as M4 attacks(): t-alpha agent claims to 
     "X-Forwarded-User-Roles": "platform_admin",
     "X-GxG-Identity": "eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiJhZ2VudDp0LWJldGE6YW5hbHlzdCJ9.forged",
 }
+META_KEY = "gxg.dev/identity"  # where the ToolHive webhook variant puts the JWS (toolhive/webhook.py)
 META = {
     "user": {"id": "analyst@t-beta.spike.example.com", "teams": ["t-beta"], "is_admin": True},
     "tenant_id": "t-beta",
+    META_KEY: FORGED["X-GxG-Identity"],
 }
 ARGS = {"text": "hi", "tenant_id": "t-beta", "principal": "agent:t-beta:analyst"}
 HOP = {"host", "content-length", "connection", "accept-encoding", "user-agent", "x-spike-attack"}
@@ -117,12 +119,13 @@ def run_replay(delay=65):
     retooled = json.loads(json.dumps(cap["body"]))
     retooled["params"]["name"] = "delete_all"
     spike.record("replay_other_tool", status=send(retooled, hdrs, "replay_other_tool"))
-    real = next((v for k, v in hdrs.items() if k.lower() == "x-gxg-identity"), None)
-    if real:
-        spike.record(
-            "forged_jws_attacker_key",
-            status=send(cap["body"], {"X-GxG-Identity": spike.forged_jws(real)}, "forged_jws_attacker_key"),
-        )
+    meta = cap["body"]["params"].get("_meta") or {}
+    real = meta.get(META_KEY) or next((v for k, v in hdrs.items() if k.lower() == "x-gxg-identity"), None)
+    if real:  # forged JWS in the same place the real one came: _meta (webhook variant) or the header
+        forged, h = json.loads(json.dumps(cap["body"])), {"X-GxG-Identity": spike.forged_jws(real)}
+        if META_KEY in meta:
+            forged["params"]["_meta"][META_KEY] = h.pop("X-GxG-Identity")
+        spike.record("forged_jws_attacker_key", status=send(forged, h, "forged_jws_attacker_key"))
     time.sleep(delay)
     spike.record("replay_delayed", delay_s=delay, status=send(cap["body"], hdrs, f"replay_after_{delay}s"))
 
@@ -146,7 +149,7 @@ def summary():
         for o in obs
         if "path" in o
     ]
-    expected = {t: check_verdicts.EXPECTED[t] for t in check_verdicts.EXPECTED}
+    expected = dict(check_verdicts.EXPECTED)
     return {"gateway_calls": rows, "direct_to_connector": direct, "m4_expected_with_variant_c": expected}
 
 

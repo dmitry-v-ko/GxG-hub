@@ -1,13 +1,14 @@
 # Shared stand pieces for M4.1 candidates (sourced by <candidate>/run.sh, cwd = candidate dir).
 # Echo = M4 echo-MCP + variant C verifier (mounted from ../../m4-contextforge/echo, not copied), on the pinned
-# ContextForge image as in M4 (its Python has PyJWT). The adapter key pair is generated per run into secrets/.
+# ContextForge image as in M4 (its Python has PyJWT). The adapter key pair is generated once into secrets/ (the private key is used only by the ToolHive webhook variant).
 ECHO_IMAGE=ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5
 M4=$(cd ../../m4-contextforge && pwd)
 mkdir -p secrets/raw evidence; : > secrets/raw/echo.jsonl; : > secrets/observations.jsonl
-[ -f secrets/adapter_ed25519.pub.pem ] || python3 -I -c '
+[ -f secrets/adapter_ed25519.pem ] || python3 -I -c '
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey as K
 from cryptography.hazmat.primitives import serialization as s
 k=K.generate()
+open("secrets/adapter_ed25519.pem","wb").write(k.private_bytes(s.Encoding.PEM,s.PrivateFormat.PKCS8,s.NoEncryption()))
 open("secrets/adapter_ed25519.pub.pem","wb").write(k.public_key().public_bytes(s.Encoding.PEM,s.PublicFormat.SubjectPublicKeyInfo))'
 start_echo() {  # $1 = docker network (host for ToolHive, a bridge for Docker MCP Gateway)
   docker rm -f m41-echo >/dev/null 2>&1 || true

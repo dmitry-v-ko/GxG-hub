@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = os.environ.get("ECHO_LOG", "/data/echo.jsonl")
 PUBKEY = os.environ.get("ECHO_ADAPTER_PUBKEY")
+META_KEY = os.environ.get("ECHO_IDENTITY_META")  # M4.1 ToolHive webhook: the JWS comes in params._meta[<key>]
 SEEN_JTI: set = set()
 TOOLS = [
     {
@@ -74,7 +75,9 @@ class Handler(BaseHTTPRequestHandler):
         received_at = datetime.now(UTC).isoformat()
         entry = {"at": received_at, "peer": self.client_address[0], "path": self.path, "headers": headers, "body": msg}
         if PUBKEY and isinstance(msg, dict) and msg.get("method") == "tools/call":
-            entry["verdict"] = verdict(self.headers.get("X-GxG-Identity"), self.path, msg.get("params"))
+            meta = (msg.get("params") or {}).get("_meta") or {}
+            token = meta.get(META_KEY) if META_KEY else self.headers.get("X-GxG-Identity")
+            entry["verdict"] = verdict(token, self.path, msg.get("params"))
         log(entry)
 
         if isinstance(msg, list) or "id" not in msg:  # notification / batch: ack
