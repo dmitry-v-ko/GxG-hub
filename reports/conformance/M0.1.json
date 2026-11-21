@@ -1,13 +1,13 @@
 {
   "milestone": "M0.1",
-  "cycle": 2,
+  "cycle": 3,
   "branch": "claude/m0.1-standard-tools",
-  "base": "6c437a5 (M0.1 cycle 1 critic report)",
-  "commit": "9583bd64726a6ace399907d80441a9410dd52b83",
+  "base": "88f8862 (M0.1 cycle 2 critic report)",
+  "commit": "91e6e091c243831b513a589939fc1d76eb05e4c1",
   "commit_note": "Tested code commit. This report is added by the next commit on the same branch; that commit changes only reports/.",
-  "run_at": "2026-11-20T21:30:00Z",
-  "author": "Claude Code (executor, M0.1 cycle 2)",
-  "addresses": "reports/critic/M0.1-cycle-1.json required_improvements + minors; owner decision 2026-11-21: AC-M0.1-02 allows the one-line forbidden-filename check (plan claude/admiring-planck-vzys0x@760903a)",
+  "run_at": "2026-11-21T09:01:00Z",
+  "author": "Claude Code (executor, M0.1 cycle 3)",
+  "addresses": "reports/critic/M0.1-cycle-2.json required_improvements (major: -m untested; minor: grep error fail-closed; minor: no per-test network opt-out)",
   "environment": {
     "local": {
       "os": "linux x86_64",
@@ -20,14 +20,14 @@
       "runner": "ubuntu-latest",
       "python": "3.12",
       "workflow": ".github/workflows/ci.yml",
-      "run_id": 44820402301,
-      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44820402301",
-      "run_commit": "9583bd64726a6ace399907d80441a9410dd52b83",
+      "run_id": 44887393111,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44887393111",
+      "run_commit": "91e6e091c243831b513a589939fc1d76eb05e4c1",
       "run_conclusion": "success (all 7 jobs: lint, types, tests, schema-guard, secrets, mutmut, ci-ok)",
       "durations": {
-        "wall_time_seconds": "76 (cycle 1: 130)",
-        "secrets_fixture_step_seconds": "35 (cycle 1: 105)",
-        "mutmut_step_seconds": "47"
+        "wall_time_seconds": "100",
+        "secrets_fixture_step_seconds": "45",
+        "mutmut_step_seconds": "80"
       }
     }
   },
@@ -53,17 +53,17 @@
       "id": "AC-M0.1-01",
       "status": "passed",
       "expected": "All AC-M0-04 cases and M0 regressions are caught by gitleaks in CI; every fixture -> red job",
-      "actual": "tests/secrets/test_gitleaks.py: 19 tests, 150 subtests; every fixture is generated at test time (keys from openssl) and run through scripts/ci/gitleaks.sh exactly as the `secrets` job runs it, for both `tree` and `range`. One repo holds every history-free case at its own path, with one tree scan and one range scan, and asserts a gitleaks `File:` line for each case: 24 file names (*.pem/*.key/*.p12/*.pfx/.env*/id_* in any case, new: .envrc, .env-local, .ENV_PROD), 4 generated keys and 23 header placements (as in cycle 1). Empty files: all 24 names as empty files -> red in tree and range via the name check (incl. empty .env and empty server.pem). Key, server.pem and an empty gone/.env added and removed inside the PR, plus a pure rename notes.txt -> KEY.PEM -> tree green, range red with every one named. Kept from cycle 1: zero-SHA range, merge commit, plan quote (passes; 6 variants and 3 other paths fail), clean files incl. .env.example, bad revisions, this repository. Checked that the tests fail without the fixes: name check disabled -> 2 tests red; old .env regex -> .envrc/.env-local/.ENV_PROD subtests red.",
+      "actual": "tests/secrets/test_gitleaks.py: 21 tests, 150 subtests; every fixture is generated at test time (keys from openssl) and run through scripts/ci/gitleaks.sh exactly as the `secrets` job runs it, for both `tree` and `range`. One repo holds every history-free case at its own path, with one tree scan and one range scan, and asserts a gitleaks `File:` line for each case: 24 file names (*.pem/*.key/*.p12/*.pfx/.env*/id_* in any case, new: .envrc, .env-local, .ENV_PROD), 4 generated keys and 23 header placements (as in cycle 1). Empty files: all 24 names as empty files -> red in tree and range via the name check (incl. empty .env and empty server.pem). Key, server.pem and an empty gone/.env added and removed inside the PR, plus a pure rename notes.txt -> KEY.PEM -> tree green, range red with every one named. Kept from cycle 1: zero-SHA range, merge commit, plan quote (passes; 6 variants and 3 other paths fail), clean files incl. .env.example, bad revisions, this repository. Checked that the tests fail without the fixes: name check disabled -> 2 tests red; old .env regex -> .envrc/.env-local/.ENV_PROD subtests red. Cycle 3: an empty .env added only by a merge commit -> range red with 'gitleaks.sh: secret file name: .env' (red with -m removed from the name-check git log: checked by hand, 1 failed); a grep that fails on -P (fake on PATH, exit 2) -> tree and range red on a clean repo (red with the old `|| true`: checked by hand, 1 failed).",
       "evidence": [
-        "CI job `secrets` (run 44820402301)",
-        "local: uv run pytest tests/secrets -> 19 passed, 150 subtests, 40 s (cycle 1: 147 s)"
+        "CI job `secrets` (run 44887393111)",
+        "local: uv run pytest tests/secrets -> 21 passed, 150 subtests, 45 s"
       ]
     },
     {
       "id": "AC-M0.1-02",
       "status": "passed",
       "expected": "scripts/ci/check_secrets.py and its tests deleted; no other hand-made secret scanner",
-      "actual": "check_secrets.py and its test stay deleted; all content matching is gitleaks (.gitleaks.toml, .gitleaks-strict.toml). The only code outside gitleaks is the owner-approved file-name check in scripts/ci/gitleaks.sh: `git ls-tree -r -z --name-only` for the tree and `git log -z --name-only --diff-filter=d -m` for each commit of the range, piped through `grep -zP` with the strict rule's regex. It exists because gitleaks skips empty files, and it reads no content.",
+      "actual": "check_secrets.py and its test stay deleted; all content matching is gitleaks (.gitleaks.toml, .gitleaks-strict.toml). The only code outside gitleaks is the owner-approved file-name check in scripts/ci/gitleaks.sh: `git ls-tree -r -z --name-only` for the tree and `git log -z --name-only --diff-filter=d -m` for each commit of the range, piped through `grep -zP` with the strict rule's regex. It exists because gitleaks skips empty files, and it reads no content. Cycle 3: a grep error (exit 2) now fails the check (`|| [ $? -eq 1 ]`).",
       "evidence": [
         "docs/implementation-plan-v1.md AC-M0.1-02 (owner decision 2026-11-21)",
         "git show --stat 5964ee4"
@@ -74,10 +74,10 @@
       "id": "AC-M0.1-03",
       "status": "passed",
       "expected": "`mutmut run` on the M0 key-condition modules (scripts/ci, conftest.py) by one command; report attached; no surviving non-equivalent mutants",
-      "actual": "scripts/ci/mutmut.sh ([tool.mutmut]: source_paths scripts/ci/, conftest.py; tests via pytest_add_cli_args_test_selection, so mutmut 3.8.1 prints no deprecation warning): 631 mutants, 631 killed. The drop from 669 comes from the network guard leaving conftest.py (pytest-socket). The module-level keyword tables of schema_lock.py, which mutmut does not mutate, are covered by tests/ci/test_schema_lock_cli.py::test_every_subschema_keyword_is_walked: hand check, dropping 'else', 'dependentSchemas' or 'prefixItems' turns it red. Lines with `# pragma: no mutate (<reason>)`: codec spelling, ensure_ascii, help/description text (now incl. --write and --only), terminal colour, subprocess options.",
+      "actual": "scripts/ci/mutmut.sh ([tool.mutmut]: source_paths scripts/ci/, conftest.py; tests via pytest_add_cli_args_test_selection, so mutmut 3.8.1 prints no deprecation warning): 635 mutants, 635 killed (+4 for the new pytest_runtest_call hook). The drop from 669 comes from the network guard leaving conftest.py (pytest-socket). The module-level keyword tables of schema_lock.py, which mutmut does not mutate, are covered by tests/ci/test_schema_lock_cli.py::test_every_subschema_keyword_is_walked: hand check, dropping 'else', 'dependentSchemas' or 'prefixItems' turns it red. Lines with `# pragma: no mutate (<reason>)`: codec spelling, ensure_ascii, help/description text (now incl. --write and --only), terminal colour, subprocess options.",
       "evidence": [
-        "CI job `mutmut` (run 44820402301)",
-        "reports/mutmut/M0.1.txt (631 lines, all killed)"
+        "CI job `mutmut` (run 44887393111)",
+        "reports/mutmut/M0.1.txt (635 lines, all killed)"
       ]
     },
     {
@@ -88,25 +88,25 @@
       "evidence": [
         "reports/plans/M0.1-cycle-1.md",
         "reports/critic/M0.1-cycle-1.json AC-M0.1-04",
-        "CI job `schema-guard` (run 44820402301)"
+        "CI job `schema-guard` (run 44887393111)"
       ]
     },
     {
       "id": "AC-M0-01",
       "status": "passed",
       "expected": "uv sync && uv run pytest is green without network beyond the package registry",
-      "actual": "Network is blocked by pinned pytest-socket 0.8.1 (`--disable-socket --allow-unix-socket` in addopts); the conftest guard is deleted. tests/ci/test_pytest_policy.py: TCP connect, connect_ex, UDP sendto to 192.0.2.1:9, IPv6 sendto to 2001:db8::1 and create_connection all raise SocketBlockedError; with --force-enable-socket all 5 fail. A Unix socket still reaches the OS. uv run pytest -> 103 passed, 136 subtests, 0 skipped.",
+      "actual": "Network is blocked by pinned pytest-socket 0.8.1 (`--disable-socket --allow-unix-socket` in addopts); the conftest guard is deleted. tests/ci/test_pytest_policy.py: TCP connect, connect_ex, UDP sendto to 192.0.2.1:9, IPv6 sendto to 2001:db8::1 and create_connection all raise SocketBlockedError; with --force-enable-socket all 5 fail. A Unix socket still reaches the OS. uv run pytest -> 106 passed, 136 subtests, 0 skipped. Cycle 3: no per-test opt-out: conftest.py pytest_runtest_call re-applies pytest-socket's disable_socket after all fixtures; tests/ci/test_pytest_policy.py::test_no_per_test_network_opt_out: UDP sendto to 192.0.2.1:9 raises SocketBlockedError with @pytest.mark.enable_socket, the socket_enabled fixture and @pytest.mark.allow_hosts (without the hook the marker and fixture cases fail; allow_hosts already blocked UDP, kept as a guard).",
       "evidence": [
-        "CI job `tests` (run 44820402301)"
+        "CI job `tests` (run 44887393111)"
       ]
     },
     {
       "id": "AC-M0-04",
       "status": "passed",
       "expected": "CI rejects a commit with a file matching the secret patterns (*.pem, .env, the private key header)",
-      "actual": "See AC-M0.1-01. Empty .env and empty server.pem are now red in both tree and range (cycle 1: green).",
+      "actual": "See AC-M0.1-01. Empty .env/server.pem red in tree and range, also when the empty .env comes only from a merge commit.",
       "evidence": [
-        "CI job `secrets` (run 44820402301)"
+        "CI job `secrets` (run 44887393111)"
       ]
     }
   ],
@@ -129,26 +129,26 @@
     {
       "id": "DoD-4",
       "status": "passed",
-      "note": "mutmut on scripts/ci and conftest.py: 631/631 killed; keyword tables covered by an explicit test. Schema mutations: prove_schema_guard.py 59/59."
+      "note": "mutmut on scripts/ci and conftest.py: 635/635 killed; keyword tables covered by an explicit test. Schema mutations: prove_schema_guard.py 59/59."
     },
     {
       "id": "DoD-5",
       "status": "passed",
-      "note": "No skip/xfail; the conftest.py policy is unchanged."
+      "note": "No skip/xfail; and no per-test network opt-out (enable_socket / allow_hosts markers, socket_enabled fixture)."
     },
     {
       "id": "DoD-6",
       "status": "passed",
-      "note": "reports/plans/M0.1-cycle-2.md: the name check (owner decision), the .env* rule, pytest-socket instead of the own network guard, batched fixtures, mutmut config."
+      "note": "reports/plans/M0.1-cycle-3.md: no new component; pytest-socket has no switch to turn its opt-outs off, so one hook re-applies its own disable_socket."
     }
   ],
   "tests": [
     {
-      "id": "tests/secrets/test_gitleaks.py (19 tests, 150 subtests; `secrets` job)",
+      "id": "tests/secrets/test_gitleaks.py (21 tests, 150 subtests; `secrets` job)",
       "status": "passed"
     },
     {
-      "id": "tests/ci/test_pytest_policy.py (29 tests)",
+      "id": "tests/ci/test_pytest_policy.py (32 tests)",
       "status": "passed"
     },
     {
@@ -162,7 +162,7 @@
     {
       "id": "uv run pytest (default run)",
       "status": "passed",
-      "note": "103 passed, 136 subtests passed, 0 skipped"
+      "note": "106 passed, 136 subtests passed, 0 skipped"
     },
     {
       "id": "ruff check / format --check; mypy --strict incl. tests/secrets",
@@ -180,7 +180,7 @@
     {
       "id": "scripts/ci/mutmut.sh",
       "status": "passed",
-      "note": "631/631 killed"
+      "note": "635/635 killed"
     }
   ],
   "known_limitations": [
@@ -192,16 +192,17 @@
     "gitleaks.sh downloads linux x64 only; elsewhere set GITLEAKS to a local 8.30.1 binary (version checked).",
     "mutmut cannot follow subprocesses; the subprocess tests are marked e2e and deselected under mutmut, and the logic they drive is tested in-process.",
     "`# pragma: no mutate` on the three ensure_ascii lines also hides the non-equivalent False->True mutant; tests/ci/test_schema_lock_cli.py pins non-ASCII hashing and rendering, so that mutant would be killed.",
-    "`.env[^/]*` also matches names such as .envoy.yaml; this is the `.env*` the milestone asks for."
+    "`.env[^/]*` also matches names such as .envoy.yaml; this is the `.env*` the milestone asks for.",
+    "The no-opt-out hook runs at pytest_runtest_call: code in fixture setup/teardown of a test with socket_enabled can still open sockets (fixtures need no network in this repo); --force-enable-socket on the command line is also overridden for the test body."
   ],
   "mutmut": {
     "command": "scripts/ci/mutmut.sh",
     "report": "reports/mutmut/M0.1.txt",
-    "mutants": 631,
-    "killed": 631,
+    "mutants": 635,
+    "killed": 635,
     "survived": 0,
     "ci_frequency": "every push and PR (job `mutmut`, required via ci-ok)"
   },
-  "plan": "reports/plans/M0.1-cycle-2.md",
+  "plan": "reports/plans/M0.1-cycle-3.md",
   "plan_source": "docs/implementation-plan-v1.md from claude/admiring-planck-vzys0x@760903a, unchanged"
 }
