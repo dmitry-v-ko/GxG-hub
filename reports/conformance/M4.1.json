@@ -3,7 +3,7 @@
  "cycle": 3,
  "branch": "claude/m4.1-gateway-comparison",
  "base": "cycle 2 @ 190786d (critic 8.0)",
- "commit": "(set by the next commit)",
+ "commit": "185162e9c7194e8b25d2d85d6a244d31b4e24599",
  "commit_note": "Tested commit; this report's commit field is set by the next commit, which changes only reports/.",
  "run_at": "2026-11-21T15:00:00Z",
  "author": "Claude Code (executor, M4.1 cycle 3)",
