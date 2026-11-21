@@ -166,16 +166,14 @@ def test_manifest_tool_changes() -> None:
     # Cycle 3 finding 2: the bundle takes effect_class/action/executes_via from manifests (AS-26).
     r = _case(HERE / "diff/10-manifest-tools")
     assert {(e["tool"], e["change"]) for e in r["widening"]} == {
-        ("demo.wire.propose", "effect_class_lowered"),
-        ("demo.message.propose", "effect_class_lowered"),
+        ("demo.wire.propose", "effect_class_changed"),
+        ("demo.message.propose", "effect_class_changed"),
         ("demo.message.propose", "executes_via_changed"),
+        ("demo.notes.search", "effect_class_changed"),
         ("demo.notes.search", "action_changed"),
         ("demo.board.delete", "added"),
     }
-    assert {(e["tool"], e["change"]) for e in r["narrowing"]} == {
-        ("demo.notes.search", "effect_class_raised"),
-        ("demo.note.get", "removed"),
-    }
+    assert {(e["tool"], e["change"]) for e in r["narrowing"]} == {("demo.note.get", "removed")}
     # Without connector dirs manifests are not compared; same policies -> empty report.
     case = HERE / "diff/10-manifest-tools"
     assert diff(case / "base", case / "head") == {"widening": [], "narrowing": []}
@@ -203,3 +201,45 @@ def test_invalid_manifest_is_an_input_error(tmp_path: Path) -> None:
     cmd = [sys.executable, "-m", "gxg_policy.cli", "diff", str(case / "base"), str(case / "head")]
     r = subprocess.run([*cmd, "--head-connectors", str(conns)], capture_output=True, text=True, check=False)
     assert r.returncode == 2 and "invalid policies" in r.stderr
+
+
+def test_raised_effect_class_under_a_class_matched_deny_is_widening(tmp_path: Path) -> None:
+    # Cycle 4 finding 2: a deny matching effect_classes: [external_effect] stops matching once the class is raised.
+    case = HERE / "diff/10-manifest-tools"
+    pols, head = tmp_path / "p", tmp_path / "c"
+    shutil.copytree(case / "base", pols)
+    (pols / "approval/t-alpha.yaml").write_text(
+        "tenant: t-alpha\nschema_version: 1\nrules:\n"
+        "  - id: no-ext\n    match:\n      effect_classes: [external_effect]\n    decision: deny\n"
+    )
+    shutil.copytree(case / "base-connectors", head)
+    m = head / "demo/gxg-manifest.yaml"
+    m.write_text(m.read_text().replace("    effect_class: external_effect\n", "    effect_class: high_risk\n"))
+    r = diff(pols, pols, case / "base-connectors", head)
+    assert r == {
+        "widening": [
+            {"tenant": None, "kind": "tool", "connector": "demo", "tool": "demo.message.propose",
+             "change": "effect_class_changed", "base": "external_effect", "head": "high_risk"},
+        ],
+        "narrowing": [],
+    }  # fmt: skip
+
+
+def test_duplicate_tool_inside_one_manifest_fails_the_diff(tmp_path: Path) -> None:
+    # Cycle 4 finding 1: last entry won, so a lower-class copy of a tool passed the gate.
+    case = HERE / "diff/10-manifest-tools"
+    head = tmp_path / "c"
+    shutil.copytree(case / "base-connectors", head)
+    m = head / "demo/gxg-manifest.yaml"
+    m.write_text(m.read_text().replace(
+        "tools:\n",
+        "tools:\n  - name: demo.message.propose\n    version: 2.0.0\n    effect_class: write_reversible\n"
+        "    action: propose\n    resource: { type: board, scope: single }\n"
+        "    executes_via: demo.message.execute\n    input_schema: schemas/x.json\n",
+        1,
+    ))  # fmt: skip
+    with pytest.raises(PolicyError, match=r"tools\[2\]\.name: \[duplicate-tool\]"):
+        diff(case / "base", case / "base", case / "base-connectors", head)
+    cmd = [sys.executable, "-m", "gxg_policy.cli", "diff", str(case / "base"), str(case / "base")]
+    r = subprocess.run([*cmd, "--head-connectors", str(head)], capture_output=True, text=True, check=False)
+    assert r.returncode == 2 and "[duplicate-tool]" in r.stderr

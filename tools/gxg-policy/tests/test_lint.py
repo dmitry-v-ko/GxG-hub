@@ -303,7 +303,23 @@ def test_same_tool_name_in_two_manifests_is_an_error(tmp_path: Path) -> None:
         (str(other), "tools[0].name", "duplicate-tool"),
         (str(other), "tools[1].name", "duplicate-tool"),
     ]
-    assert pol.errors[0].message == "tool 'demo.wire.propose' is in another manifest"
+    assert pol.errors[0].message == "tool 'demo.wire.propose' is declared twice"
     assert list(pol.manifests) == ["demo"]
     r = cli("lint", str(GOOD / "policies"), "--manifest", str(GOOD / "manifest.yaml"), "--manifest", str(other))
+    assert r.returncode == 1 and "[duplicate-tool]" in r.stderr
+
+
+def test_same_tool_name_twice_in_one_manifest_is_an_error(tmp_path: Path) -> None:
+    # Cycle 4 finding 1: names inside one manifest are unique too.
+    doc = parse_yaml((GOOD / "manifest.yaml").read_text())
+    doc["tools"].append({**doc["tools"][0], "version": "2.0.0", "effect_class": "external_effect"})
+    m = tmp_path / "m.yaml"
+    m.write_text(yaml.safe_dump(doc, allow_unicode=True))
+    pol = lint(GOOD / "policies", [m], NOW)
+    n = len(doc["tools"]) - 1
+    assert [str(f) for f in pol.errors] == [
+        f"{m}: tools[{n}].name: [duplicate-tool] tool {doc['tools'][0]['name']!r} is declared twice"
+    ]
+    assert pol.manifests == {}
+    r = cli("lint", str(GOOD / "policies"), "--manifest", str(m))
     assert r.returncode == 1 and "[duplicate-tool]" in r.stderr

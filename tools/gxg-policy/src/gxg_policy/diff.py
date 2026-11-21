@@ -19,7 +19,6 @@ Groups = dict[str, list[str]]
 STRICTNESS = {"auto_approve": 0, "require_approval": 1, "deny": 2}
 QUOTA_DEFAULTS = {"propose_per_requester_per_hour": 30, "pending_per_requester_max": 20, "pending_per_tenant_max": 100}
 INF = float("inf")
-EFFECT_ORDER = {"read": 0, "write_reversible": 1, "external_effect": 2, "high_risk": 3}  # AP-01
 
 
 class PolicyError(Exception):
@@ -218,11 +217,8 @@ class _Diff:
                 self.add(False, **e, change="removed")
             else:
                 bc, hc = b[key]["effect_class"], h[key]["effect_class"]
-                if bc != hc:
-                    wider = EFFECT_ORDER[hc] < EFFECT_ORDER[bc]
-                    self.add(
-                        wider, **e, change="effect_class_lowered" if wider else "effect_class_raised", base=bc, head=hc
-                    )
+                if bc != hc:  # either way: rules may match by effect_classes, so a raise can drop a deny or quorum
+                    self.add(True, **e, change="effect_class_changed", base=bc, head=hc)
                 for f in ("action", "executes_via"):
                     if b[key].get(f) != h[key].get(f):
                         self.add(True, **e, change=f"{f}_changed", base=b[key].get(f), head=h[key].get(f))

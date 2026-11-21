@@ -13,6 +13,15 @@
       "tenant": null,
       "kind": "tool",
       "connector": "demo",
+      "tool": "demo.wire.propose",
+      "change": "effect_class_changed",
+      "base": "external_effect",
+      "head": "high_risk"
+    },
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
       "tool": "demo.notes.search",
       "change": "action_changed",
       "base": "write",
@@ -22,8 +31,17 @@
       "tenant": null,
       "kind": "tool",
       "connector": "demo",
+      "tool": "demo.message.propose",
+      "change": "effect_class_changed",
+      "base": "write_reversible",
+      "head": "external_effect"
+    },
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
       "tool": "demo.notes.search",
-      "change": "effect_class_lowered",
+      "change": "effect_class_changed",
       "base": "write_reversible",
       "head": "read"
     },
@@ -37,24 +55,6 @@
     }
   ],
   "narrowing": [
-    {
-      "tenant": null,
-      "kind": "tool",
-      "connector": "demo",
-      "tool": "demo.wire.propose",
-      "change": "effect_class_raised",
-      "base": "external_effect",
-      "head": "high_risk"
-    },
-    {
-      "tenant": null,
-      "kind": "tool",
-      "connector": "demo",
-      "tool": "demo.message.propose",
-      "change": "effect_class_raised",
-      "base": "write_reversible",
-      "head": "external_effect"
-    },
     {
       "tenant": null,
       "kind": "tool",
