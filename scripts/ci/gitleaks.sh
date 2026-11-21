@@ -7,7 +7,7 @@
 # Two configs, both must pass: .gitleaks.toml (gitleaks defaults) and .gitleaks-strict.toml
 # (AC-M0-04 rules without the default path allowlist). Historical findings: .gitleaksignore.
 # All three come from this repository's root, not from the scanned repository. Exit code: 0 clean, non-zero findings or error.
-# Plus one check of file names outside gitleaks, because gitleaks skips empty files (pending owner decision on AC-M0.1-02, M0.1 cycle 2).
+# Plus one check of file names outside gitleaks, because gitleaks skips empty files (owner decision 2026-11-21, AC-M0.1-02).
 # GITLEAKS=/path/to/gitleaks uses that binary instead of downloading (it must be $VERSION).
 set -euo pipefail
 
@@ -36,7 +36,7 @@ GL="${GITLEAKS:-$(install_gitleaks)}"
 # --redact: never print the secret; --ignore-gitleaks-allow: an inline "gitleaks:allow" must not hide a finding.
 COMMON=(--no-banner --no-color --redact --ignore-gitleaks-allow -v --exit-code 1 --gitleaks-ignore-path "$IGNORE")
 ZERO=0000000000000000000000000000000000000000
-# The file-name rule of .gitleaks-strict.toml, for empty files: gitleaks skips them (pending owner decision on AC-M0.1-02, M0.1 cycle 2).
+# The file-name rule of .gitleaks-strict.toml, for empty files: gitleaks skips them (owner decision 2026-11-21, AC-M0.1-02).
 NAMES='(?i)(?:^|/)(?!(?-i)\.env\.example$)(?:[^/]*\.(?:pem|key|p12|pfx)|\.env[^/]*|id_(?:rsa|dsa|ecdsa|ed25519))$'
 
 names() {
