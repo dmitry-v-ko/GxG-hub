@@ -1,0 +1,208 @@
+{
+  "milestone": "M3",
+  "cycle": 1,
+  "branch": "claude/m3-demo-read",
+  "base": "origin/claude/integration@6a75c62 + specs/plan from claude/admiring-planck-vzys0x (commit ed06707, no edits)",
+  "commit": "469030961cb02fbf152808d34a4c912027825829",
+  "commit_note": "Tested code commit. This report is committed on top of it and changes only reports/.",
+  "run_at": "2026-11-21T12:39:00Z",
+  "author": "Claude Code (executor, M3 cycle 1)",
+  "environment": {
+    "local": {
+      "os": "linux x86_64",
+      "python": "3.13.18 (connector image: 3.12)",
+      "uv": "0.11.32",
+      "docker": "29.10.0",
+      "commands": [
+        "root: uv run pytest -> 722 passed",
+        "connectors/demo: uv run pytest -> 50 passed",
+        "scripts/ci/mutmut.sh -> OK",
+        "connectors/demo/docker_smoke.sh -> OK"
+      ]
+    },
+    "ci": {
+      "runner": "ubuntu-latest",
+      "python": "3.12",
+      "workflow": ".github/workflows/ci.yml",
+      "run_id": 44903221571,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44903221571",
+      "jobs": {
+        "lint": "success",
+        "types": "success",
+        "tests": "success",
+        "schema-guard": "success",
+        "secrets": "success",
+        "mutmut": "success",
+        "policy": "success",
+        "demo-image": "success",
+        "grants-widening": "failure",
+        "ci-ok": "failure"
+      },
+      "note": "grants-widening is red by M2 design: '229 widening change(s) outside a pull request' (push to a branch, no PR; new connector manifest, gate files and lockfiles count as widening). ci-ok is red only because it needs grants-widening; every other job is green. Not a milestone defect: on a PR it needs the owner's widening-approved label (AC-M2-04)."
+    }
+  },
+  "contextforge_image_digest": null,
+  "sdk_versions": {
+    "fastmcp": "4.1.8",
+    "mcp": "2.3.0",
+    "note": "FastMCP 4.1.8 pinned in connectors/demo/pyproject.toml and uv.lock; mcp (official SDK) is its dependency and the test client"
+  },
+  "library_versions": {
+    "pyjwt": "2.15.1",
+    "cryptography": "46.0.7",
+    "jsonschema": "4.26.0",
+    "starlette": "1.10.0",
+    "uvicorn": "0.54.0",
+    "httpx2": "2.16.2",
+    "pytest": "9.2.0",
+    "mutmut": "3.8.1"
+  },
+  "images": {
+    "base": "python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b",
+    "uv": "ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c"
+  },
+  "policy_version": null,
+  "bundle_version": "tests: '0'*40, smoke: git HEAD; both built by gxg-policy build from connectors/demo/fixtures/grants/ + policies/platform/registry.example.yaml with a key generated at run time",
+  "fixture_identity": "synthetic: kit StubIssuer (GXG_PROFILE=test), principals agent:t-alpha:{reader,actor,nobody}, agent:t-beta:reader",
+  "acceptance": [
+    {
+      "id": "AC-M3-01",
+      "status": "passed",
+      "expected": "docker build + docker run: /readyz 200 with a valid bundle, 503 without",
+      "actual": "Image built from the repo root (docker build -f connectors/demo/Dockerfile .), kit via path source. docker_smoke.sh: bundle built by gxg-policy build from fixtures/grants/ with a throw-away key -> /readyz 200 {\"status\":\"ready\"}; no bundle -> 503; bundle under another key -> 503. In-process: missing / flipped byte / foreign key -> 503 without reasons in the body; reload on file change; a broken update keeps the previous bundle",
+      "tests": [
+        "connectors/demo/docker_smoke.sh (CI job demo-image)",
+        "connectors/demo/tests/test_demo.py::test_readyz_ready_with_bundle_and_healthz",
+        "connectors/demo/tests/test_demo.py::test_readyz_503_without_valid_bundle[*] (3)",
+        "connectors/demo/tests/test_demo.py::test_bundle_is_reloaded_when_its_files_change"
+      ]
+    },
+    {
+      "id": "AC-M3-02",
+      "status": "passed",
+      "expected": "Official MCP SDK client lists 3 tools (no propose); input/output schemas equal the files",
+      "actual": "mcp 2.3.0 ClientSession over Streamable HTTP (httpx2 ASGITransport): exactly demo.boards.list, demo.notes.search, demo.note.get; inputSchema/outputSchema equal the files named in gxg-manifest.yaml (search output = schemas/search-result.schema.json); results validate against them; errors validate against error.schema.json and are duplicated in content (MCC-04/05); tool timeouts equal manifest limits",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_three_tools_with_the_schema_files",
+        "connectors/demo/tests/test_demo.py::test_results_match_the_output_schemas"
+      ]
+    },
+    {
+      "id": "AC-M3-03",
+      "status": "passed",
+      "expected": "boards.list: t-alpha:reader = a-public, a-sales; t-alpha:nobody = []; t-beta:reader = b-public, b-ops",
+      "actual": "Exactly as expected (plus t-alpha:actor = a-public); nobody does not reach the backend (allowed() empty); unknown tenant -> []",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_boards_list_only_allowed[*] (4)",
+        "connectors/demo/tests/test_demo.py::test_nobody_does_not_reach_the_backend",
+        "connectors/demo/tests/test_demo.py::test_unknown_tenant_sees_nothing"
+      ]
+    },
+    {
+      "id": "AC-M3-04",
+      "status": "passed",
+      "expected": "search over all 5 boards: t-alpha:reader sees only a-public/a-sales; items, next_cursor, partial_reasons unchanged after adding matching notes to a-secret",
+      "actual": "Every page (limit 7, cursor chain) only a-public/a-sales, all matching notes, no overlaps; after adding matching notes to a-secret all pages are identical. GR-17: a-secret, a mixed list, another tenant's board and a non-existent board give the same not_found. GR-16: a backend that returns extra notes leaks nothing (check() per item). Tenants do not mix (same injection text in both)",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_search_only_allowed_boards_and_unchanged_by_hidden_matches",
+        "connectors/demo/tests/test_demo.py::test_search_board_ids_narrow_and_hidden_board_is_not_found",
+        "connectors/demo/tests/test_demo.py::test_every_search_item_is_checked_again",
+        "connectors/demo/tests/test_demo.py::test_search_does_not_mix_tenants",
+        "connectors/demo/tests/test_demo.py::test_search_result_shape",
+        "connectors/demo/tests/test_demo.py::test_last_page_has_no_cursor",
+        "connectors/demo/tests/test_demo.py::test_cursor_is_bound_to_caller_and_query",
+        "connectors/demo/tests/test_demo.py::test_search_input_is_validated[*] (9)"
+      ]
+    },
+    {
+      "id": "AC-M3-05",
+      "status": "passed",
+      "expected": "note.get of an a-secret note and of a t-beta note by t-alpha:reader -> not_found, byte-identical to a non-existent note",
+      "actual": "Three replies serialized byte-identical: {code: not_found, message: 'not found', retryable: false}; the board comes from the backend, a board_id argument is ignored; actor gets not_found for an existing a-sales note",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_note_get_hidden_and_missing_are_identical",
+        "connectors/demo/tests/test_demo.py::test_note_get_board_comes_from_backend"
+      ]
+    },
+    {
+      "id": "AC-M3-06",
+      "status": "passed",
+      "expected": "tenant_id/agent_id in arguments, X-Tenant-Id/X-Forwarded-User headers, _meta do not change the result",
+      "actual": "For all three tools (incl. a cross-tenant note.get) the full CallToolResult with spoofed arguments, headers and _meta equals the plain one. Extra arguments are ignored (input schemas allow them), identity comes only from the verified header",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_identity_in_arguments_headers_or_meta_changes_nothing"
+      ]
+    },
+    {
+      "id": "AC-M3-07",
+      "status": "passed",
+      "expected": "no identity, foreign issuer, expired or replayed -> unauthenticated, backend counter = 0",
+      "actual": "Also other audience, principal outside its tenant and a malformed token; every tool returns {code: unauthenticated, message: 'token rejected', retryable: false}; sum of backend calls = 0. Production profile (no verifier yet) refuses every call",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_bad_identity_is_refused_before_the_backend",
+        "connectors/demo/tests/test_demo.py::test_production_profile_without_verifier_refuses_every_call"
+      ]
+    },
+    {
+      "id": "AC-M3-08",
+      "status": "passed",
+      "expected": "POST /_test/index/fail -> result via scan (partial_reasons empty, method marker in logs); valid empty index result -> scan counter 0",
+      "actual": "Both temporarily_unavailable and timeout_before_start: scan result equals the index result, partial_reasons [], audit line method=scan, index=1/scan=1; repair -> method=index, scan 0. Empty result: index only, scan 0. Other index errors (internal_error) do not fall back. Scan out of time -> partial_reasons [source_timeout], complete false. Scan delay 2 s by default",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_index_failure_falls_back_to_scan",
+        "connectors/demo/tests/test_demo.py::test_valid_empty_result_does_not_scan",
+        "connectors/demo/tests/test_demo.py::test_other_index_errors_do_not_scan",
+        "connectors/demo/tests/test_demo.py::test_scan_out_of_time_is_partial",
+        "connectors/demo/tests/test_demo.py::test_scan_has_the_artificial_delay",
+        "connectors/demo/tests/test_demo.py::test_backend_calls_are_counted"
+      ]
+    },
+    {
+      "id": "AC-M3-09",
+      "status": "passed",
+      "expected": "after 100 calls of all tools no DEMO_PROVIDER_TOKEN or its value in logs and responses, no note texts in logs",
+      "actual": "100 calls (3 tools, 3 principals, ok and not_found) with DEMO_PROVIDER_TOKEN=demo-secret-<random> in the process env; every logger at INFO captured: neither the name nor the value appear; no note bodies/titles, queries or JWTs in logs; 100 audit lines with request_id, tenant, principal, tool, grant_id, outcome, duration_ms",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_no_secret_or_note_text_in_logs_and_responses",
+        "connectors/demo/tests/test_demo.py::test_audit_line_per_call",
+        "connectors/demo/tests/test_demo.py::test_duration_is_in_milliseconds"
+      ]
+    },
+    {
+      "id": "AC-M3-10",
+      "status": "passed",
+      "expected": "search for the prompt-injection note returns it as data; no records in fake provider and Approval Service journals",
+      "actual": "The note is returned as an excerpt; backend calls are reads only (boards, index); no propose tool exists. In M3 the fake provider and Approval Service do not exist (stage C), so their journals are empty by construction; root pytest run forbids every TCP socket, so no outbound call is possible",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_prompt_injection_is_data"
+      ]
+    },
+    {
+      "id": "AC-M3-11",
+      "status": "passed",
+      "expected": "production profile with the test issuer or DEMO_TEST_CONTROLS=1 does not start (exit != 0)",
+      "actual": "python -m demo_connector exits 2 (startup_refused) for DEMO_TEST_ISSUER_KEY or DEMO_TEST_CONTROLS=1 with GXG_PROFILE unset/production/prod; the production image exits 2 likewise and has no testctl module",
+      "tests": [
+        "connectors/demo/tests/test_demo.py::test_production_profile_with_test_switches_does_not_start[*] (4)",
+        "connectors/demo/tests/test_demo.py::test_test_profile_allows_the_switches",
+        "connectors/demo/docker_smoke.sh"
+      ]
+    }
+  ],
+  "dod": {
+    "DoD-1": "Branch pushed; CI green except grants-widening (see environment.ci.note). Merge into main via PR is the owner's step",
+    "DoD-2": "All AC by automated tests (pytest + docker_smoke.sh in CI job demo-image)",
+    "DoD-3": "this file",
+    "DoD-4": "mutmut on connectors/demo tools.py and backend.py: 481 mutants, 479 killed, 2 equivalent (listed with reasons in scripts/ci/mutmut-equivalent.txt); part of scripts/ci/mutmut.sh and CI job mutmut. Report: reports/mutmut/M3.txt",
+    "DoD-5": "no skip/xfail (root conftest policy)",
+    "DoD-6": "reports/plans/M3-cycle-1.md, table DoD-6"
+  },
+  "known_limits": [
+    "Outside GXG_PROFILE=test the connector has no identity verifier: the ContextForge variant-C verifier (ADR-0001) is not in the kit yet, so every tool call is unauthenticated (fail closed). Needed before M5",
+    "AC-M3-10 names journals of the fake provider and Approval Service; neither exists in M3 (stage C)",
+    "DEMO_PROVIDER_TOKEN is not read by the M3 connector (no provider before M8); AC-M3-09 checks that the value in the process environment never leaks",
+    "Spec lists fixtures/grants/t-alpha.yaml; gxg-policy reads a root with tenants/ and platform/, so tests and smoke assemble a temporary root",
+    "Network restriction 'only from ContextForge' (SEC-04) and internal port 8081 are out of M3 scope",
+    "The Dockerfile takes an optional BuildKit secret ca-bundle for a TLS-intercepting proxy (used only in the sandbox build, not in CI)"
+  ]
+}
