@@ -15,7 +15,7 @@ uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/t
 uv run mypy --strict conftest.py tests/ci
 uv run mypy tools/gxg-policy/src tools/gxg-policy/tests connectors/demo/src connectors/demo/tests \
   connectors/telegram/src connectors/telegram/tests tests/contract
-MYPYPATH=stand/tests:stand:gateway/contextforge uv run mypy --exclude mutants stand gateway/contextforge
+MYPYPATH=stand/tests:stand:gateway/contextforge:connectors/telegram/archive uv run mypy --exclude mutants stand gateway/contextforge
 uv run pytest
 uv run python scripts/ci/schema_lock.py
 uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-branch --cov-report=json:coverage-kit.json

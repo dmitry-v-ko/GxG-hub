@@ -12,7 +12,7 @@ uv run python stand/init.py
 docker build -q ${DOCKER_BUILD_FLAGS:-} --build-arg KEEP_TEST_CONTROLS=1 -t gxg-demo:stand \
   -f connectors/demo/Dockerfile . > /dev/null
 # shellcheck disable=SC2086
-docker build -q ${DOCKER_BUILD_FLAGS:-} --build-arg KEEP_TEST_CONTROLS=1 -t gxg-telegram:stand \
+docker build -q ${DOCKER_BUILD_FLAGS:-} -t gxg-telegram:stand \
   -f connectors/telegram/Dockerfile . > /dev/null
 docker compose up -d --wait
 uv run python stand/bootstrap.py

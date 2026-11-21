@@ -65,7 +65,7 @@ jobs:
           connectors/telegram/src connectors/telegram/tests
           tests/contract
       - name: mypy (dev stand and the ContextForge plugin; their own import roots)
-        run: MYPYPATH=stand/tests:stand:gateway/contextforge uv run mypy --exclude mutants stand gateway/contextforge
+        run: MYPYPATH=stand/tests:stand:gateway/contextforge:connectors/telegram/archive uv run mypy --exclude mutants stand gateway/contextforge
 
   tests:
     runs-on: ubuntu-latest
@@ -75,6 +75,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: PostgreSQL 16 with pgvector (connectors/telegram tests, M11)
+        run: sudo apt-get update -q && sudo apt-get install -y -q postgresql-16 postgresql-16-pgvector
       - name: Lockfiles are up to date
         run: |
           uv lock --check
@@ -158,6 +160,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: PostgreSQL 16 with pgvector (connectors/telegram tests, M11)
+        run: sudo apt-get update -q && sudo apt-get install -y -q postgresql-16 postgresql-16-pgvector
       - run: uv sync
       - run: scripts/ci/mutmut.sh
 

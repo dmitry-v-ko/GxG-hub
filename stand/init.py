@@ -6,6 +6,7 @@ Writes (all git-ignored, never commit them):
   stand/secrets/bundle.seed    grants bundle signing seed; public half in .env
   stand/secrets/bundle/        grants bundle of connectors/demo/fixtures/grants, signed (GR-11)
   stand/secrets/plugins.yaml   ContextForge plugins; bootstrap.py fills in the team and gateway ids
+  stand/secrets/archive-seed.sql  synthetic telegram_archive fixtures (M11, connectors/telegram/archive/seed.py)
 Synthetic only: the stand never holds a real credential.
 """
 
@@ -167,11 +168,20 @@ def main() -> None:
             )
             + "\n"
         )
+    added = {"TELEGRAM_ARCHIVE_PASSWORD", "TELEGRAM_ARCHIVE_OWNER_PASSWORD"} - set(env_values())  # M11, older .env
+    with ENV.open("a") as f:
+        f.writelines(f"{k}={secrets.token_urlsafe(24)}\n" for k in sorted(added))
     missing = {"DEMO_IDENTITY_KEYS", "DEMO_BUNDLE_KEYS", "DEMO_PROVIDER_TOKEN"} - set(env_values())
     if missing:
         sys.exit(f".env exists without {sorted(missing)}: move it away and rerun")
     # GR-13: a bundle older than 24 h makes demo not ready; every run re-signs it (CI does it every 6 h, GR-13a)
     build_bundle(seed, SECRETS / "bundle")
+    # M11: synthetic fixtures of the telegram-archive database (read by its init scripts, uid 999)
+    sys.path.insert(0, str(REPO / "connectors" / "telegram" / "archive"))
+    import seed as archive_seed  # noqa: PLC0415 - path of the connector's test data
+
+    (SECRETS / "archive-seed.sql").write_text(archive_seed.seed_sql(), encoding="utf-8")
+    (SECRETS / "archive-seed.sql").chmod(0o644)
     if not (SECRETS / "plugins.yaml").exists():
         (SECRETS / "plugins.yaml").write_text(plugins_yaml({}, {}))
     (SECRETS / "plugins.yaml").chmod(0o644)
