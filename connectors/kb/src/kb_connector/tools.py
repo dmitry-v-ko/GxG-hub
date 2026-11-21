@@ -201,10 +201,15 @@ class Connector:
         return content, {"grant_id": sorted(grant_ids)}
 
     async def documents_get(self, ident: VerifiedIdentity, args: dict[str, Any]) -> Result:
+        connection = self.backend.connections.get(ident.tenant_id)
+        if connection is None:  # no KB for this tenant
+            raise GxgError("not_found", NOT_FOUND)
+        allowed = self.grants.allowed(ident.tenant_id, ident.principal, "read", connection, RTYPE)
+        if not (allowed.all_of_type or allowed.rids):  # no collection granted at all: no KB call
+            raise GxgError("not_found", NOT_FOUND)
         doc = self.backend.get_document(ident.tenant_id, args["document_id"])  # collection from the KB (GR-01)
         if doc is None:
             raise GxgError("not_found", NOT_FOUND)
-        connection = self.backend.connections[ident.tenant_id]
         decision = self.grants.check(ident.tenant_id, ident.principal, "read", rid(connection, doc.collection))
         if not decision.allowed:
             raise GxgError("not_found", NOT_FOUND)

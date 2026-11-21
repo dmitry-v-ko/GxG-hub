@@ -307,8 +307,8 @@ async def test_nobody_does_not_reach_the_kb(kb: Kb) -> None:
     assert (await kb.ok(SEARCH, {"query": "contract"}, principal=ALPHA_NOBODY))["items"] == []
     ctx = await kb.ok(CONTEXT, {"query": "contract"}, principal=ALPHA_NOBODY)
     assert ctx["documents"] == [] and ctx["context"] == ""
-    assert kb.backend.calls.total() == 0
     assert await kb.error(GET, {"document_id": SALES[0]}, principal=ALPHA_NOBODY) == NOT_FOUND
+    assert kb.backend.calls.total() == 0  # no grant on any collection: not even the collection lookup
 
 
 async def test_tenant_without_kb_connection_sees_nothing(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -582,6 +582,7 @@ async def test_no_bundle_get_does_not_reach_the_kb(env: Env) -> None:
 
 async def test_tenant_without_a_kb(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delitem(kb.backend.connections, "t-alpha")
+    assert await kb.error(GET, {"document_id": SALES[0]}) == NOT_FOUND
     assert (await kb.ok(SEARCH, {"query": "contract"}))["items"] == []
     assert await kb.error(SEARCH, {"query": "contract", "collections": ["sales"]}) == NOT_FOUND
     assert (await kb.ok(SEARCH, {"query": "contract", "collections": []}))["items"] == []
