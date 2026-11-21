@@ -12,6 +12,8 @@
 | AC-M2-04: метка `widening-approved`, secret подписи bundle, проверка на реальном PR | AC — manual_pending | ничего |
 | Мерж `claude/integration` в `main` | работаем от `claude/integration` | ничего |
 | Approver для пилота M13 | — | только M13 |
+| M11-1: у Telegram-сервиса gxg_agents_v2 нет сетевого порта для чтения архива (поиск только внутри Mastra; thread.read и collect не реализованы) — нужен HTTP-маршрут в gxg_agents_v2 или TS-коннектор внутри сервиса; это изменение другого репозитория | HTTP `POST /internal/telegram/{search,thread,collect}` со служебным ключом в gxg_agents_v2 (делает владелец/отдельная задача); до этого коннектор только на fake-порту | реальная интеграция M11, M12 |
+| M11-3: RID чата — `chat_ref` сервиса вместо peer ID (пример в resource-grants-v1) | `telegram:<connection>/chat/<chat_ref>`; правка примера в спеке — решение владельца | ничего |
 | M7/EFF-08: идемпотентность в пределах tenant, хеш не покрывает requester — другой агент того же tenant получает чужой intent по ключу или занимает ключ (Signals-ключи предсказуемы) | в коде: `requester_principal` ≠ requester → `conflict` (закрывает a, c) — в M8; для (b) поменять в спеке DDL на UNIQUE (tenant_id, requester_principal, idempotency_key) и EFF-08 — решение владельца | M8 (частично) |
 | Доступ к `dmitry-v-ko/gxg_agents_v2` (код KB и Telegram-сервиса) для M6, M11: у оркестратора `add_repo` отклонён | треды M6/M11 пробуют сами; без доступа — fake по контракту из спек, gap-аудит не выполнен | gap-аудит M6, AC-M11-02/03 на реальном сервисе |
 | Тестовый Telegram-аккаунт и тестовые чаты (AC-M11-01) | локальный сервис с fake-транспортом | прогон на реальном тестовом аккаунте |
@@ -140,3 +142,4 @@
 | M7 | final | независимый критик | claude/m7-approval-core | a843c11 | **9.0** | ≥ 9 — **веха закрыта**; major: затёрты результаты M4 в спеках ветки (missed_earlier, исправлено в ветке оркестратора), идемпотентность между агентами tenant'а (new_scope, вне AC M7 → M8 + вопрос владельцу), окно execution_deadline не под тестом (missed_earlier → backlog) | 2026-11-21 |
 | — | — | оркестратор | claude/admiring-planck-vzys0x | — | — | спеки ветки оркестратора выровнены с результатами M4/M4.1/M5 (ADR-0001 вариант C, SEC-02/03, TEN-01, ADR-0002, Roadmap GO) | 2026-11-21 |
 | — | — | интеграция | claude/integration | — | — | запущен интегратор: M3+M4.1+M5 (claude/m5-readonly-poc) и M7 → integration; затем M8, M9 | 2026-11-21 |
+| M11 | 1 | владелец вехи | claude/m11-telegram-read | 3d590e4 | — | коннектор на fake-порту, стенд, live-тесты через ContextForge; доступ к gxg_agents_v2 получен; 3 вопроса `pending_owner_decision` | 2026-11-21 |
