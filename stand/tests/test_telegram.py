@@ -143,7 +143,7 @@ def test_sc04_bad_identity_is_refused_by_the_connector_before_the_service(stand:
 # AC-M11-01: SC-05, SC-10; AC-M11-03 -------------------------------------------------------------
 
 
-def test_ac_m11_03_unauthorized_chat_is_not_found_and_never_reaches_the_service(stand: Stand) -> None:
+def test_sc05_and_ac_m11_03_unauthorized_chat_is_not_found_and_never_reaches_the_service(stand: Stand) -> None:
     unreadable = {
         "other tenant's chat": REF["b-public"],
         "no grant": REF["a-hidden"],
@@ -213,7 +213,7 @@ def _wait_ready(stand: Stand, timeout_s: float = 90) -> None:
 # AC-M11-01: SC-09; AC-M11-05 --------------------------------------------------------------------
 
 
-def test_ac_m11_05_1000_calls_leave_no_texts_peer_ids_or_sessions_in_logs(stand: Stand) -> None:
+def test_sc09_and_ac_m11_05_1000_calls_leave_no_texts_peer_ids_or_sessions_in_logs(stand: Stand) -> None:
     known = stand.ctl("GET", "/_test/service/secrets", service="telegram")
     plan: list[tuple[str, str, dict[str, Any]]] = [
         (ALPHA_READER, SEARCH, {"query": "status", "limit": 20}),
