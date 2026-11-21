@@ -80,6 +80,8 @@ python -m unittest discover -s tests/contract -p 'test_*.py' -v
 | OPS-03 | F | Backup/restore Approval Service | Состояния intents восстановлены; повторных исполнений нет |
 | OPS-04 | F | Очистка payload через срок; восстановление из бэкапа старше срока хранения | Args и preview удалены; бэкапы старше 35 дней отсутствуют | RET-01…RET-04 |
 | OPS-05 | F | Изменения в `audit_events` от роли приложения | Запрещены правами БД | AS-02 |
+| OPS-06 | F | Сетевая доступность снаружи: запросы к ContextForge, Web UI, admin, коннекторам и базам с адреса вне tailnet; с узла `tag:agent` — к Web UI, admin, коннектору; с устройства approver'а — к ContextForge admin | Нет соединения во всех случаях; `tailscale funnel status` пуст на всех узлах; ACL `tests` зелёные в CI | SEC-13, SEC-26, SEC-27 |
+| OPS-07 | F | Запрос через tailnet без токена агента / OIDC-сессии, с поддельным `Tailscale-User-Login` | 401/403, как вне tailnet | SEC-25 |
 
 ## Фиксация результатов
 

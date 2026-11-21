@@ -152,3 +152,4 @@
 | M11 | 1 | владелец вехи | claude/m11-telegram-read | 2cebc81 | — | conformance: AC-M11-01…05 + backlog M5 (2),(3) через ContextForge, 3 × 46 passed; ждёт критика-субагента | 2026-11-21 |
 | M8 | 1 | владелец вехи | claude/m8-executor | e1a5c64 | — | executor, demo propose/execute/reconcile, fake provider, ротация JWKS, EX-01 на стенде | 2026-11-21 |
 | M9 | 1 | владелец вехи | claude/m9-ui-bot | f0d0308 | — | ui/notifier, E2E Playwright; 5 вопросов `pending_owner_decision` (работа идёт) | 2026-11-21 |
+| — | — | решение владельца | — | — | — | Сеть и доступ через Tailscale: в интернет ничего не открыто, ContextForge/Web UI/admin только из tailnet, ACL в Git с тестами, Funnel запрещён (ADR-0003, SEC-13, SEC-25…27, OPS-06/07); вводится в M14 | 2026-11-21 |

@@ -66,7 +66,7 @@ curl -f http://127.0.0.1:4444/health
 - Образ закреплён по digest (SEC-22, спайк M4); для production версия одобряется после этапа B.
 - Identity propagation и плагины выключены.
 
-Не публикуйте этот стенд в интернет. Требования к production: [Security](docs/specs/security-v1.md).
+Не публикуйте этот стенд в интернет. В production в интернет не открыто ничего: доступ только через tailnet Tailscale ([ADR-0003](docs/adr/0003-network-tailscale.md), SEC-13, SEC-25…27). Требования к production: [Security](docs/specs/security-v1.md).
 
 ## Тесты
 
