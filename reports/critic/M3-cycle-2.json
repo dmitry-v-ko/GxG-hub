@@ -1,0 +1,309 @@
+{
+  "milestone": "M3",
+  "branch": "claude/m3-demo-read",
+  "commit": "f54b9f1d2a1bdf256149ad0d9cb4a697a6eac7f6",
+  "executor_report": "fc8d17d",
+  "cycle": 2,
+  "reviewed_at": "2026-11-21",
+  "score": 6.0,
+  "caps_applied": [
+    "dod",
+    "major"
+  ],
+  "dimensions": {
+    "spec": 2.5,
+    "tests": 1.0,
+    "security": 2.0,
+    "code": 1.0,
+    "ops": 0.5,
+    "evidence": 0.5
+  },
+  "acceptance": [
+    {
+      "id": "AC-M3-01",
+      "status": "passed",
+      "evidence": "docker_smoke.sh on the real image (dockerd by hand, python:3.12-slim pulled via mirror.gcr.io by the same digest): /readyz 200 {\"status\":\"ready\"} with bundle, 503 without, 503 foreign key; in-process test_readyz_* passed"
+    },
+    {
+      "id": "AC-M3-02",
+      "status": "passed",
+      "evidence": "test_three_tools_with_the_schema_files, test_results_match_the_output_schemas passed (official mcp ClientSession); tools now built from gxg-manifest.yaml; live image lists 3 tools"
+    },
+    {
+      "id": "AC-M3-03",
+      "status": "passed",
+      "evidence": "test_boards_list_only_allowed[*] passed; live: reader a-public,a-sales, nobody []"
+    },
+    {
+      "id": "AC-M3-04",
+      "status": "passed",
+      "evidence": "test_search_only_allowed_boards_and_unchanged_by_hidden_matches passed"
+    },
+    {
+      "id": "AC-M3-05",
+      "status": "passed",
+      "evidence": "test_note_get_hidden_and_missing_are_identical passed; without bundle test_no_bundle_refuses_every_call_alike gives one body for secret/public/missing ids (cycle-1 gap closed)"
+    },
+    {
+      "id": "AC-M3-06",
+      "status": "passed",
+      "evidence": "test_identity_in_arguments_headers_or_meta_changes_nothing passed"
+    },
+    {
+      "id": "AC-M3-07",
+      "status": "passed",
+      "evidence": "test_bad_identity_is_refused_before_the_backend passed (backend counter 0)"
+    },
+    {
+      "id": "AC-M3-08",
+      "status": "passed",
+      "evidence": "test_index_failure_falls_back_to_scan, test_valid_empty_result_does_not_scan passed (method marker checked via caplog only; real-process log output untested: finding 1)"
+    },
+    {
+      "id": "AC-M3-09",
+      "status": "passed",
+      "evidence": "test_no_secret_or_note_text_in_logs_and_responses passed; live container: no DEMO_PROVIDER_TOKEN name or value in docker logs or responses"
+    },
+    {
+      "id": "AC-M3-10",
+      "status": "passed",
+      "evidence": "test_prompt_injection_is_data passed; fake provider / Approval Service journals do not exist before stage C (known spec gap)"
+    },
+    {
+      "id": "AC-M3-11",
+      "status": "passed",
+      "evidence": "test_production_profile_with_test_switches_does_not_start[*] passed (main() exit 2, subprocess exit 2); docker_smoke: production image with DEMO_TEST_CONTROLS=1 / DEMO_TEST_ISSUER_KEY exits 2"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "DoD-4, spec demo «Логи и аудит», MCC-08, AC-M3-08",
+      "where": "connectors/demo/src/demo_connector/server.py:156; scripts/ci/mutmut-equivalent.txt (demo_connector.server.x_main__mutmut_1..6)",
+      "problem": "logging.basicConfig(level=logging.INFO, format=\"%(message)s\") is what makes the INFO JSON audit lines reach stdout in the real process. Its 6 mutants (level=None, no level, format=None, no format, XX%(message)sXX, %(MESSAGE)S) survive and are listed as equivalent with the reason 'checked in docker logs by docker_smoke.sh / critic'. False: docker_smoke greps only startup_refused (ERROR level). Critic built level=None into the image: docker_smoke OK, live container wrote 0 log lines for 30 tool calls (15 audit lines per run normally). A non-equivalent survivor in a mutated module passes the CI gate via the list (DoD-4). The basicConfig line itself dates from cycle 1; listing it as equivalent is new in this cycle.",
+      "required_improvement": "Add an automated real-process check that a JSON audit line (keys tool, outcome) is written to stdout: e.g. in docker_smoke.sh make one tools/call (a refused one is enough) and grep docker logs, or a subprocess test of python -m demo_connector. Then drop x_main__mutmut_1..6 from mutmut-equivalent.txt or relabel them 'killed by <check>' with a true reason."
+    },
+    {
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "demo-connector-v1 test controls (only 127.0.0.1), DoD-4",
+      "where": "connectors/demo/src/demo_connector/server.py:165-167; mutmut-equivalent.txt x_main__mutmut_35..45",
+      "problem": "The test-controls server (:8090 on 127.0.0.1) is never started by any test; port 8091 / default 8000, XX127.0.0.1XX, Server(None), test_app(None) survive. Test profile only, absent from the production image, so no production exposure.",
+      "required_improvement": "Factor the uvicorn.Config list into a function and assert [(host, port)] for test and production settings in-process; keep only asyncio.run listed."
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "demo-connector-v1 cursor (signed, bound to principal and query); Lean",
+      "where": "connectors/demo/src/demo_connector/tools.py:160-168",
+      "problem": "The empty-board-set shortcut returns before _offset(): reader with {board_ids: [], cursor: 'garbage'} -> success, with board_ids [a-public] -> invalid_input (reproduced on the live image). The 7-line empty-result literal duplicates what the general path builds from no notes.",
+      "required_improvement": "Validate the cursor first and skip only the backend call: notes, method, timed_out = ([], None, False) if not boards else await self.backend.search(...); remove the literal (-7 lines)."
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "MCC-08 (ops)",
+      "where": "connectors/demo/src/demo_connector/tools.py:89-91",
+      "problem": "except Exception keeps no diagnostic: the audit line has only outcome internal_error, no exception type or traceback anywhere; with a real backend a bug cannot be told from an outage.",
+      "required_improvement": "Add \"error\": type(exc).__name__ to the audit entry (class name, no provider text)."
+    }
+  ],
+  "required_improvements": [
+    "DoD-4 / audit log: an automated check that the real process writes a JSON audit line to stdout (docker_smoke.sh tools/call + grep of docker logs, or a subprocess test), and mutmut-equivalent.txt without the 6 basicConfig mutants listed as equivalent (removed, or relabelled with the check that kills them). With this alone, and no new problems, the score is >= 9; findings 2-4 go to the backlog if not done."
+  ],
+  "ponytail_review": "reports/critic/M3-cycle-2.review.md",
+  "threat_model": [
+    {
+      "path": "SC-03 forged tenant_id/agent_id in arguments, X-Tenant-Id/X-Forwarded-User, _meta",
+      "status": "closed",
+      "evidence": "verifier gets only HTTP headers, reads only x-gxg-test-identity; test_identity_in_arguments_headers_or_meta_changes_nothing compares whole responses"
+    },
+    {
+      "path": "SC-04 no identity, foreign issuer, expired, replayed jti, wrong audience, other tenant's principal, garbage",
+      "status": "closed",
+      "evidence": "test_bad_identity_is_refused_before_the_backend: unauthenticated, backend 0; production uses NoVerifier (fail closed)"
+    },
+    {
+      "path": "SC-04 test issuer / test controls in production",
+      "status": "closed",
+      "evidence": "Settings.from_env refuses outside GXG_PROFILE=test, main() exit 2; kit StubVerifier refuses; docker_smoke: production image exits 2, no testctl module"
+    },
+    {
+      "path": "SC-05 hidden or other tenant's note by exact id, bundle loaded",
+      "status": "closed",
+      "evidence": "test_note_get_hidden_and_missing_are_identical; backend lookup tenant-scoped"
+    },
+    {
+      "path": "SC-05 hidden vs missing note while the bundle is not loaded",
+      "status": "closed",
+      "evidence": "ready() before the handler; test_no_bundle_refuses_every_call_alike; live image: one temporarily_unavailable body for every principal and id"
+    },
+    {
+      "path": "SC-06 direct call bypassing ContextForge",
+      "status": "out_of_scope",
+      "evidence": "network isolation is SEC-04 (M5); at connector level a direct call without valid identity is unauthenticated (SC-04 tests)"
+    },
+    {
+      "path": "SC-08 prompt injection in note text",
+      "status": "closed",
+      "evidence": "test_prompt_injection_is_data: returned as data, no propose tool in M3, backend sees reads only"
+    },
+    {
+      "path": "SC-09 DEMO_PROVIDER_TOKEN, tokens, note texts, queries in responses and logs",
+      "status": "closed",
+      "evidence": "in-process test with every logger at INFO; live container: clean; unexpected exception text masked (test_unexpected_error_is_internal_error_without_its_text)"
+    },
+    {
+      "path": "SC-10 counts of hidden matches, pagination over hidden notes, explicit hidden board",
+      "status": "closed",
+      "evidence": "backend searches readable boards only, check() per item, pages byte-equal after adding a-secret matches; hidden board in board_ids -> not_found"
+    },
+    {
+      "path": "SC-10 / GR-12 invalid or stale bundle -> not ready and refusal",
+      "status": "closed",
+      "evidence": "/readyz 503 (docker_smoke); every call temporarily_unavailable before any handler, backend 0 (test + live)"
+    },
+    {
+      "path": "GR-16 zero-rights caller reaching the backend search",
+      "status": "closed",
+      "evidence": "empty board set returns before backend.search; test asserts sum(calls)==0 with index healthy and failed"
+    },
+    {
+      "path": "Forged cursor accepted when the board set is empty",
+      "status": "open",
+      "evidence": "finding 3 (minor): success instead of invalid_input; no data disclosed"
+    }
+  ],
+  "lean_lines": 7,
+  "existing_solutions": [
+    {
+      "component": "MCP server, transport, health routes",
+      "alternative": "FastMCP 4.1.8 (http_app, custom_route) — used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "DemoTool (Tool subclass with schemas from files)",
+      "alternative": "@mcp.tool / Tool.from_function generate schemas from the signature and cannot equal the files (AC-M3-02); subclassing Tool is FastMCP's extension point",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "tool definitions from gxg-manifest.yaml",
+      "alternative": "PyYAML (installed via FastMCP, now a direct dependency) — used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "load_schema parent walk for ../../schemas",
+      "alternative": "importlib.resources / package data; marked shortcut with upgrade point (template), 3 lines",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "argument validation",
+      "alternative": "jsonschema (installed by the kit) — used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "readiness refusal before handler (GR-12)",
+      "alternative": "kit BundleStore.current via GrantResolver.version — used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "identity verification",
+      "alternative": "kit StubVerifier/StubIssuer — used; production verifier absent in kit (ADR-0001), NoVerifier 3 lines fail-closed",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "TokenError / parse_public_key",
+      "alternative": "now public kit exports — used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "grants, signature, rollback floor, staleness",
+      "alternative": "kit BundleStore — used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "BundleFiles (reload on mtime change)",
+      "alternative": "watchfiles (transitive) needs a background watcher; kit has no file loader; 20 lines",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "unexpected-exception envelope",
+      "alternative": "FastMCP mask_error_details gives masked text but no structuredContent envelope or audit outcome; reason recorded in plan cycle 2",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "cursor signing",
+      "alternative": "PyJWT (transitive), itsdangerous (not installed); stdlib hmac is the lower rung",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "index/scan backend",
+      "alternative": "SQLite FTS, whoosh: spec needs a synthetic two-method backend with failure and delay",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "synthetic data generation",
+      "alternative": "Faker (new dependency); stdlib random.Random(seed)",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "JSON audit logs",
+      "alternative": "python-json-logger/structlog (new deps); stdlib logging + json.dumps(kit redact(...))",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "Settings.from_env",
+      "alternative": "pydantic-settings (transitive); 15 lines with one cross-field rule",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "parse_keys (DEMO_BUNDLE_KEYS)",
+      "alternative": "kit parse_public_key per key — used; kit has no multi-key parser",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "testctl FAILURES",
+      "alternative": "typing.get_args(IndexFailure) — used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "test controls endpoint",
+      "alternative": "Starlette (FastMCP dependency) — used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "docker_smoke.sh",
+      "alternative": "testcontainers (new dependency); bash + docker + curl like M2 bundle_smoke.sh",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "mutation testing",
+      "alternative": "mutmut 3.8.1 — used",
+      "verdict": "use_existing"
+    }
+  ],
+  "mutmut_equivalence_check": {
+    "reproduced": "connectors/demo 749 mutants, 710 killed, 39 survived, 39 listed (scripts/ci/mutmut.sh exit 0)",
+    "equivalent": [
+      "backend._scan__mutmut_7",
+      "tools.DemoTool.run__mutmut_91",
+      "tools.load_schema__mutmut_4",
+      "tools.Connector.tools__mutmut_11",
+      "tools.Connector.tools__mutmut_13",
+      "server.BundleFiles.__init____mutmut_3"
+    ],
+    "not_equivalent_untested": [
+      "server.main__mutmut_1..6 (basicConfig: audit log lost or not JSON; finding 1)",
+      "server.main__mutmut_35..37,39,40,42..45 (test-controls server; finding 2)"
+    ],
+    "not_equivalent_killed_outside_mutmut": "server.main__mutmut_21..25,27..29,31..33,46,47 (:8080 server; docker_smoke in CI job demo-image)",
+    "equivalent_by_library_default": "server.main__mutmut_34 (uvicorn lowercases log_level), 38, 41 (uvicorn default host 127.0.0.1); 26, 30 (log_level None -> uvicorn access log at INFO, no query/body/token: harmless)"
+  },
+  "notes": [
+    "CI run 44908551466 (head 19c6f14, code identical to f54b9f1): all jobs green except grants-widening (red outside a PR by M2 design) and ci-ok (needs it); not a finding.",
+    "Both cycle-1 majors are closed (GR-12 refusal before handler with one body and backend 0; GR-16 empty board set never reaches backend.search), re-checked by test and on the live image.",
+    "Score: dimensions sum 7.5, DoD cap 6 (a listed non-equivalent survivor that no test kills). The fix is about 5 lines; with it the cycle has no major left.",
+    "Critic environment: clean clone, empty UV_CACHE_DIR, Python 3.12.3; Docker Hub returned 429, dockerd restarted with --registry-mirror=https://mirror.gcr.io, image pinned by the same digest."
+  ]
+}
