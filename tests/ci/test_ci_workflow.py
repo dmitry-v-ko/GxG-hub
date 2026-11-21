@@ -66,3 +66,11 @@ def test_grants_widening_checkout_has_history() -> None:
     # merge-base with main needs the full history and refs/remotes/origin/main.
     checkout = WF["jobs"]["grants-widening"]["steps"][0]
     assert checkout["uses"].startswith("actions/checkout@") and checkout["with"]["fetch-depth"] == 0
+
+
+def test_grants_widening_runs_no_pr_code() -> None:
+    # Cycle 3 finding 1: the gate comes from main; no step installs or runs the PR's project.
+    steps = WF["jobs"]["grants-widening"]["steps"]
+    assert [s.get("uses", "").split("@")[0] for s in steps] == ["actions/checkout", "astral-sh/setup-uv", ""]
+    run = steps[2]["run"]
+    assert "uv " not in run and 'git worktree add --detach "$RUNNER_TEMP/gate" refs/remotes/origin/main' in run

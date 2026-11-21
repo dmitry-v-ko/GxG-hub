@@ -154,7 +154,7 @@ jobs:
     # AC-M2-04 / GR-10: red while the policy diff has widening and no code owner added the
     # `widening-approved` label after the head commit. Posts the diff report to the PR.
     # Always diffed against main (merge-base), not against the PR base. Outside a PR (push / dispatch
-    # to a branch other than main) any widening is red.
+    # to a branch other than main) any widening is red. Connector manifests and gate files count too.
     # docs/setup/widening-approval.md
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -169,13 +169,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
-      - run: uv sync
-      - name: Policy diff and approval gate
+      # No `uv sync` of the checkout: no code of the PR runs in this job. The gate, gxg-policy and the
+      # lockfile come from main; changes to them in the PR need the label (scripts/ci/grants_widening.sh).
+      - name: Policy diff and approval gate (code from main)
         env:
           GITHUB_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: bash scripts/ci/grants_widening.sh
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/gate" refs/remotes/origin/main
+          gate="$RUNNER_TEMP/gate/scripts/ci/grants_widening.sh"
+          if [ ! -f "$gate" ]; then
+            # Bootstrap only: main has no gate yet. This PR then adds gate files, so it needs the label anyway.
+            echo "::warning::main has no grants_widening.sh yet: running the PR copy (bootstrap)"
+            gate=scripts/ci/grants_widening.sh
+          fi
+          bash "$gate"
 
   ci-ok:
     # Single required check for branch protection: green only if every job is green.

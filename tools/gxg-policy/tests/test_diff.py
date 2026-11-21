@@ -16,13 +16,20 @@ HERE = Path(__file__).parent
 CASES = sorted(p for p in (HERE / "diff").iterdir() if p.is_dir())
 
 
+def _case(case: Path, reverse: bool = False) -> dict[str, list[dict[str, object]]]:
+    """Diff of a fixture pair; `<side>-connectors/` (when present) holds that side's connector manifests."""
+    sides = ("head", "base") if reverse else ("base", "head")
+    conns = [case / f"{s}-connectors" if (case / f"{s}-connectors").exists() else None for s in sides]
+    return diff(case / sides[0], case / sides[1], *conns)
+
+
 def test_at_least_six_fixture_pairs() -> None:
     assert len(CASES) >= 6
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
 def test_ac_m2_03_report_matches_golden(case: Path) -> None:
-    assert diff(case / "base", case / "head") == json.loads((case / "expected.json").read_text())
+    assert _case(case) == json.loads((case / "expected.json").read_text())
 
 
 def test_ac_m2_03_core_classification() -> None:
@@ -93,7 +100,7 @@ def test_star_means_everyone_in_approvers_and_requesters() -> None:
 @pytest.mark.parametrize("case", [c for c in CASES if (c / "expected-reverse.json").exists()], ids=lambda c: c.name)
 def test_reverse_report_matches_golden(case: Path) -> None:
     # head -> base: every added becomes removed and every widening narrowing, except the fail-closed ones.
-    assert diff(case / "head", case / "base") == json.loads((case / "expected-reverse.json").read_text())
+    assert _case(case, reverse=True) == json.loads((case / "expected-reverse.json").read_text())
 
 
 def test_expanded_does_not_change_the_loaded_rule() -> None:
@@ -153,3 +160,46 @@ def test_tenant_without_groups_and_registry_without_webhooks(tmp_path: Path) -> 
     assert ("approval_rule", "requesters_removed") in {(e["kind"], e["change"]) for e in report["narrowing"]}
     reverse = diff(head, base)
     assert ("webhook", "added") in {(e["kind"], e["change"]) for e in reverse["widening"]}
+
+
+def test_manifest_tool_changes() -> None:
+    # Cycle 3 finding 2: the bundle takes effect_class/action/executes_via from manifests (AS-26).
+    r = _case(HERE / "diff/10-manifest-tools")
+    assert {(e["tool"], e["change"]) for e in r["widening"]} == {
+        ("demo.wire.propose", "effect_class_lowered"),
+        ("demo.message.propose", "effect_class_lowered"),
+        ("demo.message.propose", "executes_via_changed"),
+        ("demo.notes.search", "action_changed"),
+        ("demo.board.delete", "added"),
+    }
+    assert {(e["tool"], e["change"]) for e in r["narrowing"]} == {
+        ("demo.notes.search", "effect_class_raised"),
+        ("demo.note.get", "removed"),
+    }
+    # Without connector dirs manifests are not compared; same policies -> empty report.
+    case = HERE / "diff/10-manifest-tools"
+    assert diff(case / "base", case / "head") == {"widening": [], "narrowing": []}
+
+
+def test_manifest_moved_to_another_connector_is_widening(tmp_path: Path) -> None:
+    case = HERE / "diff/10-manifest-tools"
+    head = tmp_path / "c"
+    shutil.copytree(case / "base-connectors", head)
+    (head / "other").rename(head / "third")
+    m = head / "third/gxg-manifest.yaml"
+    m.write_text(m.read_text().replace("connector: other", "connector: third"))
+    r = diff(case / "base", case / "head", case / "base-connectors", head)
+    assert [(e["connector"], e["change"]) for e in r["widening"]] == [("third", "added")]
+    assert [(e["connector"], e["change"]) for e in r["narrowing"]] == [("other", "removed")]
+
+
+def test_invalid_manifest_is_an_input_error(tmp_path: Path) -> None:
+    conns = tmp_path / "c"
+    (conns / "x").mkdir(parents=True)
+    (conns / "x/gxg-manifest.yaml").write_text("connector: x\n")
+    case = HERE / "diff/10-manifest-tools"
+    with pytest.raises(PolicyError, match=r"gxg-manifest\.yaml"):
+        diff(case / "base", case / "head", case / "base-connectors", conns)
+    cmd = [sys.executable, "-m", "gxg_policy.cli", "diff", str(case / "base"), str(case / "head")]
+    r = subprocess.run([*cmd, "--head-connectors", str(conns)], capture_output=True, text=True, check=False)
+    assert r.returncode == 2 and "invalid policies" in r.stderr

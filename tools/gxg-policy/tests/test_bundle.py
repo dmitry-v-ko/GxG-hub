@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import unicodedata
@@ -327,11 +328,19 @@ def test_build_takes_connector_tools_from_manifests(tmp_path: Path) -> None:
 
 
 def test_build_without_manifest_gives_connectors_empty_tools(tmp_path: Path) -> None:
-    # The repo registry has hand-written tools; with no manifest the bundle carries [] (lint warns).
-    doc = _bundle(REPO / "policies", [], tmp_path)
+    # Hand-written tools in the registry are dropped by build (lint warns); with no manifest the bundle carries [].
+    root = tmp_path / "policies"
+    shutil.copytree(REPO / "policies", root)
+    reg = root / "platform/registry.example.yaml"
+    reg.write_text(reg.read_text().replace(
+        "    internal_url: https://demo.internal:8081\n",
+        "    internal_url: https://demo.internal:8081\n"
+        "    tools:\n      - { name: demo.notes.search, version: 1.0.0, effect_class: read, action: read }\n",
+    ))  # fmt: skip
+    doc = _bundle(root, [], tmp_path / "out")
     connectors = [s for s in doc["platform"]["services"] if s["kind"] == "connector"]  # type: ignore[index]
     assert connectors and all(s["tools"] == [] for s in connectors)
-    warnings = [f for f in lint(REPO / "policies", []).findings if f.code == "ignored-tools"]
+    warnings = [f for f in lint(root, []).findings if f.code == "ignored-tools"]
     assert [(f.file, f.path, f.level) for f in warnings] == [
         ("platform/registry.example.yaml", "services[2].tools", "warning")
     ]

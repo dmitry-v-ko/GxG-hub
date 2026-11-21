@@ -292,3 +292,17 @@ def test_nested_files_belong_to_their_top_directory(tmp_path: Path) -> None:
     shutil.move(root / "tenants/t-alpha.yaml", root / "tenants/sub/t-alpha.yaml")
     pol = load(root)
     assert pol.findings == [] and pol.tenants["t-alpha"][0] == "tenants/sub/t-alpha.yaml"
+
+
+def test_same_tool_name_in_two_manifests_is_an_error(tmp_path: Path) -> None:
+    # Cycle 3 finding 3: AP-02 and AS-26 look a tool up by name; two classes for one name must not pass.
+    other = tmp_path / "other.yaml"
+    other.write_text((GOOD / "manifest.yaml").read_text().replace("connector: demo", "connector: other"))
+    pol = lint(GOOD / "policies", [GOOD / "manifest.yaml", other], NOW)
+    assert [(f.file, f.path, f.code) for f in pol.errors] == [
+        (str(other), "tools[0].name", "duplicate-tool"),
+        (str(other), "tools[1].name", "duplicate-tool"),
+    ]
+    assert list(pol.manifests) == ["demo"]
+    r = cli("lint", str(GOOD / "policies"), "--manifest", str(GOOD / "manifest.yaml"), "--manifest", str(other))
+    assert r.returncode == 1 and "[duplicate-tool]" in r.stderr

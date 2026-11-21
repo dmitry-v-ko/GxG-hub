@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from gxg_policy.lint import SYSTEM_DEFAULTS, expand, seconds
+from gxg_policy.lint import SYSTEM_DEFAULTS, expand, load_manifests, seconds
 from gxg_policy.load import Policies, load, parse_ts
 
 Entry = dict[str, Any]
@@ -19,16 +19,17 @@ Groups = dict[str, list[str]]
 STRICTNESS = {"auto_approve": 0, "require_approval": 1, "deny": 2}
 QUOTA_DEFAULTS = {"propose_per_requester_per_hour": 30, "pending_per_requester_max": 20, "pending_per_tenant_max": 100}
 INF = float("inf")
+EFFECT_ORDER = {"read": 0, "write_reversible": 1, "external_effect": 2, "high_risk": 3}  # AP-01
 
 
 class PolicyError(Exception):
     pass
 
 
-def _load(root: Path) -> Policies:
-    if not root.exists():  # e.g. the base commit has no policies/ yet
-        return Policies()
-    pol = load(root)
+def _load(root: Path, connectors: Path | None = None) -> Policies:
+    pol = load(root) if root.exists() else Policies()  # e.g. the base commit has no policies/ yet
+    if connectors is not None:
+        load_manifests(pol, sorted(connectors.glob("*/gxg-manifest.yaml")))
     if pol.errors:
         raise PolicyError("\n".join(map(str, pol.errors)))
     return pol
@@ -205,13 +206,37 @@ class _Diff:
                         if b[sid].get(f) != h[sid].get(f):
                             self.add(True, **e, change=f"{f}_changed")
 
+    def tools(self, base: dict[str, Any], head: dict[str, Any]) -> None:
+        """Connector manifests (GR-11a, AS-26): the bundle takes effect_class/action/executes_via from them."""
+        b = {(c, t["name"]): t for c, m in base.items() for t in m["tools"]}
+        h = {(c, t["name"]): t for c, m in head.items() for t in m["tools"]}
+        for key in b.keys() | h.keys():
+            e = {"tenant": None, "kind": "tool", "connector": key[0], "tool": key[1]}
+            if key not in b:
+                self.add(True, **e, change="added", effect_class=h[key]["effect_class"])
+            elif key not in h:
+                self.add(False, **e, change="removed")
+            else:
+                bc, hc = b[key]["effect_class"], h[key]["effect_class"]
+                if bc != hc:
+                    wider = EFFECT_ORDER[hc] < EFFECT_ORDER[bc]
+                    self.add(
+                        wider, **e, change="effect_class_lowered" if wider else "effect_class_raised", base=bc, head=hc
+                    )
+                for f in ("action", "executes_via"):
+                    if b[key].get(f) != h[key].get(f):
+                        self.add(True, **e, change=f"{f}_changed", base=b[key].get(f), head=h[key].get(f))
+
 
 def _key(e: Entry) -> str:
     return json.dumps(e, sort_keys=True)
 
 
-def diff(base_root: Path, head_root: Path) -> dict[str, list[Entry]]:
-    base, head = _load(base_root), _load(head_root)
+def diff(
+    base_root: Path, head_root: Path, base_connectors: Path | None = None, head_connectors: Path | None = None
+) -> dict[str, list[Entry]]:
+    """`*_connectors`: directories with `<id>/gxg-manifest.yaml`; None = manifests are not compared."""
+    base, head = _load(base_root, base_connectors), _load(head_root, head_connectors)
     d = _Diff()
     for t in sorted(base.tenants.keys() | head.tenants.keys()):
         d.grants(t, base.tenants.get(t, ("", None))[1], head.tenants.get(t, ("", None))[1])
@@ -219,6 +244,7 @@ def diff(base_root: Path, head_root: Path) -> dict[str, list[Entry]]:
         bg, hg = ((p.tenants.get(t, ("", None))[1] or {}).get("groups", {}) for p in (base, head))
         d.approval(t, base.approval.get(t, ("", None))[1], head.approval.get(t, ("", None))[1], (bg, hg))
     d.platform(base.platform and base.platform[1], head.platform and head.platform[1])
+    d.tools(base.manifests, head.manifests)
     return {"widening": sorted(d.widening, key=_key), "narrowing": sorted(d.narrowing, key=_key)}
 
 

@@ -17,7 +17,10 @@ is no label to look at, so any widening is red: fail closed.
 Also posts the Markdown diff report as one PR comment, updated in place. The comment is found by
 the first line of the Markdown file (the marker written by `gxg-policy diff`).
 
-Usage:
+Every path listed in `--gate-paths` (files of the gate itself changed vs main) is added to the
+report as a widening entry: changing the gate needs the same label as widening.
+
+Usage (both modes also take --gate-paths FILE):
   widening_gate.py --report diff.json --markdown diff.md --codeowners base-CODEOWNERS   (pull_request)
   widening_gate.py --report diff.json --markdown diff.md --no-pr                        (other events)
 Env (PR mode): GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_EVENT_PATH, GITHUB_API_URL; GITHUB_STEP_SUMMARY.
@@ -167,6 +170,16 @@ def report_out(body: str, ok: bool, msg: str) -> int:
     return 0 if ok else 1
 
 
+def with_gate_paths(report: dict[str, Any], markdown: str, paths: list[str]) -> tuple[dict[str, Any], str]:
+    """Changed gate files (CI, gxg-policy, schemas, lockfiles) count as widening: the label must cover them."""
+    if not paths:
+        return report, markdown
+    entries = [{"tenant": None, "kind": "gate_path", "change": "changed", "path": p} for p in paths]
+    rows = "".join(f"| `{p}` |\n" for p in paths)
+    note = f"\n### Gate files changed ({len(paths)}, need the `{LABEL}` label)\n\n| path |\n| --- |\n{rows}"
+    return {**report, "widening": report["widening"] + entries}, markdown + note
+
+
 def run_no_pr(report: dict[str, Any], *, markdown: str) -> int:
     n = len(report["widening"])
     ok = n == 0
@@ -207,10 +220,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--markdown", type=Path, required=True)
     p.add_argument("--codeowners", type=Path, help="CODEOWNERS of the PR base commit (PR mode)")
     p.add_argument("--no-pr", action="store_true", help="not a pull_request event: any widening fails")
+    p.add_argument("--gate-paths", type=Path, help="changed gate files, one per line: each counts as widening")
     a = p.parse_args(argv)
     try:
         report = json.loads(a.report.read_text(encoding="utf-8"))
         markdown = a.markdown.read_text(encoding="utf-8")
+        if a.gate_paths is not None:
+            report, markdown = with_gate_paths(
+                report, markdown, [x for x in a.gate_paths.read_text(encoding="utf-8").splitlines() if x]
+            )
         if a.no_pr:
             return run_no_pr(report, markdown=markdown)
         if a.codeowners is None:

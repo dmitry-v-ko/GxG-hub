@@ -473,7 +473,7 @@ def test_help_lists_modes(capsys: Any) -> None:
     assert re.search(r"  CODEOWNERS of the PR base commit \(PR mode\)\n", out)
     assert re.search(r"  not a pull_request event: any widening fails\n", out)
     # The module docstring is the description, kept verbatim (RawDescriptionHelpFormatter).
-    assert "Usage:\n  widening_gate.py --report diff.json" in out
+    assert "Usage (both modes also take --gate-paths FILE):\n  widening_gate.py --report diff.json" in out
 
 
 class FakeResponse:
@@ -512,3 +512,26 @@ def test_github_api_request(monkeypatch: pytest.MonkeyPatch) -> None:
     api("PATCH", "/x", {"a": 1})
     api("DELETE", "/y", None)
     assert [r.get_method() for r, _ in sent[2:]] == ["PATCH", "DELETE"]
+
+
+def test_changed_gate_paths_count_as_widening(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+    # Cycle 3 finding 1: a PR that edits the gate needs the label even with no policy widening.
+    summary = tmp_path / "s.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    r, md, paths = tmp_path / "r.json", tmp_path / "r.md", tmp_path / "p.txt"
+    r.write_text(json.dumps(NARROW))
+    md.write_text("<!-- m -->\nx\n")
+    args = ["--report", str(r), "--markdown", str(md), "--no-pr", "--gate-paths", str(paths)]
+    paths.write_text("")
+    assert gate.main(args) == 0
+    paths.write_text("scripts/ci/grants_widening.sh\n\nuv.lock\n")
+    assert gate.main(args) == 1
+    assert "2 widening change(s) outside a pull request" in capsys.readouterr().out
+    text = summary.read_text()
+    assert "### Gate files changed (2, need the `widening-approved` label)" in text
+    assert "| `scripts/ci/grants_widening.sh` |\n| `uv.lock` |\n" in text
+    report, markdown = gate.with_gate_paths(NARROW, "m", ["a b"])
+    assert report["widening"] == [{"tenant": None, "kind": "gate_path", "change": "changed", "path": "a b"}]
+    assert report["narrowing"] == NARROW["narrowing"] and NARROW["widening"] == []
+    assert markdown.startswith("m\n### Gate files")
+    assert gate.with_gate_paths(NARROW, "m", []) == (NARROW, "m")

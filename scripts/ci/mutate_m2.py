@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 JOB = "scripts/ci/grants_widening.sh"
 CI = ".github/workflows/ci.yml"
 TESTS = ["tests/ci/test_grants_widening_job.py", "tests/ci/test_ci_workflow.py"]
-UV = "      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0\n      - run: uv sync\n"
+UV = "      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0\n"
 
 # (file, exact text, replacement, what the mutation breaks)
 MUTATIONS: list[tuple[str, str, str, str]] = [
@@ -29,17 +29,29 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (JOB, 'if [ "$EVENT" != "pull_request" ]; then\n  exec', "if false; then\n  exec", "push run uses PR mode"),
     (JOB, 'git show "$main:.github/CODEOWNERS"', 'git show "$head:.github/CODEOWNERS"', "PR names its own owners"),
     (CI, "reopened, edited, labeled", "reopened, labeled", "base change does not re-run the gate"),
-    (CI, "PR_HEAD: ${{ github.event.pull_request.head.sha }}\n        run: bash scripts/ci/grants_widening.sh",
-     "PR_HEAD: ${{ github.event.pull_request.base.sha }}\n        run: bash scripts/ci/grants_widening.sh",
-     "gate diffs the base commit"),
+    (CI, "PR_HEAD: ${{ github.event.pull_request.head.sha }}\n        run: |",
+     "PR_HEAD: ${{ github.event.pull_request.base.sha }}\n        run: |", "gate diffs the base commit"),
+    (CI, '          bash "$gate"\n', "          bash scripts/ci/grants_widening.sh\n", "PR copy of the gate runs"),
+    (CI, 'if [ ! -f "$gate" ]; then', "if true; then", "PR copy of the gate always runs"),
+    (CI, f"{UV}      # No `uv sync`", f"{UV}      - run: uv sync\n      # No `uv sync`", "PR project installed"),
+    (JOB, '-- "${GATE_PATHS[@]}" >', '-- policies/ >', "gate edits are not widening"),
+    (JOB, "GATE_PATHS=(.github/workflows/ scripts/ci/ tools/gxg-policy/ schemas/ pyproject.toml uv.lock)",
+     "GATE_PATHS=(scripts/ci/)", "lockfile / tool / workflow / schema edits are not widening"),
+    (JOB, ' --head-connectors "$tmp/head/connectors"', ' --head-connectors "$tmp/base/connectors"',
+     "manifest edits are not compared"),
+    (JOB, '--gate-paths "$tmp/gate-paths.txt")', ")", "gate paths not passed to the gate"),
+    (JOB, 'check=(uv run --locked --project "$gate" python', "check=(uv run --locked --project . python",
+     "widening_gate.py runs in the PR's environment"),
+    (JOB, 'uv run --locked --project "$gate" gxg-policy', "uv run --locked gxg-policy", "PR's gxg-policy runs"),
+    (JOB, '"$gate/scripts/ci/widening_gate.py"', "scripts/ci/widening_gate.py", "PR's widening_gate.py runs"),
     (CI, "github.event_name == 'pull_request' && github.run_id || github.ref", "github.ref", "PR runs cancelled"),
     (CI, "      actions: read ", "      actions: none ", "gate cannot read workflow runs"),
     (CI, "needs: [lint, types, tests, schema-guard, secrets, policy, grants-widening]",
      "needs: [lint, types, tests, schema-guard, secrets, policy]", "ci-ok ignores the gate"),
     (CI, "(github.event_name == 'push' || github.event_name == 'schedule')", "(github.event_name == 'push')",
      "bundle not re-signed on schedule"),
-    (CI, f"          fetch-depth: 0\n          persist-credentials: false\n{UV}      - name: Policy diff",
-     f"          persist-credentials: false\n{UV}      - name: Policy diff", "gate checkout without history"),
+    (CI, f"          fetch-depth: 0\n          persist-credentials: false\n{UV}      # No",
+     f"          persist-credentials: false\n{UV}      # No", "gate checkout without history"),
 ]  # fmt: skip
 
 

@@ -14,13 +14,20 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 JOB = ROOT / "scripts" / "ci" / "grants_widening.sh"
 CASE = ROOT / "tools" / "gxg-policy" / "tests" / "diff" / "01-grant-resource-added"
-# `uv run X` → the current interpreter, so the test does not depend on uv or a project in the temp repo.
+MANIFESTS = ROOT / "tools" / "gxg-policy" / "tests" / "diff" / "10-manifest-tools"
+WORKFLOW = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+STEP = next(s for s in WORKFLOW["jobs"]["grants-widening"]["steps"] if "grants_widening.sh" in s.get("run", ""))
+GATE_FILES = ("scripts/ci/grants_widening.sh", "scripts/ci/widening_gate.py")
+# `uv run [--locked] [--project DIR] X` → the current interpreter, so the test needs neither uv nor a project.
 UV_SHIM = f"""#!/bin/sh
+echo "$@" >> "$RUNNER_TEMP/uv-calls"
 shift
+while [ "$1" = --locked ] || [ "$1" = --project ]; do [ "$1" = --project ] && shift; shift; done
 [ "$1" = gxg-policy ] && {{ shift; exec "{sys.executable}" -m gxg_policy.cli "$@"; }}
 shift
 exec "{sys.executable}" "$@"
@@ -51,9 +58,10 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
-def job(
-    repo: Path, event: str, ref: str, pr_head: str = "", runner: Path | None = None
+def job(  # noqa: PLR0917 - test helper, keyword use at every call site but the first three
+    repo: Path, event: str, ref: str, pr_head: str = "", runner: Path | None = None, script: str | None = None
 ) -> subprocess.CompletedProcess[str]:
+    """Runs the job script from this repo (= main's copy), or `script` (bash text) in the temp repo."""
     shim = repo.parent / "bin"
     shim.mkdir(exist_ok=True)
     (shim / "uv").write_text(UV_SHIM)
@@ -63,7 +71,8 @@ def job(
     env = {**os.environ, "PATH": f"{shim}:{os.environ['PATH']}", "EVENT": event, "GITHUB_REF": ref}
     env |= {"RUNNER_TEMP": str(runner), "PR_HEAD": pr_head}
     env.pop("GITHUB_STEP_SUMMARY", None)
-    return subprocess.run(["bash", str(JOB)], cwd=repo, env=env, capture_output=True, text=True, check=False)
+    cmd = ["bash", str(JOB)] if script is None else ["bash", "-c", script]
+    return subprocess.run(cmd, cwd=repo, env=env, capture_output=True, text=True, check=False)
 
 
 @pytest.mark.parametrize("event", ["push", "workflow_dispatch"])
@@ -156,3 +165,84 @@ def test_code_owners_come_from_main_not_from_the_pr(repo: Path, tmp_path: Path) 
     runner = tmp_path / "runner-pr"
     job(repo, "pull_request", "refs/pull/7/merge", pr_head=git(repo, "rev-parse", "HEAD"), runner=runner)
     assert (runner / "CODEOWNERS").read_text() == "* @owner\n"
+
+
+def commit_files(repo: Path, files: dict[str, str], msg: str) -> None:
+    for name, text in files.items():
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(text)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", msg)
+
+
+@pytest.fixture
+def gated(repo: Path) -> Path:
+    """main also holds the real gate files, as after M2 is merged."""
+    git(repo, "checkout", "-q", "main")
+    commit_files(repo, {f: (ROOT / f).read_text() for f in GATE_FILES}, "gate on main")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(repo, "checkout", "-qB", "claude/x")
+    return repo
+
+
+def step(repo: Path, runner: Path) -> subprocess.CompletedProcess[str]:
+    """The ci.yml step itself, as a workflow_dispatch on claude/x."""
+    return job(repo, "workflow_dispatch", "refs/heads/claude/x", runner=runner, script=STEP["run"])
+
+
+def test_pr_that_disables_its_gate_and_widens_is_red(gated: Path, tmp_path: Path) -> None:
+    # Cycle 3 finding 1: the PR copy says `exit 0`; ci.yml runs main's copy, which sees the widening.
+    commit_files(gated, {"scripts/ci/grants_widening.sh": "exit 0\n"}, "disable the gate")
+    commit_policies(gated, CASE / "head", "widen")
+    runner = tmp_path / "runner-step"
+    r = step(gated, runner)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "2 widening change(s) outside a pull request" in r.stdout
+    assert (runner / "gate-paths.txt").read_text() == "scripts/ci/grants_widening.sh\n"
+    # gxg-policy and widening_gate.py run from main's worktree with main's lockfile.
+    calls = (runner / "uv-calls").read_text().splitlines()
+    assert len(calls) == 2 and all(c.startswith(f"run --locked --project {runner}/gate ") for c in calls), calls
+    assert calls[1].split()[5] == f"{runner}/gate/scripts/ci/widening_gate.py"
+
+
+@pytest.mark.parametrize(
+    "path", ["scripts/ci/widening_gate.py", "tools/gxg-policy/src/gxg_policy/diff.py", "uv.lock", "pyproject.toml",
+             ".github/workflows/ci.yml", "schemas/x.json"]
+)  # fmt: skip
+def test_gate_edit_alone_needs_the_label(gated: Path, tmp_path: Path, path: str) -> None:
+    commit_files(gated, {path: "# changed\n"}, "edit the gate")
+    r = step(gated, tmp_path / "runner-step")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "1 widening change(s)" in r.stdout
+
+
+def test_unrelated_edit_is_green_with_the_gate_from_main(gated: Path, tmp_path: Path) -> None:
+    commit_files(gated, {"README.md": "x\n", "scripts/other.sh": "x\n"}, "docs")
+    r = step(gated, tmp_path / "runner-step")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "bootstrap" not in r.stdout + r.stderr
+
+
+def test_without_a_gate_on_main_the_pr_copy_runs(repo: Path, tmp_path: Path) -> None:
+    # Bootstrap: main has no gate yet. The PR copy runs and its own gate files count as widening.
+    commit_files(repo, {f: (ROOT / f).read_text() for f in GATE_FILES}, "add the gate")
+    r = step(repo, tmp_path / "runner-step")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "bootstrap" in r.stdout and "2 widening change(s)" in r.stdout
+
+
+def test_manifest_weakening_is_widening(repo: Path, tmp_path: Path) -> None:
+    # Cycle 3 finding 2: same policies, a tool's effect class lowered in connectors/*/gxg-manifest.yaml.
+    git(repo, "checkout", "-q", "main")
+    shutil.copytree(MANIFESTS / "base-connectors", repo / "connectors")
+    commit_files(repo, {}, "manifests")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(repo, "checkout", "-qB", "claude/x")
+    shutil.rmtree(repo / "connectors")
+    shutil.copytree(MANIFESTS / "head-connectors", repo / "connectors")
+    commit_files(repo, {}, "weaken")
+    runner = tmp_path / "runner-m"
+    r = job(repo, "push", "refs/heads/claude/x", runner=runner)
+    assert r.returncode == 1, r.stdout + r.stderr
+    report = json.loads((runner / "diff.json").read_text())
+    assert report == json.loads((MANIFESTS / "expected.json").read_text())

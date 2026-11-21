@@ -44,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("head", type=Path)
     s.add_argument("--json", type=Path, help="write the JSON report here (default: stdout)")
     s.add_argument("--md", type=Path, help="write the Markdown report here")
+    s.add_argument("--base-connectors", type=Path, help="connectors/ of the base: compare */gxg-manifest.yaml tools")
+    s.add_argument("--head-connectors", type=Path, help="connectors/ of the head")
     s = sub.add_parser("build", help=f"build and sign {BUNDLE} (key: ${KEY_ENV})")
     s.add_argument("root", type=Path)
     s.add_argument("--out", type=Path, required=True)
@@ -70,7 +72,7 @@ def _lint(a: argparse.Namespace) -> int:
 
 def _diff(a: argparse.Namespace) -> int:
     try:
-        report = diff(a.base, a.head)
+        report = diff(a.base, a.head, a.base_connectors, a.head_connectors)
     except PolicyError as exc:
         print(f"error: invalid policies:\n{exc}", file=sys.stderr)
         return 2

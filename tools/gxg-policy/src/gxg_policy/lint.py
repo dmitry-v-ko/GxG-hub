@@ -56,6 +56,13 @@ def load_manifests(pol: Policies, paths: Iterable[Path]) -> None:
         bad = schema_findings(str(path), "gxg-manifest.schema.json", doc)
         if not bad and doc["connector"] in pol.manifests:
             bad = [Finding(str(path), "connector", "duplicate-id", f"second manifest for {doc['connector']!r}")]
+        if not bad:  # AP-02 and AS-26 look tools up by name: one name, one class
+            seen = {t["name"] for m in pol.manifests.values() for t in m["tools"]}
+            bad = [
+                Finding(str(path), f"tools[{i}].name", "duplicate-tool", f"tool {t['name']!r} is in another manifest")
+                for i, t in enumerate(doc["tools"])
+                if t["name"] in seen
+            ]
         pol.findings += bad
         if not bad:
             pol.manifests[doc["connector"]] = doc

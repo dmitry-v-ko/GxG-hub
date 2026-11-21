@@ -1,0 +1,66 @@
+{
+  "widening": [
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
+      "tool": "demo.message.propose",
+      "change": "executes_via_changed",
+      "base": "demo.message.execute",
+      "head": "demo.message.send"
+    },
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
+      "tool": "demo.message.propose",
+      "change": "effect_class_lowered",
+      "base": "external_effect",
+      "head": "write_reversible"
+    },
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
+      "tool": "demo.wire.propose",
+      "change": "effect_class_lowered",
+      "base": "high_risk",
+      "head": "external_effect"
+    },
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
+      "tool": "demo.notes.search",
+      "change": "action_changed",
+      "base": "read",
+      "head": "write"
+    },
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
+      "tool": "demo.board.delete",
+      "change": "added",
+      "effect_class": "high_risk"
+    }
+  ],
+  "narrowing": [
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
+      "tool": "demo.notes.search",
+      "change": "effect_class_raised",
+      "base": "read",
+      "head": "write_reversible"
+    },
+    {
+      "tenant": null,
+      "kind": "tool",
+      "connector": "demo",
+      "tool": "demo.note.get",
+      "change": "removed"
+    }
+  ]
+}
