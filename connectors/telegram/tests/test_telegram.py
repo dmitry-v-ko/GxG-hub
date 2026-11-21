@@ -3,13 +3,17 @@ stand/tests/test_telegram.py.
 
 The MCP client is the official SDK over Streamable HTTP on httpx2's ASGITransport (no TCP socket). The bundle is
 built by `gxg-policy build` from fixtures/grants/ with a key made here; identities come from the kit's test issuer.
-The service is the fake of fixtures/service.json behind the `TelegramService` port: no real Telegram account.
+The data source is a real PostgreSQL (TELEGRAM_PG_BIN, default /usr/lib/postgresql/16/bin, with pgvector) on a
+unix socket: the vendored telegram_archive migrations of gxg_agents_v2, the reader role and synthetic fixtures
+(archive/seed.py), one database per test. No Telegram, no real account (ADR-0004).
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import dataclasses
+import itertools
 import json
 import logging
 import os
@@ -18,9 +22,10 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,7 +34,9 @@ from typing import Any
 import httpx2
 import jsonschema
 import jwt
+import psycopg
 import pytest
+import seed
 import yaml
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from mcp.client.session import ClientSession
@@ -39,8 +46,8 @@ from gxg_connector_kit import TokenError
 from gxg_connector_kit import cf_identity as cf
 from gxg_connector_kit.identity import StubIssuer
 from gxg_policy import cli as policy_cli
-from telegram_connector import server, testctl, tools
-from telegram_connector.fake import FakeTelegramService
+from telegram_connector import server, tools
+from telegram_connector.archive import ArchiveService
 from telegram_connector.service import ServiceError
 from telegram_connector.tools import Connector
 
@@ -51,13 +58,124 @@ TG = REPO / "connectors" / "telegram"
 ALPHA_READER, ALPHA_NOBODY, BETA_READER = "agent:t-alpha:reader", "agent:t-alpha:nobody", "agent:t-beta:reader"
 CONNECTIONS = "t-alpha=tg-main:svc-alpha,t-beta=tg-main:svc-beta"
 KID = "telegram-test"
-FIXTURES = json.loads((TG / "fixtures" / "service.json").read_text(encoding="utf-8"))
-REF = {ch["name"]: ch["chat_ref"] for c in FIXTURES["connections"].values() for ch in c["chats"]}
+REF = seed.REF
 FORGED = "tgc1_" + "A" * 32  # well-formed, issued for no chat
 NOT_FOUND = {"code": "not_found", "message": "not found", "retryable": False}
 SEARCH_RESULT = json.loads((REPO / "schemas" / "search-result.schema.json").read_text())
 ERROR = json.loads((REPO / "schemas" / "error.schema.json").read_text())
 MESSAGES = json.loads((TG / "schemas" / "messages.output.json").read_text())
+PG_BIN = Path(os.environ.get("TELEGRAM_PG_BIN", "/usr/lib/postgresql/16/bin"))
+READER_PASSWORD = "reader-" + secrets.token_hex(12)  # in the DSN: must never reach a log or a reply
+
+
+class Pg:
+    """A throw-away PostgreSQL cluster on a unix socket; `tpl` holds the archive schema, the role and the fixtures.
+
+    shortcut: own initdb/pg_ctl fixture; pytest-postgresql connects over TCP, which the root run forbids.
+    """
+
+    def __init__(self) -> None:
+        self.root = Path(tempfile.mkdtemp(prefix="gxg-pg-"))
+        self.root.chmod(0o755)
+        self.as_postgres = ["runuser", "-u", "postgres", "--"] if os.geteuid() == 0 else []  # initdb refuses root
+        if self.as_postgres:
+            shutil.chown(self.root, "postgres")
+        self._n = itertools.count()
+
+    def run(self, *cmd: str) -> None:
+        subprocess.run([*self.as_postgres, *cmd], check=True, capture_output=True, timeout=120)
+
+    def start(self) -> None:
+        data = str(self.root / "data")
+        self.run(str(PG_BIN / "initdb"), "-D", data, "-U", "postgres", "-A", "trust", "-E", "UTF8", "--no-sync")
+        opts = f"-k {self.root} -c listen_addresses='' -c fsync=off -c log_connections=on"
+        self.run(str(PG_BIN / "pg_ctl"), "-D", data, "-o", opts, "-l", str(self.root / "log"), "-w", "start")
+        self.sql("postgres", "CREATE DATABASE tpl")
+        self.sql("tpl", seed.schema_sql() + seed.seed_sql())
+        self.sql("tpl", f"ALTER ROLE {seed.READER} PASSWORD '{READER_PASSWORD}'")
+
+    def stop(self) -> None:
+        self.run(str(PG_BIN / "pg_ctl"), "-D", str(self.root / "data"), "-m", "immediate", "stop")
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def dsn(self, db: str, user: str = "postgres", password: str = "") -> str:
+        auth = f"{user}:{password}" if password else user
+        return f"postgresql://{auth}@/{db}?host={self.root}"
+
+    def sql(self, db: str, statement: str, params: Any = None) -> list[tuple[Any, ...]]:
+        with psycopg.connect(self.dsn(db), autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute(statement, params)
+            return cur.fetchall() if cur.description else []
+
+    def database(self) -> str:
+        name = f"t{next(self._n)}"
+        self.sql("postgres", f"CREATE DATABASE {name} TEMPLATE tpl")
+        return name
+
+
+@pytest.fixture(scope="session")
+def pg() -> Iterator[Pg]:
+    cluster = Pg()
+    cluster.start()
+    yield cluster
+    cluster.stop()
+
+
+@dataclass
+class Db:
+    """The test's own archive database: `sql()` as the owner, `dsn` of the connector's read-only role."""
+
+    pg: Pg
+    name: str
+
+    @property
+    def dsn(self) -> str:
+        return self.pg.dsn(self.name, seed.READER, READER_PASSWORD)
+
+    def sql(self, statement: str, params: Any = None) -> list[tuple[Any, ...]]:
+        return self.pg.sql(self.name, statement, params)
+
+    def add(self, chat: str, text: str | None, caption: str | None = None, media: str | None = None) -> int:
+        """Append a message to a fixture chat; returns its id."""
+        conn = next(c for c, n, *_ in seed.CHATS if n == chat)
+        rows = self.sql(
+            """INSERT INTO telegram_archive.messages (connection_id, peer_id, message_id, sent_at, text,
+                caption, media_type) SELECT %(c)s, %(p)s, coalesce(max(message_id), 0) + 1, now(), %(t)s, %(cap)s, %(m)s
+                FROM telegram_archive.messages WHERE connection_id = %(c)s AND peer_id = %(p)s RETURNING message_id""",
+            {"c": conn, "p": seed.PEER[chat], "t": text, "cap": caption, "m": media},
+        )
+        return int(rows[0][0])
+
+    def defer(self, connection: str, seconds: float) -> None:
+        """Telegram flood wait recorded by the service's sync: the Connection is deferred for `seconds`."""
+        self.sql(
+            """INSERT INTO telegram_archive.connection_state (connection_id, retry_after)
+            VALUES (%s, clock_timestamp() + make_interval(secs => %s)) ON CONFLICT (connection_id)
+            DO UPDATE SET retry_after = excluded.retry_after""",
+            (connection, seconds),
+        )
+
+
+@pytest.fixture
+def db(pg: Pg) -> Db:
+    return Db(pg, pg.database())
+
+
+class Counting(ArchiveService):
+    """The archive port with a counter of requests (AC-M11-03): every public method counts once."""
+
+    def __init__(self, dsn: str) -> None:
+        super().__init__(dsn)
+        self.calls: dict[str, int] = {}
+
+    def total(self) -> int:
+        return sum(self.calls.values())
+
+    def __getattribute__(self, name: str) -> Any:
+        if name in ("scope_chats", "search", "read_thread", "collect"):
+            calls = object.__getattribute__(self, "calls")
+            calls[name] = calls.get(name, 0) + 1
+        return object.__getattribute__(self, name)
 
 
 def public_key(key: Any) -> str:
@@ -86,7 +204,7 @@ def build_bundle(out: Path, monkeypatch: pytest.MonkeyPatch) -> str:
 def env_of(tmp: Path, keys: str, issuer: StubIssuer, **extra: str) -> dict[str, str]:
     return {
         "GXG_PROFILE": "test",
-        "TELEGRAM_SERVICE": "fake",
+        "TELEGRAM_ARCHIVE_DSN": "postgresql://unused@/x",
         "TELEGRAM_CONNECTIONS": CONNECTIONS,
         "TELEGRAM_BUNDLE_DIR": str(tmp / "bundle"),
         "TELEGRAM_BUNDLE_KEYS": keys,
@@ -113,8 +231,8 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Env:
 class Tg:
     def __init__(self, connector: Connector, http: httpx2.AsyncClient, session: ClientSession, issuer: StubIssuer):
         self.connector, self.http, self.session, self.issuer = connector, http, session, issuer
-        assert isinstance(connector.service, FakeTelegramService)
-        self.service: FakeTelegramService = connector.service
+        assert isinstance(connector.service, Counting)
+        self.service: Counting = connector.service
 
     def identity(self, principal: str, **kw: Any) -> dict[str, str]:
         return self.issuer.headers(
@@ -165,21 +283,24 @@ async def connect(stack: AsyncExitStack, app: Any) -> tuple[httpx2.AsyncClient, 
     return http, session
 
 
+async def open_tg(stack: AsyncExitStack, env: Env, db: Db, settings: server.Settings | None = None) -> Tg:
+    app, connector = server.build(settings or env.settings, Counting(db.dsn))
+    http, session = await connect(stack, app)
+    return Tg(connector, http, session, env.issuer)
+
+
 @pytest.fixture
-async def tg(env: Env) -> AsyncIterator[Tg]:
-    app, connector = server.build(env.settings, FakeTelegramService())
+async def tg(env: Env, db: Db) -> AsyncIterator[Tg]:
     async with AsyncExitStack() as stack:
-        http, session = await connect(stack, app)
-        yield Tg(connector, http, session, env.issuer)
+        yield await open_tg(stack, env, db)
 
 
 def audit_lines(caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
     return [json.loads(r.getMessage()) for r in caplog.records if r.name == "telegram_connector.audit"]
 
 
-def texts_of(service: FakeTelegramService, chat: str) -> list[str]:
-    ch = next(c for chats in service.chats.values() for c in chats.values() if c.name == chat)
-    return [m.text or m.caption or "" for m in ch.messages]
+def texts_of(chat: str) -> list[str]:
+    return [m["text"] or m["caption"] for m in seed.messages() if m["peer_id"] == seed.PEER[chat]]
 
 
 def search_ids(content: dict[str, Any]) -> list[str]:
@@ -189,34 +310,31 @@ def search_ids(content: dict[str, Any]) -> list[str]:
 # health, configuration -------------------------------------------------------------------------
 
 
-async def test_healthz_and_readyz(tg: Tg) -> None:
+async def test_healthz_and_readyz(tg: Tg, db: Db) -> None:
     assert (await tg.http.get("/healthz")).status_code == 200
     r = await tg.http.get("/readyz")
     assert (r.status_code, r.json()) == (200, {"status": "ready"})
-    tg.service.failure = "auth_required"
+    tg.service.dsn = tg.service.dsn.replace(db.name, "no_such_db")  # the archive cannot be read
     r = await tg.http.get("/readyz")
     assert (r.status_code, r.json()) == (503, {"status": "not_ready"})  # MCC-09: no reasons in the body
 
 
-async def test_readyz_503_and_calls_refused_without_a_valid_bundle(env: Env) -> None:
+async def test_readyz_503_and_calls_refused_without_a_valid_bundle(env: Env, db: Db) -> None:
     (env.settings.bundle_dir / "grants-bundle.json.sig").write_text("{}")
-    app, connector = server.build(env.settings, FakeTelegramService())
     async with AsyncExitStack() as stack:
-        http, session = await connect(stack, app)
-        assert (await http.get("/readyz")).status_code == 503
-        t = Tg(connector, http, session, env.issuer)
+        t = await open_tg(stack, env, db)
+        assert (await t.http.get("/readyz")).status_code == 503
         err = await t.error("telegram.thread.read", {"chat_ref": REF["a-partners"]})
         assert (err["code"], err["retryable"]) == ("temporarily_unavailable", True)
-        assert t.service.calls.total() == 0
+        assert t.service.total() == 0
 
 
 @pytest.mark.parametrize(
     "change",
     [
-        {"TELEGRAM_SERVICE": ""},  # no adapter to the real service yet: never a silent fake
-        {"TELEGRAM_SERVICE": "http"},
-        {"GXG_PROFILE": "production", "TELEGRAM_TEST_ISSUER_KEY": ""},  # the fake only in the test profile
-        {"GXG_PROFILE": "production", "TELEGRAM_TEST_CONTROLS": "1"},
+        {"TELEGRAM_ARCHIVE_DSN": ""},  # the archive is the only data source: no silent default
+        {"TELEGRAM_ARCHIVE_DSN": "http://archive"},
+        {"GXG_PROFILE": "production"},  # the test issuer only in the test profile
         {"TELEGRAM_IDENTITY_KEYS": "k=ed25519:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},  # with the test issuer
         {"TELEGRAM_CONNECTIONS": "t-alpha=tg-main"},
         {"TELEGRAM_CONNECTIONS": "t-alpha=tg-main:svc-alpha,t-alpha=tg-main:svc-beta"},
@@ -227,10 +345,9 @@ def test_settings_refuse_to_start(env: Env, change: dict[str, str]) -> None:
         server.Settings.from_env(env.raw | change)
 
 
-def test_main_refuses_without_the_fake_and_logs_why(caplog: pytest.LogCaptureFixture) -> None:
-    assert server.main({"GXG_PROFILE": "production"}) == 2
-    line = json.loads(caplog.records[-1].getMessage())
-    assert line["event"] == "startup_refused" and "TELEGRAM_SERVICE" in line["reason"]
+def test_production_profile_starts_with_an_archive_dsn() -> None:
+    s = server.Settings.from_env({"TELEGRAM_ARCHIVE_DSN": "postgres://r@h/a", "TELEGRAM_IDENTITY_KEYS": "k=v"})
+    assert (s.profile, s.archive_dsn, s.test_issuer_key) == ("production", "postgres://r@h/a", None)
 
 
 def test_connections_and_keys_parse() -> None:
@@ -245,14 +362,12 @@ def test_connections_and_keys_parse() -> None:
         server.parse_keys("k=ed25519:short", "X")
 
 
-async def test_no_identity_keys_refuse_every_call(env: Env) -> None:
+async def test_no_identity_keys_refuse_every_call(env: Env, db: Db) -> None:
     settings = server.Settings.from_env(env.raw | {"TELEGRAM_TEST_ISSUER_KEY": ""})
-    app, connector = server.build(settings, FakeTelegramService())
     async with AsyncExitStack() as stack:
-        http, session = await connect(stack, app)
-        t = Tg(connector, http, session, env.issuer)
+        t = await open_tg(stack, env, db, settings)
         assert (await t.error("telegram.thread.read", {"chat_ref": REF["a-partners"]}))["code"] == "unauthenticated"
-        assert t.service.calls.total() == 0
+        assert t.service.total() == 0
 
 
 def test_identity_keys_select_the_contextforge_verifier(env: Env) -> None:
@@ -260,36 +375,10 @@ def test_identity_keys_select_the_contextforge_verifier(env: Env) -> None:
     settings = server.Settings.from_env(
         env.raw | {"TELEGRAM_TEST_ISSUER_KEY": "", "TELEGRAM_IDENTITY_KEYS": f"a={key}"}
     )
-    _, connector = server.build(settings, FakeTelegramService())
-    assert server.configs(settings, *server.build(settings, FakeTelegramService()))[0].port == 8080
-    assert connector.connections == {"t-alpha": ("tg-main", "svc-alpha"), "t-beta": ("tg-main", "svc-beta")}
-
-
-def test_test_controls_listen_on_loopback_only(env: Env) -> None:
-    settings = server.Settings.from_env(env.raw | {"TELEGRAM_TEST_CONTROLS": "1"})
     app, connector = server.build(settings)
-    ports = [(c.host, c.port) for c in server.configs(settings, app, connector)]
-    assert ports == [("0.0.0.0", 8080), ("127.0.0.1", 8090)]  # noqa: S104
-
-
-async def test_test_controls_set_failures_and_report() -> None:
-    service = FakeTelegramService()
-    async with httpx2.AsyncClient(
-        transport=httpx2.ASGITransport(app=testctl.create_app(service)), base_url="http://t"
-    ) as c:
-        assert (await c.post("/_test/service/fail", json={"mode": "flood_wait:42"})).status_code == 200
-        assert (service.failure, service.retry_after_s, service.delay_s) == ("flood_wait", 42.0, 0.0)
-        await c.post("/_test/service/fail", json={"mode": "slow:1500"})
-        assert (service.failure, service.delay_s) == (None, 1.5)
-        await c.post("/_test/service/fail", json={"mode": "busy"})
-        assert service.failure == "busy"
-        assert (await c.post("/_test/service/fail", json={"mode": "nope"})).status_code == 400
-        await c.post("/_test/service/fail", json={"mode": None})
-        assert (service.failure, service.delay_s, service.retry_after_s) == (None, 0.0, 0.0)  # type: ignore[comparison-overlap]
-        stats = (await c.get("/_test/service/stats")).json()
-        assert stats == {"calls": {}, "open_sessions": 2}
-        known = (await c.get("/_test/service/secrets")).json()
-        assert len(known["peer_ids"]) == 7 and len(known["sessions"]) == 2 and len(known["texts"]) > 80
+    assert isinstance(connector.service, ArchiveService) and connector.service.dsn == settings.archive_dsn
+    assert [(c.host, c.port) for c in server.configs(settings, app, connector)] == [("0.0.0.0", 8080)]  # noqa: S104
+    assert connector.connections == {"t-alpha": ("tg-main", "svc-alpha"), "t-beta": ("tg-main", "svc-beta")}
 
 
 # AC-M11-01: SC-03 -------------------------------------------------------------------------------
@@ -331,11 +420,11 @@ async def test_sc04_bad_identity_is_refused_before_the_service(tg: Tg, caplog: p
         "garbage": {"x-gxg-test-identity": "W10.e30.AA"},
     }
     assert (await tg.ok("telegram.thread.read", args, identity=replay))["messages"]
-    calls = tg.service.calls.total()
+    calls = tg.service.total()
     for name, identity in cases.items():
         err = await tg.error("telegram.thread.read", args, identity=identity)
         assert err == {"code": "unauthenticated", "message": "token rejected", "retryable": False}, name
-    assert tg.service.calls.total() == calls  # refused before any request to the service
+    assert tg.service.total() == calls  # refused before any request to the service
     assert all(a["outcome"] == "unauthenticated" and a.get("reason") for a in audit_lines(caplog)[1:])
 
 
@@ -365,7 +454,7 @@ async def test_ac_m11_03_unauthorized_chat_never_reaches_the_service(tg: Tg) -> 
     replies.append(await tg.call("telegram.thread.read", {"chat_ref": REF["a-partners"]}, principal=ALPHA_NOBODY))
     assert len({json.dumps(r, sort_keys=True) for r in replies}) == 1
     assert replies[0]["structuredContent"] == NOT_FOUND and replies[0]["isError"] is True
-    assert tg.service.calls.total() == 0
+    assert tg.service.total() == 0
 
 
 async def test_sc05_chat_outside_the_service_scope_is_the_same_not_found(tg: Tg) -> None:
@@ -405,7 +494,7 @@ async def test_sc10_nothing_granted_means_no_request(tg: Tg) -> None:
     gamma = "agent:t-gamma:reader"  # a tenant without a Telegram Connection
     assert (await tg.ok("telegram.messages.search", {"query": "status"}, principal=gamma))["items"] == []
     assert (await tg.error("telegram.thread.read", {"chat_ref": REF["a-partners"]}, principal=gamma)) == NOT_FOUND
-    assert tg.service.calls.total() == 0
+    assert tg.service.total() == 0
 
 
 async def test_sc10_mask_grant_reads_the_service_scope(tg: Tg) -> None:
@@ -437,8 +526,8 @@ async def test_sc10_items_of_ungranted_chats_from_the_service_are_dropped(tg: Tg
 # AC-M11-01: SC-09; AC-M11-05 --------------------------------------------------------------------
 
 
-async def test_ac_m11_05_no_texts_peer_ids_or_sessions_in_logs_after_1000_calls(
-    tg: Tg, caplog: pytest.LogCaptureFixture
+async def test_ac_m11_05_no_texts_peer_ids_or_secrets_in_logs_after_1000_calls(
+    tg: Tg, db: Db, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.DEBUG)
     plan: list[tuple[str, dict[str, Any], str]] = [
@@ -452,30 +541,35 @@ async def test_ac_m11_05_no_texts_peer_ids_or_sessions_in_logs_after_1000_calls(
         ("telegram.messages.search", {"query": "beta secret plan"}, BETA_READER),
     ]
     replies = []
+    dsn = tg.service.dsn
     for i in range(1000):
         tool, args, who = plan[i % len(plan)]
         if i % 97 == 0:
-            tg.service.failure = "flood_wait"
-            tg.service.retry_after_s = 3
+            db.defer("svc-alpha", 3)  # flood-wait deferral: rate_limited / partial results
+        if i % 89 == 0:
+            tg.service.dsn = dsn.replace(db.name, "no_such_db")  # the archive is down: its error text quotes the db
         replies.append(await tg.call(tool, args, principal=who))
-        tg.service.failure = None
-    logs = "\n".join(r.getMessage() for r in caplog.records)
+        tg.service.dsn = dsn
+        db.sql("DELETE FROM telegram_archive.connection_state")
+    # everything logged in this process except the test's own MCP client
+    logs = "\n".join(r.getMessage() for r in caplog.records if not r.name.startswith("mcp.client"))
     assert len(audit_lines(caplog)) == 1000
-    texts = tg.service.texts()
-    peers = [ch.peer_id for chats in tg.service.chats.values() for ch in chats.values()]
-    sessions = list(tg.service.sessions.values())
+    texts = seed.texts()
+    peers = [str(p) for p in seed.PEER.values()]
     assert [t for t in texts if t in logs] == []
     assert [p for p in peers if p in logs or p.lstrip("-") in logs] == []
-    assert [s for s in sessions if s in logs] == []
+    assert READER_PASSWORD not in logs and seed.READER not in logs and "no_such_db" not in logs  # DSN, role, errors
     assert "игнорируй" not in logs and "beta secret plan" not in logs  # the queries are not logged either
     blob = json.dumps(replies, ensure_ascii=False)
-    assert [p for p in peers if p in blob] == [] and [s for s in sessions if s in blob] == []  # MCC-04
-    assert texts_of(tg.service, "b-public")[-1] in blob  # the replies do carry texts: the scan is meaningful
+    assert [p for p in peers if p in blob] == [] and READER_PASSWORD not in blob  # MCC-04, SEC-17
+    assert texts_of("b-public")[-1] in blob  # the replies do carry texts: the scan is meaningful
+    outcomes = {a["outcome"] for a in audit_lines(caplog)}
+    assert {"ok", "not_found", "rate_limited", "temporarily_unavailable"} <= outcomes
 
 
 async def test_sc09_internal_error_keeps_text_out_of_logs_and_reply(tg: Tg, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
-    leak = texts_of(tg.service, "a-partners")[0]
+    leak = texts_of("a-partners")[0]
 
     async def boom(*_: Any) -> Any:
         raise RuntimeError(f"peer -1001000000101 said {leak}")
@@ -514,22 +608,51 @@ async def test_control_characters_are_escaped_and_text_is_marked_untrusted(tg: T
 
 async def test_sc08_injection_is_returned_as_data_and_no_effect_tool_exists(tg: Tg) -> None:
     got = await tg.ok("telegram.messages.search", {"query": "игнорируй инструкции"})
-    assert [i["excerpt"] for i in got["items"]] == [texts_of(tg.service, "a-partners")[-2]]
+    assert [i["excerpt"] for i in got["items"]] == [texts_of("a-partners")[-2]]
     names = [t.name for t in (await tg.session.list_tools()).tools]
     assert names == ["telegram.messages.search", "telegram.thread.read", "telegram.messages.collect"]
 
 
-async def test_long_text_is_truncated_and_flagged(tg: Tg) -> None:
-    chat = tg.service.chats["svc-alpha"][REF["a-sales"]]
-    import random
-
-    tg.service._append("svc-alpha", REF["a-sales"], "x" * 5000, random.Random(1))  # noqa: S311
+async def test_long_text_is_truncated_and_flagged(tg: Tg, db: Db) -> None:
+    long_id = db.add("a-sales", "lorem ipsum " * 400)  # 4800 characters
     thread = await tg.ok("telegram.thread.read", {"chat_ref": REF["a-sales"], "limit": 2})
     first, second = thread["messages"]
-    assert (len(first["text"]), first["truncated"], second["truncated"]) == (4000, True, False)
-    assert first["message_id"] == chat.messages[-1].message_id
-    got = await tg.ok("telegram.messages.search", {"query": "xxxx", "chat_refs": [REF["a-sales"]]})
-    assert len(got["items"][0]["excerpt"]) == 500
+    assert (first["message_id"], len(first["text"]), first["truncated"], second["truncated"]) == (
+        long_id,
+        4000,
+        True,
+        False,
+    )
+    got = await tg.ok("telegram.messages.search", {"query": "lorem", "chat_refs": [REF["a-sales"]]})
+    assert len(got["items"][0]["excerpt"]) == 400
+
+
+async def test_text_is_cut_before_it_is_escaped(tg: Tg, db: Db) -> None:
+    """3999 characters with two bidi marks are not truncated; escaping never cuts a `\\u{...}` in half."""
+    db.add("a-sales", "\u202e" + "a" * 3997 + "\u202c")
+    (m,) = (await tg.ok("telegram.thread.read", {"chat_ref": REF["a-sales"], "limit": 1}))["messages"]
+    assert (m["truncated"], m["text"][:8], m["text"][-8:], len(m["text"])) == (
+        False,
+        "\\u{202E}",
+        "\\u{202C}",
+        3997 + 16,
+    )
+    db.add("a-sales", "\u202e" * 4001)
+    (m,) = (await tg.ok("telegram.thread.read", {"chat_ref": REF["a-sales"], "limit": 1}))["messages"]
+    assert (m["truncated"], len(m["text"])) == (True, 4000 * 8)
+    jsonschema.validate(
+        {
+            "chat_ref": REF["a-sales"],
+            "source_ref": "x",
+            "untrusted": True,
+            "messages": [m],
+            "next_cursor": None,
+            "more": False,
+            "complete": True,
+            "partial_reasons": [],
+        },
+        MESSAGES,
+    )
 
 
 # AC-M11-01: MC-02 -------------------------------------------------------------------------------
@@ -608,11 +731,10 @@ async def test_mc02_valid_empty_result_is_success(tg: Tg) -> None:
 async def test_mc02_size_and_shape_limits_are_invalid_input(tg: Tg, tool: str, args: dict[str, Any]) -> None:
     err = await tg.error(tool, args)
     assert (err["code"], err["retryable"]) == ("invalid_input", False)
-    assert tg.service.calls.total() == 0
+    assert tg.service.total() == 0
 
 
 async def test_mc02_thread_read_pages_back_to_the_start(tg: Tg) -> None:
-    chat = tg.service.chats["svc-alpha"][REF["a-sales"]]
     ids: list[int] = []
     before = None
     for _ in range(10):
@@ -625,13 +747,12 @@ async def test_mc02_thread_read_pages_back_to_the_start(tg: Tg) -> None:
         assert page["more"] is (before is not None)
         if before is None:
             break
-    assert ids == [m.message_id for m in reversed(chat.messages)]
+    assert ids == list(range(len(texts_of("a-sales")), 0, -1))
     assert page["source_ref"] == f"telegram:tg-main/chat/{REF['a-sales']}" and page["complete"] is True
 
 
-async def test_mc02_collect_follows_the_cursor_and_resumes(tg: Tg) -> None:
+async def test_mc02_collect_follows_the_cursor_and_resumes(tg: Tg, db: Db) -> None:
     ref = REF["a-partners"]
-    chat = tg.service.chats["svc-alpha"][ref]
     got: list[int] = []
     cursor = None
     for _ in range(20):
@@ -643,13 +764,11 @@ async def test_mc02_collect_follows_the_cursor_and_resumes(tg: Tg) -> None:
         cursor = page["next_cursor"]
         if not page["more"]:
             break
-    assert got == [m.message_id for m in chat.messages]
+    assert got == list(range(1, len(texts_of("a-partners")) + 1))
     # nothing new: an empty page keeps the caller's cursor (never a step back)
     idle = await tg.ok("telegram.messages.collect", {"chat_ref": ref, "cursor": cursor})
     assert (idle["messages"], idle["next_cursor"], idle["more"]) == ([], cursor, False)
-    import random
-
-    tg.service._append("svc-alpha", ref, "fresh Status: new", random.Random(2))  # noqa: S311
+    db.add("a-partners", "fresh Status: new")
     fresh = await tg.ok("telegram.messages.collect", {"chat_ref": ref, "cursor": cursor})
     assert [m["text"] for m in fresh["messages"]] == ["fresh Status: new"]
     assert (await tg.ok("telegram.messages.collect", {"chat_ref": ref, "cursor": fresh["next_cursor"]}))[
@@ -667,84 +786,187 @@ async def test_mc02_gap_chat_reports_incomplete(tg: Tg) -> None:
 # AC-M11-01: MC-03; AC-M11-04 --------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("seconds", [1, 7, 3600, 2.2])
-async def test_ac_m11_04_flood_wait_is_rate_limited_with_telegrams_delay(tg: Tg, seconds: float) -> None:
-    tg.service.failure, tg.service.retry_after_s = "flood_wait", seconds
+@pytest.mark.parametrize("seconds", [1, 7, 3600])
+async def test_ac_m11_04_flood_wait_is_rate_limited_with_telegrams_delay(tg: Tg, db: Db, seconds: int) -> None:
+    """The service's sync records Telegram's flood wait as `connection_state.retry_after`: collect (Signals) is
+    rate_limited with the remaining delay; search and thread.read still answer from the archive, flagged."""
+    db.defer("svc-alpha", seconds)
+    err = await tg.error("telegram.messages.collect", {"chat_ref": REF["a-partners"]})
+    assert (err["code"], err["retryable"], err["message"]) == ("rate_limited", True, "Telegram flood wait")
+    assert seconds - 1 <= err["retry_after_s"] <= seconds, err
     for tool, args in (
-        ("telegram.messages.search", {"query": "status"}),
-        ("telegram.thread.read", {"chat_ref": REF["a-partners"]}),
-        ("telegram.messages.collect", {"chat_ref": REF["a-partners"]}),
+        ("telegram.messages.search", {"query": "status", "chat_refs": [REF["a-sales"]]}),
+        ("telegram.thread.read", {"chat_ref": REF["a-sales"]}),
     ):
-        err = await tg.error(tool, args)
-        assert (err["code"], err["retryable"]) == ("rate_limited", True), tool
-        assert seconds <= err["retry_after_s"] <= seconds + 1, (tool, err)
+        page = await tg.ok(tool, args)
+        assert (page["complete"], page["partial_reasons"]) == (False, ["rate_limited"]), tool
+    assert (await tg.ok("telegram.messages.collect", {"chat_ref": REF["b-ops"]}, principal=BETA_READER))["messages"]
+    db.sql("UPDATE telegram_archive.connection_state SET retry_after = clock_timestamp() - interval '1 s'")
+    assert (await tg.ok("telegram.messages.collect", {"chat_ref": REF["a-partners"]}))["messages"]  # it passed
 
 
 def test_flood_wait_bounds() -> None:
     assert tools.service_error(ServiceError("flood_wait", 0)).retry_after_s == 1
     assert tools.service_error(ServiceError("flood_wait", None)).retry_after_s == 1
+    assert tools.service_error(ServiceError("flood_wait", 2.2)).retry_after_s == 3
     assert tools.service_error(ServiceError("flood_wait", 10**9)).retry_after_s == 86400
 
 
-@pytest.mark.parametrize(
-    ("kind", "code", "retryable"),
-    [
-        ("busy", "temporarily_unavailable", True),
-        ("auth_required", "temporarily_unavailable", True),
-        ("provider_error", "temporarily_unavailable", True),
-        ("peer_inaccessible", "not_found", False),
-        ("chat_forbidden", "not_found", False),
-    ],
-)
-async def test_mc03_service_failures_keep_codes_and_retryable(tg: Tg, kind: str, code: str, retryable: bool) -> None:
-    tg.service.failure = kind  # type: ignore[assignment]
+async def test_mc03_archive_down_is_temporarily_unavailable(tg: Tg, db: Db, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, "telegram_connector.audit")
+    tg.service.dsn = tg.service.dsn.replace(db.name, "no_such_db")
     for tool, args in (
         ("telegram.messages.search", {"query": "status"}),
         ("telegram.thread.read", {"chat_ref": REF["a-partners"]}),
         ("telegram.messages.collect", {"chat_ref": REF["a-partners"]}),
     ):
         err = await tg.error(tool, args)
-        assert (err["code"], err["retryable"]) == (code, retryable), tool
-        assert "retry_after_s" not in err
+        assert err == {
+            "code": "temporarily_unavailable",
+            "message": "Telegram archive is not available",
+            "retryable": True,
+        }, tool
+    assert {(a["service_error"], a["error"]) for a in audit_lines(caplog)} == {("unavailable", "OperationalError")}
+
+
+async def test_mc03_chat_outside_the_scope_is_not_found(tg: Tg) -> None:
+    assert (await tg.error("telegram.messages.collect", {"chat_ref": FORGED}, principal=BETA_READER)) == NOT_FOUND
 
 
 async def test_mc03_timeout_after_the_request_was_sent(
-    env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    env: Env, db: Db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The service got the request and does not answer: the tool timeout (manifest limits.timeout_s) answers
-    temporarily_unavailable, retryable for a read, never timeout_before_start."""
+    """The archive got the query and does not answer (a lock): the tool timeout (manifest limits.timeout_s)
+    answers temporarily_unavailable, retryable for a read, never timeout_before_start."""
     manifest = yaml.safe_load((TG / "gxg-manifest.yaml").read_text(encoding="utf-8"))
     assert {t["limits"]["timeout_s"] for t in manifest["tools"]} == {20}
     for t in manifest["tools"]:
-        t["limits"]["timeout_s"] = 0.05
+        t["limits"]["timeout_s"] = 0.5
     (tmp_path / "m.yaml").write_text(yaml.safe_dump(manifest))
     monkeypatch.setattr(tools, "MANIFEST", tmp_path / "m.yaml")
-    service = FakeTelegramService()
-    service.delay_s = 0.5
-    app, connector = server.build(env.settings, service)
-    async with AsyncExitStack() as stack:
-        http, session = await connect(stack, app)
-        t = Tg(connector, http, session, env.issuer)
-        err = await t.error("telegram.thread.read", {"chat_ref": REF["a-partners"]})
+    with psycopg.connect(db.pg.dsn(db.name)) as locker:
+        locker.execute("LOCK TABLE telegram_archive.messages IN ACCESS EXCLUSIVE MODE")
+        async with AsyncExitStack() as stack:
+            t = await open_tg(stack, env, db)
+            started = time.monotonic()
+            err = await t.error("telegram.thread.read", {"chat_ref": REF["a-partners"]})
+            took = time.monotonic() - started
     assert err == {
         "code": "temporarily_unavailable",
-        "message": "Telegram service did not answer in time",
+        "message": "Telegram archive did not answer in time",
         "retryable": True,
     }
-    assert service.calls["read_thread"] == 1
+    assert t.service.calls["read_thread"] == 1 and took < 5
 
 
 # AC-M11-02 --------------------------------------------------------------------------------------
 
 
-async def test_ac_m11_02_the_connector_opens_no_telegram_session(tg: Tg) -> None:
-    before = tg.service.open_sessions
-    for i in range(30):
-        tg.service.failure = ("busy", None, "flood_wait")[i % 3]
-        tg.service.retry_after_s = 5
-        await tg.call("telegram.thread.read", {"chat_ref": REF["a-partners"]})
-        await tg.call("telegram.messages.search", {"query": "status"}, principal=BETA_READER)
-    assert tg.service.open_sessions == before == 2
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "INSERT INTO telegram_archive.connection_state (connection_id, retry_after) VALUES ('svc-alpha', now())",
+        "UPDATE telegram_archive.messages SET text = 'x' WHERE message_id = 1",
+        "DELETE FROM telegram_archive.chats",
+        "SELECT telegram_archive.apply_chat_batch('{}'::jsonb)",
+        "SELECT author_id FROM telegram_archive.messages LIMIT 1",  # column-level: not granted
+        "SELECT embedding FROM telegram_archive.messages LIMIT 1",
+        "SELECT metadata FROM capability_hub.connections LIMIT 1",
+        "CREATE TABLE telegram_archive.x (a int)",
+    ],
+)
+def test_ac_m11_02_the_archive_role_cannot_write_or_read_beyond_its_columns(db: Db, statement: str) -> None:
+    """ADR-0004: the connector reads with gxg_telegram_reader only; the archive and the session stay the service's.
+    Even with the read-only default switched off, the grants refuse."""
+    with psycopg.connect(db.dsn, autocommit=True) as conn:
+        conn.execute("SET default_transaction_read_only = off")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conn.execute(statement)
+        assert conn.execute("SELECT count(*) FROM telegram_archive.messages").fetchone() == (len(seed.messages()),)
+
+
+def test_ac_m11_02_reader_transactions_are_read_only(db: Db) -> None:
+    with psycopg.connect(db.dsn, autocommit=True) as conn, pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
+        conn.execute("DELETE FROM telegram_archive.chats")
+
+
+def test_vendored_schema_is_the_pinned_upstream() -> None:
+    """The archive schema is the contract with gxg_agents_v2 (ADR-0004): the vendored migrations are byte-for-byte
+    the ones archive/SOURCE.md pins (the upstream comparison itself: archive/check_upstream.sh)."""
+    import hashlib
+
+    source = (TG / "archive" / "SOURCE.md").read_text(encoding="utf-8")
+    pinned = dict(line.split()[::-1] for line in re.findall(r"^[0-9a-f]{64}  \S+$", source, re.M))
+    assert set(pinned) == {"20261105010000_telegram_archive.sql", "20261106010000_telegram_archive_semantic.sql"}
+    for name, digest in pinned.items():
+        assert hashlib.sha256((TG / "archive" / name).read_bytes()).hexdigest() == digest, name
+
+
+def test_contract_the_columns_the_adapter_reads_exist_with_their_types(db: Db) -> None:
+    """If gxg_agents_v2 renames or retypes a column the adapter reads, re-vendoring the migrations fails here."""
+    want = {
+        ("chats", "connection_id", "text"),
+        ("chats", "peer_id", "bigint"),
+        ("chats", "chat_ref", "text"),
+        ("chats", "state", "text"),
+        ("chats", "gap", "boolean"),
+        ("chats", "synced_at", "timestamp with time zone"),
+        ("messages", "connection_id", "text"),
+        ("messages", "peer_id", "bigint"),
+        ("messages", "message_id", "bigint"),
+        ("messages", "sent_at", "timestamp with time zone"),
+        ("messages", "edited_at", "timestamp with time zone"),
+        ("messages", "text", "text"),
+        ("messages", "caption", "text"),
+        ("messages", "reply_to", "bigint"),
+        ("messages", "media_type", "text"),
+        ("messages", "tsv", "tsvector"),
+        ("messages", "archived_at", "timestamp with time zone"),
+        ("connection_state", "connection_id", "text"),
+        ("connection_state", "retry_after", "timestamp with time zone"),
+    }
+    rows = db.sql("""SELECT table_name, column_name, data_type FROM information_schema.columns
+        WHERE table_schema = 'telegram_archive'""")
+    assert want <= {tuple(r) for r in rows}
+    granted = db.sql(
+        """SELECT table_name, column_name FROM information_schema.column_privileges
+        WHERE grantee = %s AND privilege_type = 'SELECT'""",
+        (seed.READER,),
+    )
+    assert {(t, c) for t, c, _ in want} == {tuple(r) for r in granted}  # exactly what the adapter reads
+
+
+async def test_chat_taken_out_of_scope_is_not_found_on_every_tool(tg: Tg, db: Db) -> None:
+    """CON-TG-02/06: the service's trigger purges a chat from the archive in the transaction that removes it from
+    the Connection's scope; from then on the connector answers not_found, also for a mask grant."""
+    ref = REF["b-ops"]
+    assert (await tg.ok("telegram.thread.read", {"chat_ref": ref}, principal=BETA_READER))["messages"]
+    db.sql(
+        """UPDATE capability_hub.connections SET metadata = jsonb_set(metadata, '{scope,chats}',
+        (SELECT coalesce(jsonb_agg(e), '[]') FROM jsonb_array_elements(metadata #> '{scope,chats}') e
+         WHERE e ->> 'chat_ref' <> %s)) WHERE id = 'svc-beta'""",
+        (ref,),
+    )
+    assert db.sql("SELECT count(*) FROM telegram_archive.chats WHERE chat_ref = %s", (ref,)) == [(0,)]
+    for tool, args in (
+        ("telegram.thread.read", {"chat_ref": ref}),
+        ("telegram.messages.collect", {"chat_ref": ref}),
+        ("telegram.messages.search", {"query": "status", "chat_refs": [ref]}),
+    ):
+        assert await tg.error(tool, args, principal=BETA_READER) == NOT_FOUND, tool
+    got = await tg.ok("telegram.messages.search", {"query": "status", "limit": 50}, principal=BETA_READER)
+    assert {i["id"].split(":")[0] for i in got["items"]} == {REF["b-public"]}
+
+
+async def test_mask_grant_and_a_chat_outside_the_scope_is_not_found_on_every_tool(tg: Tg) -> None:
+    """t-beta has a mask grant: chat_refs of t-alpha's Connection or forged ones are not in its archive."""
+    for ref in (REF["a-partners"], FORGED):
+        for tool, args in (
+            ("telegram.thread.read", {"chat_ref": ref}),
+            ("telegram.messages.collect", {"chat_ref": ref}),
+            ("telegram.messages.search", {"query": "status", "chat_refs": [ref]}),
+        ):
+            assert await tg.error(tool, args, principal=BETA_READER) == NOT_FOUND, (ref, tool)
 
 
 def test_ac_m11_02_no_telegram_client_library_in_the_lockfile() -> None:
@@ -775,7 +997,8 @@ def test_manifest_tools_are_read_only_and_schemas_exist() -> None:
 # configuration, bundle reload, audit and logging (server.py and TelegramTool.run are copies of demo's:
 # tested the same way) ---------------------------------------------------------------------------
 
-BASE = {"GXG_PROFILE": "test", "TELEGRAM_SERVICE": "fake"}
+DSN = "postgresql://gxg_telegram_reader:not-a-real-password@archive.invalid/archive"
+BASE = {"TELEGRAM_ARCHIVE_DSN": DSN}
 THREAD = "telegram.thread.read"
 
 
@@ -795,11 +1018,10 @@ def clean_env(tmp: Path) -> dict[str, str]:
 
 def test_defaults_and_values_come_from_the_environment(tmp_path: Path) -> None:
     s = server.Settings.from_env(BASE)
-    assert (s.profile, s.service, s.connections, s.test_controls, s.test_issuer_key, s.identity_keys) == (
-        "test",
-        "fake",
+    assert (s.profile, s.archive_dsn, s.connections, s.test_issuer_key, s.identity_keys) == (
+        "production",
+        DSN,
         {},
-        False,
         None,
         "",
     )
@@ -812,39 +1034,34 @@ def test_defaults_and_values_come_from_the_environment(tmp_path: Path) -> None:
     s = server.Settings.from_env(
         BASE
         | {
+            "GXG_PROFILE": "test",
             "TELEGRAM_STATE_FILE": str(path),
             "TELEGRAM_BUNDLE_DIR": str(tmp_path),
             "TELEGRAM_BUNDLE_KEYS": "k=v",
-            "TELEGRAM_TEST_CONTROLS": "1",
             "TELEGRAM_TEST_ISSUER_KEY": "i",
         }
     )
-    assert (s.state_file, s.bundle_dir, s.bundle_keys, s.test_controls, s.test_issuer_key) == (
+    assert (s.profile, s.state_file, s.bundle_dir, s.bundle_keys, s.test_issuer_key) == (
+        "test",
         path,
         tmp_path,
         "k=v",
-        True,
         "i",
     )
     assert server.Settings.from_env(BASE | {"TELEGRAM_IDENTITY_KEYS": "k=v"}).identity_keys == "k=v"
-    assert server.Settings.from_env(BASE | {"TELEGRAM_TEST_CONTROLS": "0"}).test_controls is False
+    assert server.Settings.from_env({"TELEGRAM_ARCHIVE_DSN": "postgres://x"}).archive_dsn == "postgres://x"
 
 
 @pytest.mark.parametrize(
     ("env", "reason"),
     [
-        ({"TELEGRAM_TEST_ISSUER_KEY": "k"}, "test issuer and test controls are allowed only with GXG_PROFILE=test"),
-        ({"TELEGRAM_TEST_CONTROLS": "1"}, "test issuer and test controls are allowed only with GXG_PROFILE=test"),
+        (BASE | {"TELEGRAM_TEST_ISSUER_KEY": "k"}, "the test issuer is allowed only with GXG_PROFILE=test"),
         (
-            BASE | {"TELEGRAM_TEST_ISSUER_KEY": "k", "TELEGRAM_IDENTITY_KEYS": "k=v"},
+            BASE | {"GXG_PROFILE": "test", "TELEGRAM_TEST_ISSUER_KEY": "k", "TELEGRAM_IDENTITY_KEYS": "k=v"},
             "TELEGRAM_TEST_ISSUER_KEY and TELEGRAM_IDENTITY_KEYS are exclusive",
         ),
-        ({}, "TELEGRAM_SERVICE: only `fake` with GXG_PROFILE=test; no adapter to the service yet"),
-        (
-            {"TELEGRAM_SERVICE": "fake"},
-            "TELEGRAM_SERVICE: only `fake` with GXG_PROFILE=test; no adapter to the service yet",
-        ),
-        ({"GXG_PROFILE": "test"}, "TELEGRAM_SERVICE: only `fake` with GXG_PROFILE=test; no adapter to the service yet"),
+        ({}, "TELEGRAM_ARCHIVE_DSN: expected postgresql://..."),
+        ({"TELEGRAM_ARCHIVE_DSN": "host=archive password=hunter2"}, "TELEGRAM_ARCHIVE_DSN: expected postgresql://..."),
         (
             BASE | {"TELEGRAM_CONNECTIONS": "x"},
             "TELEGRAM_CONNECTIONS: expected tenant=hub_connection:service_connection, once per tenant",
@@ -859,9 +1076,10 @@ def test_bad_configuration_does_not_start_and_says_why(
 ) -> None:
     assert server.main(clean_env(tmp_path) | env) == 2
     assert [json.loads(r.getMessage()) for r in caplog.records] == [{"event": "startup_refused", "reason": reason}]
+    assert "hunter2" not in caplog.text  # a bad DSN is never echoed
 
 
-def test_the_real_process_refuses_without_the_fake(tmp_path: Path) -> None:
+def test_the_real_process_refuses_without_an_archive(tmp_path: Path) -> None:
     proc = subprocess.run(
         [sys.executable, "-m", "telegram_connector"],
         check=False,
@@ -888,28 +1106,21 @@ def test_no_verifier_refuses_with_a_reason() -> None:
 
 def test_servers_listen_where_the_spec_says(env: Env) -> None:
     app, connector = server.build(env.settings)
-    assert isinstance(connector.service, FakeTelegramService)
     (only,) = server.configs(env.settings, app, connector)
     assert (only.host, only.port, only.log_level) == ("0.0.0.0", 8080, "warning")  # noqa: S104
-    with_ctl = dataclasses.replace(env.settings, test_controls=True)
-    ctl = server.configs(with_ctl, app, connector)[1]
-    assert (ctl.host, ctl.port) == ("127.0.0.1", 8090)
 
 
 # bundle, readiness ------------------------------------------------------------------------------
 
 
-async def test_bundle_is_reloaded_when_its_files_change(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+async def test_bundle_is_reloaded_when_its_files_change(env: Env, db: Db, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger="telegram_connector")
     good = {p.name: p.read_bytes() for p in env.settings.bundle_dir.iterdir()}
     shutil.rmtree(env.settings.bundle_dir)
     server.build(env.settings)  # a second build over the same state directory is fine
-    service = FakeTelegramService()
-    app, connector = server.build(env.settings, service)
-    assert connector.service is service
     async with AsyncExitStack() as stack:
-        http, session = await connect(stack, app)
-        t = Tg(connector, http, session, env.issuer)
+        t = await open_tg(stack, env, db)
+        http = t.http
         assert (await http.get("/readyz")).status_code == 503
         assert (await t.error(THREAD, {"chat_ref": REF["a-sales"]}))["code"] == "temporarily_unavailable"
         env.settings.bundle_dir.mkdir()
@@ -927,12 +1138,12 @@ async def test_bundle_is_reloaded_when_its_files_change(env: Env, caplog: pytest
     assert not_ready and all(e["reasons"] for e in not_ready)
 
 
-async def test_not_ready_service_is_logged_with_its_reason(tg: Tg, caplog: pytest.LogCaptureFixture) -> None:
+async def test_not_ready_archive_is_logged_with_its_reason(tg: Tg, db: Db, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger="telegram_connector")
-    tg.service.failure = "busy"
+    tg.service.dsn = tg.service.dsn.replace(db.name, "no_such_db")
     assert (await tg.http.get("/readyz")).status_code == 503
     [line] = [json.loads(r.getMessage()) for r in caplog.records if r.name == "telegram_connector"]
-    assert line == {"event": "not_ready", "reasons": ["telegram service is not available"]}
+    assert line == {"event": "not_ready", "reasons": ["telegram archive is not available"]}
 
 
 async def test_mcp_endpoint_is_stateless_json(tg: Tg) -> None:
@@ -952,15 +1163,15 @@ async def test_mcp_endpoint_is_stateless_json(tg: Tg) -> None:
 # audit ------------------------------------------------------------------------------------------
 
 
-async def test_audit_line_per_call(tg: Tg, caplog: pytest.LogCaptureFixture) -> None:
+async def test_audit_line_per_call(tg: Tg, db: Db, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger="telegram_connector")
     ids = [tg.identity(ALPHA_READER) for _ in range(5)]
     await tg.ok("telegram.messages.search", {"query": "status"}, identity=ids[0])
     await tg.ok(THREAD, {"chat_ref": REF["a-sales"]}, identity=ids[1])
     await tg.ok("telegram.messages.collect", {"chat_ref": REF["a-partners"]}, identity=ids[2])
     await tg.error(THREAD, {"chat_ref": REF["a-hidden"]}, identity=ids[3])
-    tg.service.failure, tg.service.retry_after_s = "flood_wait", 9
-    await tg.error(THREAD, {"chat_ref": REF["a-sales"]}, identity=ids[4])
+    db.defer("svc-alpha", 9)
+    await tg.error("telegram.messages.collect", {"chat_ref": REF["a-partners"]}, identity=ids[4])
     await tg.error(THREAD, {"chat_ref": REF["a-sales"]}, identity={})
     lines = audit_lines(caplog)
     assert all(isinstance(a.pop("duration_ms"), int) for a in lines)
@@ -983,16 +1194,25 @@ async def test_audit_line_per_call(tg: Tg, caplog: pytest.LogCaptureFixture) -> 
             "outcome": "ok",
         },
         {"request_id": jti(ids[3]), **who, "tool": THREAD, "outcome": "not_found"},
-        {"request_id": jti(ids[4]), **who, "tool": THREAD, "service_error": "flood_wait", "outcome": "rate_limited"},
+        {
+            "request_id": jti(ids[4]),
+            **who,
+            "tool": "telegram.messages.collect",
+            "service_error": "flood_wait",
+            "outcome": "rate_limited",
+        },
         {"tool": THREAD, "authorization_header": False, "outcome": "unauthenticated", "reason": "missing"},
     ]
     assert len(anonymous) == 36 and anonymous != jti(ids[0])
 
 
-async def test_duration_is_in_milliseconds(tg: Tg, caplog: pytest.LogCaptureFixture) -> None:
+async def test_duration_is_in_milliseconds(tg: Tg, db: Db, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO, logger="telegram_connector")
-    tg.service.delay_s = 0.3
-    await tg.ok(THREAD, {"chat_ref": REF["a-sales"]})
+    with psycopg.connect(db.pg.dsn(db.name)) as locker:
+        locker.execute("LOCK TABLE telegram_archive.messages IN ACCESS EXCLUSIVE MODE")
+        task = asyncio.create_task(tg.ok(THREAD, {"chat_ref": REF["a-sales"]}))
+        await asyncio.sleep(0.3)
+    await task  # the lock is released when the block closes the locker's transaction
     assert 300 <= audit_lines(caplog)[0]["duration_ms"] < 5000
 
 
@@ -1014,7 +1234,7 @@ def cf_identity(key: Ed25519PrivateKey, tool: str, args: dict[str, Any], kid: st
 
 
 async def test_contextforge_identity_is_verified_and_refusals_are_audited(
-    env: Env, caplog: pytest.LogCaptureFixture
+    env: Env, db: Db, caplog: pytest.LogCaptureFixture
 ) -> None:
     """ADR-0001 C: TELEGRAM_IDENTITY_KEYS -> the kit's ContextForgeVerifier with aud `telegram`; SEC-03 reasons."""
     caplog.set_level(logging.INFO, logger="telegram_connector")
@@ -1022,7 +1242,7 @@ async def test_contextforge_identity_is_verified_and_refusals_are_audited(
     settings = dataclasses.replace(
         env.settings, test_issuer_key=None, identity_keys=f"cf-1={public_key(key.public_key())}"
     )
-    app, connector = server.build(settings, FakeTelegramService())
+    app, connector = server.build(settings, Counting(db.dsn))
     args = {"chat_ref": REF["a-sales"]}
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
@@ -1101,8 +1321,8 @@ def test_real_process_writes_audit_to_stdout_and_frames_to_stderr(
     env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(Path(server.__file__).parents[1]), env.get("PYTHONPATH")]))
     served: list[Any] = []
     monkeypatch.setattr(server, "serve", served.append)
-    assert server.main(env | {"TELEGRAM_TEST_CONTROLS": "1"}) == 0
-    assert [c.port for c in served[0]] == [8080, 8090]
+    assert server.main(env) == 0
+    assert [c.port for c in served[0]] == [8080]
     proc = subprocess.run(
         [sys.executable, "-c", CHILD], env=env, capture_output=True, text=True, timeout=60, check=False
     )
@@ -1125,14 +1345,17 @@ def test_real_process_writes_audit_to_stdout_and_frames_to_stderr(
 def test_errors_are_exact() -> None:
     flood = tools.service_error(ServiceError("flood_wait", 2.5)).to_dict()
     assert flood == {"code": "rate_limited", "message": "Telegram flood wait", "retryable": True, "retry_after_s": 3}
-    down = tools.service_error(ServiceError("busy")).to_dict()
+    down = tools.service_error(ServiceError("unavailable")).to_dict()
     assert down == {
         "code": "temporarily_unavailable",
-        "message": "Telegram service is not available",
+        "message": "Telegram archive is not available",
         "retryable": True,
     }
+    assert tools.service_error(ServiceError("chat_forbidden")).to_dict() == NOT_FOUND
     assert tools.other(["sync_gap"]) == tools.other(["not_synced"]) == ["other"]
-    assert tools.other(["semantic_pending", "result_limit"]) == []
+    assert tools.other(["flood_wait"]) == ["rate_limited"]
+    assert tools.other(["sync_gap", "flood_wait"]) == ["other", "rate_limited"]
+    assert tools.other(["result_limit"]) == []
 
 
 async def test_invalid_input_names_the_path(tg: Tg) -> None:
@@ -1152,30 +1375,35 @@ async def test_defaults_page_sizes(tg: Tg) -> None:
     assert len((await tg.ok("telegram.messages.collect", {"chat_ref": REF["a-partners"], "limit": 9}))["messages"]) == 9
 
 
-async def test_media_without_text_and_text_at_the_budget(tg: Tg) -> None:
-    import random
-
+async def test_media_without_text_and_text_at_the_budget(tg: Tg, db: Db) -> None:
     ref = REF["a-sales"]
-    tg.service._append("svc-alpha", ref, "y" * 4000, random.Random(3))  # noqa: S311
-    chat = tg.service.chats["svc-alpha"][ref]
-    last = chat.messages[-1]
-    chat.messages.append(dataclasses.replace(last, message_id=last.message_id + 1, text=None, caption=None))
-    chat.archived_us.append(chat.archived_us[-1] + 1)
-    newest, exact = (await tg.ok(THREAD, {"chat_ref": ref, "limit": 2}))["messages"]
-    assert (newest["text"], newest["truncated"]) == ("", False)
-    assert (len(exact["text"]), exact["truncated"]) == (4000, False)
-
-    orig = tg.service.search
-
-    async def media(connection: str, query: str, chat_refs: list[str], limit: int) -> Any:
-        page = await orig(connection, query, chat_refs, limit)
-        return dataclasses.replace(page, items=[chat.messages[-1]])
-
-    tg.service.search = media  # type: ignore[method-assign]
-    got = await tg.ok("telegram.messages.search", {"query": "status", "chat_refs": [ref]})
+    exact_id = db.add("a-sales", "y" * 4000)
+    media_id = db.add("a-sales", None, None, "photo")
+    caption_id = db.add("a-sales", None, "a caption about the budget", "document")
+    caption, newest, exact = (await tg.ok(THREAD, {"chat_ref": ref, "limit": 3}))["messages"]
+    assert (caption["message_id"], caption["text"], caption["media_type"]) == (
+        caption_id,
+        "a caption about the budget",
+        "document",
+    )
+    assert (newest["message_id"], newest["text"], newest["truncated"]) == (media_id, "", False)
+    assert (exact["message_id"], len(exact["text"]), exact["truncated"]) == (exact_id, 4000, False)
+    got = await tg.ok("telegram.messages.search", {"query": "caption", "chat_refs": [ref]})
     assert got["items"] == [
-        {"id": f"{ref}:{last.message_id + 1}", "excerpt": "", "source_ref": f"telegram:tg-main/chat/{ref}"}
+        {
+            "id": f"{ref}:{caption_id}",
+            "excerpt": "a caption about the budget",
+            "source_ref": f"telegram:tg-main/chat/{ref}",
+        }
     ]
+    orig = tg.service.read_thread
+
+    async def no_text(*a: Any) -> Any:
+        page = await orig(*a)
+        return dataclasses.replace(page, items=[dataclasses.replace(m, text=None, caption=None) for m in page.items])
+
+    tg.service.read_thread = no_text  # type: ignore[method-assign,assignment]
+    assert {m["text"] for m in (await tg.ok(THREAD, {"chat_ref": ref}))["messages"]} == {""}
 
 
 async def test_items_of_another_granted_chat_are_dropped_when_chats_are_named(tg: Tg) -> None:
@@ -1192,12 +1420,10 @@ async def test_items_of_another_granted_chat_are_dropped_when_chats_are_named(tg
     assert got["items"] and {i["id"].split(":")[0] for i in got["items"]} == {REF["a-sales"]}
 
 
-async def test_more_than_128_scope_chats_is_truncated(tg: Tg) -> None:
-    beta = tg.service.chats["svc-beta"]
-    template = beta[REF["b-ops"]]
-    for i in range(130):
-        ref = f"tgc1_{i:032d}"
-        beta[ref] = dataclasses.replace(template, chat_ref=ref, messages=[], archived_us=[])
+async def test_more_than_128_scope_chats_is_truncated(tg: Tg, db: Db) -> None:
+    db.sql("""INSERT INTO telegram_archive.chats (connection_id, peer_id, chat_ref, state)
+        SELECT 'svc-beta', -1003000000000 - i, 'tgc1_' || lpad(i::text, 32, '0'), 'synced'
+        FROM generate_series(1, 128) i""")
     seen: list[int] = []
     orig = tg.service.search
 
@@ -1208,12 +1434,13 @@ async def test_more_than_128_scope_chats_is_truncated(tg: Tg) -> None:
     tg.service.search = spy  # type: ignore[method-assign]
     got = await tg.ok("telegram.messages.search", {"query": "status"}, principal=BETA_READER)
     assert seen == [128] and got["partial_reasons"] == ["truncated"] and got["complete"] is False
-    for _ in range(4):  # 128 exactly is not truncated
-        beta.pop(next(r for r in beta if r.startswith("tgc1_0")))
-    assert len(beta) == 128
+    db.sql(
+        "DELETE FROM telegram_archive.chats WHERE chat_ref IN ('tgc1_' || lpad('1', 32, '0'),"
+        " 'tgc1_' || lpad('2', 32, '0'))"
+    )
     assert (await tg.ok("telegram.messages.search", {"query": "status"}, principal=BETA_READER))[
         "partial_reasons"
-    ] == []
+    ] == []  # 128 exactly is not truncated
 
 
 async def test_cursor_offset_cannot_be_changed(tg: Tg) -> None:
@@ -1240,12 +1467,10 @@ async def test_collect_with_a_broken_port_answer_is_internal_error(tg: Tg) -> No
     assert err["code"] == "internal_error"
 
 
-async def test_no_bundle_refuses_even_a_tenant_without_a_connection(env: Env) -> None:
+async def test_no_bundle_refuses_even_a_tenant_without_a_connection(env: Env, db: Db) -> None:
     shutil.rmtree(env.settings.bundle_dir)
-    app, connector = server.build(env.settings, FakeTelegramService())
     async with AsyncExitStack() as stack:
-        http, session = await connect(stack, app)
-        t = Tg(connector, http, session, env.issuer)
+        t = await open_tg(stack, env, db)
         err = await t.error("telegram.messages.search", {"query": "x"}, principal="agent:t-gamma:reader")
         assert err["code"] == "temporarily_unavailable"
 
@@ -1255,15 +1480,6 @@ def test_keys_split_at_the_first_equals_sign() -> None:
     assert list(server.parse_keys(f"a={key}", "X")) == ["a"]
     with pytest.raises(server.ConfigError):
         server.parse_keys(f"a=b={key}", "X")
-
-
-async def test_test_controls_config_serves_the_fake(env: Env) -> None:
-    settings = dataclasses.replace(env.settings, test_controls=True)
-    app, connector = server.build(settings)
-    ctl = server.configs(settings, app, connector)[1].app
-    transport = httpx2.ASGITransport(app=ctl)  # type: ignore[arg-type]
-    async with httpx2.AsyncClient(transport=transport, base_url="http://t") as c:
-        assert (await c.get("/_test/service/stats")).json()["open_sessions"] == 2
 
 
 def test_main_quiets_the_sdk_loggers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1277,7 +1493,8 @@ def test_main_quiets_the_sdk_loggers(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 async def test_last_page_before_the_service_limit_is_not_truncated(tg: Tg) -> None:
     """offset + 2 * limit > 100 makes a page the last one; it is `truncated` only if the service had more."""
-    total = len(search_ids(await tg.ok("telegram.messages.search", {"query": "budget", "limit": 50})))
+    granted = {seed.PEER[c] for c in ("a-partners", "a-sales", "a-gap")}
+    total = sum(1 for m in seed.messages() if m["peer_id"] in granted and "budget" in (m["text"] or m["caption"]))
     assert 34 < total < 68  # fixtures: page 2 at limit 34 is the last one and holds the rest
     first = await tg.ok("telegram.messages.search", {"query": "budget", "limit": 34})
     second = await tg.ok("telegram.messages.search", {"query": "budget", "limit": 34, "cursor": first["next_cursor"]})

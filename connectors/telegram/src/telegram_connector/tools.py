@@ -1,9 +1,10 @@
 """The three read tools of the Telegram connector and the checks every call goes through.
 
 Order for every call (as `demo`): identity from the trusted channel (SEC-03, MCC-02) -> input schema ->
-grants: a named chat without a grant is `not_found` before any request to the service (GR-17, AC-M11-03);
-a search is narrowed to `allowed()` first and every item is checked again (GR-16) -> the service port.
-The service keeps its own Connection scope; grants only narrow it. Errors are `GxgError.to_dict()` as a tool
+grants: a named chat without a grant is `not_found` before any request to the archive (GR-17, AC-M11-03);
+a search is narrowed to `allowed()` first and every item is checked again (GR-16) -> the archive port
+(`archive.ArchiveService`), where a chat outside the Connection's scope is not in the archive and is
+`not_found` too: grants only narrow the scope (CON-TG-02). Errors are `GxgError.to_dict()` as a tool
 error (MCC-05); a flood wait is `rate_limited` with Telegram's delay (AC-M11-04). One JSON audit line per call
 without query, text, peer IDs or tokens (SEC-18, AC-M11-05).
 """
@@ -44,7 +45,8 @@ from .service import CHAT_REFS_MAX, SEARCH_LIMIT_MAX, Message, Reason, ServiceEr
 ROOT = Path(__file__).resolve().parents[2]  # connectors/telegram
 MANIFEST = ROOT / "gxg-manifest.yaml"
 DOMAIN, RTYPE = "telegram", "chat"
-EXCERPT_MAX, TEXT_MAX = 500, 4000
+# raw characters; escaping can grow each to `\u{XXXXX}` (9), within the schemas' 4000 and 40000
+EXCERPT_MAX, TEXT_MAX = 400, 4000
 audit = logging.getLogger("telegram_connector.audit")
 errors = logging.getLogger("telegram_connector.errors")  # stack frames of internal errors; main() sends them to stderr
 
@@ -77,9 +79,10 @@ def escape(text: str) -> str:
 
 
 def other(reasons: list[Reason]) -> list[str]:
-    """Archive completeness: a chat not yet synced or with a sync gap. `semantic_pending` concerns semantic ranking,
-    not this full-text search; `result_limit` becomes pagination."""
-    return ["other"] if {"sync_gap", "not_synced"} & set(reasons) else []
+    """Archive completeness in search-result's words: a chat not yet synced or with a sync gap is `other`; a
+    Telegram flood wait deferring the sync is `rate_limited`; `result_limit` becomes pagination."""
+    out = ["other"] if {"sync_gap", "not_synced"} & set(reasons) else []
+    return out + (["rate_limited"] if "flood_wait" in reasons else [])
 
 
 def service_error(exc: ServiceError) -> GxgError:
@@ -87,9 +90,9 @@ def service_error(exc: ServiceError) -> GxgError:
     if exc.kind == "flood_wait":
         delay = math.ceil(exc.retry_after_seconds or 0)  # Telegram's delay, never shortened (AC-M11-04)
         return GxgError("rate_limited", "Telegram flood wait", retry_after_s=min(max(delay, 1), 86400))
-    if exc.kind in ("chat_forbidden", "peer_inaccessible"):
-        return GxgError("not_found", NOT_FOUND)  # outside the service scope: the same as no grant (GR-17)
-    return GxgError("temporarily_unavailable", "Telegram service is not available")  # busy, auth_required, provider
+    if exc.kind == "chat_forbidden":
+        return GxgError("not_found", NOT_FOUND)  # outside the Connection's scope: the same as no grant (GR-17)
+    return GxgError("temporarily_unavailable", "Telegram archive is not available")
 
 
 class TelegramTool(Tool):
@@ -121,9 +124,9 @@ class TelegramTool(Tool):
                 content, fields = await asyncio.wait_for(self.handler(ident, arguments), self.timeout)
             except TimeoutError:
                 # sent to the service, no answer: a read is safe to repeat; never timeout_before_start (MCC-05)
-                raise GxgError("temporarily_unavailable", "Telegram service did not answer in time") from None
+                raise GxgError("temporarily_unavailable", "Telegram archive did not answer in time") from None
             except ServiceError as exc:
-                entry["service_error"] = exc.kind
+                entry |= {"service_error": exc.kind} | ({"error": exc.detail} if exc.detail else {})
                 raise service_error(exc) from None
             entry |= fields | {"outcome": "ok"}
             return ToolResult(structured_content=content)
@@ -142,13 +145,13 @@ class TelegramTool(Tool):
             audit.info(json.dumps(redact(entry)))
 
 
-def _text(m: Message) -> str:
-    """The message text, or the caption of a media message; never instructions (SEC-11)."""
-    return escape(m.text or m.caption or "")
+def _raw(m: Message) -> str:
+    """The message text, or the caption of a media message; never instructions (SEC-11). Cut, then `escape`."""
+    return m.text or m.caption or ""
 
 
 def _message(m: Message) -> dict[str, Any]:
-    text = _text(m)
+    raw = _raw(m)
     return {
         "id": f"{m.chat_ref}:{m.message_id}",
         "message_id": m.message_id,
@@ -156,8 +159,8 @@ def _message(m: Message) -> dict[str, Any]:
         "edited_at": m.edited_at,
         "reply_to": m.reply_to,
         "media_type": m.media_type,
-        "text": text[:TEXT_MAX],  # the response budget of thread.read (connectors/telegram.md)
-        "truncated": len(text) > TEXT_MAX,
+        "text": escape(raw[:TEXT_MAX]),  # the response budget of thread.read (connectors/telegram.md)
+        "truncated": len(raw) > TEXT_MAX,
     }
 
 
@@ -237,7 +240,7 @@ class Connector:
                 items.append(
                     {
                         "id": f"{m.chat_ref}:{m.message_id}",
-                        "excerpt": _text(m)[:EXCERPT_MAX],
+                        "excerpt": escape(_raw(m)[:EXCERPT_MAX]),
                         "source_ref": rid(conn[0], m.chat_ref),
                     }
                 )

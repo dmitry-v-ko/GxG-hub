@@ -8,3 +8,4 @@
 **/mutants
 **/.pytest_cache
 connectors/telegram/tests
+connectors/telegram/archive

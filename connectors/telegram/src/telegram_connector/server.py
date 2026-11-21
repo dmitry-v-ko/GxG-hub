@@ -1,9 +1,10 @@
 """MCP server of the Telegram connector: FastMCP over Streamable HTTP plus /healthz and /readyz (MCC-09).
 
-Configuration (environment; no secrets, only public keys, paths and ids):
-  GXG_PROFILE               `test` allows the fake service, the test identity issuer and test controls
-  TELEGRAM_SERVICE          `fake` (test profile only). There is no network adapter to the existing service yet
-                            (reports/M11-ESCALATION.md): any other value refuses to start
+Configuration (environment; one secret, TELEGRAM_ARCHIVE_DSN):
+  GXG_PROFILE               `test` allows the test identity issuer
+  TELEGRAM_ARCHIVE_DSN      libpq URI of the telegram_archive database, role gxg_telegram_reader
+                            (archive/reader_role.sql, ADR-0004): `postgresql://...`; required. A secret (SEC-16):
+                            never logged, never returned
   TELEGRAM_CONNECTIONS      `tenant=hub_connection:service_connection[,...]`: the Connection used for a verified
                             tenant (MCC-03); a tenant without one reads nothing
   TELEGRAM_BUNDLE_DIR       directory with grants-bundle.json and grants-bundle.json.sig (GR-11a)
@@ -12,7 +13,6 @@ Configuration (environment; no secrets, only public keys, paths and ids):
   TELEGRAM_IDENTITY_KEYS    `kid=ed25519:<base64url>[,...]`: ContextForge identity adapter keys (ADR-0001 C);
                             without them every call is refused
   TELEGRAM_TEST_ISSUER_KEY  test profile only: public key of the test identity issuer
-  TELEGRAM_TEST_CONTROLS=1  test profile only: the fake service's controls on 127.0.0.1:8090
 shortcut: Settings, parse_keys, BundleFiles and NoVerifier repeat demo's server.py; into gxg-connector-kit with
 the connector template.
 """
@@ -42,7 +42,7 @@ from gxg_connector_kit.cf_identity import ContextForgeVerifier
 from gxg_connector_kit.grants import BundleError, BundleStore
 from gxg_connector_kit.identity import IdentityVerifier, StubVerifier, VerifiedIdentity
 
-from .fake import FakeTelegramService
+from .archive import ArchiveService
 from .service import TelegramService
 from .tools import Connector, errors
 
@@ -59,34 +59,32 @@ class ConfigError(Exception):
 @dataclass(frozen=True)
 class Settings:
     profile: str
-    service: str
+    archive_dsn: str
     connections: dict[str, tuple[str, str]]
     bundle_dir: Path
     bundle_keys: str
     state_file: Path
     test_issuer_key: str | None
-    test_controls: bool
     identity_keys: str = ""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:
         s = cls(
             profile=env.get("GXG_PROFILE", "production"),
-            service=env.get("TELEGRAM_SERVICE", ""),
+            archive_dsn=env.get("TELEGRAM_ARCHIVE_DSN", ""),
             connections=parse_connections(env.get("TELEGRAM_CONNECTIONS", "")),
             bundle_dir=Path(env.get("TELEGRAM_BUNDLE_DIR", "/bundle")),
             bundle_keys=env.get("TELEGRAM_BUNDLE_KEYS", ""),
             state_file=Path(env.get("TELEGRAM_STATE_FILE", "/var/lib/telegram/bundle-state.json")),
             test_issuer_key=env.get("TELEGRAM_TEST_ISSUER_KEY") or None,
-            test_controls=env.get("TELEGRAM_TEST_CONTROLS") == "1",
             identity_keys=env.get("TELEGRAM_IDENTITY_KEYS", ""),
         )
-        if s.profile != "test" and (s.test_issuer_key is not None or s.test_controls):
-            raise ConfigError("test issuer and test controls are allowed only with GXG_PROFILE=test")
+        if s.profile != "test" and s.test_issuer_key is not None:
+            raise ConfigError("the test issuer is allowed only with GXG_PROFILE=test")
         if s.test_issuer_key is not None and s.identity_keys:
             raise ConfigError("TELEGRAM_TEST_ISSUER_KEY and TELEGRAM_IDENTITY_KEYS are exclusive")
-        if s.service != "fake" or s.profile != "test":
-            raise ConfigError("TELEGRAM_SERVICE: only `fake` with GXG_PROFILE=test; no adapter to the service yet")
+        if not s.archive_dsn.startswith(("postgresql://", "postgres://")):
+            raise ConfigError("TELEGRAM_ARCHIVE_DSN: expected postgresql://...")  # never echo the value
         return s
 
 
@@ -160,10 +158,12 @@ def create_app(
 
     @mcp.custom_route("/readyz", methods=["GET"])
     async def readyz(_: Request) -> JSONResponse:
-        # Read-only connector: the service port + a valid bundle; no Approval Service (MCC-09).
+        # Read-only connector: the archive database + a valid bundle; no Approval Service (MCC-09).
         refresh()
         ready = store.readiness()
-        reasons = list(ready.reasons) + ([] if connector.service.ready() else ["telegram service is not available"])
+        reasons = list(ready.reasons) + (
+            [] if await connector.service.ready() else ["telegram archive is not available"]
+        )
         if reasons:
             log.warning(json.dumps({"event": "not_ready", "reasons": reasons}))
         # The reasons stay in the log: /readyz does not disclose configuration (MCC-09).
@@ -173,7 +173,7 @@ def create_app(
 
 
 def build(settings: Settings, service: TelegramService | None = None) -> tuple[Starlette, Connector]:
-    service = service or FakeTelegramService()
+    service = service or ArchiveService(settings.archive_dsn)
     settings.state_file.parent.mkdir(parents=True, exist_ok=True)
     store = BundleStore(parse_keys(settings.bundle_keys, "TELEGRAM_BUNDLE_KEYS"), state_file=settings.state_file)
     files = BundleFiles(store, settings.bundle_dir)
@@ -188,13 +188,7 @@ def build(settings: Settings, service: TelegramService | None = None) -> tuple[S
 
 
 def configs(settings: Settings, app: Starlette, connector: Connector) -> list[uvicorn.Config]:
-    out = [uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")]  # noqa: S104
-    if settings.test_controls:
-        from .testctl import create_app as test_app  # noqa: PLC0415 - absent in the production image
-
-        assert isinstance(connector.service, FakeTelegramService)  # noqa: S101 - from_env allows only the fake
-        out.append(uvicorn.Config(test_app(connector.service), host="127.0.0.1", port=8090))
-    return out
+    return [uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")]  # noqa: S104
 
 
 def serve(configs: list[uvicorn.Config]) -> None:

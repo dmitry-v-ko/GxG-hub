@@ -7,6 +7,7 @@ dependencies = [
     "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn
     "gxg-connector-kit",
     "pyyaml>=6,<7",  # gxg-manifest.yaml is read at start; already installed by fastmcp
+    "psycopg[binary]>=3.2,<4",  # the telegram_archive database of the existing service (ADR-0004)
 ]
 # No Telegram client library (telethon, pyrogram, pyrofork, tdlib): the existing service is the only
 # session owner (AC-M11-02); tests/test_telegram.py checks uv.lock.
@@ -27,6 +28,7 @@ dev = ["pytest>=8.3,<10", "gxg-policy", "mutmut==3.8.1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["archive"]  # archive/seed.py: schema and synthetic fixtures of the test database
 addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
 xfail_strict = true
 
