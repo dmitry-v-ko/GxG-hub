@@ -11,9 +11,11 @@
 | 3 | RID чата | `telegram:<connection>/chat/<chat_ref>`; примеры в спеках обновлены |
 | — | DoD-1 без минут GitHub Actions | Зелёный локальный `scripts/ci/check-all.sh` на проверяемом commit, вывод — `ci_local` в отчёте |
 
-## Ждут владельца (работу не блокируют, `pending_owner_decision`)
+## Решены оркестратором по поручению владельца (2026-11-21, `reports/progress.md` ветки плана)
 
-| # | Вопрос | Вариант по умолчанию |
+| # | Вопрос | Решение |
 | --- | --- | --- |
-| 4 | **Ключ дедупликации для M12.** Существующий сбор Chat folders отдаёт `externalId = <peer_id>:<message_id>`; коннектор не выдаёт peer ID (MCC-04) и отдаёт `id = <chat_ref>:<message_id>`, сбор — по чату, а не по папке. Переход Signals на Hub изменит ключ `SourceInboxItem` для Telegram | M12 сопоставляет ключи один раз (таблица `chat_ref → peer` в Signals из той же базы архива) или принимает новый ключ с переходом; решение — в задании M12 |
-| 5 | **Кто выдаёт роль в production.** `gxg_telegram_reader` нужен `BYPASSRLS` (RLS в миграциях принудительный и без политик), это право выдаёт суперпользователь базы Supabase. Альтернатива — политика `SELECT` для роли, но это миграция в gxg_agents_v2 | Оператор базы выполняет `connectors/telegram/archive/reader_role.sql` и задаёт пароль из secret store; миграций в gxg_agents_v2 не нужно |
+| 4 | **Ключ дедупликации для M12.** Существующий сбор Chat folders отдаёт `externalId = <peer_id>:<message_id>`; коннектор не выдаёт peer ID (MCC-04) и отдаёт `id = <chat_ref>:<message_id>`, сбор — по чату, а не по папке. Переход Signals на Hub изменит ключ `SourceInboxItem` для Telegram | Решается в задании M12: сопоставление ключей один раз или переход на новый ключ |
+| 5 | **Кто выдаёт роль в production.** `gxg_telegram_reader` нужен `BYPASSRLS` (RLS в миграциях принудительный и без политик), это право выдаёт суперпользователь базы Supabase. Альтернатива — политика `SELECT` для роли, но это миграция в gxg_agents_v2 | Принят вариант по умолчанию: оператор базы выполняет `connectors/telegram/archive/reader_role.sql`, пароль из secret store; миграций в gxg_agents_v2 нет |
+
+Открытых вопросов у M11 нет.
