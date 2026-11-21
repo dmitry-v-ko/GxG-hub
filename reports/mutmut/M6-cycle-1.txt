@@ -1,0 +1,93 @@
+== tools/gxg-policy: {"killed":2555,"survived":35,"total":2590,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== connectors/demo: {"killed":832,"survived":7,"total":841,"no_tests":2,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== connectors/kb: {"killed":665,"survived":5,"total":670,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== gateway/contextforge: {"killed":132,"survived":1,"total":133,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== packages/gxg-connector-kit: {"killed":1066,"survived":11,"total":1077,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== .: {"killed":1211,"survived":24,"total":1235,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+not killed: 85, listed as equivalent: 85
+gxg_policy.lint.x_load_manifests__mutmut_3  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.lint.x_load_manifests__mutmut_5  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.lint.xǁ_Linterǁrid__mutmut_13  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+gxg_policy.lint.xǁ_Linterǁrid__mutmut_16  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+gxg_policy.diff.xǁ_Diffǁnumber__mutmut_12  # unreachable difference: guarded by `base != head` / decisions differ, so > and >= (< and <=) agree
+gxg_policy.diff.xǁ_Diffǁnumber__mutmut_22  # unreachable difference: guarded by `base != head` / decisions differ, so > and >= (< and <=) agree
+gxg_policy.diff.xǁ_Diffǁgrants__mutmut_31  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.xǁ_Diffǁgrants__mutmut_85  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_9  # unreachable difference: guarded by `base != head` / decisions differ, so > and >= (< and <=) agree
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_173  # not h.get("step_up", None) == not h.get("step_up", False): both defaults are falsy
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_175  # not h.get("step_up", None) == not h.get("step_up", False): both defaults are falsy
+gxg_policy.diff.xǁ_Diffǁsets__mutmut_23  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.xǁ_Diffǁplatform__mutmut_43  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.xǁ_Diffǁplatform__mutmut_87  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.x_diff__mutmut_29  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.diff.x_diff__mutmut_23  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.diff.x_diff__mutmut_43  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.diff.x_diff__mutmut_65  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.diff.x_diff__mutmut_59  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.bundle.x__sorted__mutmut_9  # "UTF-16-BE" and "utf-16-be" name the same codec
+gxg_policy.bundle.x_jcs__mutmut_2  # ensure_ascii=None is falsy, the same as False
+gxg_policy.bundle.x_unb64url__mutmut_6  # Python's non-strict base64 decoding ignores surplus "=" padding; every valid input decodes the same
+gxg_policy.bundle.x_unb64url__mutmut_7  # Python's non-strict base64 decoding ignores surplus "=" padding; every valid input decodes the same
+gxg_policy.bundle.x_bundle_doc__mutmut_33  # build() gets linted policies only (bundle_doc refuses any error; a group ref without a groups map is a lint error), so the default is never used
+gxg_policy.bundle.x_bundle_doc__mutmut_35  # build() gets linted policies only (bundle_doc refuses any error; a group ref without a groups map is a lint error), so the default is never used
+gxg_policy.load.x_parse_ts__mutmut_1  # astimezone(None) vs UTC: aware datetimes compare and subtract by instant; parse_ts results are only compared
+gxg_policy.load.x_validator__mutmut_4  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_validator__mutmut_6  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_validator__mutmut_18  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_validator__mutmut_21  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_load__mutmut_28  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+gxg_policy.load.x_load__mutmut_31  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+gxg_policy.load.x_load__mutmut_54  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_load__mutmut_56  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_codeowners__mutmut_5  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_codeowners__mutmut_8  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_github_api__mutmut_16  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_17  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_19  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_20  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_24  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_25  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_upsert_comment__mutmut_23  # a comment without a body: "XXXX".startswith(marker) is false like "".startswith(marker), the marker starts with "<!--"
+scripts.ci.widening_gate.x_report_out__mutmut_7  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_report_out__mutmut_10  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_report_out__mutmut_14  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_run__mutmut_80  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_run__mutmut_83  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_main__mutmut_61  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_63  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_65  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_67  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_76  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_78  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_89  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_94  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_125  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_127  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.diff.xǁ_Diffǁtools__mutmut_39  # add(None, ...) vs add(False, ...): add() only tests truthiness
+demo_connector.backend.xǁBackendǁ_scan__mutmut_7  # M3: `>=` -> `>` on time.monotonic() vs a float deadline; equal only at the same nanosecond, no test can tell
+demo_connector.tools.xǁDemoToolǁrun__mutmut_133  # M3: duration_ms * 1001 instead of * 1000: 0.1 % off a log field, no observable behaviour
+demo_connector.tools.x_load_schema__mutmut_4  # M3: keeping `..` in the tail still finds the same file: the parent walk reaches it as d/../../schemas/… from connectors/demo (or its mutants/ copy)
+demo_connector.tools.xǁConnectorǁtools__mutmut_11  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+demo_connector.tools.xǁConnectorǁtools__mutmut_13  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+demo_connector.server.xǁBundleFilesǁ__init____mutmut_3  # M3: _seen None vs "": both mean "nothing loaded yet"; an (mtime, mtime) tuple never equals either
+demo_connector.server.x_configs__mutmut_19  # M3: no host= on the test-controls Config: uvicorn's default host is "127.0.0.1", the same binding (test_servers_listen_where_the_spec_says)
+demo_connector.server.x_serve__mutmut_1  # M3: serve() runs uvicorn forever on real sockets, which the test run forbids (--disable-socket); covered on the real image by docker_smoke.sh (/readyz, tools/call on :8080, CI job demo-image)
+demo_connector.server.x_serve__mutmut_2  # M3: serve() runs uvicorn forever on real sockets, which the test run forbids (--disable-socket); covered on the real image by docker_smoke.sh (/readyz, tools/call on :8080, CI job demo-image)
+gxg_identity.core.x_args_hash__mutmut_5  # ensure_ascii=None is falsy: the same output as ensure_ascii=False
+gxg_connector_kit._jwt.x_verify__mutmut_41  # M1: `not isinstance(kid, str) or not kid` → `and`: PyJWT already rejects a non-string kid as malformed; an empty kid then reaches key_for, matches no JWKS kid / no thumbprint → the same 'kid' rejection
+gxg_connector_kit._jwt.x_verify__mutmut_70  # M1: PyJWT option key `verify_nbf` renamed: PyJWT then uses its default (check nbf only if present); neither token type has nbf, so tokens of our issuers are judged the same
+gxg_connector_kit._jwt.x_verify__mutmut_71  # M1: same as _70 (key upper-cased)
+gxg_connector_kit._jwt.x_verify__mutmut_72  # M1: same as _70 (`verify_nbf: True`)
+gxg_connector_kit._jwt.x_verify__mutmut_76  # M1: PyJWT option key `verify_iss` renamed: default verify_iss is True, but we pass no `issuer`, and PyJWT skips the check when issuer is None; iss is checked by our allowlist
+gxg_connector_kit._jwt.x_verify__mutmut_77  # M1: same as _76 (key upper-cased)
+gxg_connector_kit._jwt.x_verify__mutmut_78  # M1: same as _76 (`verify_iss: True`)
+gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4  # M1: `_keys = None`: never read before the first _current() assigns it (_refetch_at = -inf forces a fetch on first use)
+gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8  # M1: `float("-INF")`: Python parses it case-insensitively, same value
+gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27  # M1: `cast(None, claims)`: typing.cast is a no-op at runtime
+gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is falsy: the same output as ensure_ascii=False
+kb_connector.tools.x_load_schema__mutmut_4  # M6: as demo_connector.tools.x_load_schema__mutmut_4: keeping `..` in the tail still finds the same file by the parent walk
+kb_connector.tools.xǁKbToolǁrun__mutmut_134  # M6: as demo's run__mutmut_133: duration_ms * 1001 instead of * 1000, 0.1 % off a log field, no observable behaviour
+kb_connector.tools.xǁConnectorǁtools__mutmut_11  # M6: as demo: encoding None = locale encoding, UTF-8 on the CI runner; the manifest is ASCII
+kb_connector.tools.xǁConnectorǁtools__mutmut_13  # M6: as demo: codec names are case-insensitive
+kb_connector.tools.xǁConnectorǁ_readable__mutmut_11  # M6: the connection returned with an empty set is never used: no search, no item, no source_ref
+mutmut: OK, no surviving non-equivalent mutants

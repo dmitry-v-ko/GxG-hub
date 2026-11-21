@@ -575,7 +575,10 @@ async def test_no_bundle_get_does_not_reach_the_kb(env: Env) -> None:
     app, connector = server.build(settings, Backend())
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
-        err = await Kb(connector, http, session, env.issuer).error(GET, {"document_id": SALES[0]})
+        k = Kb(connector, http, session, env.issuer)
+        assert (await k.error(GET, {"document_id": SALES[0]}))["code"] == "temporarily_unavailable"
+        del connector.backend.connections["t-alpha"]  # even where no grant lookup would happen
+        err = await k.error(SEARCH, {"query": "x", "collections": ["sales"]})
         assert err["code"] == "temporarily_unavailable"
     assert connector.backend.calls.total() == 0  # GR-12 before the KB lookup of the collection
 
@@ -654,4 +657,5 @@ async def test_internal_error_frames_go_to_the_errors_log(
     assert head == f"internal_error {line['request_id']} KeyError"
     lines = frames.split("\n")
     assert len(lines) >= 2 and all(re.fullmatch(r"\S+:\d+ in \S+", f) for f in lines), lines
-    assert lines[-1].endswith(" in boom") and "test_kb.py:" in lines[-1]
+    assert all(f.startswith("/") for f in lines), lines  # one "<absolute path>:<line> in <name>" per line
+    assert lines[-1].endswith(" in boom") and "/test_kb.py:" in lines[-1]
