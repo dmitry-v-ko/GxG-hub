@@ -83,7 +83,7 @@ def claims_for(
     local, at, domain = email.partition("@")
     if not at or not local or domain != tenant.agent_domain:
         raise Denied("caller is not an agent of this tenant")
-    aud = cfg.connectors.get(gateway_id or "")
+    aud = cfg.connectors.get(gateway_id) if gateway_id else None
     if aud is None:
         raise Denied("gateway is not a registered connector")
     iat = int(now())

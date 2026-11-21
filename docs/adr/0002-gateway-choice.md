@@ -15,6 +15,18 @@
 
 **Когда пересмотреть.** Переход на ToolHive (путь webhook) имеет смысл, если в M5 ContextForge не выполнит условие 4 GO/NO-GO: `unified_pdp`, deny by default на всех путях. Формат JWS и claims не меняются, подписант — тот же Python-код. Меняется канал: `IdentityVerifier` читает JWS из `params._meta["gxg.dev/identity"]`, это правка SEC-03. Перед переходом нужно сначала решить топологию (Kubernetes или `thv run` без root-доступа к docker) и проверить её вживую.
 
+## M5: условие 4
+
+Проверено на dev-стенде M5 (2026-11-21, [stand/README.md](../../stand/README.md), [отчёт](../../reports/conformance/M5.json)). Встроенный плагин `unified_pdp` ContextForge v1.1.1: движок `native`, `default_decision: deny`, `combination_mode: all_must_allow`, кеш решений выключен. Правила — точный email агента × точное имя tool ([`stand/unified_pdp.rules.json`](../../stand/unified_pdp.rules.json)). Плагин стоит перед адаптером identity, поэтому запрещённый вызов не получает и JWS.
+
+- Без правила allow вызов отклоняется (`PDP_DENY`) на `/rpc`, на virtual server и по алиасу. До коннектора он не доходит (по аудиту `demo`).
+- Глобальный `/mcp` отказывает team-scoped токену агента для любого tool (RBAC `tools.execute`), как в M4.
+- Deny-правило `tools.invoke.*execute*` срабатывает раньше allow. Проверено ошибочным allow на `demo-message-execute` для `t-alpha:reader`.
+- Неизвестный правилам субъект (токен platform admin) отклоняется.
+- Если файл правил не читается, `native` остаётся без правил и запрещает всё. Если плагин не загрузился, ContextForge не стартует (`PLUGINS_FAIL_ON_PLUGIN_ERROR=true`).
+
+**Итог: условие 4 выполнено, переход на ToolHive не нужен.** Одна находка: REST-tool, созданный с `visibility` рядом с `team_id`, а не внутри `tool`, становится `public` и виден агентам других team. Вызвать его не даёт `unified_pdp`: deny by default. Bootstrap стенда ставит `visibility` внутри `tool` и чинит существующие записи.
+
 ## Закреплённые версии
 
 | Кандидат | Образ | Источник |

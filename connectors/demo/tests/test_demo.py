@@ -29,6 +29,7 @@ from typing import Any, cast
 
 import httpx2
 import jsonschema
+import jwt
 import pytest
 import yaml
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -40,6 +41,7 @@ from demo_connector import tools as tools_module
 from demo_connector.backend import Backend, Note
 from demo_connector.tools import Connector
 from gxg_connector_kit import TokenError
+from gxg_connector_kit import cf_identity as cf
 from gxg_connector_kit.identity import StubIssuer
 from gxg_policy import cli as policy_cli
 
@@ -982,3 +984,106 @@ def test_real_process_writes_audit_to_stdout_and_frames_to_stderr(
     assert re.search(rf"^internal_error {lines[1]['request_id']} RuntimeError$", proc.stderr, re.M), proc.stderr
     assert re.search(r"^\S+:\d+ in verify$", proc.stderr, re.M), proc.stderr
     assert "demo-secret-XYZ" not in proc.stdout + proc.stderr
+
+
+# M5: identity from ContextForge (ADR-0001 variant C), backend failure modes of the stand ------------
+
+
+def cf_identity(key: Ed25519PrivateKey, tool: str, args: dict[str, Any], principal: str = ALPHA_READER) -> str:
+    now = int(time.time())
+    claims = {
+        "iss": cf.ISSUER,
+        "aud": "demo",
+        "sub": principal,
+        "tenant_id": principal.split(":")[1],
+        "tool": tool,
+        "iat": now,
+        "exp": now + 60,
+        "jti": secrets.token_hex(16),
+        "request_id": "cf-req",
+        "ahs": cf.args_hash(args),
+    }
+    return jwt.encode(claims, key, algorithm="EdDSA", headers={"typ": cf.TYP, "kid": "cf-1"})
+
+
+async def test_contextforge_identity_keys_select_the_kit_verifier(env: Env) -> None:
+    key = Ed25519PrivateKey.generate()
+    settings = dataclasses.replace(
+        env.settings, profile="production", test_issuer_key=None, identity_keys=f"cf-1={public_key(key.public_key())}"
+    )
+    app, connector = server.build(settings, Backend(scan_delay_s=0))
+    args = {"query": "status", "limit": 2}
+    async with AsyncExitStack() as stack:
+        http, session = await connect(stack, app)
+        demo = Demo(connector, http, session, env.issuer)
+        own = {"x-gxg-identity": cf_identity(key, "demo.notes.search", args)}
+        assert len((await demo.ok("demo.notes.search", args, identity=own))["items"]) == 2
+        for bad in (
+            cf_identity(key, "demo.boards.list", args),  # signed for another tool
+            cf_identity(key, "demo.notes.search", {"query": "status", "limit": 3}),  # for other arguments
+            cf_identity(Ed25519PrivateKey.generate(), "demo.notes.search", args),  # another key
+        ):
+            assert await demo.error("demo.notes.search", args, identity={"x-gxg-identity": bad}) == "unauthenticated"
+        stub = demo.identity(ALPHA_READER)  # the test issuer is not accepted next to the ContextForge keys
+        assert await demo.error("demo.boards.list", identity=stub) == "unauthenticated"
+
+
+def test_identity_keys_come_from_the_environment_and_exclude_the_test_issuer() -> None:
+    assert server.Settings.from_env({"DEMO_IDENTITY_KEYS": "k=v"}).identity_keys == "k=v"
+    assert server.Settings.from_env({}).identity_keys == ""
+    env = {"GXG_PROFILE": "test", "DEMO_TEST_ISSUER_KEY": "k", "DEMO_IDENTITY_KEYS": "k=v"}
+    with pytest.raises(server.ConfigError, match=r"^DEMO_TEST_ISSUER_KEY and DEMO_IDENTITY_KEYS are exclusive$"):
+        server.Settings.from_env(env)
+    assert server.Settings.from_env({"GXG_PROFILE": "test", "DEMO_TEST_ISSUER_KEY": "k"}).identity_keys == ""
+
+
+def test_bad_identity_keys_do_not_start(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    env = {"DEMO_STATE_FILE": str(tmp_path / "s.json"), "DEMO_BUNDLE_DIR": str(tmp_path), "DEMO_IDENTITY_KEYS": "x"}
+    assert server.main(env) == 2
+    assert json.loads(caplog.records[-1].getMessage())["reason"] == (
+        "DEMO_IDENTITY_KEYS: expected kid=ed25519:<base64url>"
+    )
+
+
+async def test_backend_failure_modes_through_the_test_controls(demo: Demo) -> None:
+    """stand MC-03: every backend call fails with the chosen code, or waits; null repairs it."""
+    want = {
+        "rate_limited": {
+            "code": "rate_limited",
+            "message": "backend rate limit",
+            "retryable": True,
+            "retry_after_s": 7,
+        },
+        "temporarily_unavailable": {
+            "code": "temporarily_unavailable",
+            "message": "backend is not available",
+            "retryable": True,
+        },
+        "timeout_before_start": {
+            "code": "timeout_before_start",
+            "message": "backend is not available",
+            "retryable": True,
+        },
+    }
+    note = notes_of(demo.backend, "t-alpha", "a-public")[0]
+    async with httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=testctl.create_app(demo.backend)), base_url="http://ctl"
+    ) as ctl:
+        assert demo.backend.failure is None and demo.backend.delay_s == 0
+        for mode, envelope in want.items():
+            assert (await ctl.post("/_test/backend/fail", json={"mode": mode})).json() == {"mode": mode}
+            for tool, args in (("demo.boards.list", {}), ("demo.note.get", {"note_id": note.id})):
+                r = await demo.call(tool, args)
+                assert r["isError"] is True and r["structuredContent"] == envelope, (mode, tool)
+        assert (await ctl.post("/_test/backend/fail", json={"mode": "slow:300"})).status_code == 200
+        assert (demo.backend.failure, demo.backend.delay_s) == (None, 0.3)
+        started = time.monotonic()
+        assert await demo.ok("demo.notes.search", {"query": "status"})
+        assert time.monotonic() - started >= 0.3
+        assert (await ctl.post("/_test/backend/fail", json={"mode": None})).json() == {"mode": None}
+        assert (demo.backend.failure, demo.backend.delay_s) == (None, 0.0)
+        for bad in ({"mode": "boom"}, {"mode": "slow:x"}, {"mode": 5}, ["slow:1"]):
+            assert (await ctl.post("/_test/backend/fail", json=bad)).status_code == 400, bad
+        demo.backend.calls.clear()
+        await demo.ok("demo.boards.list")
+        assert (await ctl.get("/_test/backend/calls")).json() == {"boards": 1}

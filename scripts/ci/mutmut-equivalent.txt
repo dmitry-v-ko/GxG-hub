@@ -60,7 +60,7 @@ scripts.ci.widening_gate.x_main__mutmut_125  # encoding="UTF-8"/None/omitted: co
 scripts.ci.widening_gate.x_main__mutmut_127  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 gxg_policy.diff.xǁ_Diffǁtools__mutmut_39  # add(None, ...) vs add(False, ...): add() only tests truthiness
 demo_connector.backend.xǁBackendǁ_scan__mutmut_7  # M3: `>=` -> `>` on time.monotonic() vs a float deadline; equal only at the same nanosecond, no test can tell
-demo_connector.tools.xǁDemoToolǁrun__mutmut_113  # M3: duration_ms * 1001 instead of * 1000: 0.1 % off a log field, no observable behaviour
+demo_connector.tools.xǁDemoToolǁrun__mutmut_130  # M3: duration_ms * 1001 instead of * 1000: 0.1 % off a log field, no observable behaviour
 demo_connector.tools.x_load_schema__mutmut_4  # M3: keeping `..` in the tail still finds the same file: the parent walk reaches it as d/../../schemas/… from connectors/demo (or its mutants/ copy)
 demo_connector.tools.xǁConnectorǁtools__mutmut_11  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 demo_connector.tools.xǁConnectorǁtools__mutmut_13  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
@@ -68,3 +68,5 @@ demo_connector.server.xǁBundleFilesǁ__init____mutmut_3  # M3: _seen None vs ""
 demo_connector.server.x_configs__mutmut_19  # M3: no host= on the test-controls Config: uvicorn's default host is "127.0.0.1", the same binding (test_servers_listen_where_the_spec_says)
 demo_connector.server.x_serve__mutmut_1  # M3: serve() runs uvicorn forever on real sockets, which the test run forbids (--disable-socket); covered on the real image by docker_smoke.sh (/readyz, tools/call on :8080, CI job demo-image)
 demo_connector.server.x_serve__mutmut_2  # M3: serve() runs uvicorn forever on real sockets, which the test run forbids (--disable-socket); covered on the real image by docker_smoke.sh (/readyz, tools/call on :8080, CI job demo-image)
+# M5 (gateway/contextforge/gxg_identity/core.py)
+gxg_identity.core.x_args_hash__mutmut_5  # ensure_ascii=None is falsy: the same output as ensure_ascii=False

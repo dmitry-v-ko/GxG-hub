@@ -67,31 +67,50 @@ def test_no_arguments_hash_as_empty_object() -> None:
     assert core.claims_for(CFG, **ok_inputs(arguments=None))["ahs"] == core.args_hash({})
 
 
+NO_USER = "no authenticated user"
+NO_NAME = "tool record has no upstream name"
+NO_TEAM = "tool has no team or context tenant disagrees with the tool record"
+NOT_SCOPED = "caller token must be scoped to exactly the tool's team"
+NO_TENANT = "team is not a registered tenant"
+NOT_AGENT = "caller is not an agent of this tenant"
+NO_GATEWAY = "gateway is not a registered connector"
+
+
 @pytest.mark.parametrize(
     ("change", "why"),
     [
-        ({"email": None}, "no authenticated user"),
-        ({"email": ""}, "no authenticated user"),
-        ({"tool_name": None}, "tool record has no upstream name"),
-        ({"tool_team": None}, "tool has no team"),
-        ({"context_tenant": TEAM_B}, "context tenant disagrees"),
-        ({"context_tenant": None}, "context tenant disagrees"),
-        ({"teams": []}, "exactly the tool's team"),
-        ({"teams": None}, "exactly the tool's team"),
-        ({"teams": [TEAM_A, TEAM_B]}, "exactly the tool's team"),
-        ({"teams": [TEAM_B]}, "exactly the tool's team"),
-        ({"tool_team": "team-x", "context_tenant": "team-x", "teams": ["team-x"]}, "not a registered tenant"),
-        ({"email": "reader@t-beta.agents.example.com"}, "not an agent of this tenant"),
-        ({"email": "reader@evil.t-alpha.agents.example.com"}, "not an agent of this tenant"),
-        ({"email": "@t-alpha.agents.example.com"}, "not an agent of this tenant"),
-        ({"email": "reader"}, "not an agent of this tenant"),
-        ({"gateway_id": "other-gw"}, "gateway is not a registered connector"),
-        ({"gateway_id": None}, "gateway is not a registered connector"),
+        ({"email": None}, NO_USER),
+        ({"email": ""}, NO_USER),
+        ({"tool_name": None}, NO_NAME),
+        ({"tool_team": None}, NO_TEAM),
+        ({"context_tenant": TEAM_B}, NO_TEAM),
+        ({"context_tenant": None}, NO_TEAM),
+        ({"teams": []}, NOT_SCOPED),
+        ({"teams": None}, NOT_SCOPED),
+        ({"teams": [TEAM_A, TEAM_B]}, NOT_SCOPED),
+        ({"teams": [TEAM_B]}, NOT_SCOPED),
+        ({"tool_team": "team-x", "context_tenant": "team-x", "teams": ["team-x"]}, NO_TENANT),
+        ({"email": "reader@t-beta.agents.example.com"}, NOT_AGENT),
+        ({"email": "reader@evil.t-alpha.agents.example.com"}, NOT_AGENT),
+        ({"email": "x@reader@t-alpha.agents.example.com"}, NOT_AGENT),  # the first @ splits: domain must match
+        ({"email": "@t-alpha.agents.example.com"}, NOT_AGENT),
+        ({"email": "reader"}, NOT_AGENT),
+        ({"gateway_id": "other-gw"}, NO_GATEWAY),
+        ({"gateway_id": None}, NO_GATEWAY),
+        ({"gateway_id": ""}, NO_GATEWAY),
     ],
 )
 def test_fail_closed(change: dict[str, Any], why: str) -> None:
-    with pytest.raises(core.Denied, match=why):
+    with pytest.raises(core.Denied) as exc:
         core.claims_for(CFG, **ok_inputs(**change))
+    assert str(exc.value) == why
+
+
+def test_empty_gateway_id_is_never_a_connector() -> None:
+    cfg = core.Config("k1", CFG.tenants, {"": "demo"})  # even a config that maps an empty id
+    for gateway_id in (None, ""):
+        with pytest.raises(core.Denied):
+            core.claims_for(cfg, **ok_inputs(gateway_id=gateway_id))
 
 
 def test_incoming_identity_header_is_replaced() -> None:

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx2 as httpx
+import jwt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from init import ENV, REPO, SECRETS, env_values, plugins_yaml
@@ -49,6 +50,11 @@ class Api:
 
 def items(resp: Any, key: str) -> list[dict[str, Any]]:
     return resp if isinstance(resp, list) else resp.get(key, resp.get("items", []))
+
+
+def token_expires(token: str) -> float:
+    """`exp` of a ContextForge API token (read only to decide on reissue; ContextForge verifies it)."""
+    return float(jwt.decode(token, options={"verify_signature": False})["exp"])
 
 
 def wait_healthy(timeout_s: float = 240) -> None:
@@ -100,7 +106,7 @@ def main() -> None:
                 )
                 api("POST", f"/v1/teams/{team['id']}/members", {"email": mail, "role": "member"})
             agent = state["agents"].setdefault(f"agent:{tenant}:{name}", {"email": mail, "team": tenant})
-            if "token" not in agent:
+            if "token" not in agent or token_expires(agent["token"]) < time.time() + 86400:  # reissue a day early
                 tok = api(
                     "POST",
                     "/v1/tokens",
