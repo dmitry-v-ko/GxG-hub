@@ -83,3 +83,4 @@
 | M0.1 | 4 | критик | claude/m0.1-standard-tools | e52a20d | **9.0** | ≥ 9 — **веха закрыта**; 3 minor (2 missed_earlier, 1 new_regression) → backlog | 2026-11-21 |
 | M2 | 5 | исполнитель | claude/m2-policy-tooling | 6ffcadd (+e169154) | — | дубли внутри manifest, любое изменение effect_class = widening; критик ц5 запущен (threat_model) | 2026-11-21 |
 | M2 | 5 | критик | claude/m2-policy-tooling | 6ffcadd | **9.5** | ≥ 9 — **веха закрыта**; threat_model: открытых путей нет; AC-M2-04 ждёт ручной проверки владельца | 2026-11-21 |
+| — | — | интеграция | claude/integration | — | — | тред слияния M0.1 + M2 запущен (конфликты CI/pyproject/uv.lock); после него — M3 и M7 | 2026-11-21 |
