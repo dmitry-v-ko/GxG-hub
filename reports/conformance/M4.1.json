@@ -2,7 +2,7 @@
   "milestone": "M4.1",
   "cycle": 1,
   "branch": "claude/m4.1-gateway-comparison",
-  "base": "claude/m4-contextforge-spike @ 27c676a (M4 closed, 9.5)",
+  "base": "claude/m4-contextforge-spike @ 1d54921 (M4 closed, critic 9.5)",
   "commit": "1054d056b4d476b8015ef32197604cef79f4827f",
   "commit_note": "Tested commit; this report's commit field is set by the next commit, which changes only reports/.",
   "run_at": "2026-11-21T11:45:00Z",
