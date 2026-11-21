@@ -2,6 +2,26 @@
 
 Процесс: [План реализации → Процесс исполнения вех](../docs/implementation-plan-v1.md#процесс-исполнения-вех). Порог закрытия вехи — оценка критика ≥ 9.
 
+## Ждёт владельца
+
+Работа не блокируется: идём по варианту по умолчанию (`pending_owner_decision`).
+
+| Вопрос | По умолчанию | Что блокирует |
+| --- | --- | --- |
+| AC-M0-03: защита `main` (нужен GitHub Pro или публичный репозиторий) | веха M0 закрыта, AC — manual_pending | ничего |
+| AC-M2-04: метка `widening-approved`, secret подписи bundle, проверка на реальном PR | AC — manual_pending | ничего |
+| Мерж `claude/integration` в `main` | работаем от `claude/integration` | ничего |
+| Approver для пилота M13 | — | только M13 |
+| M7/EFF-08: идемпотентность в пределах tenant, хеш не покрывает requester — другой агент того же tenant получает чужой intent по ключу или занимает ключ (Signals-ключи предсказуемы) | в коде: `requester_principal` ≠ requester → `conflict` (закрывает a, c) — в M8; для (b) поменять в спеке DDL на UNIQUE (tenant_id, requester_principal, idempotency_key) и EFF-08 — решение владельца | M8 (частично) |
+| Доступ к `dmitry-v-ko/gxg_agents_v2` (код KB и Telegram-сервиса) для M6, M11: у оркестратора `add_repo` отклонён | треды M6/M11 пробуют сами; без доступа — fake по контракту из спек, gap-аудит не выполнен | gap-аудит M6, AC-M11-02/03 на реальном сервисе |
+| Тестовый Telegram-аккаунт и тестовые чаты (AC-M11-01) | локальный сервис с fake-транспортом | прогон на реальном тестовом аккаунте |
+| M7: скомпрометированный `ui` может подделать решение через `gxg_decide(p_approver, p_step_up)` | делать по матрице AS-27; закрыть в M9 | M9 |
+| CI без раннеров: прогоны 44932350759 (M5) и M7 падают за 2–3 с без шагов — вероятно, исчерпаны минуты GitHub Actions или ограничение аккаунта | проверяем CI локально; перед PR в main нужен зелёный CI на GitHub | подтверждение DoD «CI зелёный» на GitHub |
+| M5-1: MC-04 для read-only `demo` (провайдера нет) | проверять отзыв токена агента, ротацию `kid` адаптера identity, изоляцию credentials по tenant; ротация provider credentials — с M11 | ничего |
+| M5-2: ContextForge v1.1.1 сам валидирует `inputSchema` → `-32603`, а не `invalid_input` (MCC-05); его тайм-аут — без кода | принять как ограничение upstream; тайм-аут коннектора 20 с < `TOOL_TIMEOUT` 25 с | ничего |
+| M5-3: отзыв токена агента не мгновенный (кеш ≥ 5 с), SEC-20 требует «немедленно» | стенд 5 с; поправить SEC-20 на «≤ 5 с» — решение владельца | ничего |
+| M5-4: код таймаута read после отправки (`temporarily_unavailable` в MCC-05 означает «не выполнен») | оставить `temporarily_unavailable` для read; правка MCC-05 «для read — и таймаут после отправки» — решение владельца | ничего |
+
 | Веха | Цикл | Роль | Ветка | Commit | Оценка | Решение | Дата |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | M0 | 1 | исполнитель | claude/m0-foundation | — | — | запущен (session_01V6d5A8r9tNJf6eQbcBq8sx) | 2026-11-20 |
@@ -84,3 +104,39 @@
 | M2 | 5 | исполнитель | claude/m2-policy-tooling | 6ffcadd (+e169154) | — | дубли внутри manifest, любое изменение effect_class = widening; критик ц5 запущен (threat_model) | 2026-11-21 |
 | M2 | 5 | критик | claude/m2-policy-tooling | 6ffcadd | **9.5** | ≥ 9 — **веха закрыта**; threat_model: открытых путей нет; AC-M2-04 ждёт ручной проверки владельца | 2026-11-21 |
 | — | — | интеграция | claude/integration | — | — | тред слияния M0.1 + M2 запущен (конфликты CI/pyproject/uv.lock); после него — M3 и M7 | 2026-11-21 |
+| M4.1 | — | решение владельца | — | — | — | новая веха: спайк ADR-0002 (ToolHive, Docker MCP Gateway vs ContextForge) до M5 | 2026-11-21 |
+| M4.1 | 1 | исполнитель | claude/m4.1-gateway-comparison | — | — | запущен (спайк ADR-0002) | 2026-11-21 |
+| — | — | решение владельца | — | — | — | Изоляция процессов Approval Service: AS-27 роли БД на процесс, AS-28 секреты на процесс, AS-29 отдельные deployable ui/notifier; AC-M7-13, AC-M9-12 | 2026-11-21 |
+| — | — | интеграция | claude/integration | 6a75c62 | — | M0.1 + M2 влиты; все проверки зелёные; grants-widening красный вне PR по дизайну M2 (нужен мерж в main с меткой владельца) | 2026-11-21 |
+| M3 | 1 | исполнитель | claude/m3-demo-read | — | — | запущен (волна 3) | 2026-11-21 |
+| M7 | 1 | исполнитель | claude/m7-approval-core | — | — | запущен (волна 3, с AS-27…29) | 2026-11-21 |
+| M4.1 | 1 | исполнитель | claude/m4.1-gateway-comparison | 1054d05 (+5ece6e4) | — | ADR-0002 Proposed: оставить ContextForge + C; ToolHive — запасной/гибрид; Docker MCP Gateway отклонить; критик запущен | 2026-11-21 |
+| M4.1 | 1 | критик | claude/m4.1-gateway-comparison | 1054d05 | **8.0** | < 9: ToolHive недооценён (путь C через mutating webhook без форка), неполные advisories ToolHive → цикл 2 | 2026-11-21 |
+| M4.1 | 2 | исполнитель | claude/m4.1-gateway-comparison | 28fba91 (+bcff838) | — | рекомендация не изменилась: ContextForge + C; ToolHive — проверенный запасной (путь C без форка, ~7–10 дн.); критик запущен | 2026-11-21 |
+| M3 | 1 | исполнитель | claude/m3-demo-read | 4690309 | — | AC-M3-01…11 passed по отчёту; критик запущен | 2026-11-21 |
+| M4.1 | 2 | критик | claude/m4.1-gateway-comparison | 28fba91 | **8.0** | < 9 (без роста 1 цикл): находки только по запасному ToolHive (docker socket, Bearer, jti per connector, webhook advisories) → узкий цикл 3 | 2026-11-21 |
+| M3 | 1 | критик | claude/m3-demo-read | 4690309 | **8.0** | < 9: major — нет проверки bundle до handler; пустой набор досок всё равно идёт в backend → цикл 2 | 2026-11-21 |
+| M4.1 | 3 | исполнитель | claude/m4.1-gateway-comparison | 185162e (+c2f505f) | — | рекомендация та же; ToolHive production-топология не проверена (K8s ~12–17 дн. / docker socket — отклонён); критик запущен | 2026-11-21 |
+| M4.1 | 3 | критик | claude/m4.1-gateway-comparison | 185162e | **9.0** | ≥ 9 — **веха закрыта**; 7 minor → backlog; ADR-0002 Proposed → решение владельца | 2026-11-21 |
+| M4.1 | — | решение владельца | — | — | — | ADR-0002 → Accepted: ContextForge v1.1.1 + вариант C; ToolHive — запасной при провале условия 4 в M5; Docker MCP Gateway отклонён | 2026-11-21 |
+| M3 | 2 | исполнитель | claude/m3-demo-read | f54b9f1 (+fc8d17d) | — | GR-12 отказ без bundle, GR-16 пустой набор без backend, internal_error; mutmut 749/710 (+39 экв.); критик запущен | 2026-11-21 |
+| M3 | 2 | критик | claude/m3-demo-read | f54b9f1 | **6.0** | < 9: DoD-4 (basicConfig мутанты ложно эквивалентны, аудит в stdout не проверен) new_regression → цикл 3 | 2026-11-21 |
+| M3 | 3 | исполнитель | claude/m3-demo-read | 3bcd176 | — | код запушен (аудит-лог реального процесса, курсор на пустом наборе, internal_error); отчёт cycle 3 ожидается | 2026-11-21 |
+| M7 | 1 | исполнитель | claude/m7-approval-core | 7c68ff8 (+b752d31) | — | AC-M7-01…13 passed по отчёту, mutmut; критик запущен | 2026-11-21 |
+| M3 | 3 | исполнитель | claude/m3-demo-read | 3bcd176 (+08c1150) | — | AC-M3-01…11 passed, CI 44913137254; критик ц3 запущен | 2026-11-21 |
+| — | — | решение владельца | — | — | — | Ускорение процесса: тред-владелец вехи + финальный независимый критик; вопросы не блокируют; закрытый чек-лист, missed_earlier ≤ major → backlog; порог ≥ 8 для M0.x/M4.x; самопроверка исполнителя; опрос раз в минуту. Со следующего цикла | 2026-11-21 |
+| M3 | 3 | критик | claude/m3-demo-read | 3bcd176 | **9.5** | ≥ 9 — **веха закрыта**; 2 minor (логи) → backlog | 2026-11-21 |
+| M5 | 1 | владелец вехи | claude/m5-readonly-poc | — | — | запущен по новому процессу (тред-владелец вехи + финальный независимый критик) | 2026-11-21 |
+| M7 | 1 | критик | claude/m7-approval-core | 7c68ff8 | **6.0** | < 9: DoD-4 (8 SQL-мутантов выжили: tenant-фильтр и др.), major: path traversal intent_id в mcp, T1-счётчики без индексов, самописное сравнение OpenAPI без DoD-6 (все new_scope) → цикл 2 | 2026-11-21 |
+| M7 | 2 | владелец вехи | claude/m7-approval-core | — | — | запущен по новому процессу (закрытый чек-лист из 6 пунктов, threat_model ц1) | 2026-11-21 |
+| M5 | 1 | владелец вехи | claude/m5-readonly-poc | e810df0 | — | стенд через ContextForge (unified_pdp, вариант C, сетевая изоляция), тесты этапа B; 3 вопроса `pending_owner_decision` (MC-04, коды ошибок CF, TTL отзыва) — работа идёт | 2026-11-21 |
+| M5 | 1 | критик-субагент | claude/m5-readonly-poc | c01c5c3 | **8.0** | < 9: 5 major (общий пароль агентов, bundle стенда истекает через 24 ч, SC-10 stale проверяет откат, SSE не под тестом, неизвестный kid не логируется) → цикл 2 в треде вехи | 2026-11-21 |
+| M5 | 2 | критик-субагент | claude/m5-readonly-poc | d39a1ff | **9.5** | чек-лист ц1 выполнен; 3 minor → backlog; M5-READY.md; финальный независимый критик запущен | 2026-11-21 |
+| M7 | 2 | критик-субагент | claude/m7-approval-core | c6bb52f | **9.0** | чек-лист ц1 выполнен; 2 major missed_earlier (тест индекса не ловит удаление; окна auto-лимита 1 h/1 day не под мутациями) и 4 minor → по правилу в backlog; ждём M7-READY | 2026-11-21 |
+| M7 | 2 | владелец вехи | claude/m7-approval-core | a843c11 (+0fce3f3) | — | 2 major missed_earlier закрыты тестами; M7-READY.md; финальный независимый критик запущен | 2026-11-21 |
+| M5 | final | независимый критик | claude/m5-readonly-poc | d39a1ff | **9.5** | ≥ 9 — **веха закрыта**: GO через ContextForge; 3 major + 3 minor missed_earlier → backlog | 2026-11-21 |
+| M6 | 1 | владелец вехи | claude/m6-kb | — | — | запущен (нужен read-доступ к gxg_agents_v2) | 2026-11-21 |
+| M11 | 1 | владелец вехи | claude/m11-telegram-read | — | — | запущен (нужен read-доступ к gxg_agents_v2; без живых аккаунтов) | 2026-11-21 |
+| M7 | final | независимый критик | claude/m7-approval-core | a843c11 | **9.0** | ≥ 9 — **веха закрыта**; major: затёрты результаты M4 в спеках ветки (missed_earlier, исправлено в ветке оркестратора), идемпотентность между агентами tenant'а (new_scope, вне AC M7 → M8 + вопрос владельцу), окно execution_deadline не под тестом (missed_earlier → backlog) | 2026-11-21 |
+| — | — | оркестратор | claude/admiring-planck-vzys0x | — | — | спеки ветки оркестратора выровнены с результатами M4/M4.1/M5 (ADR-0001 вариант C, SEC-02/03, TEN-01, ADR-0002, Roadmap GO) | 2026-11-21 |
+| — | — | интеграция | claude/integration | — | — | запущен интегратор: M3+M4.1+M5 (claude/m5-readonly-poc) и M7 → integration; затем M8, M9 | 2026-11-21 |
