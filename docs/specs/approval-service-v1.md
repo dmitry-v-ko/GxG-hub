@@ -70,7 +70,7 @@ CREATE TABLE intents (
   execution_deadline   timestamptz,
   terminal_at          timestamptz,
   payload_purged_at    timestamptz,
-  UNIQUE (tenant_id, idempotency_key)
+  UNIQUE (tenant_id, requester_principal, idempotency_key)
 );
 CREATE INDEX ON intents (tenant_id, status, expires_at);
 CREATE INDEX ON intents (tenant_id, requester_principal, created_at);
@@ -321,6 +321,8 @@ Identity проверяется так же, как в любом коннект
   | `gxg_notifier` | — | — | — | SELECT; UPDATE `delivered_at`, `attempts` | — | INSERT | SELECT |
   | `gxg_admin` | — | — | — | INSERT | SELECT, INSERT, UPDATE | INSERT | — |
 
+  Дополнительные таблицы (решение владельца 2026-11-21): `link_codes` — `gxg_ui` создаёт код через `gxg_link_code`, `gxg_notifier` погашает его через `gxg_link_claim` (обе `SECURITY DEFINER`); `webauthn_credentials` — пишет только `gxg_decider` (AS-30), `gxg_ui` читает публичную часть для показа. Набор approver'ов intent'а замораживается при T1 (`allowed_approvers`, AP-04). Канонические args для карточки `api` кладёт при T1 в preview-конверт `{preview, canonical_args}`; `ui` сверяет их хеш с `canonical_args_hash` и не даёт решить при расхождении.
+
   Чтение `args_ciphertext`/`preview_ciphertext` разрешено только ролям, которым нужен payload: `gxg_ui` (preview) и `gxg_executor` (args), через column-level privileges. Переходы, где важна согласованность, реализуются функциями `SECURITY DEFINER` с проверкой исходного статуса, а не прямыми UPDATE.
 - **AS-28. Свои секреты на процесс.** Каждый секрет доступен ровно тем процессам, которым он нужен; остальные не получают его ни через переменные окружения, ни через смонтированные файлы.
 
@@ -337,3 +339,4 @@ Identity проверяется так же, как в любом коннект
   | OIDC client secret, ключи сессий, WebAuthn RP | `ui` |
   | OIDC оператора для admin | `admin` |
 - **AS-29. Отдельные deployable для внешних процессов.** `ui` и `notifier` собираются и разворачиваются отдельными образами (своё дерево зависимостей, свой цикл обновлений и сканирования уязвимостей) и запускаются с отдельными сетевыми политиками: `ui` — входящий HTTPS только из tailnet (SEC-26), исходящие только в БД и OIDC-провайдера; `notifier` — исходящие только в БД, Telegram Bot API и allowlist webhook-получателей, входящих нет. `api`, `mcp`, `executor`, `sweeper`, `admin` — внутренняя сеть, без выхода в интернет, кроме явно нужного (`executor` → коннекторы).
+- **AS-30. Решение человека подписано, проверяет его не `ui`** (решение владельца 2026-11-21, вводится в M10). Каждое решение (approve и reject, не только `high_risk`) сопровождается WebAuthn-assertion approver'а с challenge = SHA-256(`intent_id` ‖ `args_hash` ‖ `version` ‖ `decision`). `ui` пересылает сырой assertion во внутренний процесс `decider` (своя роль `gxg_decider`, без входа из tailnet, AS-27). `decider` проверяет подпись по ключу из `webauthn_credentials` и `sign_count`, затем вызывает `gxg_decide`. `EXECUTE gxg_decide` есть только у `gxg_decider`. Assertion (authenticatorData, clientDataJSON, signature, credential_id) хранится в `decisions` и проверяем задним числом. Регистрация passkey — через `decider` с подтверждением вне `ui` (одноразовая ссылка оператора или повторный вход в IdP с `max_age`). Скомпрометированный `ui` поэтому не может решить за человека и не может подделать step-up. AS-16 (свежесть ≤ 5 мин, привязка к intent) действует для каждого решения. Passkey обязателен каждому approver'у (AS-17).
