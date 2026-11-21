@@ -91,3 +91,4 @@
 | M3 | 1 | исполнитель | claude/m3-demo-read | — | — | запущен (волна 3) | 2026-11-21 |
 | M7 | 1 | исполнитель | claude/m7-approval-core | — | — | запущен (волна 3, с AS-27…29) | 2026-11-21 |
 | M4.1 | 1 | исполнитель | claude/m4.1-gateway-comparison | 1054d05 (+5ece6e4) | — | ADR-0002 Proposed: оставить ContextForge + C; ToolHive — запасной/гибрид; Docker MCP Gateway отклонить; критик запущен | 2026-11-21 |
+| M4.1 | 1 | критик | claude/m4.1-gateway-comparison | 1054d05 | **8.0** | < 9: ToolHive недооценён (путь C через mutating webhook без форка), неполные advisories ToolHive → цикл 2 | 2026-11-21 |
