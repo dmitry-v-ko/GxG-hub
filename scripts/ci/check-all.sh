@@ -13,6 +13,7 @@ uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/t
 # separate run: two conftest.py modules clash in one mypy run; tests/ci imports the root conftest
 uv run mypy --strict conftest.py tests/ci
 uv run mypy tools/gxg-policy/src tools/gxg-policy/tests connectors/demo/src connectors/demo/tests tests/contract
+MYPYPATH=stand/tests:stand:gateway/contextforge uv run mypy --exclude mutants stand gateway/contextforge
 uv run pytest
 uv run python scripts/ci/schema_lock.py
 uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-branch --cov-report=json:coverage-kit.json
@@ -25,5 +26,7 @@ uv run pytest tests/secrets
 uv run gxg-policy validate policies/
 uv run gxg-policy lint policies/
 bash scripts/ci/bundle_smoke.sh
+connectors/demo/docker_smoke.sh  # needs a Docker daemon; extra build flags: DOCKER_BUILD_FLAGS
+stand/run.sh  # M5 dev stand end to end (needs a Docker daemon); extra build flags: DOCKER_BUILD_FLAGS
 scripts/ci/mutmut.sh >/dev/null
 echo "check-all: OK"

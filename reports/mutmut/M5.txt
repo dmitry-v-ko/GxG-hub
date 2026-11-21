@@ -1,0 +1,28 @@
+M5 cycle 1 — mutmut 3.8.1 (DoD-4), 2026-11-21
+
+scripts/ci/mutmut.sh (tools/gxg-policy, connectors/demo, gateway/contextforge, root):
+  gateway/contextforge (gxg_identity/core.py): 133 mutants, 132 killed, 1 equivalent
+    gxg_identity.core.x_args_hash__mutmut_5  ensure_ascii=None is falsy: same output as False
+  connectors/demo (tools.py, backend.py, server.py; changed in M5): every survivor listed in
+    scripts/ci/mutmut-equivalent.txt; the M3 entry run__mutmut_113 is renumbered run__mutmut_130 (same
+    mutant: duration_ms * 1001) because M5 code moved the numbering. No unexplained, no stale entries.
+    First pass after the M5 change: 47 unexplained survivors in the new code (failure modes, identity keys,
+    call binding); killed by test_backend_failure_modes_through_the_test_controls,
+    test_contextforge_identity_keys_select_the_kit_verifier, test_identity_keys_come_from_the_environment_...,
+    test_bad_identity_keys_do_not_start, test_tool_timeout_from_the_manifest_is_enforced.
+  tools/gxg-policy, root: unchanged by M5; survivors as listed (M2, M0.1).
+
+packages/gxg-connector-kit (own [tool.mutmut], `uv run mutmut run` there; cf_identity.py added to only_mutate):
+  cf_identity.py: 122 mutants, 121 killed, 1 equivalent
+    gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  ensure_ascii=None is falsy: same output as False
+    (first pass: __init__ message mutant survived; killed by an exact-message match in test_no_keys_does_not_start)
+  _jwt.py, exec_token.py: the 10 survivors documented as equivalent in reports/conformance/M1.json (unchanged).
+
+gateway/contextforge/gxg_identity/plugin.py (cpex adapter) is not mutated: cpex exists only in the ContextForge
+image; it is exercised live on the stand (every stand test call passes through it).
+
+Cycle 2 (scripts/ci/mutmut.sh now also runs packages/gxg-connector-kit):
+  tools/gxg-policy 2555/2590 killed, connectors/demo 832/841 (7 survived + 2 no tests, all listed),
+  gateway/contextforge 132/133, packages/gxg-connector-kit 1066/1077 (10 M1 equivalents + cf_identity args_hash),
+  root 1211/1235. Not killed 80, listed 80 after renumbering the M3 duration mutant run__mutmut_130 -> 133
+  (the audit `reason` line moved it again; same mutant: duration_ms * 1001).

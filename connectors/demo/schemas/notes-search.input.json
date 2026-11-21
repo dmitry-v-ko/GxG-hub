@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "demo.notes.search input",
+  "description": "Search notes of the boards the caller may read. Extra fields are ignored and never carry identity (SC-03).",
+  "type": "object",
+  "required": ["query"],
+  "properties": {
+    "query": {"type": "string", "minLength": 1, "maxLength": 200},
+    "board_ids": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {"type": "string", "minLength": 1, "maxLength": 64}
+    },
+    "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20},
+    "cursor": {"type": ["string", "null"], "maxLength": 1024},
+    "mode": {"const": "auto", "default": "auto", "description": "Reserved: the connector picks index or scan"}
+  }
+}

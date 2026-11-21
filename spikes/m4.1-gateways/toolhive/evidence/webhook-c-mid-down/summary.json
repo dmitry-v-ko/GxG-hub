@@ -1,0 +1,390 @@
+{
+ "direct_to_connector": {},
+ "gateway_calls": [
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call_same_session_before_stop",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795265736,
+     "iat": 1795265676,
+     "jti": "8632b68a…",
+     "principal": "agent:t-alpha:hermes",
+     "request_id": "7d0aa904-593e-4de0-a8e8-3ddd2ec72d64",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call_same_session_before_stop",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795265736,
+     "iat": 1795265676,
+     "jti": "481eaace…",
+     "principal": "agent:t-alpha:hermes",
+     "request_id": "1fb7d578-ae31-4d13-b91f-30bfd8e0ddec",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call_same_session_before_stop",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795265737,
+     "iat": 1795265677,
+     "jti": "b069dd86…",
+     "principal": "agent:t-alpha:analyst",
+     "request_id": "826efdb0-c11d-4d12-a491-f306967f57b5",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call_same_session_before_stop",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795265737,
+     "iat": 1795265677,
+     "jti": "84a22111…",
+     "principal": "agent:t-alpha:analyst",
+     "request_id": "3427f158-f5dd-4c39-8fd1-4e241c5ff439",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call_same_session_before_stop",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795265737,
+     "iat": 1795265677,
+     "jti": "730d2a78…",
+     "principal": "agent:t-beta:hermes",
+     "request_id": "0f30776a-4de6-4f3d-80f8-072da79a07bd",
+     "tenant_id": "t-beta",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call_same_session_before_stop",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795265737,
+     "iat": 1795265677,
+     "jti": "1581a698…",
+     "principal": "agent:t-beta:hermes",
+     "request_id": "429bc646-3ac2-4290-a1d8-e99804c80da5",
+     "tenant_id": "t-beta",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call_same_session_before_stop",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795265737,
+     "iat": 1795265677,
+     "jti": "ae7bcff9…",
+     "principal": "agent:t-beta:analyst",
+     "request_id": "3397ce63-61dd-439b-96d8-d1d4d4d312b9",
+     "tenant_id": "t-beta",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call_same_session_before_stop",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795265737,
+     "iat": 1795265677,
+     "jti": "3f2b604e…",
+     "principal": "agent:t-beta:analyst",
+     "request_id": "9adaa981-7698-4bd4-a5c4-751d286a93b5",
+     "tenant_id": "t-beta",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call_same_session_after_stop",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call_same_session_after_stop",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call_same_session_after_stop",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call_same_session_after_stop",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call_same_session_after_stop",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call_same_session_after_stop",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call_same_session_after_stop",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call_same_session_after_stop",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  }
+ ],
+ "m4_expected_with_variant_c": {
+  "bypass_no_identity": "missing X-GxG-Identity",
+  "forged_jws_attacker_key": "InvalidSignatureError: Signature verification failed",
+  "replay_after_65s": "ExpiredSignatureError: Signature has expired",
+  "replay_immediate": "replayed jti",
+  "replay_other_connector": "InvalidAudienceError: Audience doesn't match (strict)",
+  "replay_other_tool": "bad tool",
+  "replay_tampered_args": "arguments hash mismatch"
+ }
+}

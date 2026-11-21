@@ -1,0 +1,370 @@
+{
+ "direct_to_connector": {
+  "bypass_no_identity": {
+   "rejected": "missing X-GxG-Identity"
+  },
+  "forged_jws_attacker_key": {
+   "rejected": "InvalidSignatureError: Signature verification failed"
+  },
+  "replay_after_65s": {
+   "rejected": "ExpiredSignatureError: Signature has expired"
+  },
+  "replay_immediate": {
+   "rejected": "replayed jti"
+  },
+  "replay_other_connector": {
+   "rejected": "InvalidAudienceError: Audience doesn't match (strict)"
+  },
+  "replay_other_tool": {
+   "rejected": "bad tool"
+  },
+  "replay_tampered_args": {
+   "rejected": "arguments hash mismatch"
+  }
+ },
+ "gateway_calls": [
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264459,
+     "iat": 1795264399,
+     "jti": "73eea107…",
+     "principal": "agent:t-alpha:hermes",
+     "request_id": "598ea2fc-6233-48a4-87a7-8dae9f31fc2a",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264460,
+     "iat": 1795264400,
+     "jti": "446ac303…",
+     "principal": "agent:t-alpha:hermes",
+     "request_id": "6fe45e6e-1982-4543-9eb6-a4d44fe1a7d0",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264460,
+     "iat": 1795264400,
+     "jti": "173d1ec4…",
+     "principal": "agent:t-alpha:analyst",
+     "request_id": "e69d0b9a-27d2-49b2-b896-a712b73a34a9",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264460,
+     "iat": 1795264400,
+     "jti": "4258991b…",
+     "principal": "agent:t-alpha:analyst",
+     "request_id": "98f3c93a-6e9d-43c5-b42a-888e10ff0eff",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264461,
+     "iat": 1795264401,
+     "jti": "c4c23a62…",
+     "principal": "agent:t-beta:hermes",
+     "request_id": "2d9020ee-8773-4327-a24e-5bc9699d6d16",
+     "tenant_id": "t-beta",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264461,
+     "iat": 1795264401,
+     "jti": "8691ca22…",
+     "principal": "agent:t-beta:hermes",
+     "request_id": "5cd6b942-0080-4358-9f99-ec8cc14441c1",
+     "tenant_id": "t-beta",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264462,
+     "iat": 1795264402,
+     "jti": "a2ca0211…",
+     "principal": "agent:t-beta:analyst",
+     "request_id": "b56b6d77-09d5-4d0d-bf20-8f32e40d0a5d",
+     "tenant_id": "t-beta",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264462,
+     "iat": 1795264402,
+     "jti": "b0068c9f…",
+     "principal": "agent:t-beta:analyst",
+     "request_id": "37f25d5c-dca1-4f10-9383-842485a26c51",
+     "tenant_id": "t-beta",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": true,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…"
+   },
+   "kind": "attack_forge",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264463,
+     "iat": 1795264403,
+     "jti": "1f389452…",
+     "principal": "agent:t-alpha:hermes",
+     "request_id": "5f58c010-f507-4872-9aa7-dec2e440daae",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": null,
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_no_token",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 401,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "admin",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "admin_call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 403,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": true,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…",
+    "x-forwarded-for": "127.0.0.1…",
+    "x-forwarded-proto": "http…",
+    "x-forwarded-user-admin": "true…",
+    "x-forwarded-user-email": "analyst@t-beta.spike.exa…",
+    "x-forwarded-user-id": "analyst@t-beta.spike.exa…",
+    "x-forwarded-user-roles": "platform_admin…",
+    "x-forwarded-user-teams": "t-beta…",
+    "x-gxg-identity": "eyJhbGciOiJFZERTQSJ9.eyJ…",
+    "x-tenant-id": "t-beta…"
+   },
+   "kind": "attack_forge",
+   "path": "thv-proxy:direct",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "echo",
+   "verdict": {
+    "accepted": {
+     "exp": 1795264463,
+     "iat": 1795264403,
+     "jti": "968137f1…",
+     "principal": "agent:t-alpha:hermes",
+     "request_id": "31d0434a-ed7c-4cf3-a775-70481ac36887",
+     "tenant_id": "t-alpha",
+     "tool": "echo"
+    }
+   }
+  },
+  {
+   "agent": null,
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_no_token",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 401,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "admin",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "admin_call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 403,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_cross_tenant",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 403,
+   "tool": "beta_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_cross_tenant",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 403,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_hidden_tool",
+   "path": "vmcp:filtered-out",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "hidden_echo",
+   "verdict": null
+  }
+ ],
+ "m4_expected_with_variant_c": {
+  "bypass_no_identity": "missing X-GxG-Identity",
+  "forged_jws_attacker_key": "InvalidSignatureError: Signature verification failed",
+  "replay_after_65s": "ExpiredSignatureError: Signature has expired",
+  "replay_immediate": "replayed jti",
+  "replay_other_connector": "InvalidAudienceError: Audience doesn't match (strict)",
+  "replay_other_tool": "bad tool",
+  "replay_tampered_args": "arguments hash mismatch"
+ }
+}

@@ -1,0 +1,41 @@
+# Variant: outgoing token_exchange (RFC 8693) for both tenant backends — the closest built-in identity mechanism.
+# M4.1 ToolHive vMCP v0.67.0 stand: one vMCP for both tenants (static backends, no Kubernetes),
+# OIDC from a mock IdP (tenant_id claim), Cedar deny by default, tool filter hides the "hidden" backend's tool.
+name: gxg-vmcp
+groupRef: gxg
+backends:
+  - {name: alpha, url: "http://127.0.0.1:9000/mcp/t-alpha", transport: streamable-http}
+  - {name: beta, url: "http://127.0.0.1:9000/mcp/t-beta", transport: streamable-http}
+  - {name: hidden, url: "http://127.0.0.1:9000/mcp/t-hidden", transport: streamable-http}
+incomingAuth:
+  type: oidc
+  oidc:
+    issuer: "http://127.0.0.1:8080/gxg"
+    clientId: vmcp
+    audience: vmcp
+    resource: "http://127.0.0.1:4483/mcp"
+    insecureAllowHttp: true
+    jwksAllowPrivateIp: true
+    protectedResourceAllowPrivateIp: true
+  authz:
+    type: cedar
+    policies:
+      - 'permit(principal, action == Action::"call_tool", resource == Tool::"alpha_echo") when { principal has claim_tenant_id && principal.claim_tenant_id == "t-alpha" };'
+      - 'permit(principal, action == Action::"call_tool", resource == Tool::"beta_echo") when { principal has claim_tenant_id && principal.claim_tenant_id == "t-beta" };'
+      # the hidden tool is allowed by policy for t-beta: only the aggregation filter hides it (matrix item 4)
+      - 'permit(principal, action == Action::"call_tool", resource == Tool::"hidden_echo") when { principal has claim_tenant_id && principal.claim_tenant_id == "t-beta" };'
+      - 'permit(principal, action == Action::"list_tools", resource);'
+outgoingAuth:
+  source: inline
+  default: {type: unauthenticated}
+  backends:
+    alpha: {type: token_exchange, tokenExchange: {tokenUrl: "http://127.0.0.1:8080/gxg/token", clientId: vmcp-exchange, clientSecret: spike-not-secret, audience: "gxg-connector:echo-t-alpha"}}
+    beta: {type: token_exchange, tokenExchange: {tokenUrl: "http://127.0.0.1:8080/gxg/token", clientId: vmcp-exchange, clientSecret: spike-not-secret, audience: "gxg-connector:echo-t-beta"}}
+aggregation:
+  conflictResolution: prefix
+  conflictResolutionConfig: {prefixFormat: "{workload}_"}
+  tools:
+    - {workload: hidden, filter: ["no_such_tool"]}
+audit:
+  component: gxg-vmcp
+  includeRequestData: true

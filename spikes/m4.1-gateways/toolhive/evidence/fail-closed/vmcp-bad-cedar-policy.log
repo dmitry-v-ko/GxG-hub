@@ -1,0 +1,24 @@
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"Loading configuration from: /c.yaml"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"configuration loaded and validated successfully"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"  Name: gxg-vmcp"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"  Group: gxg"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"  Conflict Resolution: prefix"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"initializing outgoing authentication"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"Static mode: using 3 pre-configured backends"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"Discovering backends in group: gxg"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"discovering backends in group","group":"gxg"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"using pre-configured static backends (no K8s API access)","count":3}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"loaded static backend","name":"alpha","url":"http://127.0.0.1:9000/mcp/t-alpha","transport":"streamable-http"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"loaded static backend","name":"beta","url":"http://127.0.0.1:9000/mcp/t-beta","transport":"streamable-http"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"loaded static backend","name":"hidden","url":"http://127.0.0.1:9000/mcp/t-hidden","transport":"streamable-http"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"Discovered 3 backends"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"using prefix conflict resolution strategy","format":"{workload}_"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"dynamic backend registry enabled for Kubernetes environment"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"Setting up incoming authentication (type: oidc)"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"health monitoring configured from operational settings"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"creating OIDC incoming authentication middleware"}
+{"time":"2026-11-21T12:28:04Z","level":"WARN","msg":"insecure HTTP is enabled - HTTP OIDC URLs are allowed - this is INSECURE and should NEVER be used in production","issuer":"http://127.0.0.1:8080/gxg"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"oIDC authentication configured","issuer":"http://127.0.0.1:8080/gxg","client_id":"vmcp","resource":"http://127.0.0.1:4483/mcp"}
+{"time":"2026-11-21T12:28:04Z","level":"INFO","msg":"creating Cedar authorization middleware","policies":4}
+Error: failed to create authentication middleware: failed to create authorization middleware: failed to create Cedar middleware: failed to create cedarv1 authorizer: failed to parse policy 3: parse error at <input>:1:73 "is": invalid primary
+{"time":"2026-11-21T12:28:04Z","level":"ERROR","msg":"Error executing command: failed to create authentication middleware: failed to create authorization middleware: failed to create Cedar middleware: failed to create cedarv1 authorizer: failed to parse policy 3: parse error at <input>:1:73 \"is\": invalid primary"}

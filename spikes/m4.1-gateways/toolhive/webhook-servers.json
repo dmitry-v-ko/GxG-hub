@@ -1,0 +1,2 @@
+{"echo-alpha": {"tenant": "t-alpha", "aud": "gxg-connector:echo-t-alpha"},
+ "echo-beta": {"tenant": "t-beta", "aud": "gxg-connector:echo-t-beta"}}

@@ -134,7 +134,7 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 ```
 
 - **AS-01.** Изменение `intents.status` и связанных строк (`decisions`, `executions`, `outbox`, `audit_events`) — в одной транзакции. Каждое изменение `intents` проверяет и увеличивает `version` (`UPDATE … WHERE intent_id = $1 AND version = $2`).
-- **AS-02.** Роль БД приложения не имеет прав `UPDATE`/`DELETE` на `audit_events` и `DELETE` на `intents`, `decisions`, `executions`. Очистка payload идёт через `UPDATE … SET args_ciphertext = NULL`.
+- **AS-02.** Ни одна роль БД процессов (AS-27) не имеет прав `UPDATE`/`DELETE` на `audit_events` и `DELETE` на `intents`, `decisions`, `executions`. Очистка payload идёт через `UPDATE … SET args_ciphertext = NULL`.
 
 ## Статусы intent'а и переходы
 
@@ -304,3 +304,36 @@ Identity проверяется так же, как в любом коннект
 - Минимальный вариант: по одному экземпляру каждого процесса и PostgreSQL с ежедневным бэкапом и PITR.
 - Все процессы, кроме `ui`, — без внешнего доступа (SEC-13).
 - `/healthz` и `/readyz` у каждого процесса. `readyz` проверяет БД, валидный bundle, ключ подписи (для executor'а).
+
+## Изоляция процессов (решение владельца 2026-11-21)
+
+Цель: компрометация процесса, открытого наружу (`ui`, `notifier`), не даёт права исполнить эффект или подделать решение человека.
+
+- **AS-27. Своя роль БД на процесс, минимальные права.** Каждый процесс подключается к PostgreSQL своей ролью; общей роли приложения нет. Права — только из таблицы ниже, всё остальное запрещено (`REVOKE ALL` по умолчанию); владелец схемы и миграции — отдельная роль, не используемая процессами в работе. Переходы, которые процессу не принадлежат, ему физически недоступны. AS-02 действует для всех ролей.
+
+  | Роль | `intents` | `decisions` | `executions` | `outbox` | `switches` | `audit_events` | `approver_links` |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | `gxg_api` | INSERT; SELECT; UPDATE только `status`, `version`, `terminal_at` для T1/T6 | — | — | INSERT | SELECT | INSERT | — |
+  | `gxg_mcp` | SELECT (через `api`-функции чтения и отмены) | — | — | — | — | INSERT | — |
+  | `gxg_ui` | SELECT; UPDATE только `status`, `version`, `approved_at`, `execution_deadline`, `terminal_at` для T2–T4, T18 | INSERT; SELECT | SELECT | INSERT | SELECT | INSERT | SELECT, INSERT, UPDATE |
+  | `gxg_executor` | SELECT; UPDATE только `status`, `version`, `attempts`, `terminal_at` для T7–T17 | SELECT | INSERT; SELECT; UPDATE | SELECT; UPDATE `delivered_at`, `attempts` | SELECT | INSERT | — |
+  | `gxg_sweeper` | SELECT; UPDATE `status`, `version`, `terminal_at` для T5, T8, T10, T14 | — | SELECT; UPDATE `state` | INSERT | SELECT | INSERT | — |
+  | `gxg_notifier` | — | — | — | SELECT; UPDATE `delivered_at`, `attempts` | — | INSERT | SELECT |
+  | `gxg_admin` | — | — | — | INSERT | SELECT, INSERT, UPDATE | INSERT | — |
+
+  Чтение `args_ciphertext`/`preview_ciphertext` разрешено только ролям, которым нужен payload: `gxg_ui` (preview) и `gxg_executor` (args), через column-level privileges. Переходы, где важна согласованность, реализуются функциями `SECURITY DEFINER` с проверкой исходного статуса, а не прямыми UPDATE.
+- **AS-28. Свои секреты на процесс.** Каждый секрет доступен ровно тем процессам, которым он нужен; остальные не получают его ни через переменные окружения, ни через смонтированные файлы.
+
+  | Секрет | Процесс |
+  | --- | --- |
+  | Пароль/сертификат роли БД | только её процесс |
+  | Ключ подписи execution token | `executor` |
+  | Ключ service JWT | у каждого процесса свой (`api`, `mcp`, `executor`) |
+  | Data key / доступ к KMS для расшифровки args | `executor` |
+  | Data key для расшифровки preview | `ui` |
+  | Шифрование payload при создании intent'а | `api` (только encrypt) |
+  | Токен Telegram-бота | `notifier` |
+  | Секреты подписи webhooks | `notifier` |
+  | OIDC client secret, ключи сессий, WebAuthn RP | `ui` |
+  | OIDC оператора для admin | `admin` |
+- **AS-29. Отдельные deployable для внешних процессов.** `ui` и `notifier` собираются и разворачиваются отдельными образами (своё дерево зависимостей, свой цикл обновлений и сканирования уязвимостей) и запускаются с отдельными сетевыми политиками: `ui` — входящий HTTPS снаружи, исходящие только в БД и OIDC-провайдера; `notifier` — исходящие только в БД, Telegram Bot API и allowlist webhook-получателей, входящих нет. `api`, `mcp`, `executor`, `sweeper`, `admin` — внутренняя сеть, без выхода в интернет, кроме явно нужного (`executor` → коннекторы).

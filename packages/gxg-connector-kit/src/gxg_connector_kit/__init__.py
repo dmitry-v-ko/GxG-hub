@@ -5,6 +5,8 @@ Modules: `canonical` (EFF-05), `errors` (MCC-05), `svc_jwt` (AS-06), `exec_token
 `redact` (SEC-18), `readiness` (GR-12, GR-13).
 """
 
-__all__ = ["__version__"]
+from ._jwt import TokenError, parse_public_key
+
+__all__ = ["TokenError", "__version__", "parse_public_key"]
 
 __version__: str = "0.0.0"

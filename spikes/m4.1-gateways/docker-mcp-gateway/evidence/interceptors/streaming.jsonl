@@ -1,0 +1,2 @@
+{"interceptor": "before:exec:cat > /tmp/req.json", "transport": "streaming", "status": 200, "reached_echo": false, "response": {"jsonrpc": "2.0", "id": 7, "error": {"code": 0, "message": "marshalling request: json: unsupported type: func(mcp.CloseSSEStreamArgs)"}}}
+{"interceptor": "before:exec:exit 1", "transport": "streaming", "status": 200, "reached_echo": false, "response": {"jsonrpc": "2.0", "id": 7, "error": {"code": 0, "message": "marshalling request: json: unsupported type: func(mcp.CloseSSEStreamArgs)"}}}

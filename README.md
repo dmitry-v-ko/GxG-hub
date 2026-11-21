@@ -30,43 +30,20 @@
 - `tests/contract/` — schema smoke-тесты (не end-to-end проверка безопасности).
 - `policies/` — grants, политики согласования, реестр платформы (примеры, без секретов).
 - `connectors/` — каталог коннекторов и их статус. Коннекторы пока не реализованы.
-- `compose.yaml`, `.env.example` — локальный dev-стенд ContextForge.
+- `compose.yaml`, `stand/` — локальный dev-стенд (M5): ContextForge, PostgreSQL, `demo`.
+- `gateway/contextforge/` — наш плагин ContextForge `gxg_identity` (ADR-0001, вариант C).
 
-## Локальный запуск ContextForge (только разработка)
+## Локальный стенд (только разработка)
 
-Нужен Docker с Compose v2.
-
-```bash
-cp .env.example .env
-python3 - <<'PY'
-from pathlib import Path
-import secrets
-p = Path(".env")
-s = p.read_text()
-s = s.replace("__GENERATE_JWT_SECRET__", secrets.token_urlsafe(48))
-s = s.replace("__GENERATE_ENCRYPTION_SECRET__", secrets.token_urlsafe(48))
-p.write_text(s)
-print("Сгенерированы два локальных секрета в .env")
-PY
-```
-
-Задайте в `.env` свои `PLATFORM_ADMIN_EMAIL` и сильный `PLATFORM_ADMIN_PASSWORD`, затем:
+Корневой `compose.yaml` — dev-стенд M5: ContextForge (закреплён по digest, SEC-22) на PostgreSQL, коннектор `demo` во внутренней сети, плагины `unified_pdp` и `gxg_identity` (ADR-0001, вариант C). Нужны Docker с Compose v2 и `uv`.
 
 ```bash
-docker compose config
-docker compose pull
-docker compose up -d
-curl -f http://127.0.0.1:4444/health
+stand/run.sh   # секреты, сборка, запуск, настройка, тесты этапа B через ContextForge, рестарт, повтор, отчёт
 ```
 
-Админка: http://127.0.0.1:4444/admin. Остановить: `docker compose down`.
+Шаги по отдельности, сети, runbook: [stand/README.md](stand/README.md). Секреты генерирует `stand/init.py` в `.env` и `stand/secrets/`, оба пути игнорирует Git.
 
-**Ограничения стенда:**
-- SQLite, порт только на localhost.
-- Образ закреплён по digest (SEC-22, спайк M4); для production версия одобряется после этапа B.
-- Identity propagation и плагины выключены.
-
-Не публикуйте этот стенд в интернет. Требования к production: [Security](docs/specs/security-v1.md).
+**Ограничения стенда:** только `127.0.0.1`, синтетические данные, ключи в файлах, а не в secret store. Не публикуйте этот стенд в интернет. Требования к production: [Security](docs/specs/security-v1.md).
 
 ## Разработка и тесты
 
