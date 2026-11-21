@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Callable, Collection, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
@@ -30,6 +30,8 @@ class Service:
     public_keys: tuple[Ed25519PublicKey, ...]  # 1-2 active keys (AS-06)
     tenants: frozenset[str]
     internal_url: str | None = None
+    # AS-26: (name, version) → the bundle's tool entry (effect_class, action, executes_via, dispatch_timeout_s, …)
+    tools: Mapping[tuple[str, str], Mapping[str, Any]] = field(default_factory=dict)
 
     def serves(self, tenant: str) -> bool:
         """AS-25: the service is registered for this tenant (`*` = all, never allowed for connectors by schema)."""
@@ -48,6 +50,7 @@ def parse_registry(doc: Mapping[str, Any]) -> dict[str, Service]:
             public_keys=tuple(_jwt.parse_public_key(k) for k in s["public_keys"]),
             tenants=frozenset(s["tenants"]),
             internal_url=s.get("internal_url"),
+            tools={(t["name"], t["version"]): t for t in s.get("tools", [])},
         )
     return services
 

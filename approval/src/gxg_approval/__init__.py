@@ -1,7 +1,7 @@
-"""GxG Hub Approval Service and Effect Executor.
+"""GxG Hub Approval Service (docs/specs/approval-service-v1.md).
 
-M0 skeleton only. No effect can be proposed, approved or executed by this
-package yet (docs/specs/approval-service-v1.md, milestone M7+).
+M7: data model and roles (migrations), transition functions T1-T18 + T12a, policy engine and quotas,
+processes `api`, `mcp` and `sweeper`, payload encryption. The executor, UI and bot follow in M8 and M9.
 """
 
 __all__ = ["__version__"]

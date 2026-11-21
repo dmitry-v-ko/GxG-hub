@@ -83,6 +83,8 @@ class TenantGrants:
     connections: Mapping[str, str]  # connection_id → domain
     principals: frozenset[str]
     grants: tuple[_Grant, ...]
+    groups: Mapping[str, frozenset[str]]  # group name → members, for approval `requesters`/`approvers`
+    roles: Mapping[str, frozenset[str]]  # human → roles (`approver`, …), GR-08
 
 
 @dataclass(frozen=True)
@@ -133,7 +135,15 @@ def parse_tenant(doc: Mapping[str, Any]) -> TenantGrants:
                 expires_at=_parse_time(expires) if expires is not None else None,
             )
         )
-    return TenantGrants(doc["tenant"], connections, principals, tuple(grants))
+    roles = {h["id"]: frozenset(h.get("roles", [])) for h in principals_doc.get("humans", [])}
+    return TenantGrants(
+        doc["tenant"],
+        connections,
+        principals,
+        tuple(grants),
+        {name: frozenset(members) for name, members in groups.items()},
+        roles,
+    )
 
 
 def _verify_signature(data: bytes, sig: bytes, keys: Mapping[str, Ed25519PublicKey]) -> None:

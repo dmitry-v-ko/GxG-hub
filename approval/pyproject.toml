@@ -1,9 +1,23 @@
 [project]
 name = "gxg-approval"
 version = "0.0.0"
-description = "GxG Hub Approval Service and Effect Executor (M0 skeleton; implementation starts in M7)."
+description = "GxG Hub Approval Service: api, mcp, sweeper (M7); executor, ui, notifier follow (M8, M9)."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "alembic>=1.14,<2",
+    "fastapi>=0.115,<1",
+    "fastmcp>=2.12,<3",
+    "gxg-connector-kit",
+    "jsonschema>=4.23,<5",
+    "psycopg-pool>=3.2,<4",
+    "psycopg[binary]>=3.2,<4",
+    "prometheus-client>=0.21,<1",
+    "pynacl>=1.5,<2",
+    "uvicorn>=0.32,<1",
+]
+
+[project.scripts]
+gxg-approval = "gxg_approval.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.14"]
@@ -11,3 +25,21 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "gxg_approval"
+
+[tool.uv.sources]
+gxg-connector-kit = { workspace = true }
+
+# DoD-4: from this directory, with a PostgreSQL for all mutants (scripts/ci/mutmut.sh starts one):
+#   GXG_TEST_PG_SOCKET_DIR=<dir> uv run mutmut run && uv run mutmut results
+# Key conditions of M7: policy engine, transition table, quotas, T1 checks.
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = [
+    "src/gxg_approval/policy.py",
+    "src/gxg_approval/transitions.py",
+    "src/gxg_approval/quotas.py",
+    "src/gxg_approval/intents.py",
+]
+also_copy = ["tests_db/"]
+pytest_add_cli_args_test_selection = ["tests", "tests_db"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]

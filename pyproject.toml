@@ -31,6 +31,8 @@ dev = [
     "cryptography>=44,<51",
     # spikes/m4-contextforge verifier tests: the PyJWT version in the pinned ContextForge image
     "PyJWT==2.15.1",
+    "httpx>=0.27,<1",
+    "docker>=7.1,<8",
 ]
 
 [tool.uv]
@@ -89,8 +91,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Tests and CI scripts run git/pytest subprocesses and use assert by design.
 "**/tests/**" = ["S101", "S603", "S607", "PLC0415"]
+"**/tests_db/**" = ["S101", "S603", "S607", "PLC0415", "S608"]  # S608: SQL built from test constants
 "conftest.py" = ["S101"]
 "scripts/ci/**" = ["S603", "S607"]
+"approval/src/gxg_approval/cli.py" = ["PLC0415"]  # each process imports only what it runs
+"approval/src/gxg_approval/migrations/**" = ["S101", "S608", "E501"]  # static DDL from code constants
 
 [tool.ruff.lint.isort]
 known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector"]
@@ -107,7 +112,7 @@ no_implicit_optional = true
 strict_equality = true
 # scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
 explicit_package_bases = true
-mypy_path = ["packages/gxg-connector-kit/src", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
+mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
 
 [tool.ruff.format]
 quote-style = "preserve"
