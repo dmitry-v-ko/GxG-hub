@@ -37,6 +37,7 @@ def test_status_counts_human_votes(
     created = propose().json()
     owner.execute("UPDATE intents SET required_approvals = 2")
     row = owner.execute("SELECT canonical_args_hash FROM intents").fetchone()
+    assert row is not None
     with pg.connect("gxg_ui") as ui:
         ui.execute("SELECT gxg_decide(%s, %s, 'approve', 1, %s, false, null)", (created["intent_id"], HUMAN, row[0]))
     doc = client.get(f"/v1/intents/{created['intent_id']}", params=q(), headers=world.auth("approval-mcp")).json()
