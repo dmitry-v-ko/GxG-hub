@@ -10,7 +10,7 @@
 | `approval/` | Политика согласования и квоты | [approval-policy](../docs/specs/approval-policy-v1.md) | [example.yaml](approval/example.yaml) |
 | `platform/` | Реестр сервисов и webhooks | [approval-service](../docs/specs/approval-service-v1.md#реестр-платформы) | [registry.example.yaml](platform/registry.example.yaml) |
 
-Всё это собирается в один подписанный bundle (GR-11). Правила `unified_pdp` для ContextForge (tool-level RBAC, постоянный запрет `*.execute` для агентов) появятся здесь по итогам спайка [ADR-0001](../docs/adr/0001-identity-propagation.md).
+Всё это собирается в один подписанный bundle (GR-11). Правила `unified_pdp` для ContextForge (tool-level RBAC, постоянный запрет `*.execute` для агентов) не входят в bundle: их читает ContextForge. Для dev-стенда M5 они лежат в [`stand/unified_pdp.rules.json`](../stand/unified_pdp.rules.json) (точный email агента × точное имя tool, иначе deny). Генерация правил для production из реестра платформы — после этапа B.
 
 ## Пример для первого пилота (tenant оператора)
 

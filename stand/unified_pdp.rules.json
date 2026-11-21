@@ -1,0 +1,55 @@
+[
+  {
+    "id": "deny:agents-never-execute",
+    "roles": ["*"],
+    "actions": ["tools.invoke.*execute*", "tools.invoke.*reconcile*"],
+    "resource_types": ["*"],
+    "resource_ids": ["*"],
+    "reason": "EFF-02, security-v1 step 2: execute and reconcile are never callable through ContextForge"
+  },
+  {
+    "id": "t-alpha.reader",
+    "roles": ["*"],
+    "conditions": {"subject.email": "reader@t-alpha.agents.gxg.example.com"},
+    "actions": [
+      "tools.invoke.demo-t-alpha-alpha-boards",
+      "tools.invoke.demo-t-alpha-demo-notes-search",
+      "tools.invoke.demo-t-alpha-demo-note-get",
+      "tools.invoke.demo-message-execute"
+    ],
+    "resource_types": ["tool"],
+    "resource_ids": ["*"],
+    "reason": "t-alpha reader: the demo read tools. demo-message-execute is a deliberate mistake: the deny rule above must win"
+  },
+  {
+    "id": "t-alpha.nobody",
+    "roles": ["*"],
+    "conditions": {"subject.email": "nobody@t-alpha.agents.gxg.example.com"},
+    "actions": ["tools.invoke.demo-t-alpha-alpha-boards"],
+    "resource_types": ["tool"],
+    "resource_ids": ["*"],
+    "reason": "t-alpha nobody: boards list only; every other tool falls to the default deny"
+  },
+  {
+    "id": "t-beta.reader",
+    "roles": ["*"],
+    "conditions": {"subject.email": "reader@t-beta.agents.gxg.example.com"},
+    "actions": [
+      "tools.invoke.demo-t-beta-demo-boards-list",
+      "tools.invoke.demo-t-beta-demo-notes-search",
+      "tools.invoke.demo-t-beta-demo-note-get"
+    ],
+    "resource_types": ["tool"],
+    "resource_ids": ["*"],
+    "reason": "t-beta reader: the demo read tools"
+  },
+  {
+    "id": "t-beta.nobody",
+    "roles": ["*"],
+    "conditions": {"subject.email": "nobody@t-beta.agents.gxg.example.com"},
+    "actions": ["tools.invoke.demo-t-beta-demo-boards-list"],
+    "resource_types": ["tool"],
+    "resource_ids": ["*"],
+    "reason": "t-beta nobody: boards list only"
+  }
+]

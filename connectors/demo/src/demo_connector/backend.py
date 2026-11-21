@@ -19,6 +19,8 @@ from .data import Board, Note
 
 SCAN_DELAY_S = 2.0  # demo-connector-v1: `scan` is slow on purpose
 IndexFailure = Literal["temporarily_unavailable", "timeout_before_start"]
+BackendFailure = Literal["rate_limited", "temporarily_unavailable", "timeout_before_start"]
+RETRY_AFTER_S = 7
 Method = Literal["index", "scan"]
 
 
@@ -27,15 +29,25 @@ class Backend:
         self.connections, self.boards = data.load(path)  # tenant -> connection; tenant -> board id -> board
         self.scan_delay_s = scan_delay_s
         self.index_failure: IndexFailure | None = None  # set by POST /_test/index/fail
+        self.failure: BackendFailure | None = None  # set by POST /_test/backend/fail: every call fails (MC-03)
+        self.delay_s = 0.0  # set by POST /_test/backend/fail `slow:<ms>`: every call waits (MC-03)
         self.calls: Counter[str] = Counter()  # tests: backend calls per method (AC-M3-07, AC-M3-08)
 
+    def _enter(self, kind: str) -> None:
+        """Count the call, then apply the test failure mode (the service behind the connector is down)."""
+        self.calls[kind] += 1
+        if self.failure == "rate_limited":
+            raise GxgError("rate_limited", "backend rate limit", retry_after_s=RETRY_AFTER_S)
+        if self.failure is not None:
+            raise GxgError(self.failure, "backend is not available")
+
     def list_boards(self, tenant: str) -> list[Board]:
-        self.calls["boards"] += 1
+        self._enter("boards")
         return sorted(self.boards[tenant].values(), key=lambda b: b.id)
 
     def get_note(self, tenant: str, note_id: str) -> Note | None:
         """The note with its real board (GR-03), or None. Only this tenant's data (GR-02)."""
-        self.calls["get"] += 1
+        self._enter("get")
         for board in self.boards.get(tenant, {}).values():
             for note in board.notes:
                 if note.id == note_id:
@@ -50,6 +62,9 @@ class Backend:
         Fallback index -> scan only when the index fails before running (MCC-06);
         a valid empty index result is final.
         """
+        self._enter("search")
+        if self.delay_s:
+            await asyncio.sleep(self.delay_s)
         q = query.casefold()
         boards = [self.boards[tenant][b] for b in sorted(board_ids)]
         try:

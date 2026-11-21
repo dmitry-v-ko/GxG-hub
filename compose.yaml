@@ -1,34 +1,127 @@
-# Local development ONLY. Do not expose directly to the internet.
-# ContextForge is used as an external OCI dependency, not forked.
-# Default image removed deliberately: no accidental fallback to insecure prerelease.
-# Pinned image (tag@digest) lives in .env.example; see ADR-0001 for the advisory check.
-# Effects are NOT enabled by this Compose; effect execution path / identity PoC is separate.
+# GxG Hub dev stand (M5, stage B read-only). Local development ONLY, synthetic data, never exposed.
+# Setup and runbook: stand/README.md. Secrets: `.env` and stand/secrets/ (git-ignored), made by stand/init.py.
+# ContextForge is an external OCI dependency, not forked; pinned by digest (SEC-22, ADR-0001).
+# Networks: agents reach only ContextForge (edge, published on 127.0.0.1); `demo` has no port and sits on the
+# internal `connectors` network that only ContextForge shares (SEC-04, SEC-13); PostgreSQL only on `db`.
+name: gxg-stand
+
+x-contextforge-image: &contextforge-image
+  # v1.1.1 (OCI index). Re-check IBM advisories and re-run stand/run.sh before changing it (SEC-22).
+  ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5
+
 services:
-  contextforge:
-    image: ${CONTEXTFORGE_IMAGE:?Set CONTEXTFORGE_IMAGE in .env (pinned digest in .env.example)}
+  postgres:
+    image: postgres:18@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:4444:4444"
+    environment:
+      POSTGRES_DB: mcp
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run stand/init.py}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      interval: 2s
+      retries: 30
+    volumes: [pgdata:/var/lib/postgresql]
+    networks: [db]
+
+  contextforge:
+    image: *contextforge-image
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+    ports: ["127.0.0.1:4444:4444"]
     environment:
       HOST: "0.0.0.0"
       PORT: "4444"
       APP_DOMAIN: "http://localhost:4444"
+      DATABASE_URL: postgresql+psycopg://mcp:${POSTGRES_PASSWORD}@postgres:5432/mcp
       AUTH_REQUIRED: "true"
-      # Default deny: no effects or identity propagation until the trusted security PoC.
-      IDENTITY_PROPAGATION_ENABLED: "false"
-      PLUGINS_ENABLED: "false"
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
-      AUTH_ENCRYPTION_SECRET: ${AUTH_ENCRYPTION_SECRET:?Set AUTH_ENCRYPTION_SECRET in .env}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?run stand/init.py}
+      AUTH_ENCRYPTION_SECRET: ${AUTH_ENCRYPTION_SECRET:?run stand/init.py}
       JWT_AUDIENCE: "mcpgateway-api"
       JWT_ISSUER: "mcpgateway"
-      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL:?Set PLATFORM_ADMIN_EMAIL in .env}
-      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Set PLATFORM_ADMIN_PASSWORD in .env}
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL:?run stand/init.py}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?run stand/init.py}
       PLATFORM_ADMIN_FULL_NAME: "GxG Hub Operator"
-      MCPGATEWAY_UI_ENABLED: "true"
+      DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD:?run stand/init.py}
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:?run stand/init.py}
+      EMAIL_AUTH_ENABLED: "true"
+      MCPGATEWAY_UI_ENABLED: "false"
       MCPGATEWAY_ADMIN_API_ENABLED: "true"
-      DATABASE_URL: "sqlite:////data/mcp.db"
+      # ADR-0001: built-in identity propagation gives no authority and stays off.
+      IDENTITY_PROPAGATION_ENABLED: "false"
+      ENABLE_HEADER_PASSTHROUGH: "false"
+      # Plugins: unified_pdp (tool policy, deny by default) and gxg_identity (X-GxG-Identity, variant C).
+      PLUGINS_ENABLED: "true"
+      PLUGINS_CONFIG_FILE: /run/gxg/plugins.yaml
+      # Fail closed: a plugin that cannot load stops the start (only this env var counts on v1.1.1).
+      PLUGINS_FAIL_ON_PLUGIN_ERROR: "true"
+      # direct_proxy gateways skip all plugins (ADR-0001), keep it off.
+      MCPGATEWAY_DIRECT_PROXY_ENABLED: "false"
+      # SSRF (SEC-15): private ranges blocked, except the connector addresses of the stand.
+      SSRF_PROTECTION_ENABLED: "true"
+      SSRF_ALLOW_PRIVATE_NETWORKS: "false"
+      SSRF_ALLOW_LOCALHOST: "false"
+      SSRF_ALLOWED_NETWORKS: '["10.250.0.8/30"]'
+      TOOL_TIMEOUT: "25"  # above the slowest demo tool (20 s, gxg-manifest.yaml): MC-03 times out here
+      # The live suite makes a few hundred tool calls a minute from one agent; ContextForge's default is 100/min
+      # with a 15 min lockout. Stand only; the limiter itself stays on.
+      RATE_LIMIT_MEDIUM_RPM: "3000"
+      RATE_LIMIT_MEDIUM_BURST: "300"
+      AUTH_CACHE_REVOCATION_TTL: "5"  # the minimum: a revoked agent token stops within seconds (MC-04, SEC-20)
+      LOG_LEVEL: "INFO"
     volumes:
-      - contextforge-data:/data
+      - ./gateway/contextforge/gxg_identity:/app/plugins/gxg_identity:ro
+      - ./stand/secrets/plugins.yaml:/run/gxg/plugins.yaml:ro
+      - ./stand/unified_pdp.rules.json:/run/gxg/unified_pdp.rules.json:ro
+      - ./stand/secrets/adapter_ed25519.pem:/run/gxg/adapter_ed25519.pem:ro
+    extra_hosts:
+      # SC-07: names that resolve to blocked addresses (the DNS step of SSRF); nothing listens there.
+      - "ssrf-metadata.gxg.example.com:169.254.169.254"
+      - "ssrf-private.gxg.example.com:192.168.7.7"
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python3", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:4444/health', timeout=3)"]
+      interval: 3s
+      retries: 60
+    networks:
+      edge: {}
+      db: {}
+      connectors: {ipv4_address: 10.250.0.2}
+
+  demo:
+    image: gxg-demo:stand
+    build:
+      context: .
+      dockerfile: connectors/demo/Dockerfile
+      args:
+        KEEP_TEST_CONTROLS: "1"  # stand only: backend counters and failure modes on 127.0.0.1:8090 in the container
+    restart: unless-stopped
+    environment:
+      GXG_PROFILE: test  # only for DEMO_TEST_CONTROLS; identity comes from ContextForge, no test issuer
+      DEMO_TEST_CONTROLS: "1"
+      DEMO_IDENTITY_KEYS: ${DEMO_IDENTITY_KEYS:?run stand/init.py}
+      DEMO_BUNDLE_KEYS: ${DEMO_BUNDLE_KEYS:?run stand/init.py}
+      DEMO_PROVIDER_TOKEN: ${DEMO_PROVIDER_TOKEN:?run stand/init.py}  # fake credential, must never leak (SC-09)
+    volumes:
+      - ./stand/secrets/bundle:/bundle:ro
+      - demo-state:/var/lib/demo
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]
+      interval: 3s
+      retries: 30
+    networks:
+      connectors: {ipv4_address: 10.250.0.10}
+
+networks:
+  edge: {}
+  db: {internal: true}
+  connectors:
+    internal: true
+    # No address for the host on this bridge: the docker host itself has no route to demo (AC-M5-03).
+    driver_opts: {com.docker.network.bridge.inhibit_ipv4: "true"}
+    ipam:
+      config: [{subnet: 10.250.0.0/24}]
 
 volumes:
-  contextforge-data:
+  pgdata:
+  demo-state:

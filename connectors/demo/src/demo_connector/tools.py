@@ -8,6 +8,7 @@ error (MCC-05). One JSON audit line per call without query, body or tokens (SEC-
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -17,7 +18,7 @@ import secrets
 import time
 import traceback
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -67,22 +68,27 @@ class DemoTool(Tool):
     """A FastMCP tool whose schemas are the files in connectors/demo/schemas/ (AC-M3-02)."""
 
     handler: Annotated[SkipJsonSchema[Handler], Field(exclude=True)]
-    verify: Annotated[SkipJsonSchema[Callable[[Mapping[str, str]], VerifiedIdentity]], Field(exclude=True)]
+    verify: Annotated[SkipJsonSchema[Callable[..., VerifiedIdentity]], Field(exclude=True)]  # IdentityVerifier.verify
     refresh: Annotated[SkipJsonSchema[Callable[[], None]], Field(exclude=True)]
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
         started = time.monotonic()
         entry: dict[str, Any] = {"request_id": str(uuid.uuid4()), "tool": self.name}
         try:
-            # Headers only: arguments and _meta never reach the verifier (MCC-02).
-            ident = self.verify(get_http_request().headers)
+            # Identity from headers only; tool and arguments are checked against the signed binding
+            # (SEC-03 `tool`, `ahs`), _meta never reaches the verifier (MCC-02).
+            ident = self.verify(get_http_request().headers, tool=self.name, arguments=arguments)
             entry |= {"request_id": ident.request_id, "tenant": ident.tenant_id, "principal": ident.principal}
             error = next(jsonschema.Draft202012Validator(self.parameters).iter_errors(arguments), None)
             if error is not None:
                 where = "/" + "/".join(map(str, error.absolute_path))
                 raise GxgError("invalid_input", "arguments do not match the input schema", details={"path": where})
             self.refresh()  # also refuses with temporarily_unavailable without a valid bundle (GR-12)
-            content, fields = await self.handler(ident, arguments)
+            try:  # gxg-manifest.yaml limits.timeout_s; FastMCP does not enforce Tool.timeout for this run()
+                content, fields = await asyncio.wait_for(self.handler(ident, arguments), self.timeout)
+            except TimeoutError:
+                # sent to the backend, no answer: a read is safe to repeat; never timeout_before_start (MCC-05)
+                raise GxgError("temporarily_unavailable", "backend did not answer in time") from None
             entry |= fields | {"outcome": "ok"}
             return ToolResult(structured_content=content)
         except GxgError as exc:

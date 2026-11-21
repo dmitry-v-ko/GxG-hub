@@ -11,12 +11,14 @@ COPY packages/gxg-connector-kit packages/gxg-connector-kit
 COPY schemas/search-result.schema.json schemas/
 COPY connectors/demo connectors/demo
 WORKDIR /app/connectors/demo
+# The dev stand (compose.yaml) builds with KEEP_TEST_CONTROLS=1; the default production image drops them.
+ARG KEEP_TEST_CONTROLS=0
 # Optional secret `ca-bundle`: a TLS-intercepting proxy's CA for the download only, never stored in a layer.
 RUN --mount=type=secret,id=ca-bundle,required=false \
     if [ -f /run/secrets/ca-bundle ]; then export SSL_CERT_FILE=/run/secrets/ca-bundle; fi \
     && uv sync --no-dev \
     # test controls are not shipped in the production image (demo-connector-v1, fake provider)
-    && rm src/demo_connector/testctl.py
+    && if [ "$KEEP_TEST_CONTROLS" != 1 ]; then rm src/demo_connector/testctl.py; fi
 
 FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 COPY --from=build /app /app

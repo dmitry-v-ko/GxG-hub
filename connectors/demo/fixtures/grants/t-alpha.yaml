@@ -25,3 +25,9 @@ grants:
     actions: [read, propose]
     resources:
       - demo:demo-main/board/a-public
+  - id: alpha-reader-secret-expired   # GR-06: expired, gives nothing (SC-10)
+    subjects: [agent:t-alpha:reader]
+    actions: [read]
+    resources:
+      - demo:demo-main/board/a-secret
+    expires_at: "2026-01-01T00:00:00Z"

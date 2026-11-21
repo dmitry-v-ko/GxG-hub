@@ -1,6 +1,6 @@
 # ADR-0002: Выбор MCP-шлюза: ContextForge, ToolHive или Docker MCP Gateway
 
-**Статус:** Proposed — решение принимает владелец. Спайк M4.1, 2026-11-21.
+**Статус:** Accepted — ContextForge v1.1.1 + вариант C; ToolHive — запасной кандидат на случай провала условия 4 в M5; Docker MCP Gateway отклонён. Решение владельца 2026-11-21 ([журнал](../../reports/progress.md) ветки плана, коммит `3f4c736`). Спайк M4.1, 2026-11-21. Проверка условия 4 в M5 — раздел [«M5: условие 4»](#m5-условие-4).
 **Связано:** [ADR-0001](0001-identity-propagation.md) (вариант C на ContextForge, Accepted), [SEC-03, SEC-04](../specs/security-v1.md#identity), [Roadmap → GO/NO-GO](../specs/roadmap-v1.md#go--no-go). Стенды: [`spikes/m4.1-gateways/`](../../spikes/m4.1-gateways/README.md).
 
 ## Рекомендация

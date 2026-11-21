@@ -1,8 +1,8 @@
 """Caller identity in the connector (ADR-0001, SEC-03, MCC-02).
 
 `IdentityVerifier` is the interface every connector depends on. The production
-mechanism is chosen by the M4 spike (ADR-0001); until then the only implementation is
-the stub issuer/verifier below, which refuses to start outside `GXG_PROFILE=test`.
+implementation is `cf_identity.ContextForgeVerifier` (ADR-0001 variant C); the stub
+issuer/verifier below is for tests without ContextForge and refuses to start outside `GXG_PROFILE=test`.
 Without a verifier a connector has no identity and must refuse calls (fail closed).
 """
 
@@ -40,10 +40,13 @@ class VerifiedIdentity:
 
 
 class IdentityVerifier(Protocol):
-    def verify(self, headers: Mapping[str, str]) -> VerifiedIdentity:
+    def verify(
+        self, headers: Mapping[str, str], *, tool: str | None = None, arguments: Mapping[str, Any] | None = None
+    ) -> VerifiedIdentity:
         """Identity from the trusted channel only, or raise `GxgError("unauthenticated")`.
 
-        Tool arguments and `_meta` are never passed here: they cannot carry identity.
+        `tool` and `arguments` are the call the assertion must be bound to (SEC-03: `tool`, `ahs`);
+        a verifier that binds refuses without them. They never carry identity, `_meta` is never passed (MCC-02).
         """
         ...
 
@@ -92,7 +95,10 @@ class StubVerifier:
         self._now = now
         self._jti = JtiCache()
 
-    def verify(self, headers: Mapping[str, str]) -> VerifiedIdentity:
+    def verify(
+        self, headers: Mapping[str, str], *, tool: str | None = None, arguments: Mapping[str, Any] | None = None
+    ) -> VerifiedIdentity:
+        """The test issuer's assertions are not bound to a call: `tool` and `arguments` are ignored."""
         token = {k.lower(): v for k, v in headers.items()}.get(STUB_HEADER)
         if token is None:
             raise TokenError("missing")

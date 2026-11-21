@@ -25,6 +25,7 @@ only_mutate = [
     "src/gxg_connector_kit/_jwt.py",
     "src/gxg_connector_kit/grants.py",
     "src/gxg_connector_kit/canonical.py",
+    "src/gxg_connector_kit/cf_identity.py",  # M5: ContextForge identity (SEC-03)
 ]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]

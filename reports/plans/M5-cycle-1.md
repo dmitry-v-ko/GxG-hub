@@ -74,7 +74,7 @@
 
 ## Агенты стенда
 
-`t-alpha`: `reader` (grant на `a-public`, `a-sales`), `nobody` (без grant'ов). `t-beta`: `reader` (все доски), `nobody`. Email `<name>@<tenant>.agents.gxg.test`, principal `agent:<tenant>:<name>` (resource-grants-v1). Grants — fixtures `demo` без правок. `agent:t-beta:nobody` в fixtures не объявлен: у неизвестного principal'а нет grant'ов. Это проверяется.
+`t-alpha`: `reader` (grant на `a-public`, `a-sales`), `nobody` (без grant'ов). `t-beta`: `reader` (все доски), `nobody`. Email `<name>@<tenant>.agents.gxg.example.com`, principal `agent:<tenant>:<name>` (resource-grants-v1). Grants — fixtures `demo` без правок. `agent:t-beta:nobody` в fixtures не объявлен: у неизвестного principal'а нет grant'ов. Это проверяется.
 
 ## Что сознательно не делается
 

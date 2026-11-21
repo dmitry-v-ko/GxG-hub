@@ -65,6 +65,7 @@ testpaths = [
     "connectors/demo/tests",
     "spikes/m4-contextforge/tests",
     "spikes/m4.1-gateways/tests",
+    "gateway/contextforge/tests",
 ]
 # DoD-5: a skipped or xfailed test is a failure, not a pass.
 xfail_strict = true
@@ -92,6 +93,7 @@ ignore = [
 "**/tests/**" = ["S101", "S603", "S607", "PLC0415"]
 "conftest.py" = ["S101"]
 "scripts/ci/**" = ["S603", "S607"]
+"stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
 
 [tool.ruff.lint.isort]
 known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector"]
@@ -109,6 +111,11 @@ strict_equality = true
 # scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
 explicit_package_bases = true
 mypy_path = ["packages/gxg-connector-kit/src", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
+
+[[tool.mypy.overrides]]
+# gateway/contextforge/gxg_identity/plugin.py runs inside the ContextForge image, where cpex is installed
+module = ["cpex.*"]
+ignore_missing_imports = true
 
 [tool.ruff.format]
 quote-style = "preserve"

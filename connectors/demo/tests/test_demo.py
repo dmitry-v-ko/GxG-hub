@@ -36,6 +36,7 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from demo_connector import data, server, testctl
+from demo_connector import tools as tools_module
 from demo_connector.backend import Backend, Note
 from demo_connector.tools import Connector
 from gxg_connector_kit import TokenError
@@ -657,7 +658,7 @@ async def test_valid_empty_result_does_not_scan(demo: Demo) -> None:
     for _ in range(2):
         empty = await demo.ok("demo.notes.search", {"query": "zzz-nothing"})
         assert empty["items"] == [] and empty["complete"] is True
-    assert demo.backend.calls == {"boards": 2, "index": 2}
+    assert demo.backend.calls == {"boards": 2, "search": 2, "index": 2}
 
 
 async def test_backend_calls_are_counted(demo: Demo) -> None:
@@ -668,7 +669,7 @@ async def test_backend_calls_are_counted(demo: Demo) -> None:
         await demo.ok("demo.boards.list")
         await demo.ok("demo.note.get", {"note_id": note.id})
         await demo.ok("demo.notes.search", {"query": "status"})
-    assert demo.backend.calls == {"boards": 4, "get": 2, "index": 2, "scan": 2}
+    assert demo.backend.calls == {"boards": 4, "get": 2, "search": 2, "index": 2, "scan": 2}
 
 
 async def test_unknown_tenant_sees_nothing(demo: Demo) -> None:
@@ -739,6 +740,32 @@ async def test_other_index_errors_do_not_scan(demo: Demo) -> None:
     r = await demo.call("demo.notes.search", {"query": "status"})
     assert r["structuredContent"] == {"code": "internal_error", "message": "index is not available", "retryable": False}
     assert demo.backend.calls["scan"] == 0
+
+
+async def test_tool_timeout_from_the_manifest_is_enforced(
+    env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MC-03: no answer from the backend within limits.timeout_s -> temporarily_unavailable (a read, retryable)."""
+    manifest = yaml.safe_load((DEMO / "gxg-manifest.yaml").read_text(encoding="utf-8"))
+    for t in manifest["tools"]:
+        t["limits"]["timeout_s"] = 0.3  # schema paths stay relative: load_schema resolves them from connectors/demo
+    (tmp_path / "gxg-manifest.yaml").write_text(yaml.safe_dump(manifest), encoding="utf-8")
+    monkeypatch.setattr(tools_module, "MANIFEST", tmp_path / "gxg-manifest.yaml")
+    app, connector = server.build(env.settings, Backend(scan_delay_s=0))
+    async with AsyncExitStack() as stack:
+        http, session = await connect(stack, app)
+        demo = Demo(connector, http, session, env.issuer)
+        assert (await demo.ok("demo.boards.list"))["boards"]  # fast calls are untouched
+        connector.backend.delay_s = 5.0
+        started = time.monotonic()
+        r = await demo.call("demo.notes.search", {"query": "status"})
+        assert time.monotonic() - started < 2
+    assert r["isError"] is True
+    assert r["structuredContent"] == {
+        "code": "temporarily_unavailable",
+        "message": "backend did not answer in time",
+        "retryable": True,
+    }
 
 
 async def test_scan_out_of_time_is_partial(demo: Demo) -> None:
@@ -828,7 +855,7 @@ async def test_prompt_injection_is_data(demo: Demo) -> None:
     demo.backend.calls.clear()
     got = await demo.ok("demo.notes.search", {"query": "игнорируй инструкции"})
     assert [i["excerpt"] for i in got["items"]] == [INJECTION]
-    assert set(demo.backend.calls) == {"boards", "index"}  # reads only
+    assert set(demo.backend.calls) == {"boards", "search", "index"}  # reads only
     names = [t.name for t in (await demo.session.list_tools()).tools]
     assert not [n for n in names if n.endswith("propose")]  # nothing to call, no provider or Approval Service
 
@@ -905,10 +932,10 @@ from demo_connector import server
 
 refuse = server.NoVerifier.verify
 
-def verify(self, headers):
+def verify(self, headers, **binding):
     if "x-boom" in headers:
         raise RuntimeError("verifier exploded: demo-secret-XYZ")
-    return refuse(self, headers)
+    return refuse(self, headers, **binding)
 
 def two_calls(configs):
     app = configs[0].app
