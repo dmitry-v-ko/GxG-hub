@@ -97,3 +97,4 @@
 | M4.1 | 2 | критик | claude/m4.1-gateway-comparison | 28fba91 | **8.0** | < 9 (без роста 1 цикл): находки только по запасному ToolHive (docker socket, Bearer, jti per connector, webhook advisories) → узкий цикл 3 | 2026-11-21 |
 | M3 | 1 | критик | claude/m3-demo-read | 4690309 | **8.0** | < 9: major — нет проверки bundle до handler; пустой набор досок всё равно идёт в backend → цикл 2 | 2026-11-21 |
 | M4.1 | 3 | исполнитель | claude/m4.1-gateway-comparison | 185162e (+c2f505f) | — | рекомендация та же; ToolHive production-топология не проверена (K8s ~12–17 дн. / docker socket — отклонён); критик запущен | 2026-11-21 |
+| M4.1 | 3 | критик | claude/m4.1-gateway-comparison | 185162e | **9.0** | ≥ 9 — **веха закрыта**; 7 minor → backlog; ADR-0002 Proposed → решение владельца | 2026-11-21 |
