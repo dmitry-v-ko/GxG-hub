@@ -120,3 +120,16 @@ def test_no_active_key_message() -> None:
         "message": "no executor signing key is active yet",
         "retryable": True,
     }
+
+
+def test_not_before_is_utc_whatever_the_local_zone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    monkeypatch.setenv("TZ", "Asia/Tokyo")
+    time.tzset()
+    try:
+        keys.rotate(tmp_path / "k.json", tmp_path / "j.json", lead_s=0, now=T0)
+    finally:
+        monkeypatch.delenv("TZ")
+        time.tzset()
+    assert json.loads((tmp_path / "k.json").read_text())[0]["not_before"] == "2027-01-15T08:00:00Z"

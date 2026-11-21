@@ -4,9 +4,11 @@ its test controls and the configuration. The end-to-end ACs (AC-M8-01…12, 14) 
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
+import re
 import threading
 import time
 import unicodedata
@@ -603,7 +605,7 @@ async def test_reconcile_by_the_provider_journal(internal: Internal) -> None:
     r = await internal.client.post(f"/internal/v1/reconcile/{EXECUTE}", json=body, headers=auth)
     assert r.json()["finding"] == "executed" and r.json()["provider_operation_id"].startswith("demo-op-")
     assert _schema.validator("reconcile-result").is_valid(r.json())
-    bad_bodies = (
+    bad_bodies: tuple[dict[str, Any], ...] = (
         {},
         {**body, "intent_id": "x"},
         {"intent_id": INTENT, "execution_id": EXECUTION},
@@ -674,6 +676,7 @@ async def test_reconcile_and_internal_error_audit(
     await internal.client.post(f"/internal/v1/reconcile/{EXECUTE}", json=body, headers=auth)
 
     async def boom(*_: Any) -> Any:
+        await asyncio.sleep(0.03)  # duration_ms is measured in milliseconds
         raise RuntimeError("secret detail")
 
     monkeypatch.setattr(internal.effects, "_checked", boom)
@@ -688,7 +691,8 @@ async def test_reconcile_and_internal_error_audit(
     (frames,) = [r.getMessage() for r in caplog.records if r.name == "demo_connector.errors"]
     first, *stack = frames.splitlines()
     assert first == f"internal_error {err['request_id']} RuntimeError"
-    assert stack and all(" in " in line and ":" in line for line in stack) and any("boom" in x for x in stack)
+    assert stack and all(re.fullmatch(r"/\S+\.py:\d+ in \w+", line) for line in stack)
+    assert any(line.endswith(" in boom") for line in stack) and err["duration_ms"] >= 20
     assert internal.provider.calls() == []
 
 
@@ -828,6 +832,7 @@ def test_provider_mode_details(tmp_path: Path) -> None:
     p.set_mode("no_dedupe")
     assert (p.mode, p.dedupe, p.delay_s) == ("ok", False, 0.0)
     p.set_mode("ok,slow:1")
+    assert p.delay_s == 0.001
     assert send(p, key="k-slow").outcome == "ok"  # the answer waits 1 ms
     p.set_mode("ok")
     assert (p.dedupe, p.delay_s) == (True, 0.0)

@@ -14,7 +14,7 @@
 - **Identity (ADR-0001, вариант C).** Плагин [`gateway/contextforge/gxg_identity`](../gateway/contextforge/gxg_identity) (`tool_pre_invoke`) подписывает `X-GxG-Identity` (JWS EdDSA, `typ` `gxg-identity+jwt`) ключом адаптера. `demo` проверяет его через `gxg_connector_kit.cf_identity.ContextForgeVerifier` (`DEMO_IDENTITY_KEYS`). `PLUGINS_FAIL_ON_PLUGIN_ERROR=true`: если плагин не загрузился, ContextForge не стартует.
 - **Политика tools.** `unified_pdp` из образа, движок `native`, `default_decision: deny`. Правила — [`unified_pdp.rules.json`](unified_pdp.rules.json): allow только для точного email агента и точного имени tool. Deny для `*execute*`/`*reconcile*` срабатывает раньше любого allow. Плагин PDP стоит первым (priority 10), адаптер identity — после него (1000).
 - **SSRF (SEC-15).** `SSRF_ALLOW_PRIVATE_NETWORKS=false`. Исключение — `10.250.0.8/30` (адрес `demo`). В `extra_hosts` два имени, которые резолвятся в metadata и RFC1918: на них проверяется шаг DNS (SC-07).
-- **Tenants.** Team `t-alpha`, `t-beta` (private). В каждой агенты `reader` и `nobody` (`<name>@<tenant>.agents.gxg.example.com`, роль `member`, один API-токен с `team_id`). Пароль агента случайный и нигде не хранится: войти как агент и выпустить себе токен нельзя (SEC-02). Gateway `demo-<tenant>` → `http://demo:8080/mcp` (visibility `team`), virtual server `vs-<tenant>`. Алиас `alpha_boards` у `demo.boards.list` t-alpha. REST-tool `demo.message.execute` в t-alpha — мишень правила EFF-02.
+- **Tenants.** Team `t-alpha`, `t-beta` (private). В каждой агенты `reader` и `nobody` (`<name>@<tenant>.agents.gxg.example.com`, роль `member`, один API-токен с `team_id`). Пароль агента случайный и нигде не хранится: войти как агент и выпустить себе токен нельзя (SEC-02). Gateway `demo-<tenant>` → `http://demo:8080/mcp` (visibility `team`), virtual server `vs-<tenant>`. Алиас `alpha_boards` у `demo.boards.list` t-alpha. `*.execute` в ContextForge не регистрируется (EFF-02); мишень правила `deny:agents-never-execute` — probe-tool, который тест EX-01 регистрирует только на время теста (M8).
 - **Grants.** Bundle из `connectors/demo/fixtures/grants/`, подписан ключом стенда.
 
 ## Запуск
@@ -55,7 +55,7 @@ docker compose down               # остановить; -v удалит и Б�
 
 ## Тесты
 
-[`stand/tests/`](tests): SC-01…SC-10 ([`test_sc.py`](tests/test_sc.py)) и MC-01…MC-04 ([`test_mc.py`](tests/test_mc.py)) через ContextForge. Тестовые контроли `demo` доступны только изнутри контейнера: `docker compose exec demo` → `127.0.0.1:8090`. Прямые запросы в обход ContextForge отправляет одноразовый контейнер в нужной сети (`standlib.Stand.probe`). Корневой `pytest` эти тесты не запускает: им нужен стенд и сокеты. В CI их запускает job `m5-stand`.
+[`stand/tests/`](tests): SC-01…SC-10 ([`test_sc.py`](tests/test_sc.py)), MC-01…MC-04 ([`test_mc.py`](tests/test_mc.py)) и EX-01 ([`test_ex.py`](tests/test_ex.py), AC-M8-13) через ContextForge. `demo` на стенде read-only (нет Approval Service и `DEMO_APPROVAL_URL`): `propose` не публикуется, порта 8081 нет. Тестовые контроли `demo` доступны только изнутри контейнера: `docker compose exec demo` → `127.0.0.1:8090`. Прямые запросы в обход ContextForge отправляет одноразовый контейнер в нужной сети (`standlib.Stand.probe`). Корневой `pytest` эти тесты не запускает: им нужен стенд и сокеты. В CI их запускает job `m5-stand`.
 
 ## Что сознательно не сделано
 

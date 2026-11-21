@@ -148,7 +148,7 @@ class Executor:
             self.execute(taken)
         return taken is not False
 
-    def run(self, stop: threading.Event, *, poll_s: float = 1.0) -> None:
+    def run(self, stop: threading.Event, *, poll_s: float) -> None:
         while not stop.is_set():
             try:
                 busy = self.run_once()

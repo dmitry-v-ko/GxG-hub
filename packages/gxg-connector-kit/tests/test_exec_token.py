@@ -378,11 +378,17 @@ def test_signed_token_round_trips_through_the_verifier_and_its_jwk(clock: Clock)
 @pytest.mark.parametrize("ttl", [0, 61])
 def test_sign_refuses_a_lifetime_outside_60s(ttl: int) -> None:
     body = {k: v for k, v in claims().items() if k not in ("iss", "iat", "exp")}
-    with pytest.raises(ValueError, match="ttl_s"):
+    with pytest.raises(ValueError, match=r"^ttl_s must be in \(0, 60\]$"):
         sign(Ed25519PrivateKey.generate(), body, ttl_s=ttl)
+
+
+def test_sign_accepts_one_second(clock: Clock) -> None:
+    body = {k: v for k, v in claims().items() if k not in ("iss", "iat", "exp")}
+    token = sign(Ed25519PrivateKey.generate(), body, ttl_s=1, now=clock)
+    assert jwt.decode(token, options={"verify_signature": False})["exp"] == T0 + 1
 
 
 def test_sign_refuses_claims_outside_the_schema() -> None:
     body = {k: v for k, v in claims(ahs="nothex").items() if k not in ("iss", "iat", "exp")}
-    with pytest.raises(ValueError, match="schema"):
+    with pytest.raises(ValueError, match=r"^execution token claims do not match execution-token\.schema\.json$"):
         sign(Ed25519PrivateKey.generate(), body)

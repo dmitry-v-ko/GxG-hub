@@ -625,9 +625,8 @@ def test_ac10_kill_switch_after_reserve_before_dispatch(stack: Stack, pg: Any) -
     ex.execute(r)  # the executor's own call of the same reservation: refused at dispatch as well (T12a)
     assert stack.executions(alpha["intent_id"])[0][1] == "failed_before_effect"
     stack.drain(ex, lambda: stack.status(beta["intent_id"]) == "succeeded")
-    for _ in range(10):  # the refused row is tried once, then waits ≥ 5 s (backoff): nothing else is due
-        if not ex.run_once():
-            break
+    assert ex.run_once() is True  # the re-queued row: T7 refuses (423), the row stays with a backoff
+    assert ex.run_once() is False  # it waits ≥ 5 s: nothing else is due
     assert stack.status(alpha["intent_id"]) == "approved"  # waits: T7 refuses while the switch is on
     assert [c["tenant"] for c in stack.demo.calls()] == ["t-beta"]
     deferred = stack.owner.execute(
@@ -747,12 +746,15 @@ def test_ac14_removed_kid_is_refused_at_dispatch_at_once_and_by_the_connector_wi
 # --- executor details -----------------------------------------------------------------------------
 
 
-def test_connector_not_registered_for_the_tenant_gets_no_token(stack: Stack) -> None:
+def test_connector_not_registered_for_the_tenant_gets_no_token(stack: Stack, caplog: pytest.LogCaptureFixture) -> None:
     """AS-25: the connector lost t-alpha in the bundle: the attempt is refused without any HTTP call."""
+    caplog.set_level("INFO")
     r, ex = reserve_one(stack)
     stack.store.load(*_bundle_without_tenant(stack))
     ex.execute(r)
     assert stack.executions(str(r.intent_id))[0][1:] == ("failed_before_effect", "not_registered")
+    (event,) = [json.loads(x.getMessage()) for x in caplog.records if x.name == "gxg_approval.executor"]
+    assert (event["outcome"], event["error"]) == ("refused_before_dispatch", "not_registered")
     assert stack.demo.calls() == []
 
 
@@ -798,13 +800,17 @@ def test_stale_outbox_rows_are_delivered_without_work(stack: Stack, pg: Any) -> 
         api.execute("SELECT gxg_cancel(%s, 't-alpha', %s, %s)", (cancelled["intent_id"], ACTOR_A, i["version"]))
     exhausted = stack.propose()
     stack.owner.execute("UPDATE intents SET max_attempts = 0 WHERE intent_id = %s", (exhausted["intent_id"],))
+    ex = stack.executor()
+    assert [ex.run_once() for _ in range(3)] == [True, True, False]
+    approved = stack.propose()  # its execute row delivered; a reconcile row for it must not reserve it
+    stack.owner.execute("UPDATE outbox SET delivered_at = now() WHERE intent_id = %s", (approved["intent_id"],))
     stack.owner.execute(
         "INSERT INTO outbox (topic, intent_id, payload, created_at, available_at) "
         "VALUES ('reconcile', %s, '{}', now(), now())",
-        (exhausted["intent_id"],),
-    )  # a reconcile row for an intent that is not outcome_unknown
-    ex = stack.executor()
-    assert [ex.run_once() for _ in range(4)] == [True, True, True, False]
+        (approved["intent_id"],),
+    )
+    assert [ex.run_once() for _ in range(2)] == [True, False]
+    assert stack.status(approved["intent_id"]) == "approved"
     pending = stack.owner.execute("SELECT count(*) FROM outbox WHERE delivered_at IS NULL "
                                   "AND topic IN ('execute', 'reconcile')").fetchone()  # fmt: skip
     assert pending == (0,)
@@ -818,6 +824,10 @@ def test_stale_outbox_rows_are_delivered_without_work(stack: Stack, pg: Any) -> 
         (httpx.Response(200, text="<html>"), "http_200"),
         (httpx.Response(200, json={"status": "succeeded"}), "http_200"),  # not an effect-result
         (httpx.Response(500, json={"code": "internal_error"}), "http_500"),
+        (
+            httpx.Response(500, json={"operation_id": "x", "status": "succeeded", "reconciliation_required": False}),
+            "http_500",
+        ),  # a valid effect-result, but not a 200
     ],
 )
 def test_unusable_answers_before_dispatch_are_refused_attempts(
@@ -949,6 +959,37 @@ def test_run_survives_an_error_and_stops(stack: Stack, caplog: pytest.LogCapture
 
     ex.run_once = flaky  # type: ignore[method-assign]
     started = time.time()
-    ex.run(stop, poll_s=0.2)
-    assert len(calls) == 2 and 0.15 < time.time() - started < 5  # waited one poll after the error
+    worker = threading.Thread(target=ex.run, args=(stop,), kwargs={"poll_s": 0.2}, daemon=True)
+    worker.start()
+    worker.join(timeout=5)
+    stop.set()  # a broken loop must not outlive the test
+    assert not worker.is_alive() and len(calls) == 2
+    assert 0.15 < time.time() - started < 5  # waited one poll after the error
     assert [r.getMessage() for r in caplog.records if r.name == "gxg_approval.executor"] == ["executor: error"]
+
+
+def test_late_reconcile_that_finds_the_effect_raises_no_alert(stack: Stack, caplog: pytest.LogCaptureFixture) -> None:
+    stack.demo.mode("commit_then_drop", count=1)
+    created = stack.propose()
+    ex = stack.executor()
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "outcome_unknown")
+    stack.owner.execute("UPDATE executions SET dispatched_at = now() - interval '25 hours'")
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "reconciled_succeeded")
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+
+
+def test_run_takes_the_next_row_at_once_while_there_is_work(stack: Stack) -> None:
+    """The poll interval is only for an empty queue: three queued intents take far less than one poll."""
+    ids = [stack.propose()["intent_id"] for _ in range(3)]
+    ex = stack.executor()
+    stop = threading.Event()
+    worker = threading.Thread(target=ex.run, args=(stop,), kwargs={"poll_s": 30})
+    started = time.time()
+    worker.start()
+    try:
+        while not all(stack.status(i) == "succeeded" for i in ids):
+            assert time.time() - started < 10
+            time.sleep(0.05)
+    finally:
+        stop.set()
+        worker.join()

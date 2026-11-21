@@ -1,0 +1,13 @@
+M8 cycle 1 — mutation testing (DoD-4), mutmut 3.8.1, PostgreSQL 16.6 over a Unix socket (GXG_TEST_PG_SOCKET_DIR)
+
+approval ([tool.mutmut]: policy, transitions, quotas, intents, api, mcp + M8 executor, keys)
+  full run on the cycle's first code: M7 modules: only the 11 M7 equivalents of scripts/ci/mutmut-equivalent.txt left
+  executor.py, keys.py: rerun after the mutation-driven changes (clean mutants/): every mutant killed except
+  13 listed equivalents (cast() no-ops, header-name case, falsy None/"" variants, temp-file name, busy flag after an
+  error); run() mutants 3/10 (no work / wait forever) killed by test_run_survives_an_error_and_stops
+connectors/demo ([tool.mutmut]: tools, backend, server + M8 effects, provider)
+  1913 mutants: 1866 killed + set_mode timeout fixed (killed on rerun); left = only listed equivalents
+  (M3 ones, M8: SQLite keyword case, header case, partition/rpartition, uvicorn log level/host defaults, …)
+packages/gxg-connector-kit (exec_token: + sign, public_jwk): only the 3 M1 equivalents left
+
+SQL (scripts/ci/mutate_m7_sql.py, M8 rows + touched M7 rows): reports/mutmut/M8-sql.txt — 0 not as expected
