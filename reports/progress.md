@@ -95,3 +95,4 @@
 | M4.1 | 2 | исполнитель | claude/m4.1-gateway-comparison | 28fba91 (+bcff838) | — | рекомендация не изменилась: ContextForge + C; ToolHive — проверенный запасной (путь C без форка, ~7–10 дн.); критик запущен | 2026-11-21 |
 | M3 | 1 | исполнитель | claude/m3-demo-read | 4690309 | — | AC-M3-01…11 passed по отчёту; критик запущен | 2026-11-21 |
 | M4.1 | 2 | критик | claude/m4.1-gateway-comparison | 28fba91 | **8.0** | < 9 (без роста 1 цикл): находки только по запасному ToolHive (docker socket, Bearer, jti per connector, webhook advisories) → узкий цикл 3 | 2026-11-21 |
+| M3 | 1 | критик | claude/m3-demo-read | 4690309 | **8.0** | < 9: major — нет проверки bundle до handler; пустой набор досок всё равно идёт в backend → цикл 2 | 2026-11-21 |
