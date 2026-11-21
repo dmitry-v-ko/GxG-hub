@@ -116,7 +116,6 @@
         "DoD-4: mutmut on widening_gate.py 581 mutants, 557 killed, 24 equivalent; 24/24 bash/YAML mutations of grants_widening.sh and ci.yml (10 new: PR copy runs, uv sync of the PR, gate paths dropped/narrowed/not passed, manifests not compared, PR gxg-policy / widening_gate.py runs)"
       ],
       "owner_pending": [
-        "owner_decision_needed: residual risk — a PR can rewrite .github/workflows/ci.yml so that the main copy of the gate never runs (remove the step, `exit 0`, drop grants-widening from ci-ok needs). Not closable in the repo; options: required code-owner review (second person), org ruleset required workflow, or written acceptance that the owner reads every PR touching .github/workflows/ (docs/setup/widening-approval.md «Ограничения»). Until decided, AC-M2-04 is not proven for this path",
         "docs/setup/widening-approval.md checklist steps 1-13 on a real PR; step 7 now expects red (gate from main); new 12 (re-run keeps created_at) and 13 (deleted/recreated head branch cannot be reopened, or the fast-forward is red)",
         "performed_via_github_app set for Claude GitHub App tokens (step 3)",
         "actions/runs returns head_branch, head_repository and pull_requests as the gate expects (otherwise approval never counts: fail closed)",
@@ -132,7 +131,8 @@
         "CI run 44889079000 grants-widening log",
         "reports/mutations/M2-cycle-4-mutmut.txt",
         "reports/mutations/M2-cycle-4-bash-yaml.txt"
-      ]
+      ],
+      "owner_decision": "accepted risk (2026-11-21): ci.yml-rewrite path covered by the owner's own review of every PR touching .github/workflows/; see top-level owner_decision"
     },
     {
       "id": "AC-M2-05",
@@ -191,7 +191,7 @@
     "every file changed under the gate paths (.github/workflows/, scripts/ci/, tools/gxg-policy/, schemas/, pyproject.toml, uv.lock) counts as widening (kind gate_path), including tests and fixtures under those paths: fail closed"
   ],
   "known_limitations": [
-    "owner_decision_needed: a PR can rewrite .github/workflows/ci.yml so the main copy of the gate never runs; the gate code, gxg-policy, uv.lock and schemas already come from main and edits to them need the label",
+    "owner_decision (accepted risk, 2026-11-21): a PR can rewrite .github/workflows/ci.yml so the main copy of the gate never runs; the owner reviews every such PR; the gate code, gxg-policy, uv.lock and schemas already come from main and edits to them need the label",
     "bootstrap: while main has no scripts/ci/grants_widening.sh the step runs the PR copy (warning in the log); the first such PR adds gate files and so needs the label",
     "push runs on claude/** stay red while the branch widens vs main; which same-name ci-ok GitHub counts is owner checklist steps 4 and 11",
     "performed_via_github_app for Claude GitHub App tokens is unproven until owner checklist step 3; an agent with the owner's personal token is indistinguishable from the owner",
@@ -231,10 +231,20 @@
     "docs": "done: false claim replaced, checklist steps 8-11 (base change, fast-forward, tag, reverse ci-ok order); owner_pending/proven_by_tests split above"
   },
   "critic_cycle_3": {
-    "major_1_gate_from_main": "done (in-repo part): step runs main's grants_widening.sh from a worktree of refs/remotes/origin/main, gxg-policy and widening_gate.py via uv run --locked --project <main>; no uv sync of the PR; gate paths need the label; tests incl. the ci.yml step itself. Remaining ci.yml path: owner_decision_needed (docs, known_limitations)",
+    "major_1_gate_from_main": "done (in-repo part): step runs main's grants_widening.sh from a worktree of refs/remotes/origin/main, gxg-policy and widening_gate.py via uv run --locked --project <main>; no uv sync of the PR; gate paths need the label; tests incl. the ci.yml step itself. Remaining ci.yml path: owner_decision = accepted risk, 2026-11-21 (owner reviews every PR touching .github/workflows/)",
     "major_2_manifest_widening": "done: diff --base-connectors/--head-connectors, job passes both worktrees, fixture 10-manifest-tools with goldens both ways, CODEOWNERS /connectors/*/gxg-manifest.yaml",
     "minor_3_duplicate_tool": "done: lint error duplicate-tool",
     "minor_4_checklist": "done: steps 12 (re-run keeps created_at) and 13 (recreated branch + reopen)",
     "minor_5_lean": "done: hand-written tools removed from registry.example.yaml"
-  }
+  },
+  "owner_decision": [
+    {
+      "risk": "a PR can rewrite .github/workflows/ci.yml so that the main copy of the gate never runs (remove the step, `exit 0`, drop grants-widening from ci-ok needs); not closable in the repo",
+      "decision": "accepted risk",
+      "date": "2026-11-21",
+      "by": "owner (relayed by the orchestrator)",
+      "mitigation": "the owner reviews every PR that changes .github/workflows/ personally, not by a green ci-ok; CODEOWNERS marks /.github/",
+      "docs": "docs/setup/widening-approval.md «Ограничения»"
+    }
+  ]
 }
