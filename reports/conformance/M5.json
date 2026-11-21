@@ -1,8 +1,8 @@
 {
  "milestone": "M5",
- "commit": "96068d3c116fedd3bdaee5e455ca972b4908e35e",
+ "commit": "feb5de0dab58e866df316060a1f363f0bfc12d4a",
  "commit_dirty": true,
- "run_at": "2026-11-21T15:33:26Z",
+ "run_at": "2026-11-21T16:14:45Z",
  "contextforge_image": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
  "sdk_versions": {
   "mcp": "2.3.0",
@@ -34,85 +34,85 @@
      "id": "MC-01",
      "test": "stand.tests.test_mc::test_mc01_negotiate_discover_invoke_with_the_official_sdk",
      "status": "passed",
-     "duration_s": 0.32
+     "duration_s": 1.77
     },
     {
      "id": "MC-01",
      "test": "stand.tests.test_mc::test_mc01_rpc_lists_the_same_schemas",
      "status": "passed",
-     "duration_s": 0.1
+     "duration_s": 1.57
     },
     {
      "id": "MC-02",
      "test": "stand.tests.test_mc::test_mc02_search_schema_pagination_and_limits",
      "status": "passed",
-     "duration_s": 2.0
+     "duration_s": 1.88
     },
     {
      "id": "MC-02",
      "test": "stand.tests.test_mc::test_mc02_valid_empty_result_does_not_fall_back",
      "status": "passed",
-     "duration_s": 1.03
+     "duration_s": 0.94
     },
     {
      "id": "MC-02",
      "test": "stand.tests.test_mc::test_mc02_index_failure_falls_back_to_scan",
      "status": "passed",
-     "duration_s": 4.11
+     "duration_s": 3.92
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_backend_errors_keep_their_codes_and_retryable_through_contextforge",
      "status": "passed",
-     "duration_s": 3.56
+     "duration_s": 3.69
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_timeout_after_the_request_was_sent",
      "status": "passed",
-     "duration_s": 41.09
+     "duration_s": 41.1
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_connector_down_is_an_error_not_a_result",
      "status": "passed",
-     "duration_s": 4.83
+     "duration_s": 4.63
     },
     {
      "id": "MC-04",
      "test": "stand.tests.test_mc::test_mc04_revoked_agent_token_stops_working_on_every_path",
      "status": "passed",
-     "duration_s": 5.49
+     "duration_s": 6.3
     },
     {
      "id": "MC-04",
      "test": "stand.tests.test_mc::test_mc04_adapter_key_rotation_and_revocation_at_the_connector",
      "status": "passed",
-     "duration_s": 15.89
+     "duration_s": 16.9
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_each_agent_lists_only_its_team_tools",
      "status": "passed",
-     "duration_s": 0.69
+     "duration_s": 0.57
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_other_team_tool_is_refused_by_name_on_every_path",
      "status": "passed",
-     "duration_s": 1.49
+     "duration_s": 1.73
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_hidden_tool_and_default_deny_on_every_path",
      "status": "passed",
-     "duration_s": 0.98
+     "duration_s": 1.02
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_alias_and_original_name",
      "status": "passed",
-     "duration_s": 0.48
+     "duration_s": 0.56
     },
     {
      "id": "SC-01",
@@ -124,37 +124,37 @@
      "id": "SC-02",
      "test": "stand.tests.test_sc::test_sc02_anonymous_expired_and_foreign_tokens",
      "status": "passed",
-     "duration_s": 0.38
+     "duration_s": 0.39
     },
     {
      "id": "SC-03",
      "test": "stand.tests.test_sc::test_sc03_identity_in_arguments_headers_and_meta_changes_nothing",
      "status": "passed",
-     "duration_s": 3.6
+     "duration_s": 3.72
     },
     {
      "id": "SC-04",
      "test": "stand.tests.test_sc::test_sc04_bad_identity_is_refused_by_the_connector_before_the_backend",
      "status": "passed",
-     "duration_s": 1.75
+     "duration_s": 2.01
     },
     {
      "id": "SC-05",
      "test": "stand.tests.test_sc::test_sc05_other_tenant_and_hidden_note_are_byte_identical_to_missing",
      "status": "passed",
-     "duration_s": 0.62
+     "duration_s": 2.27
     },
     {
      "id": "SC-06",
      "test": "stand.tests.test_sc::test_sc06_agent_host_cannot_connect_to_demo",
      "status": "passed",
-     "duration_s": 1.79
+     "duration_s": 1.86
     },
     {
      "id": "SC-06",
      "test": "stand.tests.test_sc::test_sc06_inside_the_network_without_identity_is_unauthenticated",
      "status": "passed",
-     "duration_s": 6.25
+     "duration_s": 6.28
     },
     {
      "id": "SC-07",
@@ -166,25 +166,25 @@
      "id": "SC-07",
      "test": "stand.tests.test_sc::test_sc07_redirects_are_not_followed",
      "status": "passed",
-     "duration_s": 5.8
+     "duration_s": 5.9
     },
     {
      "id": "SC-08",
      "test": "stand.tests.test_sc::test_sc08_prompt_injection_is_data",
      "status": "passed",
-     "duration_s": 0.52
+     "duration_s": 2.2
     },
     {
      "id": "SC-09",
      "test": "stand.tests.test_sc::test_sc09_no_secrets_tokens_or_texts_in_replies_and_logs",
      "status": "passed",
-     "duration_s": 10.35
+     "duration_s": 10.83
     },
     {
      "id": "SC-10",
      "test": "stand.tests.test_sc::test_sc10_partial_grants_without_hidden_counts",
      "status": "passed",
-     "duration_s": 1.22
+     "duration_s": 1.13
     },
     {
      "id": "SC-10",
@@ -196,7 +196,7 @@
      "id": "SC-10",
      "test": "stand.tests.test_sc::test_sc10_invalid_or_stale_bundle_means_not_ready_and_refused",
      "status": "passed",
-     "duration_s": 12.06
+     "duration_s": 14.03
     }
    ],
    "summary": {
@@ -215,7 +215,7 @@
     "SC-03": "passed",
     "SC-04": "passed",
     "SC-05": "passed",
-    "SC-06": "failed",
+    "SC-06": "passed",
     "SC-07": "passed",
     "SC-08": "passed",
     "SC-09": "passed",
@@ -226,67 +226,67 @@
      "id": "MC-01",
      "test": "stand.tests.test_mc::test_mc01_negotiate_discover_invoke_with_the_official_sdk",
      "status": "passed",
-     "duration_s": 3.45
+     "duration_s": 1.96
     },
     {
      "id": "MC-01",
      "test": "stand.tests.test_mc::test_mc01_rpc_lists_the_same_schemas",
      "status": "passed",
-     "duration_s": 1.59
+     "duration_s": 0.09
     },
     {
      "id": "MC-02",
      "test": "stand.tests.test_mc::test_mc02_search_schema_pagination_and_limits",
      "status": "passed",
-     "duration_s": 2.34
+     "duration_s": 2.1
     },
     {
      "id": "MC-02",
      "test": "stand.tests.test_mc::test_mc02_valid_empty_result_does_not_fall_back",
      "status": "passed",
-     "duration_s": 1.02
+     "duration_s": 0.98
     },
     {
      "id": "MC-02",
      "test": "stand.tests.test_mc::test_mc02_index_failure_falls_back_to_scan",
      "status": "passed",
-     "duration_s": 4.07
+     "duration_s": 3.99
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_backend_errors_keep_their_codes_and_retryable_through_contextforge",
      "status": "passed",
-     "duration_s": 3.46
+     "duration_s": 3.69
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_timeout_after_the_request_was_sent",
      "status": "passed",
-     "duration_s": 41.17
+     "duration_s": 41.23
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_connector_down_is_an_error_not_a_result",
      "status": "passed",
-     "duration_s": 6.41
+     "duration_s": 6.61
     },
     {
      "id": "MC-04",
      "test": "stand.tests.test_mc::test_mc04_revoked_agent_token_stops_working_on_every_path",
      "status": "passed",
-     "duration_s": 6.4
+     "duration_s": 6.17
     },
     {
      "id": "MC-04",
      "test": "stand.tests.test_mc::test_mc04_adapter_key_rotation_and_revocation_at_the_connector",
      "status": "passed",
-     "duration_s": 18.59
+     "duration_s": 17.26
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_each_agent_lists_only_its_team_tools",
      "status": "passed",
-     "duration_s": 0.56
+     "duration_s": 0.62
     },
     {
      "id": "SC-01",
@@ -298,102 +298,102 @@
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_hidden_tool_and_default_deny_on_every_path",
      "status": "passed",
-     "duration_s": 0.95
+     "duration_s": 0.98
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_alias_and_original_name",
      "status": "passed",
-     "duration_s": 0.47
+     "duration_s": 0.5
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_global_mcp_refuses_agents",
      "status": "passed",
-     "duration_s": 0.36
+     "duration_s": 0.39
     },
     {
      "id": "SC-02",
      "test": "stand.tests.test_sc::test_sc02_anonymous_expired_and_foreign_tokens",
      "status": "passed",
-     "duration_s": 0.4
+     "duration_s": 0.43
     },
     {
      "id": "SC-03",
      "test": "stand.tests.test_sc::test_sc03_identity_in_arguments_headers_and_meta_changes_nothing",
      "status": "passed",
-     "duration_s": 2.94
+     "duration_s": 3.0
     },
     {
      "id": "SC-04",
      "test": "stand.tests.test_sc::test_sc04_bad_identity_is_refused_by_the_connector_before_the_backend",
      "status": "passed",
-     "duration_s": 2.02
+     "duration_s": 1.81
     },
     {
      "id": "SC-05",
      "test": "stand.tests.test_sc::test_sc05_other_tenant_and_hidden_note_are_byte_identical_to_missing",
      "status": "passed",
-     "duration_s": 1.83
+     "duration_s": 0.96
     },
     {
      "id": "SC-06",
      "test": "stand.tests.test_sc::test_sc06_agent_host_cannot_connect_to_demo",
      "status": "passed",
-     "duration_s": 1.89
+     "duration_s": 1.81
     },
     {
      "id": "SC-06",
      "test": "stand.tests.test_sc::test_sc06_inside_the_network_without_identity_is_unauthenticated",
-     "status": "failed",
-     "duration_s": 300.11
+     "status": "passed",
+     "duration_s": 6.28
     },
     {
      "id": "SC-07",
      "test": "stand.tests.test_sc::test_sc07_ssrf_registration_urls_are_refused",
      "status": "passed",
-     "duration_s": 0.85
+     "duration_s": 0.8
     },
     {
      "id": "SC-07",
      "test": "stand.tests.test_sc::test_sc07_redirects_are_not_followed",
      "status": "passed",
-     "duration_s": 6.37
+     "duration_s": 5.68
     },
     {
      "id": "SC-08",
      "test": "stand.tests.test_sc::test_sc08_prompt_injection_is_data",
      "status": "passed",
-     "duration_s": 0.53
+     "duration_s": 2.05
     },
     {
      "id": "SC-09",
      "test": "stand.tests.test_sc::test_sc09_no_secrets_tokens_or_texts_in_replies_and_logs",
      "status": "passed",
-     "duration_s": 10.06
+     "duration_s": 9.82
     },
     {
      "id": "SC-10",
      "test": "stand.tests.test_sc::test_sc10_partial_grants_without_hidden_counts",
      "status": "passed",
-     "duration_s": 1.23
+     "duration_s": 1.08
     },
     {
      "id": "SC-10",
      "test": "stand.tests.test_sc::test_sc10_expired_grant_gives_nothing",
      "status": "passed",
-     "duration_s": 0.12
+     "duration_s": 0.11
     },
     {
      "id": "SC-10",
      "test": "stand.tests.test_sc::test_sc10_invalid_or_stale_bundle_means_not_ready_and_refused",
      "status": "passed",
-     "duration_s": 12.06
+     "duration_s": 13.31
     }
    ],
    "summary": {
-    "passed": 27,
-    "failed": 1
+    "passed": 28,
+    "failed": 0
    }
   },
   "after-recreate": {
@@ -418,19 +418,19 @@
      "id": "MC-01",
      "test": "stand.tests.test_mc::test_mc01_negotiate_discover_invoke_with_the_official_sdk",
      "status": "passed",
-     "duration_s": 4.09
+     "duration_s": 3.67
     },
     {
      "id": "MC-01",
      "test": "stand.tests.test_mc::test_mc01_rpc_lists_the_same_schemas",
      "status": "passed",
-     "duration_s": 2.03
+     "duration_s": 1.6
     },
     {
      "id": "MC-02",
      "test": "stand.tests.test_mc::test_mc02_search_schema_pagination_and_limits",
      "status": "passed",
-     "duration_s": 2.04
+     "duration_s": 2.13
     },
     {
      "id": "MC-02",
@@ -442,97 +442,97 @@
      "id": "MC-02",
      "test": "stand.tests.test_mc::test_mc02_index_failure_falls_back_to_scan",
      "status": "passed",
-     "duration_s": 4.04
+     "duration_s": 4.01
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_backend_errors_keep_their_codes_and_retryable_through_contextforge",
      "status": "passed",
-     "duration_s": 3.62
+     "duration_s": 3.71
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_timeout_after_the_request_was_sent",
      "status": "passed",
-     "duration_s": 41.27
+     "duration_s": 41.09
     },
     {
      "id": "MC-03",
      "test": "stand.tests.test_mc::test_mc03_connector_down_is_an_error_not_a_result",
      "status": "passed",
-     "duration_s": 6.58
+     "duration_s": 6.51
     },
     {
      "id": "MC-04",
      "test": "stand.tests.test_mc::test_mc04_revoked_agent_token_stops_working_on_every_path",
      "status": "passed",
-     "duration_s": 7.23
+     "duration_s": 6.44
     },
     {
      "id": "MC-04",
      "test": "stand.tests.test_mc::test_mc04_adapter_key_rotation_and_revocation_at_the_connector",
      "status": "passed",
-     "duration_s": 18.23
+     "duration_s": 16.13
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_each_agent_lists_only_its_team_tools",
      "status": "passed",
-     "duration_s": 0.73
+     "duration_s": 0.59
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_other_team_tool_is_refused_by_name_on_every_path",
      "status": "passed",
-     "duration_s": 1.71
+     "duration_s": 1.62
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_hidden_tool_and_default_deny_on_every_path",
      "status": "passed",
-     "duration_s": 1.0
+     "duration_s": 0.94
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_alias_and_original_name",
      "status": "passed",
-     "duration_s": 0.58
+     "duration_s": 0.96
     },
     {
      "id": "SC-01",
      "test": "stand.tests.test_sc::test_sc01_global_mcp_refuses_agents",
      "status": "passed",
-     "duration_s": 0.37
+     "duration_s": 0.41
     },
     {
      "id": "SC-02",
      "test": "stand.tests.test_sc::test_sc02_anonymous_expired_and_foreign_tokens",
      "status": "passed",
-     "duration_s": 0.48
+     "duration_s": 0.52
     },
     {
      "id": "SC-03",
      "test": "stand.tests.test_sc::test_sc03_identity_in_arguments_headers_and_meta_changes_nothing",
      "status": "passed",
-     "duration_s": 3.25
+     "duration_s": 3.48
     },
     {
      "id": "SC-04",
      "test": "stand.tests.test_sc::test_sc04_bad_identity_is_refused_by_the_connector_before_the_backend",
      "status": "passed",
-     "duration_s": 1.99
+     "duration_s": 2.17
     },
     {
      "id": "SC-05",
      "test": "stand.tests.test_sc::test_sc05_other_tenant_and_hidden_note_are_byte_identical_to_missing",
      "status": "passed",
-     "duration_s": 0.83
+     "duration_s": 1.82
     },
     {
      "id": "SC-06",
      "test": "stand.tests.test_sc::test_sc06_agent_host_cannot_connect_to_demo",
      "status": "passed",
-     "duration_s": 1.8
+     "duration_s": 2.0
     },
     {
      "id": "SC-06",
@@ -544,43 +544,43 @@
      "id": "SC-07",
      "test": "stand.tests.test_sc::test_sc07_ssrf_registration_urls_are_refused",
      "status": "passed",
-     "duration_s": 1.64
+     "duration_s": 1.38
     },
     {
      "id": "SC-07",
      "test": "stand.tests.test_sc::test_sc07_redirects_are_not_followed",
      "status": "passed",
-     "duration_s": 5.75
+     "duration_s": 5.77
     },
     {
      "id": "SC-08",
      "test": "stand.tests.test_sc::test_sc08_prompt_injection_is_data",
      "status": "passed",
-     "duration_s": 2.23
+     "duration_s": 0.5
     },
     {
      "id": "SC-09",
      "test": "stand.tests.test_sc::test_sc09_no_secrets_tokens_or_texts_in_replies_and_logs",
      "status": "passed",
-     "duration_s": 10.39
+     "duration_s": 9.62
     },
     {
      "id": "SC-10",
      "test": "stand.tests.test_sc::test_sc10_partial_grants_without_hidden_counts",
      "status": "passed",
-     "duration_s": 1.09
+     "duration_s": 1.23
     },
     {
      "id": "SC-10",
      "test": "stand.tests.test_sc::test_sc10_expired_grant_gives_nothing",
      "status": "passed",
-     "duration_s": 0.11
+     "duration_s": 0.12
     },
     {
      "id": "SC-10",
      "test": "stand.tests.test_sc::test_sc10_invalid_or_stale_bundle_means_not_ready_and_refused",
      "status": "passed",
-     "duration_s": 11.65
+     "duration_s": 14.11
     }
    ],
    "summary": {
@@ -589,5 +589,98 @@
    }
   }
  },
- "all_passed": false
+ "all_passed": true,
+ "cycle": 1,
+ "branch": "claude/m5-readonly-poc",
+ "base": "origin/claude/integration@6a75c62 + claude/m3-demo-read@5361663 + claude/m4.1-gateway-comparison@b5aa07f + plan/backlog/GOAL.md from claude/admiring-planck-vzys0x@5661cbb; M4 spec text restored (c54346b)",
+ "commit_note": "Tested code commit (stand/run.sh from scratch: down -v, no .env, no stand/secrets). The report is committed on top of it and changes only reports/.",
+ "author": "Claude Code (milestone owner, M5 cycle 1)",
+ "environment": {
+  "local": {
+   "os": "linux x86_64",
+   "docker": "29.10.0 (dockerd by hand)",
+   "python": "3.13 (host), 3.12 (images)",
+   "command": "DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,...' stand/run.sh"
+  },
+  "ci": {
+   "workflow": ".github/workflows/ci.yml",
+   "job": "m5-stand",
+   "run_id": 44920017134,
+   "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44920017134",
+   "commit": "e810df0",
+   "jobs": {
+    "lint": "success",
+    "types": "success",
+    "tests": "success",
+    "schema-guard": "success",
+    "secrets": "success",
+    "policy": "success",
+    "demo-image": "success",
+    "m5-stand": "success",
+    "mutmut": "cancelled (superseded by the next push)",
+    "grants-widening": "failure (by design of M2 on a push without PR)"
+   }
+  }
+ },
+ "acceptance": [
+  {
+   "id": "AC-M5-01",
+   "status": "passed",
+   "evidence": "stand/run.sh: SC-01…SC-10 and MC-01…MC-04 through ContextForge, 28 tests, see runs.*.matrix; CI job m5-stand green (run 44920017134)"
+  },
+  {
+   "id": "AC-M5-02",
+   "status": "passed",
+   "evidence": "test_sc01_each_agent_lists_only_its_team_tools (tools/list on /rpc and virtual server = own team only); test_sc01_other_team_tool_is_refused_by_name_on_every_path (/rpc, /mcp, own and other virtual server; demo audit: no call reached the connector)"
+  },
+  {
+   "id": "AC-M5-03",
+   "status": "passed",
+   "evidence": "test_sc06_agent_host_cannot_connect_to_demo: from the edge network (agent host) demo does not resolve and 10.250.0.10:8080 does not connect; from the docker host no route (connectors bridge with inhibit_ipv4); test_sc06_inside_the_network_without_identity_is_unauthenticated: from the connectors network tools/call -> unauthenticated, backend calls unchanged"
+  },
+  {
+   "id": "AC-M5-04",
+   "status": "passed",
+   "evidence": "run.sh: same suite after `docker compose restart` and after `docker compose down` + `up` (same volumes), no bootstrap in between: runs.after-restart and runs.after-recreate all passed"
+  },
+  {
+   "id": "AC-M5-05",
+   "status": "passed",
+   "evidence": "docs/specs/roadmap-v1.md «Решение: GO (2026-11-21, M5)» with the table of conditions 1–4 and links to this report; ADR-0002 «M5: условие 4»"
+  }
+ ],
+ "go_no_go": "GO: conditions 1–4 confirmed on ContextForge v1.1.1; ToolHive fallback not needed",
+ "dod": {
+  "1": "CI green except grants-widening (red by design on push without PR, M2); PR to main is the owner's step",
+  "2": "every AC by automated tests (stand/tests, CI job m5-stand)",
+  "3": "this report",
+  "4": "mutmut: reports/mutmut/M5.txt (kit cf_identity 121/122 killed, 1 equivalent; plugin core 132/133, 1 equivalent; demo: no unexplained survivors)",
+  "5": "no skip/xfail; report.py counts a skip as failed",
+  "6": "reports/plans/M5-cycle-1.md, table DoD-6"
+ },
+ "findings_during_cycle": [
+  "M3 merge reverted the M4 text of SEC-02, SEC-03, TEN-01 and the principal format: restored from claude/integration (c54346b)",
+  "docker host reached demo through the internal bridge address: fixed with inhibit_ipv4 on the connectors network",
+  "demo did not enforce the manifest tool timeout (a search ran 40 s with outcome ok): enforced, temporarily_unavailable (missed in M3)",
+  "a REST tool created with visibility next to team_id became public and visible to the other team; unified_pdp still refused the call (deny by default); bootstrap sets visibility inside tool",
+  "ContextForge validates arguments against inputSchema itself and answers -32603 instead of invalid_input; its own TOOL_TIMEOUT answers 'MCP server error' without a code (reports/M5-ESCALATION.md #2)",
+  "agent token revocation takes up to AUTH_CACHE_REVOCATION_TTL (stand 5 s, default 30 s) (reports/M5-ESCALATION.md #3)",
+  "ContextForge's default MCP rate limit (100/min, 15 min lockout) locked the suite out: raised on the stand only"
+ ],
+ "known_limits": [
+  "jti cache in the demo process (one replica); shared store with the second replica (shortcut in cf_identity.py)",
+  "adapter key and stand secrets in files, not a secret store; team -> tenant and gateway -> aud generated by bootstrap.py, not the platform registry",
+  "unified_pdp rules are stand-specific (exact emails and tool names); generation for production after stage B",
+  "plugin.py (cpex adapter) is tested live only: cpex exists only in the ContextForge image",
+  "MC-04 interpreted for a read-only fixture backend (reports/M5-ESCALATION.md #1)",
+  "demo on the stand runs with GXG_PROFILE=test for DEMO_TEST_CONTROLS only; identity is the production verifier"
+ ],
+ "self_check": {
+  "tests": "check-all at feb5de0: root uv run pytest, connectors/demo pytest (63), stand/run.sh 3 x 28 passed",
+  "mutmut": "reports/mutmut/M5.txt; scripts/ci/mutmut.sh first pass found 47 unexplained survivors in the new demo code -> 5 tests added, rerun: none unexplained, none stale",
+  "gitleaks": "scripts/ci/gitleaks.sh tree HEAD and range origin/claude/integration..HEAD: no leaks; generated .env values not in tracked files",
+  "ruff_mypy": "ruff check/format clean; mypy (CI invocations) + MYPYPATH=stand/tests:stand:gateway/contextforge mypy stand gateway/contextforge clean",
+  "ponytail_review": "self-review of c54346b..HEAD: 1 should-fix found and fixed (bootstrap never reissued agent tokens that expire after 30 days); jti spent before the tool/ahs check judged not a finding (a replayer on path can drop the request anyway)",
+  "check_all": "scripts/ci/check-all.sh (now also runs the stand mypy step and stand/run.sh) at feb5de0: check-all: OK (lint, types, root and demo tests, coverage, schema guard, gitleaks, secrets tests, policy, bundle_smoke, docker_smoke, stand/run.sh 3 x 28 passed, mutmut.sh OK)"
+ }
 }
