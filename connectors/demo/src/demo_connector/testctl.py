@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import cast, get_args
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -11,7 +11,7 @@ from starlette.routing import Route
 
 from .backend import Backend, IndexFailure
 
-FAILURES = ("temporarily_unavailable", "timeout_before_start")
+FAILURES = get_args(IndexFailure)
 
 
 def create_app(backend: Backend) -> Starlette:

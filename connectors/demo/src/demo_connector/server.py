@@ -26,7 +26,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from gxg_connector_kit._jwt import TokenError, parse_public_key
+from gxg_connector_kit import TokenError, parse_public_key
 from gxg_connector_kit.grants import BundleError, BundleStore
 from gxg_connector_kit.identity import IdentityVerifier, StubVerifier, VerifiedIdentity
 

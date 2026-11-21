@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import jsonschema
+import yaml
 from fastmcp.server.dependencies import get_http_request
 from fastmcp.tools.base import Tool, ToolResult
 from pydantic import Field
@@ -34,13 +35,7 @@ from gxg_connector_kit.redact import redact
 from .backend import Backend, Note
 
 ROOT = Path(__file__).resolve().parents[2]  # connectors/demo
-# shortcut: the shared search-result schema is read from the nearest parent with schemas/ (repo checkout,
-# /app in the image, also mutmut's copy under connectors/demo/mutants/); upgrade to package data with the template.
-SEARCH_RESULT = next(
-    p / "schemas" / "search-result.schema.json"
-    for p in ROOT.parents
-    if (p / "schemas" / "search-result.schema.json").is_file()
-)
+MANIFEST = ROOT / "gxg-manifest.yaml"  # the one source of tool names, schemas and timeouts
 DOMAIN, RTYPE = "demo", "board"
 EXCERPT_MAX = 500
 SEARCH_BUDGET_S = 15.0  # scan stops here with `source_timeout`, before the tool timeout (20 s, manifest)
@@ -53,9 +48,12 @@ _CURSOR = re.compile(r"([0-9]{1,9})\.[0-9a-f]{64}")
 NOT_FOUND = "not found"  # one message for "no grant" and "does not exist" (GR-17, SC-05)
 
 
-def load_schema(rel: str | Path) -> dict[str, Any]:
-    """A schema file referenced by gxg-manifest.yaml, relative to connectors/demo (or absolute)."""
-    doc: dict[str, Any] = json.loads((ROOT / rel).read_bytes())
+def load_schema(rel: str) -> dict[str, Any]:
+    """A schema file referenced by gxg-manifest.yaml, relative to connectors/demo."""
+    # shortcut: a `../..` path is looked up by its tail in the nearest parent (repo checkout, /app in the image,
+    # mutmut's copy under connectors/demo/mutants/); upgrade to package data with the template.
+    tail = Path(*(part for part in Path(rel).parts if part != ".."))
+    doc: dict[str, Any] = json.loads(next(d / tail for d in (ROOT, *ROOT.parents) if (d / tail).is_file()).read_bytes())
     return doc
 
 
@@ -81,13 +79,16 @@ class DemoTool(Tool):
             if error is not None:
                 where = "/" + "/".join(map(str, error.absolute_path))
                 raise GxgError("invalid_input", "arguments do not match the input schema", details={"path": where})
-            self.refresh()
+            self.refresh()  # also refuses with temporarily_unavailable without a valid bundle (GR-12)
             content, fields = await self.handler(ident, arguments)
             entry |= fields | {"outcome": "ok"}
             return ToolResult(structured_content=content)
         except GxgError as exc:
             entry["outcome"] = exc.code
             return ToolResult(structured_content=exc.to_dict(), is_error=True)
+        except Exception:  # MCC-05 envelope; the text may hold provider secrets (SEC-18)
+            entry["outcome"] = "internal_error"
+            return ToolResult(structured_content=GxgError("internal_error", "internal error").to_dict(), is_error=True)
         finally:
             entry["duration_ms"] = round((time.monotonic() - started) * 1000)
             audit.info(json.dumps(redact(entry)))
@@ -101,24 +102,29 @@ class Connector:
         self._cursor_key = secrets.token_bytes()
 
     def tools(self, verifier: IdentityVerifier, refresh: Callable[[], None]) -> list[DemoTool]:
-        manifest: dict[str, tuple[str, str | Path, Handler]] = {
-            "demo.boards.list": ("schemas/boards-list.input.json", "schemas/boards-list.output.json", self.boards_list),
-            "demo.notes.search": ("schemas/notes-search.input.json", SEARCH_RESULT, self.notes_search),
-            "demo.note.get": ("schemas/note-get.input.json", "schemas/note-get.output.json", self.note_get),
+        handlers: dict[str, Handler] = {
+            "demo.boards.list": self.boards_list,
+            "demo.notes.search": self.notes_search,
+            "demo.note.get": self.note_get,
         }
-        timeouts = {"demo.notes.search": 20.0}  # limits.timeout_s in gxg-manifest.yaml
+
+        def ready() -> None:
+            refresh()
+            _ = self.grants.version  # GR-12: no valid bundle -> temporarily_unavailable before any handler
+
+        manifest = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
         return [
             DemoTool(
-                name=name,
-                description=load_schema(inp)["description"],
-                parameters=load_schema(inp),
-                output_schema=load_schema(out),
-                timeout=timeouts.get(name, 10.0),
-                handler=handler,
+                name=t["name"],
+                description=load_schema(t["input_schema"])["description"],
+                parameters=load_schema(t["input_schema"]),
+                output_schema=load_schema(t["output_schema"]),
+                timeout=float(t["limits"]["timeout_s"]),
+                handler=handlers[t["name"]],
                 verify=verifier.verify,
-                refresh=refresh,
+                refresh=ready,
             )
-            for name, (inp, out, handler) in manifest.items()
+            for t in manifest["tools"]
         ]
 
     def _readable(self, ident: VerifiedIdentity) -> dict[str, tuple[str, str]]:
@@ -151,6 +157,15 @@ class Connector:
         if requested is not None and any(b not in readable for b in requested):
             raise GxgError("not_found", NOT_FOUND)  # GR-17: a named board without a grant
         boards = sorted(set(requested) if requested is not None else readable)
+        if not boards:  # GR-16, MCC-06: nothing readable, no backend call (an empty filter may mean "all")
+            empty: dict[str, Any] = {
+                "items": [],
+                "next_cursor": None,
+                "complete": True,
+                "partial_reasons": [],
+                "source_refs": [],
+            }
+            return empty, {"grant_id": [], "method": None}
         binding = json.dumps([ident.tenant_id, ident.principal, query, boards, limit]).encode()
         cursor = args.get("cursor")
         offset = 0 if cursor is None else self._offset(binding, cursor)

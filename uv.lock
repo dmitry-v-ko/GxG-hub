@@ -617,12 +617,14 @@ source = { editable = "connectors/demo" }
 dependencies = [
     { name = "fastmcp" },
     { name = "gxg-connector-kit" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = "==4.1.8" },
     { name = "gxg-connector-kit", editable = "packages/gxg-connector-kit" },
+    { name = "pyyaml", specifier = ">=6,<7" },
 ]
 
 [package.metadata.requires-dev]

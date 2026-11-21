@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn
     "gxg-connector-kit",
+    "pyyaml>=6,<7",  # gxg-manifest.yaml is read at start; already installed by fastmcp
 ]
 
 [build-system]
@@ -35,7 +36,7 @@ xfail_strict = true
 # Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh does it in CI).
 [tool.mutmut]
 source_paths = ["src/demo_connector/"]
-only_mutate = ["*/tools.py", "*/backend.py"]
+only_mutate = ["*/tools.py", "*/backend.py", "*/server.py"]
 also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml"]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
