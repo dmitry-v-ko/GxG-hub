@@ -187,6 +187,7 @@ class World:
     keys: dict[str, Ed25519PrivateKey] = field(default_factory=dict)
     payload_private: dict[str, dict[str, str]] = field(default_factory=dict)
     policies: dict[str, Any] = field(default_factory=dict)
+    demo_tenants: list[str] = field(default_factory=lambda: [ALPHA, BETA])
 
     def __post_init__(self) -> None:
         self.store = BundleStore(
@@ -206,7 +207,8 @@ class World:
             (API_ID, "approval_api", ["*"], None),
             (MCP_ID, "approval_mcp", ["*"], None),
             (EXECUTOR_ID, "executor", ["*"], None),
-            ("demo", "connector", [ALPHA, BETA], TOOLS),
+            ("demo", "connector", self.demo_tenants, TOOLS),
+            ("approval-mcp-beta", "approval_mcp", [BETA], None),
             ("rogue", "connector", [BETA], TOOLS),
         ]
         out = []

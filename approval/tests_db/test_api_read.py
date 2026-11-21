@@ -83,6 +83,20 @@ def test_read_and_cancel_only_for_approval_mcp(propose: Callable[..., Any], clie
     assert missing.status_code == 400  # AS-11a: on_behalf_of is mandatory
 
 
+def test_facade_only_for_its_tenants(propose: Callable[..., Any], client: TestClient, world: Any) -> None:
+    """AS-06: an approval_mcp registered for t-beta cannot read or cancel t-alpha intents."""
+    intent = propose().json()["intent_id"]
+    r = client.get(f"/v1/intents/{intent}", params=q(), headers=world.auth("approval-mcp-beta"))
+    assert r.status_code == 404
+    r = client.post(
+        f"/v1/intents/{intent}/cancel",
+        json={"on_behalf_of": q(), "expected_version": 1},
+        headers=world.auth("approval-mcp-beta"),
+    )
+    assert r.status_code == 404
+    assert client.get(f"/v1/intents/{intent}", params=q(), headers=world.auth("approval-mcp")).status_code == 200
+
+
 def test_cancel(propose: Callable[..., Any], client: TestClient, world: Any, owner: psycopg.Connection[Any]) -> None:
     intent = propose().json()["intent_id"]
     url = f"/v1/intents/{intent}/cancel"
@@ -173,6 +187,13 @@ def test_dispatch(
         ]
         for headers, tok, code in refused:
             assert client.post(url, json={"execution_token": tok}, headers=headers).status_code == code
+        world.demo_tenants = ["t-beta"]  # the connector is no longer registered for t-alpha (AS-25)
+        world.reload(version="c" * 40)
+        with TestClient(create_app(dataclasses.replace(deps, _exec_verifiers={}))) as other:
+            r = other.post(url, json={"execution_token": token()}, headers=world.auth())
+        assert r.status_code == 404
+        world.demo_tenants = ["t-alpha", "t-beta"]
+        world.reload(version="d" * 40)
         r = client.post(url, json={"execution_token": token()}, headers=world.auth())
         assert r.status_code == 200, r.text
         assert r.json()["execution_id"] == execution

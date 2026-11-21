@@ -74,7 +74,7 @@ _SQL_OUTBOX = (
     "INSERT INTO outbox (topic, intent_id, payload, created_at, available_at) VALUES (%s, %s, %s, now(), now())"
 )
 _SQL_CANCEL = "SELECT gxg_cancel(%s, %s, %s, %s)"
-_SQL_TOOL = "SELECT tool_key, tool_version FROM intents WHERE intent_id = %s"
+_SQL_TOOL = "SELECT tool_key, tool_version, tenant_id FROM intents WHERE intent_id = %s"
 _SQL_DISPATCH = "SELECT gxg_dispatch(%s, %s, %s, %s)"
 
 
@@ -367,7 +367,8 @@ def dispatch_timeout_s(tool: Mapping[str, Any]) -> int:
 def dispatch(conn: psycopg.Connection[Any], execution_id: uuid.UUID, intent_id: uuid.UUID, connector: Service) -> str:
     """T9 for a verified execution token; returns the dispatch deadline (RFC 3339)."""
     found = conn.execute(_SQL_TOOL, (intent_id,)).fetchone()
-    tool = connector.tools.get((found[0], found[1])) if found else None
+    # AS-25, AS-26 by the current bundle: the connector still serves the tenant and still has the tool.
+    tool = connector.tools.get((found[0], found[1])) if found and connector.serves(found[2]) else None
     if tool is None:
         raise GxgError("not_found", "execution not found")
     timeout_s = dispatch_timeout_s(tool)

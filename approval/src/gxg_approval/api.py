@@ -169,7 +169,8 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (route table)
         tenant_id: Annotated[str, Query(max_length=64)],
         principal: Annotated[str, Query(max_length=256)],
     ) -> Response:
-        caller(request, "approval_mcp")
+        if not caller(request, "approval_mcp").serves(tenant_id):  # AS-06: the service's tenant list
+            raise GxgError("not_found", "intent not found")
         with deps.pool.connection() as conn:
             return JSONResponse(intents.get(conn, intent_id, tenant_id, principal))
 
@@ -182,9 +183,11 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (route table)
         responses=_responses(200, 404, 409),
     )
     async def cancel_intent(request: Request, intent_id: str) -> Response:
-        caller(request, "approval_mcp")
+        facade = caller(request, "approval_mcp")
         doc = await body(request, cancel_valid)
         who = doc["on_behalf_of"]  # AS-11a: mandatory for approval_mcp, the verified identity of the agent
+        if not facade.serves(who["tenant_id"]):
+            raise GxgError("not_found", "intent not found")
 
         def run() -> dict[str, Any]:
             with deps.pool.connection() as conn:
