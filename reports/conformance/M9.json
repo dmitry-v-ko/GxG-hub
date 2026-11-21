@@ -1,0 +1,271 @@
+{
+ "milestone": "M9",
+ "cycle": 1,
+ "branch": "claude/m9-ui-bot",
+ "base": "origin/claude/integration 3c2f0b0",
+ "commit": "c402415324f76e4c389946973f4feb64eade91a0",
+ "run_at": "2026-11-21T22:06:55Z",
+ "author": "Claude Code (milestone owner, M9)",
+ "plan": "reports/plans/M9-cycle-1.md",
+ "environment": [
+  "local (cloud container, Docker 29.10.0 started by hand)"
+ ],
+ "ci": "GitHub CI not checked from this session; jobs added: approval-db (ui/notifier + E2E), approval-images",
+ "contextforge_image_digest": null,
+ "sdk_versions": {
+  "fastapi": "0.165.0",
+  "authlib": "1.9.10",
+  "webauthn": "2.8.0",
+  "playwright (node)": "1.63.0",
+  "oidc-provider-mock": "0.4.8",
+  "psycopg": "3.3.9"
+ },
+ "policy_version": "test bundles built per test",
+ "bundle_version": "test bundles only",
+ "fixture_identity": "synthetic oidc:https://idp.example.invalid:*, oidc:http://localhost:<port>:alice (E2E); Telegram user ids 1001/1002 against the fake Bot API",
+ "acceptance": [
+  {
+   "id": "AC-M9-01",
+   "status": "passed",
+   "expected": "approver signs in through the test OIDC issuer, sees the intent, approves → approved, then succeeded",
+   "actual": "Chromium (Playwright 1.63, preinstalled) + gxg-approval-ui process + oidc-provider-mock 0.4.8 + PostgreSQL 16.6: sign-in, list, approve → approved; executor transitions T7/T9/T11 through gxg_executor/gxg_api functions (M8 not on the base) → card shows succeeded; step-up approve with a CDP virtual authenticator. OIDC code flow also in process (state, PKCE, nonce, aud, iss, exp, signature)",
+   "tests": [
+    "approval.ui.tests_db.test_e2e.test_approver_signs_in_and_approves",
+    "approval.ui.tests_db.test_oidc.test_authorization_request",
+    "approval.ui.tests_db.test_oidc.test_callback_escapes_the_query",
+    "approval.ui.tests_db.test_oidc.test_id_token_is_checked[claims0]",
+    "approval.ui.tests_db.test_oidc.test_id_token_is_checked[claims1]",
+    "approval.ui.tests_db.test_oidc.test_id_token_is_checked[claims2]",
+    "approval.ui.tests_db.test_oidc.test_id_token_is_checked[claims3]",
+    "approval.ui.tests_db.test_oidc.test_id_token_is_checked[claims4]",
+    "approval.ui.tests_db.test_oidc.test_id_token_signed_by_another_key",
+    "approval.ui.tests_db.test_oidc.test_issuer_with_a_trailing_slash",
+    "approval.ui.tests_db.test_oidc.test_login_starts_a_new_session",
+    "approval.ui.tests_db.test_oidc.test_no_claims",
+    "approval.ui.tests_db.test_oidc.test_pkce_is_checked",
+    "approval.ui.tests_db.test_oidc.test_sign_in",
+    "approval.ui.tests_db.test_oidc.test_state_is_checked"
+   ]
+  },
+  {
+   "id": "AC-M9-02",
+   "status": "passed",
+   "expected": "decision POST without CSRF, foreign CSRF, stale version, changed args_hash → 403/409, nothing written",
+   "actual": "403 for no/foreign/empty-session CSRF; 409 for version ±1, other hash; decisions count 0, status unchanged",
+   "tests": [
+    "approval.ui.tests_db.test_decisions.test_csrf_missing_or_foreign",
+    "approval.ui.tests_db.test_decisions.test_decided_intent_cannot_be_decided_again",
+    "approval.ui.tests_db.test_decisions.test_stale_version_or_changed_hash",
+    "approval.ui.tests_db.test_edges.test_missing_fields",
+    "approval.ui.tests_db.test_edges.test_session_without_csrf_token"
+   ]
+  },
+  {
+   "id": "AC-M9-03",
+   "status": "passed",
+   "expected": "agent service JWT, the requester (same OIDC subject), approver of another tenant → 403",
+   "actual": "connector/mcp JWT and no session → 403; requester → 403 from gxg_decide (also in Chromium); t-beta approver → 403, card 404; DB refuses non-approvers directly as gxg_ui",
+   "tests": [
+    "approval.ui.tests_db.test_decisions.test_approver_of_another_tenant",
+    "approval.ui.tests_db.test_decisions.test_approver_removed_from_bundle_after_t1",
+    "approval.ui.tests_db.test_decisions.test_database_refuses_a_human_outside_the_frozen_set",
+    "approval.ui.tests_db.test_decisions.test_machine_credentials_cannot_decide",
+    "approval.ui.tests_db.test_decisions.test_requester_cannot_approve_own_intent",
+    "approval.ui.tests_db.test_decisions.test_viewer_sees_but_cannot_decide",
+    "approval.ui.tests_db.test_e2e.test_requester_is_refused_in_the_browser"
+   ]
+  },
+  {
+   "id": "AC-M9-04",
+   "status": "passed",
+   "expected": "high_risk without step-up → 403; step-up > 5 min or for another intent → 403; quorum 2 by one human → 409",
+   "actual": "py_webauthn verification with a software ES256 authenticator; 301 s → 403, 300 s → ok; replay → refused; quorum: second vote 409, status pending_approval, second human → approved",
+   "tests": [
+    "approval.ui.tests_db.test_decisions.test_high_risk_needs_step_up",
+    "approval.ui.tests_db.test_decisions.test_quorum_of_two_needs_two_people",
+    "approval.ui.tests_db.test_decisions.test_step_up_at_five_minutes_is_accepted",
+    "approval.ui.tests_db.test_decisions.test_step_up_challenge_names_intent_and_hash",
+    "approval.ui.tests_db.test_decisions.test_step_up_for_another_intent",
+    "approval.ui.tests_db.test_decisions.test_step_up_from_another_origin_or_another_human",
+    "approval.ui.tests_db.test_decisions.test_step_up_is_used_once",
+    "approval.ui.tests_db.test_decisions.test_step_up_older_than_five_minutes",
+    "approval.ui.tests_db.test_edges.test_step_up_needs_the_hash_it_was_issued_for",
+    "approval.ui.tests_db.test_edges.test_user_verification_is_required"
+   ]
+  },
+  {
+   "id": "AC-M9-05",
+   "status": "passed",
+   "expected": "preview with <script>, **md**, [x](javascript:), U+202E, U+200B, 20 000 chars: no elements from values, markers, warning, length 20 000",
+   "actual": "DOM in Chromium: only template tags in #preview, values as text, ⟦U+202E⟧/⟦U+200B⟧, #hidden-warning, length 20000, window.__alerted false, one script",
+   "tests": [
+    "approval.ui.tests.test_render.test_card_flags_hidden_characters_in_args_only",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[0]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[127]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[133]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[13]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[173]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[27]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[65279]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8203]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8204]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8205]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8206]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8207]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8232]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8233]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8234]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8235]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8236]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8237]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8238]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8288]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8294]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8295]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8296]",
+    "approval.ui.tests.test_render.test_hidden_character_gets_a_marker[8297]",
+    "approval.ui.tests.test_render.test_long_text_is_not_cut",
+    "approval.ui.tests.test_render.test_marked_walks_keys_and_values",
+    "approval.ui.tests.test_render.test_tls_required_outside_loopback[ftp://x-False]",
+    "approval.ui.tests.test_render.test_tls_required_outside_loopback[http://127.0.0.1:1-True]",
+    "approval.ui.tests.test_render.test_tls_required_outside_loopback[http://approve.example.com-False]",
+    "approval.ui.tests.test_render.test_tls_required_outside_loopback[http://localhost:8443-True]",
+    "approval.ui.tests.test_render.test_tls_required_outside_loopback[http://oidc:9400-False]",
+    "approval.ui.tests.test_render.test_tls_required_outside_loopback[https://approve.example.com-True]",
+    "approval.ui.tests.test_render.test_visible_text_is_unchanged[**md**]",
+    "approval.ui.tests.test_render.test_visible_text_is_unchanged[<script>]",
+    "approval.ui.tests.test_render.test_visible_text_is_unchanged[\\u041f\\u0440\\u0438\\u0432\\u0435\\u0442]",
+    "approval.ui.tests.test_render.test_visible_text_is_unchanged[]",
+    "approval.ui.tests.test_render.test_visible_text_is_unchanged[emoji \\U0001f642]",
+    "approval.ui.tests.test_render.test_visible_text_is_unchanged[line\\nline\\tTab]",
+    "approval.ui.tests.test_render.test_visible_text_is_unchanged[plain]",
+    "approval.ui.tests_db.test_e2e.test_approver_signs_in_and_approves",
+    "approval.ui.tests_db.test_screens.test_preview_is_plain_text"
+   ]
+  },
+  {
+   "id": "AC-M9-06",
+   "status": "passed",
+   "expected": "CSP default-src 'self' without unsafe-inline; cookie __Host-, HttpOnly, Secure, SameSite=Strict",
+   "actual": "headers on every screen; Set-Cookie flags; browser cookie jar: __Host-gxg httpOnly secure Strict path /",
+   "tests": [
+    "approval.ui.tests_db.test_e2e.test_approver_signs_in_and_approves",
+    "approval.ui.tests_db.test_edges.test_headers_exact",
+    "approval.ui.tests_db.test_screens.test_security_headers_and_cookie"
+   ]
+  },
+  {
+   "id": "AC-M9-07",
+   "status": "passed",
+   "expected": "bot message has no fields/changes values (20 intents, random text), links /intents/<id>",
+   "actual": "0 of 80 random values in the 20 messages; each has its /intents/<id> URL",
+   "tests": [
+    "approval.notifier.tests_db.test_bot.test_exact_texts",
+    "approval.notifier.tests_db.test_bot.test_message_has_no_payload_and_links_the_card"
+   ]
+  },
+  {
+   "id": "AC-M9-08",
+   "status": "passed",
+   "expected": "no callback buttons, URL only; «approve <id>» to the bot does not change status",
+   "actual": "every button is {text,url}; approve/…/callback → status and version unchanged, no reply",
+   "tests": [
+    "approval.notifier.tests_db.test_bot.test_long_polling_asks_only_for_messages",
+    "approval.notifier.tests_db.test_bot.test_no_callback_buttons_and_commands_do_not_decide"
+   ]
+  },
+  {
+   "id": "AC-M9-09",
+   "status": "passed",
+   "expected": "8 intents in 2 minutes to one approver → ≤ 5 messages + 1 digest",
+   "actual": "5 singles + 1 digest; window 600 s exactly",
+   "tests": [
+    "approval.notifier.tests_db.test_bot.test_digest_after_five",
+    "approval.notifier.tests_db.test_bot.test_window_boundary",
+    "approval.notifier.tests_db.test_bot.test_windows_are_per_chat"
+   ]
+  },
+  {
+   "id": "AC-M9-10",
+   "status": "passed",
+   "expected": "link code valid 10 minutes and once; reuse and expired refused",
+   "actual": "code from UI (6 digits, 600 s); reuse and expired → «не подошёл», no link; 5 wrong guesses block the sender",
+   "tests": [
+    "approval.notifier.tests_db.test_bot.test_code_valid_just_before_ten_minutes",
+    "approval.notifier.tests_db.test_bot.test_guessing_codes_is_limited",
+    "approval.notifier.tests_db.test_bot.test_link_code_once_and_ten_minutes",
+    "approval.notifier.tests_db.test_bot.test_live_code_digits_are_not_given_twice",
+    "approval.notifier.tests_db.test_bot.test_new_code_replaces_the_old_one",
+    "approval.ui.tests_db.test_screens.test_telegram_link_code"
+   ]
+  },
+  {
+   "id": "AC-M9-11",
+   "status": "passed",
+   "expected": "manual reconcile without reason (<10) refused; with reason → status changes, audit with author",
+   "actual": "'' / 9 chars / missing → 400, status unchanged; 21 chars → reconciled_succeeded, audit actor = tenant_admin human",
+   "tests": [
+    "approval.ui.tests_db.test_screens.test_database_refuses_machine_resolution",
+    "approval.ui.tests_db.test_screens.test_manual_reconcile",
+    "approval.ui.tests_db.test_screens.test_manual_reconcile_roles_and_version"
+   ]
+  },
+  {
+   "id": "AC-M9-12",
+   "status": "passed",
+   "expected": "ui and notifier separate images with own lockfile; network policies; out-of-policy connections refused",
+   "actual": "docker compose (Docker 29.10): ui → postgres, oidc open; fake-telegram, 1.1.1.1:443, 8.8.8.8:53, example.com, api.telegram.org refused; notifier → postgres, fake-telegram open; oidc, ui, internet refused; notifier 0 listening sockets; only ingress published; https via ingress 200, http none; positive control from edge: 1.1.1.1:443 open",
+   "tests": [
+    "approval.deploy.tests.test_network_policy.test_control_egress_is_visible_outside_the_policy",
+    "approval.deploy.tests.test_network_policy.test_images_have_their_own_lockfile_and_tree",
+    "approval.deploy.tests.test_network_policy.test_notifier_accepts_no_connection",
+    "approval.deploy.tests.test_network_policy.test_notifier_reaches_only_db_and_telegram",
+    "approval.deploy.tests.test_network_policy.test_ui_is_reached_from_outside_over_https_only",
+    "approval.deploy.tests.test_network_policy.test_ui_reaches_only_db_and_oidc"
+   ]
+  }
+ ],
+ "tests_total": 527,
+ "tests_failed": [],
+ "dod": {
+  "DoD-1": "PR/merge by a human (not in scope of this thread); local equivalent of CI green, see self_check",
+  "DoD-2": "every AC by an automated test",
+  "DoD-3": "this file",
+  "DoD-4": "mutmut ui/notifier + approval (intents.py) + SQL driver, see self_check",
+  "DoD-5": "no skip/xfail (xfail_strict, root config)",
+  "DoD-6": "reports/plans/M9-cycle-1.md table"
+ },
+ "owner_questions": "reports/M9-ESCALATION.md (pending_owner_decision 1-5, defaults applied)",
+ "threat_model_ui_compromise": "reports/M9-ESCALATION.md §1",
+ "known_limitations": [
+  "AC-M9-01 'succeeded' reached through executor role functions driven by the test (M8 not on the base)",
+  "AP-08 window in memory (single bot instance by Telegram's getUpdates rule)",
+  "egress relays (profile egress) not exercised against real IdP/Telegram (forbidden in this task)",
+  "notifier has no health endpoint (no inbound per AS-29); like sweeper"
+ ],
+ "self_check": {
+  "commit": "c402415324f76e4c389946973f4feb64eade91a0",
+  "tests": "uv run pytest approval/tests approval/ui/tests approval/tests_db approval/ui/tests_db approval/notifier/tests_db: 521 passed, 0 failed/skipped; uv run pytest approval/deploy/tests: 6 passed (real images and compose networks)",
+  "e2e": "approval/ui/tests_db/test_e2e.py (Playwright 1.63 Node + preinstalled Chromium): 2 passed, 3 consecutive runs green",
+  "mutmut": {
+   "approval/ui": "572 mutants: 569 killed, 3 equivalent (listed in scripts/ci/mutmut-equivalent.txt with reasons); modules app, stepup, render, config",
+   "approval/notifier": "253 mutants: 252 killed, 1 equivalent (listed); module bot",
+   "survivor_review": "first ui run 214 survivors -> literals moved to module constants, helpers from py_webauthn, new tests (in-process OIDC flow, session edges, WebAuthn options, form fields); second 40 -> wiring to cli.py, more tests; final 3, all equivalent",
+   "approval (M7 scope incl. intents.py T1 changes) and all other packages": "scripts/ci/mutmut.sh inside check-all.sh, see ci_local"
+  },
+  "sql_mutations": "scripts/ci/mutate_m7_sql.py (extended with 0002 and the new gxg_decide/gxg_resolve_manual checks; test dirs approval/tests_db + ui/tests_db + notifier/tests_db): 102 listed, M9 subset run: 21 killed, 2 survivors found and killed by test_database_refuses_rows_t1_would_never_build; 0 not as expected",
+  "gitleaks": "scripts/ci/gitleaks.sh tree HEAD and range 3c2f0b0..HEAD: no leaks found",
+  "ponytail_review": "reports/conformance/M9-cycle-1.self-review.md (2 findings fixed: audit index for link claims, undecryptable preview -> 503)",
+  "found_by_self_check": [
+   "ui image lacked authlib's HTTP client (httpx2 came transitively in the root env only) - caught by the AC-M9-12 stand, fixed",
+   "pytest config inside approval/ui/pyproject.toml took over the rootdir (no --disable-socket) - removed"
+  ],
+  "ci_local": "see top-level ci_local"
+ },
+ "commit_note": "Code under test: c402415. This report is the next commit (reports/ only).",
+ "ci_local": {
+  "commit": "c402415324f76e4c389946973f4feb64eade91a0",
+  "command": "scripts/ci/check-all.sh (DOCKER_BUILD_FLAGS with the sandbox proxy CA)",
+  "result": "running (started 2026-11-21T22:04:41Z); updated in a later reports-only commit"
+ }
+}
