@@ -53,7 +53,8 @@ flowchart LR
 | M2 Policy tooling | B | 4–5 | M0 |
 | M3 `demo` read-only | B | 4–5 | M1, M2 |
 | M4 Спайк ContextForge | B | 3 (timebox) | M0 |
-| M5 Read-only PoC через ContextForge | B | 4–6 | M3, M4 |
+| M4.1 Спайк ADR-0002 (альтернативные шлюзы) | B | 2–3 (timebox) | M4 |
+| M5 Read-only PoC через шлюз из ADR-0002 | B | 4–6 | M3, M4, M4.1 |
 | M6 KB | B | 3–8 | M5 |
 | M7 Approval Service core | C | 8–10 | M1, M2 |
 | M8 Executor и исполнение | C | 7–9 | M3, M7 |
@@ -330,6 +331,28 @@ flowchart TD
 | AC-M4-03 | Digest образа ContextForge закреплён в `compose.yaml`/`.env.example`, проверены advisories IBM на дату спайка (ссылки в ADR) |
 | AC-M4-04 | Пометки VERIFY в SEC-02, SEC-03, TEN-01, GR-примере заменены конкретикой по итогам спайка |
 
+### M4.1 — спайк ADR-0002: ToolHive и Docker MCP Gateway против ContextForge (решение владельца 2026-11-21)
+
+**Делаем:** тот же стенд и те же атаки, что в M4 (`spikes/m4-contextforge/`), для **ToolHive** (Stacklok) и **Docker MCP Gateway**. Закреплённые версии по digest. Решение — в `docs/adr/0002-gateway-choice.md`.
+
+Матрица сравнения (одинаковая для всех трёх):
+1. Изоляция tenant'ов: видимость и вызов tools/servers по tenant, отказ cross-tenant на всех путях.
+2. Проверяемая identity к коннектору: встроенный механизм (подпись, что подписано, время/nonce) или путь к варианту C (hook/plugin/middleware, который может поставить JWS).
+3. Fail closed: что происходит, если механизм identity/плагин не загрузился.
+4. Скрытые tools нельзя вызвать по имени; RBAC/политики deny-by-default.
+5. Пути вызова (прямой, агрегирующий/virtual, алиасы) — identity на каждом.
+6. Обновление версии без поломки механизма.
+7. Зрелость и безопасность: лицензия, релизы, advisories на дату, активность, документация.
+8. Эксплуатация: PostgreSQL/хранилище, конфигурация как код, аудит, метрики.
+9. Стоимость перехода: что из M1/M4 (кит, `IdentityVerifier`, плагин C) переиспользуется.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M4.1-01 | Для ToolHive и Docker MCP Gateway по каждому пункту матрицы записан результат (`passed`/`failed`/`n/a`) с доказательствами (команды, захваченные заголовки, логи без секретов) или ссылкой на точный код/документацию закреплённой версии; не проверенное вживую — `not_run` с причиной |
+| AC-M4.1-02 | Атаки M4 (подделка заголовков/`_meta`, повтор, прямой вызов коннектора, чужой tenant, admin-токен) воспроизведены на обоих кандидатах тем же набором скриптов |
+| AC-M4.1-03 | `docs/adr/0002-gateway-choice.md`: таблица трёх шлюзов по матрице, рекомендация (оставить ContextForge / сменить / гибрид) с обоснованием и стоимостью перехода; статус `Proposed` — решение принимает владелец |
+| AC-M4.1-04 | Образы закреплены по digest, advisories проверены на дату спайка (ссылки) |
+
 ### M5 — read-only PoC через ContextForge
 
 **Делаем:** dev-стенд: ContextForge (pinned digest, PostgreSQL), два team (`t-alpha`, `t-beta`), по два агента; `demo` зарегистрирован в обоих team; правила `unified_pdp`; `IdentityVerifier` выбранного механизма; сетевая изоляция `demo` (доступен только ContextForge).
@@ -359,7 +382,7 @@ flowchart TD
 
 ### M7 — Approval Service: ядро
 
-**Делаем:** миграции БД (модель из [approval-service-v1](specs/approval-service-v1.md#модель-данных)); процесс `api` (`POST /v1/intents`, `GET`, `cancel`); движок политики ([approval-policy-v1](specs/approval-policy-v1.md)); квоты; `sweeper` для T5/T8; `mcp` (`effects.status`, `effects.cancel`); шифрование payload.
+**Делаем:** миграции БД (модель из [approval-service-v1](specs/approval-service-v1.md#модель-данных)) с отдельной ролью на процесс (AS-27); процесс `api` (`POST /v1/intents`, `GET`, `cancel`); движок политики ([approval-policy-v1](specs/approval-policy-v1.md)); квоты; `sweeper` для T5/T8; `mcp` (`effects.status`, `effects.cancel`); шифрование payload.
 
 | ID | Критерий |
 | --- | --- |
@@ -375,6 +398,7 @@ flowchart TD
 | AC-M7-10 | В БД `args_ciphertext` и `preview_ciphertext` не содержат открытого текста args (поиск подстроки по 100 intents = 0 совпадений) |
 | AC-M7-11 | Роль БД приложения: `UPDATE`/`DELETE` на `audit_events`, `DELETE` на `intents` → ошибка прав (OPS-05) |
 | AC-M7-12 | Sweeper: intent с `expires_at` в прошлом переходит в `expired` не позже чем через 60 с |
+| AC-M7-13 | Изоляция процессов (AS-27, AS-28): для каждой роли БД тест подтверждает разрешённые действия и отказ во всех остальных из матрицы, в частности `gxg_ui` не может INSERT/UPDATE `executions` и не читает `args_ciphertext`, `gxg_executor` не может INSERT в `decisions`, `gxg_notifier` не читает `intents`; конфигурация каждого процесса содержит только секреты из таблицы AS-28 (проверка по манифестам/compose) |
 
 ### M8 — Executor и исполнение
 
@@ -414,6 +438,7 @@ flowchart TD
 | AC-M9-09 | 8 новых intents за 2 минуты одному approver'у → не больше 5 отдельных уведомлений + 1 дайджест (AP-08) |
 | AC-M9-10 | Привязка Telegram: код действует 10 минут и один раз; повторное и просроченное использование отклоняется |
 | AC-M9-11 | Ручной reconcile `outcome_unknown` без обоснования (< 10 символов) отклоняется; с обоснованием — статус меняется, запись в `audit_events` с автором |
+| AC-M9-12 | AS-29: `ui` и `notifier` собираются отдельными образами со своим lockfile; сетевые политики стенда (compose/k8s) разрешают `ui` только входящий HTTPS и исходящие в БД и OIDC, `notifier` — только исходящие в БД, Telegram Bot API и allowlist webhooks; попытка исходящего соединения вне политики из каждого контейнера отклоняется (тест) |
 
 ### M10 — webhooks и эксплуатация
 
