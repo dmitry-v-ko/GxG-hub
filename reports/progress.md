@@ -12,6 +12,7 @@
 | AC-M2-04: метка `widening-approved`, secret подписи bundle, проверка на реальном PR | AC — manual_pending | ничего |
 | Мерж `claude/integration` в `main` | работаем от `claude/integration` | ничего |
 | Approver для пилота M13 | — | только M13 |
+| M7: скомпрометированный `ui` может подделать решение через `gxg_decide(p_approver, p_step_up)` | делать по матрице AS-27; закрыть в M9 | M9 |
 | CI без раннеров: прогоны 44932350759 (M5) и M7 падают за 2–3 с без шагов — вероятно, исчерпаны минуты GitHub Actions или ограничение аккаунта | проверяем CI локально; перед PR в main нужен зелёный CI на GitHub | подтверждение DoD «CI зелёный» на GitHub |
 | M5-1: MC-04 для read-only `demo` (провайдера нет) | проверять отзыв токена агента, ротацию `kid` адаптера identity, изоляцию credentials по tenant; ротация provider credentials — с M11 | ничего |
 | M5-2: ContextForge v1.1.1 сам валидирует `inputSchema` → `-32603`, а не `invalid_input` (MCC-05); его тайм-аут — без кода | принять как ограничение upstream; тайм-аут коннектора 20 с < `TOOL_TIMEOUT` 25 с | ничего |
@@ -129,3 +130,4 @@
 | M5 | 1 | критик-субагент | claude/m5-readonly-poc | c01c5c3 | **8.0** | < 9: 5 major (общий пароль агентов, bundle стенда истекает через 24 ч, SC-10 stale проверяет откат, SSE не под тестом, неизвестный kid не логируется) → цикл 2 в треде вехи | 2026-11-21 |
 | M5 | 2 | критик-субагент | claude/m5-readonly-poc | d39a1ff | **9.5** | чек-лист ц1 выполнен; 3 minor → backlog; M5-READY.md; финальный независимый критик запущен | 2026-11-21 |
 | M7 | 2 | критик-субагент | claude/m7-approval-core | c6bb52f | **9.0** | чек-лист ц1 выполнен; 2 major missed_earlier (тест индекса не ловит удаление; окна auto-лимита 1 h/1 day не под мутациями) и 4 minor → по правилу в backlog; ждём M7-READY | 2026-11-21 |
+| M7 | 2 | владелец вехи | claude/m7-approval-core | a843c11 (+0fce3f3) | — | 2 major missed_earlier закрыты тестами; M7-READY.md; финальный независимый критик запущен | 2026-11-21 |
