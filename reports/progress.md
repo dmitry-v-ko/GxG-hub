@@ -146,3 +146,5 @@
 | — | — | интеграция | claude/integration | fc87e27 (+3c2f0b0) | — | M3+M4.1+M5+M7 влиты; 868 + 307 (PG) passed, стенд M5 29/29 ×3, gitleaks чисто; спеки = ветка оркестратора; mutmut идёт (~2 ч) | 2026-11-21 |
 | M8 | 1 | владелец вехи | claude/m8-executor | — | — | запущен от integration (+ идемпотентность по requester, окно execution_deadline) | 2026-11-21 |
 | M9 | 1 | владелец вехи | claude/m9-ui-bot | — | — | запущен от integration (+ компрометация ui через gxg_decide — по умолчанию AS-27) | 2026-11-21 |
+| M6 | 1 | критик-субагент | claude/m6-kb | 6b75b6b | **5.0** | AC-M6-01/03/04 не выполнены без доступа к gxg_agents_v2 (AC-M6-02 только на fake); 4 major (схемы выхода, bundle_version в аудите, server.py вне mutmut, синхронный порт без лимита) → цикл 2; без доступа — стоп после цикла 2 | 2026-11-21 |
+| M11 | 1 | владелец вехи | claude/m11-telegram-read | 2cebc81 | — | conformance: AC-M11-01…05 + backlog M5 (2),(3) через ContextForge, 3 × 46 passed; ждёт критика-субагента | 2026-11-21 |
