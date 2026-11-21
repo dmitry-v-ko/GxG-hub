@@ -63,3 +63,10 @@ def test_internal_processes_have_no_egress() -> None:
     for name, s in doc["services"].items():
         assert s["networks"] == ["internal"], name
         assert "ports" not in s, name  # nothing of M7 is published outside (SEC-13)
+
+
+def test_db_tests_gate_ci_ok() -> None:
+    """The real-PostgreSQL tests (AC-M7-02, 04, 06…13) are a required part of CI."""
+    jobs = yaml.safe_load((REPO / ".github/workflows/ci.yml").read_text("utf-8"))["jobs"]
+    assert "approval-db" in jobs["ci-ok"]["needs"]
+    assert any(s.get("run") == "uv run pytest approval/tests_db" for s in jobs["approval-db"]["steps"])

@@ -175,7 +175,7 @@ def test_unknown_connector_or_foreign_key(client: TestClient, world: Any, owner:
     """AC-M7-08 (EX-21): connector not registered for the tenant, or a JWT signed with another key."""
     r = client.post("/v1/intents", json=world.body(), headers=world.auth("rogue"))
     assert r.status_code == 403 and r.json()["code"] == "permission_denied"
-    forged = world.auth("demo", key=Ed25519PrivateKey.generate())
+    forged = world.auth("demo", signer=Ed25519PrivateKey.generate())
     r = client.post("/v1/intents", json=world.body(), headers=forged)
     assert r.status_code == 401 and r.json()["code"] == "unauthenticated"
     for headers in ({}, {"Authorization": "Basic abc"}, world.auth("approval-mcp"), world.auth("demo", aud="x")):

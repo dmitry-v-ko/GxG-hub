@@ -182,14 +182,14 @@ class World:
     """Signed bundle, service keys and payload keys of one test."""
 
     state_dir: Path
-    ci_key: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
+    ci_signer: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
     keys: dict[str, Ed25519PrivateKey] = field(default_factory=dict)
     payload_private: dict[str, dict[str, str]] = field(default_factory=dict)
     policies: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.store = BundleStore(
-            {BUNDLE_KID: self.ci_key.public_key()}, state_file=self.state_dir / "bundle-state.json"
+            {BUNDLE_KID: self.ci_signer.public_key()}, state_file=self.state_dir / "bundle-state.json"
         )
         public: dict[str, dict[str, str]] = {}
         for tenant in (ALPHA, BETA):
@@ -238,19 +238,19 @@ class World:
             "platform": {"schema_version": 1, "services": self.services()},
         }
         data = canonical.dumps(doc)
-        self.signed = data, sign_bundle(self.ci_key, data)
+        self.signed = data, sign_bundle(self.ci_signer, data)
         self.store.load(*self.signed)
 
-    def bundle_keys(self, key: Ed25519PrivateKey | None = None) -> str:
+    def bundle_keys(self, signer: Ed25519PrivateKey | None = None) -> str:
         """`GXG_BUNDLE_KEYS` for this bundle (or for another key)."""
-        return json.dumps({BUNDLE_KID: format_public_key((key or self.ci_key).public_key())})
+        return json.dumps({BUNDLE_KID: format_public_key((signer or self.ci_signer).public_key())})
 
     def set_policy(self, tenant: str, rules: list[dict[str, Any]], **extra: Any) -> None:
         self.policies[tenant] = {"tenant": tenant, "schema_version": 1, "rules": rules, **extra}
         self.reload()
 
-    def token(self, service: str, aud: str = API_ID, key: Ed25519PrivateKey | None = None) -> str:
-        return svc_jwt.sign(key or self.keys[service], iss=service, aud=aud)
+    def token(self, service: str, aud: str = API_ID, signer: Ed25519PrivateKey | None = None) -> str:
+        return svc_jwt.sign(signer or self.keys[service], iss=service, aud=aud)
 
     def auth(self, service: str = "demo", **kw: Any) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token(service, **kw)}"}

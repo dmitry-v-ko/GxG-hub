@@ -4,6 +4,8 @@
 # Root ([tool.mutmut] in pyproject.toml): M0.1 (AC-M0.1-03) scripts/ci/ and conftest.py, M2 widening_gate.py.
 # tools/gxg-policy (its own [tool.mutmut]): M2 gxg_policy {diff,lint,bundle,load}; mutmut maps src/ paths
 # to module names, so it runs from that directory. gxg-connector-kit (M1) has its own section and command.
+# approval (its own [tool.mutmut]): M7 policy, transitions, quotas, intents (T1). Its DB tests need one
+# PostgreSQL for all mutants: a container without network, reached over a Unix socket (needs Docker).
 # mutmut exits 0 with survivors, so this script fails on any survivor, untested or timed-out mutant not
 # listed in scripts/ci/mutmut-equivalent.txt (each with a reason; the list has no M0.1 mutant, so every
 # M0.1 mutant must be killed), and on any listed mutant that is killed now (stale list).
@@ -14,7 +16,14 @@ report="${1:-/dev/stdout}"
 all="${2:-/dev/null}"
 equivalent=scripts/ci/mutmut-equivalent.txt
 tmp=$(mktemp -d)
-for dir in tools/gxg-policy .; do
+pgsock=$(mktemp -d)
+chmod 777 "$pgsock"
+pg=$(docker run -d --rm --network none -e POSTGRES_USER=test -e POSTGRES_HOST_AUTH_METHOD=trust \
+  -v "$pgsock:/var/run/postgresql" postgres:16.6-alpine)
+trap 'docker stop "$pg" > /dev/null 2>&1 || true' EXIT
+for _ in $(seq 240); do docker logs "$pg" 2>&1 | grep -q "PostgreSQL init process complete" && break; sleep 0.5; done
+export GXG_TEST_PG_SOCKET_DIR="$pgsock"
+for dir in tools/gxg-policy approval .; do
   (
     cd "$dir"
     rm -rf mutants  # no stale results from an earlier run
