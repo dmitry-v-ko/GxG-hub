@@ -9,6 +9,7 @@ dependencies = [
     "gxg-approval",
     "gxg-policy",
     "gxg-connector-demo",
+    "gxg-connector-telegram",
 ]
 
 [dependency-groups]
@@ -47,6 +48,7 @@ gxg-connector-kit = { workspace = true }
 gxg-approval = { workspace = true }
 gxg-policy = { workspace = true }
 gxg-connector-demo = { path = "connectors/demo", editable = true }
+gxg-connector-telegram = { path = "connectors/telegram", editable = true }
 
 [tool.pytest.ini_options]
 minversion = "8.3"
@@ -63,6 +65,7 @@ testpaths = [
     "approval/tests",
     "tools/gxg-policy/tests",
     "connectors/demo/tests",
+    "connectors/telegram/tests",
     "spikes/m4-contextforge/tests",
     "spikes/m4.1-gateways/tests",
     "gateway/contextforge/tests",
@@ -96,7 +99,7 @@ ignore = [
 "stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
 
 [tool.ruff.lint.isort]
-known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector"]
+known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector", "telegram_connector"]
 
 [tool.mypy]
 # Baseline for every package; the strict set is enforced separately with
@@ -110,7 +113,7 @@ no_implicit_optional = true
 strict_equality = true
 # scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
 explicit_package_bases = true
-mypy_path = ["packages/gxg-connector-kit/src", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "."]
+mypy_path = ["packages/gxg-connector-kit/src", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", "connectors/telegram/src", "."]
 
 [[tool.mypy.overrides]]
 # gateway/contextforge/gxg_identity/plugin.py runs inside the ContextForge image, where cpex is installed

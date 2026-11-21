@@ -1,0 +1,19 @@
+# Test grants of the Telegram connector (M11). Synthetic, no secrets.
+tenant: t-beta
+schema_version: 1
+
+connections:
+  - id: tg-main
+    domain: telegram
+    credential_ref: secret://t-beta/telegram/main
+
+principals:
+  agents:
+    - id: agent:t-beta:reader
+
+grants:
+  - id: beta-reader-all-chats         # a mask: every chat in the service's Connection scope
+    subjects: [agent:t-beta:reader]
+    actions: [read, collect]
+    resources:
+      - telegram:tg-main/chat/*

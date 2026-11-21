@@ -652,6 +652,30 @@ requires-dist = [
 ]
 
 [[package]]
+name = "gxg-connector-telegram"
+version = "0.1.0"
+source = { editable = "connectors/telegram" }
+dependencies = [
+    { name = "fastmcp" },
+    { name = "gxg-connector-kit" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastmcp", specifier = "==4.1.8" },
+    { name = "gxg-connector-kit", editable = "packages/gxg-connector-kit" },
+    { name = "pyyaml", specifier = ">=6,<7" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "gxg-policy", editable = "tools/gxg-policy" },
+    { name = "mutmut", specifier = "==3.8.1" },
+    { name = "pytest", specifier = ">=8.3,<10" },
+]
+
+[[package]]
 name = "gxg-hub"
 version = "0.0.0"
 source = { virtual = "." }
@@ -659,6 +683,7 @@ dependencies = [
     { name = "gxg-approval" },
     { name = "gxg-connector-demo" },
     { name = "gxg-connector-kit" },
+    { name = "gxg-connector-telegram" },
     { name = "gxg-policy" },
 ]
 
@@ -685,6 +710,7 @@ requires-dist = [
     { name = "gxg-approval", editable = "approval" },
     { name = "gxg-connector-demo", editable = "connectors/demo" },
     { name = "gxg-connector-kit", editable = "packages/gxg-connector-kit" },
+    { name = "gxg-connector-telegram", editable = "connectors/telegram" },
     { name = "gxg-policy", editable = "tools/gxg-policy" },
 ]
 
