@@ -9,6 +9,7 @@ Observations -> <dir>/secrets/observations.jsonl; summary -> <dir>/secrets/summa
 """
 
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -58,10 +59,10 @@ def seen_identity(seen):
     }
 
 
-def call(kind, agent, p, token, **kw):
+def call(kind, agent, p, token, pk="mcp", **kw):
     if token:  # Docker MCP Gateway: one shared token per instance, whoever the caller is
         token = ST.get("token_for_url", {}).get(p["url"], token)
-    s, r = spike.call_tool("mcp", p["url"], token, p["tool"], **kw)
+    s, r = spike.call_tool(pk, p["url"], token, p["tool"], **kw)
     seen = spike.echo_seen(r)
     spike.record(
         kind,
@@ -93,6 +94,20 @@ def run_attacks():
     for p in ST.get("hidden", []):  # a tool filtered out of tools/list, called by name by an agent the stand names
         who = p.get("agent", beta)
         call("attack_hidden_tool", who, p, ST["tokens"][who])
+
+
+def run_midsession():
+    """Sessions opened while the stand is healthy; tools/call in them, then ST["stop_mid"] (e.g. stop the webhook),
+    then tools/call again in the same sessions and in fresh ones."""
+    tok = ST["tokens"]
+    held = [(a, p, spike.mcp_session(p["url"], tok[a])[0]) for a in AGENTS for p in ST["paths"][a.split(":")[1]]]
+    for phase in ("before_stop", "after_stop"):
+        if phase == "after_stop":
+            subprocess.run(ST["stop_mid"], check=True)  # noqa: S603 — fixed command from our run.sh
+            spike.record("stopped_mid_session", cmd=ST["stop_mid"])
+        for a, p, hh in held:  # "rpc" = tools/call with the held session headers, no new initialize
+            call(f"call_same_session_{phase}", a, p, ST["tokens"][a], pk="rpc", extra=hh)
+    run_calls()
 
 
 def run_replay(delay=65):
@@ -158,5 +173,5 @@ def summary():
 
 if __name__ == "__main__":
     for step in sys.argv[2:] or ["calls", "attacks", "replay"]:
-        {"calls": run_calls, "attacks": run_attacks, "replay": run_replay}[step]()
+        {"calls": run_calls, "attacks": run_attacks, "replay": run_replay, "midsession": run_midsession}[step]()
     (DIR / "secrets/summary.json").write_text(json.dumps(summary(), ensure_ascii=False, indent=1, sort_keys=True))

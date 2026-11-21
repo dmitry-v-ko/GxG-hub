@@ -59,10 +59,11 @@ for line in (HERE / "secrets/raw/echo.jsonl").read_text().splitlines():
     )
     if bearer and h.get("x-spike-attack") is None:
         tokens.setdefault((res.get("claims") or {}).get("sub"), set()).add(fp)
-seen = set()  # the connector's jti store, in arrival order
+seen = set()  # one jti store per connector (SEC-03: shared by replicas of one connector), in arrival order
 for x in rows:
-    x["jti_store"] = "replayed" if x.get("jti_sha256_12") in seen else "new"
-    seen.add(x.get("jti_sha256_12"))
+    key = (x["path"], x.get("jti_sha256_12"))
+    x["jti_store"] = "replayed" if key in seen else "new"
+    seen.add(key)
 via = [x for x in rows if x["source"] == "via-gateway"]
 out = {
     "calls": rows,

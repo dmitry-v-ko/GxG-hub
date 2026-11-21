@@ -30,6 +30,7 @@ VMCP_IMAGE=ghcr.io/stacklok/toolhive/vmcp:v0.66.0@sha256:4f5ac6d239c6e7de6d6b141
   STEPS="calls attacks" VMCP_CONFIG=vmcp-tx.yaml VARIANT=upgrade-from-v0.66.0 ./run.sh
 WEBHOOK=1 VMCP_CONFIG=vmcp-tx.yaml VMCP_SED="$S_WH" VARIANT=webhook-c ./run.sh             # путь C без форка
 WEBHOOK=1 WEBHOOK_DOWN=1 STEPS=calls VMCP_CONFIG=vmcp-tx.yaml VMCP_SED="$S_WH" VARIANT=webhook-c-down ./run.sh
+WEBHOOK=1 WEBHOOK_DOWN=mid STEPS=midsession VMCP_CONFIG=vmcp-tx.yaml VMCP_SED="$S_WH" VARIANT=webhook-c-mid-down ./run.sh  # webhook стоп посреди сессии
 sed 's#Action::"list_tools", resource);#Action::"list_tools", resource) when { this is not cedar };#' vmcp.yaml > secrets/vmcp-badpolicy.yaml
 docker run --rm --network host -v $PWD/secrets/vmcp-badpolicy.yaml:/c.yaml:ro ghcr.io/stacklok/toolhive/vmcp:v0.67.0 serve -c /c.yaml  # не стартует
 docker rm -f m41-echo m41-oidc m41-vmcp m41-webhook m41-thv-alpha m41-thv-beta

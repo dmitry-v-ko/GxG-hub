@@ -3,7 +3,8 @@
 # Variants: VMCP_CONFIG=vmcp-tx.yaml VARIANT=token-exchange (RFC 8693 to backends); VMCP_SED = a sed script applied to
 # the config (STS down, bad policy, backends behind thv proxies); WEBHOOK=1 = path C without a fork: vMCP -> token_exchange
 # -> thv run proxy per connector (OIDC + mutating webhook, failure_policy: fail) -> echo, JWS in params._meta;
-# WEBHOOK_DOWN=1 = the same with the webhook stopped.
+# WEBHOOK_DOWN=1 = the same with the webhook stopped before any call; WEBHOOK_DOWN=mid STEPS=midsession = stopped
+# between calls in already open sessions (attacks.py run_midsession).
 # Needs: docker, python3 with cryptography. Raw output -> secrets/ (git-ignored), redacted -> evidence/.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,7 +25,7 @@ start_webhook_proxies() {  # webhook signer + one thv proxy per connector, each 
       --webhook-config /w/webhook.yaml >/dev/null
   done
   for p in 8091 8092; do for _ in $(seq 1 30); do curl -s -o /dev/null "http://127.0.0.1:$p/health" && break; sleep 2; done; done
-  if [ -n "${WEBHOOK_DOWN:-}" ]; then docker stop m41-webhook >/dev/null; fi  # fail closed: proxies up, signer down
+  if [ "${WEBHOOK_DOWN:-}" = 1 ]; then docker stop m41-webhook >/dev/null; fi  # fail closed: proxies up, signer down
 }
 docker rm -f m41-oidc m41-vmcp m41-webhook m41-thv-alpha m41-thv-beta >/dev/null 2>&1 || true
 start_echo host "${WEBHOOK:+-e ECHO_IDENTITY_META=gxg.dev/identity}"
@@ -36,9 +37,9 @@ docker run -d --name m41-vmcp --network host -v "$PWD/secrets/vmcp.yaml:/cfg/vmc
 for _ in $(seq 1 40); do curl -s -o /dev/null http://127.0.0.1:4483/health && break; sleep 2; done
 tok() { curl -sf -d grant_type=client_credentials -d client_id="$1" -d client_secret=x -d scope=openid http://127.0.0.1:8080/gxg/token | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])'; }
 U=http://127.0.0.1:4483/mcp
-python3 -I - "${WEBHOOK:-}" "$(tok hermes-alpha)" "$(tok analyst-alpha)" "$(tok hermes-beta)" "$(tok analyst-beta)" "$(tok platform-admin)" <<P
+python3 -I - "${WEBHOOK:-}" "${WEBHOOK_DOWN:-}" "$(tok hermes-alpha)" "$(tok analyst-alpha)" "$(tok hermes-beta)" "$(tok analyst-beta)" "$(tok platform-admin)" <<P
 import json, sys
-wh, *t = sys.argv[1:]
+wh, down, *t = sys.argv[1:]
 # webhook variant: also the agent's own token straight to the thv proxy, bypassing vMCP and Cedar
 def direct(port):
     return [{"label": "thv-proxy:direct", "url": f"http://127.0.0.1:{port}/mcp", "tool": "echo"}] if wh else []
@@ -46,7 +47,8 @@ json.dump({"paths": {"t-alpha": [{"label": "vmcp:prefixed", "url": "$U", "tool":
                      "t-beta": [{"label": "vmcp:prefixed", "url": "$U", "tool": "beta_echo"}] + direct(8092)},
            "hidden": [{"label": "vmcp:filtered-out", "url": "$U", "tool": "hidden_echo"}],
            "tokens": {"agent:t-alpha:hermes": t[0], "agent:t-alpha:analyst": t[1], "agent:t-beta:hermes": t[2],
-                      "agent:t-beta:analyst": t[3], "admin": t[4]}}, open("secrets/stand.json", "w"))
+                      "agent:t-beta:analyst": t[3], "admin": t[4]},
+           "stop_mid": ["docker", "stop", "m41-webhook"] if down == "mid" else None}, open("secrets/stand.json", "w"))
 P
 python3 -I ../attacks.py . ${STEPS:-calls attacks replay} > secrets/attacks.out
 python3 -I ../list_tools.py . > secrets/visibility.json
