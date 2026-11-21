@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "demo.note.get output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "board_id", "title", "body", "updated_at"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "board_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "title": {"type": "string", "maxLength": 300},
+    "body": {"type": "string", "maxLength": 20000},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

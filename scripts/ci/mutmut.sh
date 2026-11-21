@@ -3,7 +3,8 @@
 #   scripts/ci/mutmut.sh [REPORT_FILE [ALL_RESULTS_FILE]]
 # Root ([tool.mutmut] in pyproject.toml): M0.1 (AC-M0.1-03) scripts/ci/ and conftest.py, M2 widening_gate.py.
 # tools/gxg-policy (its own [tool.mutmut]): M2 gxg_policy {diff,lint,bundle,load}; mutmut maps src/ paths
-# to module names, so it runs from that directory. gxg-connector-kit (M1) has its own section and command.
+# to module names, so it runs from that directory. connectors/demo (M3, its own lockfile and [tool.mutmut]):
+# tools.py, backend.py. gxg-connector-kit (M1) has its own section and command.
 # mutmut exits 0 with survivors, so this script fails on any survivor, untested or timed-out mutant not
 # listed in scripts/ci/mutmut-equivalent.txt (each with a reason; the list has no M0.1 mutant, so every
 # M0.1 mutant must be killed), and on any listed mutant that is killed now (stale list).
@@ -14,7 +15,7 @@ report="${1:-/dev/stdout}"
 all="${2:-/dev/null}"
 equivalent=scripts/ci/mutmut-equivalent.txt
 tmp=$(mktemp -d)
-for dir in tools/gxg-policy .; do
+for dir in tools/gxg-policy connectors/demo .; do
   (
     cd "$dir"
     rm -rf mutants  # no stale results from an earlier run

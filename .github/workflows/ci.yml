@@ -143,9 +143,9 @@ jobs:
         run: uv sync && uv run pytest tests/secrets
 
   mutmut:
-    # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed.
+    # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed; M2 and M3 modules too.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -168,6 +168,19 @@ jobs:
       - run: uv run gxg-policy lint policies/
       - name: Build twice with a throw-away key, compare, verify
         run: bash scripts/ci/bundle_smoke.sh
+
+  demo-image:
+    # AC-M3-01, AC-M3-11: build the production image of connectors/demo from the repository root and
+    # run it: /readyz 200 with a valid bundle, 503 without; test switches stop the start.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: connectors/demo/docker_smoke.sh
 
   grants-widening:
     # AC-M2-04 / GR-10: red while the policy diff has widening and no code owner added the
@@ -208,7 +221,7 @@ jobs:
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
     if: always()
-    needs: [lint, types, tests, schema-guard, secrets, mutmut, policy, grants-widening]
+    needs: [lint, types, tests, schema-guard, secrets, mutmut, policy, demo-image, grants-widening]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

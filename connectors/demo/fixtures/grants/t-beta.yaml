@@ -1,0 +1,19 @@
+# Test grants of the demo connector (docs/specs/demo-connector-v1.md). Synthetic, no secrets.
+tenant: t-beta
+schema_version: 1
+
+connections:
+  - id: demo-main
+    domain: demo
+    credential_ref: secret://t-beta/demo/main
+
+principals:
+  agents:
+    - id: agent:t-beta:reader
+
+grants:
+  - id: beta-reader-all-boards
+    subjects: [agent:t-beta:reader]
+    actions: [read]
+    resources:
+      - demo:demo-main/board/*   # every board of the connection: b-public, b-ops (GR-04 type mask)

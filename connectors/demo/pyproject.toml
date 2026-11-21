@@ -1,9 +1,12 @@
 [project]
 name = "gxg-connector-demo"
-version = "0.0.0"
-description = "Reference connector `demo` (M0 skeleton; read-only implementation in M3)."
+version = "0.1.0"
+description = "Reference connector `demo`: read-only tools over synthetic boards and notes (M3)."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn
+    "gxg-connector-kit",
+]
 
 [build-system]
 requires = ["uv_build>=0.11,<0.14"]
@@ -12,12 +15,27 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "demo_connector"
 
+[tool.uv.sources]
+# editable: the root workspace installs the kit editable too, uv needs one URL per package
+gxg-connector-kit = { path = "../../packages/gxg-connector-kit", editable = true }
+# editable: gxg-policy finds the repository schemas/ from its own source location
+gxg-policy = { path = "../../tools/gxg-policy", editable = true }
+
 [dependency-groups]
 # Standalone `uv run pytest` inside connectors/demo. The repository-wide policy
 # (no network, no skip/xfail) applies when tests run from the repository root.
-dev = ["pytest>=8.3,<10"]
+dev = ["pytest>=8.3,<10", "gxg-policy", "mutmut==3.8.1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
 xfail_strict = true
+
+# DoD-4: modules with the M3 key conditions (grant filtering, not_found, fallback).
+# Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh does it in CI).
+[tool.mutmut]
+source_paths = ["src/demo_connector/"]
+only_mutate = ["*/tools.py", "*/backend.py"]
+also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml"]
+pytest_add_cli_args_test_selection = ["tests"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]

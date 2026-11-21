@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "demo.boards.list output",
+  "description": "Only the boards the caller may read (GrantResolver.allowed)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["boards"],
+  "properties": {
+    "boards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "maxLength": 64},
+          "title": {"type": "string", "maxLength": 300}
+        }
+      }
+    }
+  }
+}

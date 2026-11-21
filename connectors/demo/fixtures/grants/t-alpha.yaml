@@ -1,0 +1,27 @@
+# Test grants of the demo connector (docs/specs/demo-connector-v1.md). Synthetic, no secrets.
+tenant: t-alpha
+schema_version: 1
+
+connections:
+  - id: demo-main
+    domain: demo
+    credential_ref: secret://t-alpha/demo/main
+
+principals:
+  agents:
+    - id: agent:t-alpha:reader
+    - id: agent:t-alpha:actor
+    - id: agent:t-alpha:nobody
+
+grants:
+  - id: alpha-reader-boards
+    subjects: [agent:t-alpha:reader]
+    actions: [read]
+    resources:
+      - demo:demo-main/board/a-public
+      - demo:demo-main/board/a-sales
+  - id: alpha-actor-public
+    subjects: [agent:t-alpha:actor]
+    actions: [read, propose]
+    resources:
+      - demo:demo-main/board/a-public

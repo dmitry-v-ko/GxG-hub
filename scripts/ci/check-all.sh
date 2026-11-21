@@ -25,5 +25,6 @@ uv run pytest tests/secrets
 uv run gxg-policy validate policies/
 uv run gxg-policy lint policies/
 bash scripts/ci/bundle_smoke.sh
+connectors/demo/docker_smoke.sh  # needs a Docker daemon; extra build flags: DOCKER_BUILD_FLAGS
 scripts/ci/mutmut.sh >/dev/null
 echo "check-all: OK"
