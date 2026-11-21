@@ -1,0 +1,133 @@
+{
+ "direct_to_connector": {},
+ "gateway_calls": [
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…"
+   },
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…"
+   },
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…"
+   },
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…"
+   },
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": true,
+   "identity_headers": {
+    "authorization": "Bearer <redacted>…"
+   },
+   "kind": "attack_forge",
+   "path": "vmcp:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": null,
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_no_token",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 401,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "admin",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "admin_call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 403,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_cross_tenant",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 403,
+   "tool": "beta_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_hidden_tool",
+   "path": "vmcp:filtered-out",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "hidden_echo",
+   "verdict": null
+  }
+ ],
+ "m4_expected_with_variant_c": {
+  "bypass_no_identity": "missing X-GxG-Identity",
+  "forged_jws_attacker_key": "InvalidSignatureError: Signature verification failed",
+  "replay_after_65s": "ExpiredSignatureError: Signature has expired",
+  "replay_immediate": "replayed jti",
+  "replay_other_connector": "InvalidAudienceError: Audience doesn't match (strict)",
+  "replay_other_tool": "bad tool",
+  "replay_tampered_args": "arguments hash mismatch"
+ }
+}

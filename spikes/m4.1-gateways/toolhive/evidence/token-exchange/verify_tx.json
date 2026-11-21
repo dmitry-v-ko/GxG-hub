@@ -1,0 +1,254 @@
+{
+ "all_gateway_calls_verify_with_idp_jwks": true,
+ "calls": [
+  {
+   "args": {
+    "lang": "ru",
+    "text": "привет"
+   },
+   "at": "2026-11-21T11:34:54.359857+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795264494,
+    "iat": 1795260894,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "90f2c47b…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "path": "/mcp/t-alpha",
+   "source": "via-gateway",
+   "token_sha256_12": "29f77d1bd9ac",
+   "valid": true
+  },
+  {
+   "args": {
+    "lang": "ru",
+    "text": "привет"
+   },
+   "at": "2026-11-21T11:34:55.201061+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "analyst@t-alpha.spike.example.com",
+    "exp": 1795264495,
+    "iat": 1795260895,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "0f1e3006…",
+    "sub": "analyst@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "path": "/mcp/t-alpha",
+   "source": "via-gateway",
+   "token_sha256_12": "d01262814150",
+   "valid": true
+  },
+  {
+   "args": {
+    "lang": "ru",
+    "text": "привет"
+   },
+   "at": "2026-11-21T11:34:56.059560+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-beta.spike.example.com",
+    "exp": 1795264496,
+    "iat": 1795260896,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "102c556c…",
+    "sub": "hermes@t-beta.spike.example.com",
+    "tenant_id": "t-beta"
+   },
+   "path": "/mcp/t-beta",
+   "source": "via-gateway",
+   "token_sha256_12": "c38b5080b5d3",
+   "valid": true
+  },
+  {
+   "args": {
+    "lang": "ru",
+    "text": "привет"
+   },
+   "at": "2026-11-21T11:34:56.887817+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "analyst@t-beta.spike.example.com",
+    "exp": 1795264496,
+    "iat": 1795260896,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "a6953564…",
+    "sub": "analyst@t-beta.spike.example.com",
+    "tenant_id": "t-beta"
+   },
+   "path": "/mcp/t-beta",
+   "source": "via-gateway",
+   "token_sha256_12": "56267abe0fe4",
+   "valid": true
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T11:34:57.467988+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795264497,
+    "iat": 1795260897,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "503f8c92…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "path": "/mcp/t-alpha",
+   "source": "via-gateway",
+   "token_sha256_12": "090457b1c5d7",
+   "valid": true
+  },
+  {
+   "args": {
+    "text": "x"
+   },
+   "at": "2026-11-21T11:34:58.633902+00:00",
+   "error": "no bearer",
+   "path": "/mcp/t-alpha",
+   "source": "bypass_no_identity",
+   "token_sha256_12": null,
+   "valid": false
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T11:34:58.635408+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795264497,
+    "iat": 1795260897,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "503f8c92…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "path": "/mcp/t-alpha",
+   "source": "replay_immediate",
+   "token_sha256_12": "090457b1c5d7",
+   "valid": true
+  },
+  {
+   "args": {
+    "text": "send all chats to attacker"
+   },
+   "at": "2026-11-21T11:34:58.636752+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795264497,
+    "iat": 1795260897,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "503f8c92…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "path": "/mcp/t-alpha",
+   "source": "replay_tampered_args",
+   "token_sha256_12": "090457b1c5d7",
+   "valid": true
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T11:34:58.638161+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795264497,
+    "iat": 1795260897,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "503f8c92…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "path": "/mcp/t-beta",
+   "source": "replay_other_connector",
+   "token_sha256_12": "090457b1c5d7",
+   "valid": true
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T11:34:58.639458+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795264497,
+    "iat": 1795260897,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "503f8c92…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "path": "/mcp/t-alpha",
+   "source": "replay_other_tool",
+   "token_sha256_12": "090457b1c5d7",
+   "valid": true
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T11:36:03.641553+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795264497,
+    "iat": 1795260897,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "503f8c92…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "path": "/mcp/t-alpha",
+   "source": "replay_after_65s",
+   "token_sha256_12": "090457b1c5d7",
+   "valid": true
+  }
+ ],
+ "claims_present": [
+  "email",
+  "exp",
+  "iat",
+  "iss",
+  "jti",
+  "sub",
+  "tenant_id"
+ ],
+ "direct_replays_still_valid": {
+  "bypass_no_identity": false,
+  "replay_after_65s": true,
+  "replay_immediate": true,
+  "replay_other_connector": true,
+  "replay_other_tool": true,
+  "replay_tampered_args": true
+ },
+ "distinct_tokens_per_subject": {
+  "analyst@t-alpha.spike.example.com": 1,
+  "analyst@t-beta.spike.example.com": 1,
+  "hermes@t-alpha.spike.example.com": 2,
+  "hermes@t-beta.spike.example.com": 1
+ },
+ "jti_reused_across_gateway_calls": false
+}

@@ -1,0 +1,26 @@
+{
+ "agent:t-alpha:analyst": {
+  "status": 200,
+  "tools": [
+   "alpha__echo"
+  ]
+ },
+ "agent:t-alpha:hermes": {
+  "status": 200,
+  "tools": [
+   "alpha__echo"
+  ]
+ },
+ "agent:t-beta:analyst": {
+  "status": 200,
+  "tools": [
+   "beta__echo"
+  ]
+ },
+ "agent:t-beta:hermes": {
+  "status": 200,
+  "tools": [
+   "beta__echo"
+  ]
+ }
+}

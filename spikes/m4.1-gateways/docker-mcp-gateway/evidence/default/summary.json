@@ -1,0 +1,220 @@
+{
+ "direct_to_connector": {
+  "bypass_no_identity": {
+   "rejected": "missing X-GxG-Identity"
+  },
+  "replay_after_65s": {
+   "rejected": "missing X-GxG-Identity"
+  },
+  "replay_immediate": {
+   "rejected": "missing X-GxG-Identity"
+  },
+  "replay_other_connector": {
+   "rejected": "missing X-GxG-Identity"
+  },
+  "replay_other_tool": {
+   "rejected": "missing X-GxG-Identity"
+  },
+  "replay_tampered_args": {
+   "rejected": "missing X-GxG-Identity"
+  }
+ },
+ "gateway_calls": [
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "call",
+   "path": "gw-alpha:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "call",
+   "path": "gw-shared:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "call",
+   "path": "gw-alpha:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "call",
+   "path": "gw-shared:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "call",
+   "path": "gw-beta:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "call",
+   "path": "gw-shared:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "call",
+   "path": "gw-beta:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "call",
+   "path": "gw-shared:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": true,
+   "identity_headers": {},
+   "kind": "attack_forge",
+   "path": "gw-alpha:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": null,
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_no_token",
+   "path": "gw-alpha:prefixed",
+   "reached_echo": false,
+   "status": 401,
+   "tool": "alpha__echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": true,
+   "identity_headers": {},
+   "kind": "attack_forge",
+   "path": "gw-shared:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "alpha__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": null,
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_no_token",
+   "path": "gw-shared:prefixed",
+   "reached_echo": false,
+   "status": 401,
+   "tool": "alpha__echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_cross_tenant",
+   "path": "gw-beta:prefixed",
+   "reached_echo": false,
+   "status": 401,
+   "tool": "beta__echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": {},
+   "kind": "attack_cross_tenant",
+   "path": "gw-shared:prefixed",
+   "reached_echo": true,
+   "status": 200,
+   "tool": "beta__echo",
+   "verdict": {
+    "rejected": "missing X-GxG-Identity"
+   }
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "attack_hidden_tool",
+   "path": "gw-alpha:--tools-filtered",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "hidden__echo",
+   "verdict": null
+  }
+ ],
+ "m4_expected_with_variant_c": {
+  "bypass_no_identity": "missing X-GxG-Identity",
+  "forged_jws_attacker_key": "InvalidSignatureError: Signature verification failed",
+  "replay_after_65s": "ExpiredSignatureError: Signature has expired",
+  "replay_immediate": "replayed jti",
+  "replay_other_connector": "InvalidAudienceError: Audience doesn't match (strict)",
+  "replay_other_tool": "bad tool",
+  "replay_tampered_args": "arguments hash mismatch"
+ }
+}

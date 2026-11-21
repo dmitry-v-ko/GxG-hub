@@ -1,0 +1,14 @@
+# M4.1 Docker MCP Gateway stand: one catalog per tenant gateway instance (the gateway has no per-caller identity).
+registry:
+  echo-alpha:
+    type: remote
+    remote: {url: "http://m41-echo:9000/mcp/t-alpha", transport_type: http}
+    prefix: alpha
+  echo-beta:
+    type: remote
+    remote: {url: "http://m41-echo:9000/mcp/t-beta", transport_type: http}
+    prefix: beta
+  echo-hidden:
+    type: remote
+    remote: {url: "http://m41-echo:9000/mcp/t-hidden", transport_type: http}
+    prefix: hidden
