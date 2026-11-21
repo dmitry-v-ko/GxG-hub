@@ -197,12 +197,13 @@ def test_quotas_count_only_the_tenant(propose: Callable[..., Any], world: Any) -
 
 
 def test_quota_window_is_one_hour(propose: Callable[..., Any], world: Any, owner: psycopg.Connection[Any]) -> None:
-    world.set_policy("t-alpha", [], quotas={"propose_per_requester_per_hour": 1})
-    assert propose().status_code == 201
-    owner.execute("UPDATE intents SET created_at = now() - interval '59 minutes'")
+    world.set_policy("t-alpha", [], quotas={"propose_per_requester_per_hour": 2})
+    first, second = propose().json()["intent_id"], propose().json()["intent_id"]
+    owner.execute("UPDATE intents SET created_at = now() - interval '59 minutes' WHERE intent_id = %s", (first,))
+    owner.execute("UPDATE intents SET created_at = now() - interval '10 minutes' WHERE intent_id = %s", (second,))
     r = propose()
-    assert r.status_code == 429 and 55 <= r.json()["retry_after_s"] <= 61
-    owner.execute("UPDATE intents SET created_at = now() - interval '61 minutes'")
+    assert r.status_code == 429 and 55 <= r.json()["retry_after_s"] <= 61  # until the oldest leaves the hour
+    owner.execute("UPDATE intents SET created_at = now() - interval '61 minutes' WHERE intent_id = %s", (first,))
     assert propose().status_code == 201
 
 
@@ -332,10 +333,12 @@ def test_auto_limits_use_sliding_hour_and_day(
     )
     assert propose().json()["approval"]["mode"] == "auto"
     assert propose().json()["approval"]["mode"] == "human"  # hourly limit 1 used
+    owner.execute("UPDATE intents SET created_at = now() - interval '50 minutes' WHERE approval_mode = 'auto'")
+    assert propose().json()["approval"]["mode"] == "human"  # still inside the hour
     owner.execute("UPDATE intents SET created_at = now() - interval '2 hours' WHERE approval_mode = 'auto'")
     assert propose().json()["approval"]["mode"] == "auto"  # the hour is free again, day: 1 of 2
-    owner.execute("UPDATE intents SET created_at = now() - interval '3 hours' WHERE approval_mode = 'auto'")
-    assert propose().json()["approval"]["mode"] == "human"  # day: 2 of 2
+    owner.execute("UPDATE intents SET created_at = now() - interval '23 hours' WHERE approval_mode = 'auto'")
+    assert propose().json()["approval"]["mode"] == "human"  # day: 2 of 2, still inside the day
     owner.execute("UPDATE intents SET created_at = now() - interval '25 hours' WHERE approval_mode = 'auto'")
     assert propose().json()["approval"]["mode"] == "auto"
     owner.execute("UPDATE intents SET tenant_id = 't-beta', created_at = now() WHERE approval_mode = 'auto'")
@@ -443,7 +446,7 @@ def test_allowed_approvers_are_stored(propose: Callable[..., Any], world: Any, o
 
 
 def _scans(plan: dict[str, Any]) -> list[str]:
-    here = f"{plan['Node Type']}:{plan.get('Relation Name', '')}"
+    here = f"{plan['Node Type']}:{plan.get('Relation Name', '')}:{plan.get('Index Name', '')}"
     return [here, *(scan for child in plan.get("Plans", []) for scan in _scans(child))]
 
 
@@ -476,5 +479,7 @@ def test_t1_counts_use_indexes_on_a_long_history(owner: psycopg.Connection[Any])
         row = owner.execute("EXPLAIN (FORMAT JSON) " + sql, params).fetchone()
         assert row is not None
         scans = _scans(row[0][0]["Plan"])
-        assert "Seq Scan:intents" not in scans and any(s.endswith(":intents") for s in scans), scans
+        assert not any(s.startswith("Seq Scan:") for s in scans) and any(":intents:" in s for s in scans), scans
+        if sql is intents._SQL_AUTO_USED:  # the day window needs its own index, not the tenant part of another
+            assert any(s.endswith(":intents_tenant_id_created_at_idx") for s in scans), scans
     owner.execute("TRUNCATE intents CASCADE")

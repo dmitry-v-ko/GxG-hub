@@ -232,7 +232,7 @@
     "T2 'approver role by bundle' and approver-initiated T6 are ui-side (M9); the DB function checks everything else",
     "pending-cap retry_after_s is a fixed 60 s",
     "ui, executor, notifier, admin processes and AS-29 separate images are M8-M10; their DB roles, grants and transition functions exist now",
-    "mutmut job now runs ~1 h on a 4-core runner (timeout 120 min)",
+    "mutmut job (approval mutmut + SQL mutation driver) runs ~2 h on a 4-core runner (timeout 240 min)",
     "Through MCP the same principal ID in two tenants cannot occur (IdentityVerifier requires agent:<tenant>:<name>, TEN-06); the api keeps the tenant in every key for any approval_mcp caller",
     "SQL mutation list leaves locking clauses (FOR UPDATE, SKIP LOCKED) out: races are covered only by the parallel T1 tests (AC-M7-04/06)"
   ],

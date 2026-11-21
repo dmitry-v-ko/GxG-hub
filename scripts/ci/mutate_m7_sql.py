@@ -111,6 +111,7 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG, "IF now() < (x.e).reserve_lease_until THEN", "IF false THEN", "reservation released early"),
     (MIG, "IF now() < (x.e).dispatch_lease_until THEN", "IF false THEN", "dispatch declared unknown early"),
     # constraints and privileges (AS-02, AS-27)
+    (MIG, "CREATE INDEX ON intents (tenant_id, created_at);", "", "auto usage count without its index"),
     (MIG, "WHERE state IN ('reserved','dispatching','outcome_unknown');",
      "WHERE state IN ('reserved','dispatching');",
      EQUIVALENT + "an execution in outcome_unknown belongs to an intent in outcome_unknown, and T7 (the only "
@@ -149,6 +150,9 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (INT, "WHERE tenant_id = %s AND created_at > now() - interval '1 day'",
      "WHERE created_at > now() - interval '1 day'", "auto limit counts another tenant's intents"),
     (INT, "interval '1 day'", "interval '2 days'", "auto day limit window too long"),
+    (INT, "interval '1 day'", "interval '12 hours'", "auto day limit window too short (fail open)"),
+    (INT, "interval '1 hour'), count(*)", "interval '30 minutes'), count(*)", "auto hour window too short (fail open)"),
+    (INT, "now() - min(created_at)", "now() - max(created_at)", "retry_after_s from the newest intent"),
     (INT, "count(*) FILTER (WHERE created_at > now() - interval '1 hour'), count(*)", "count(*), count(*)",
      "auto hour limit counts the day"),
     (INT, "AND approval_mode = 'auto' AND %s", "AND %s", "auto limit counts human intents of the rule"),
