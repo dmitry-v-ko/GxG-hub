@@ -48,29 +48,39 @@ def test_internet_socket_is_blocked(use_network: Callable[[], None]) -> None:
         use_network()
 
 
-_UDP_BLOCKED = (
-    "import socket\nimport pytest\nfrom pytest_socket import SocketBlockedError\n\n{deco}\n"
-    "def test_a({args}):\n    with pytest.raises(SocketBlockedError):\n"
-    "        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:\n"
-    "            s.sendto(b'x', ('192.0.2.1', 9))\n"
-)
+_UDP = "    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:\n        s.sendto(b'x', ('192.0.2.1', 9))\n"
 
 
 @pytest.mark.parametrize(
-    ("deco", "args"),
+    ("body", "expected"),
     [
-        ("@pytest.mark.enable_socket", ""),
-        ("", "socket_enabled"),
-        ("@pytest.mark.allow_hosts(['192.0.2.1'])", ""),
+        (
+            f"import socket\nimport pytest\n\n@pytest.mark.enable_socket\ndef test_a():\n{_UDP}",
+            "test_inner.py::test_a (network opt-out marker)",
+        ),
+        (
+            f"import socket\n\ndef test_a(socket_enabled):\n{_UDP}",
+            "test_inner.py::test_a (network opt-out fixture)",
+        ),
+        (
+            f"import socket\nimport pytest\n\n@pytest.mark.allow_hosts(['192.0.2.1'])\ndef test_a():\n{_UDP}",
+            "test_inner.py::test_a (network opt-out marker)",
+        ),
+        (  # network only in fixture setup, test body empty
+            f"import socket\nimport pytest\n\n@pytest.fixture\ndef net():\n{_UDP}\n"
+            "@pytest.mark.enable_socket\ndef test_a(net):\n    pass\n",
+            "test_inner.py::test_a (network opt-out marker)",
+        ),
     ],
-    ids=["enable_socket-marker", "socket_enabled-fixture", "allow_hosts-marker"],
+    ids=["enable_socket-marker", "socket_enabled-fixture", "allow_hosts-marker", "marker-network-in-fixture"],
 )
-def test_no_per_test_network_opt_out(pytester: pytest.Pytester, deco: str, args: str) -> None:
-    """AC-M0-01, DoD-5 style: UDP sendto to 192.0.2.1 is blocked even when a test asks for the network."""
+def test_no_per_test_network_opt_out(pytester: pytest.Pytester, body: str, expected: str) -> None:
+    """AC-M0-01, DoD-5 style: a test that asks for the network turns the run red."""
     pytester.makeconftest(CONFTEST)
-    pytester.makepyfile(test_inner=_UDP_BLOCKED.format(deco=deco, args=args))
+    pytester.makepyfile(test_inner=body)
     res = pytester.runpytest_inprocess("-q", "-p", "no:cacheprovider", "--disable-socket", "--allow-unix-socket")
-    res.assert_outcomes(passed=1)
+    assert res.ret == pytest.ExitCode.TESTS_FAILED, _out(res)
+    assert expected in _out(res)
 
 
 def _run_inner(pytester: pytest.Pytester, body: str) -> pytest.RunResult:
@@ -126,7 +136,10 @@ def _out(res: pytest.RunResult) -> str:
 def test_skip_or_xfail_makes_run_red(pytester: pytest.Pytester, body: str) -> None:
     res = _run_inner(pytester, body)
     assert res.ret == pytest.ExitCode.TESTS_FAILED, _out(res)
-    assert any(line.startswith("FAILED: skipped/xfail tests are forbidden (DoD-5): ") for line in res.outlines)
+    assert any(
+        line.startswith("FAILED: skip, xfail and network opt-out are forbidden (DoD-5, AC-M0-01): ")
+        for line in res.outlines
+    )
 
 
 def test_xpass_strict_false_overrides_ini(pytester: pytest.Pytester) -> None:
