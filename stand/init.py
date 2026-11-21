@@ -46,7 +46,11 @@ def env_values() -> dict[str, str]:
 
 
 def build_bundle(seed: bytes, out: Path, built_at: str | None = None) -> None:
-    """`gxg-policy build` over the demo fixtures (+ the example platform registry) into `out`."""
+    """`gxg-policy build` over the demo fixtures (+ the example platform registry), signed, into `out`.
+
+    Built in a temporary directory and moved in file by file: `demo` reloads on change (GR-12) and keeps the
+    previous bundle if it ever reads a half-written pair. `bundle_version` is the commit (GR-11, GR-14).
+    """
     work = SECRETS / "policies"
     shutil.rmtree(work, ignore_errors=True)
     (work / "tenants").mkdir(parents=True)
@@ -54,12 +58,19 @@ def build_bundle(seed: bytes, out: Path, built_at: str | None = None) -> None:
     for f in (REPO / "connectors" / "demo" / "fixtures" / "grants").glob("t-*.yaml"):
         shutil.copy(f, work / "tenants" / f.name)
     shutil.copy(REPO / "policies" / "platform" / "registry.example.yaml", work / "platform")
-    cmd = [sys.executable, "-m", "gxg_policy.cli", "build", str(work), "--out", str(out), "--kid", KID_BUNDLE]
-    cmd += ["--manifest", str(REPO / "connectors" / "demo" / "gxg-manifest.yaml"), "--bundle-version", "0" * 40]
-    cmd += ["--built-at", built_at] if built_at else []
+    version = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True)
+    tmp = SECRETS / "bundle.new"
+    shutil.rmtree(tmp, ignore_errors=True)
+    cmd = [sys.executable, "-m", "gxg_policy.cli", "build", str(work), "--out", str(tmp), "--kid", KID_BUNDLE]
+    cmd += ["--manifest", str(REPO / "connectors" / "demo" / "gxg-manifest.yaml")]
+    cmd += ["--bundle-version", version.stdout.strip()] + (["--built-at", built_at] if built_at else [])
     subprocess.run(cmd, check=True, env=os.environ | {"GXG_BUNDLE_SIGNING_KEY": b64(seed)}, stdout=subprocess.DEVNULL)
-    for p in (out, *out.iterdir()):
-        p.chmod(0o755 if p.is_dir() else 0o644)  # read by the container's non-root user
+    out.mkdir(exist_ok=True)
+    out.chmod(0o755)  # read by the container's non-root user
+    for f in sorted(tmp.iterdir()):
+        f.chmod(0o644)
+        f.replace(out / f.name)
+    tmp.rmdir()
 
 
 def plugins_yaml(tenants: dict[str, str], connectors: dict[str, str]) -> str:
@@ -131,8 +142,8 @@ def main() -> None:
     missing = {"DEMO_IDENTITY_KEYS", "DEMO_BUNDLE_KEYS", "DEMO_PROVIDER_TOKEN"} - set(env_values())
     if missing:
         sys.exit(f".env exists without {sorted(missing)}: move it away and rerun")
-    if not (SECRETS / "bundle" / "grants-bundle.json").exists():
-        build_bundle(seed, SECRETS / "bundle")
+    # GR-13: a bundle older than 24 h makes demo not ready; every run re-signs it (CI does it every 6 h, GR-13a)
+    build_bundle(seed, SECRETS / "bundle")
     if not (SECRETS / "plugins.yaml").exists():
         (SECRETS / "plugins.yaml").write_text(plugins_yaml({}, {}))
     (SECRETS / "plugins.yaml").chmod(0o644)

@@ -9,6 +9,7 @@ throw-away container (`probe`).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import secrets
@@ -23,6 +24,10 @@ from typing import Any
 import httpx2 as httpx
 import pytest
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from mcp import ClientSession
+from mcp.client.sse import sse_client
+from mcp.shared.exceptions import MCPError
+from pydantic import ValidationError
 
 REPO = Path(__file__).resolve().parents[2]
 SECRETS = REPO / "stand" / "secrets"
@@ -89,6 +94,8 @@ def denied(resp: dict[str, Any]) -> str:
     """The refusal text of a ContextForge reply, or '' if it is a tool result. JSON-RPC error or isError text."""
     if "error" in resp:  # ContextForge puts the plugin's code (PDP_DENY, GXG_IDENTITY_DENIED) in error.data
         return f"{resp['error'].get('message')} {json.dumps(resp['error'].get('data'))}"
+    if resp.get("result", None) == {}:
+        return "empty result (SSE refusal)"
     result = resp.get("result", {})
     if result.get("isError") and "structuredContent" not in result:
         return " ".join(c.get("text", "") for c in result.get("content", []))
@@ -140,7 +147,10 @@ class Stand:
         token: str | None,
         extra: dict[str, str] | None = None,
     ) -> tuple[int, dict[str, Any]]:
-        """One JSON-RPC request; on an MCP endpoint (`.../mcp/`) after initialize in the same session."""
+        """One JSON-RPC request; on an MCP endpoint (`.../mcp/`) after initialize in the same session; on an SSE
+        endpoint (`.../sse`) through the official SDK client."""
+        if path.endswith("/sse"):
+            return 200, asyncio.run(self._sse(path, method, params or {}, token, extra))
         h = self.headers(token, extra)
         if path.endswith("/mcp/"):
             init = {"protocolVersion": PROTO, "capabilities": {}, "clientInfo": {"name": "m5", "version": "0"}}
@@ -157,9 +167,34 @@ class Stand:
         except ValueError:
             return r.status_code, {"_raw": r.text[:500]}
 
+    async def _sse(
+        self, path: str, method: str, params: dict[str, Any], token: str | None, extra: dict[str, str] | None
+    ) -> dict[str, Any]:
+        headers = ({"Authorization": f"Bearer {token}"} if token else {}) | (extra or {})
+        async with sse_client(CF + path, headers=headers) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            try:
+                if method == "tools/list":
+                    tools = (await session.list_tools()).tools
+                    return {"result": {"tools": [t.model_dump(by_alias=True, exclude_none=True) for t in tools]}}
+                result = await session.call_tool(params["name"], params.get("arguments"), meta=params.get("_meta"))
+            except MCPError as exc:
+                return {"error": {"message": exc.error.message, "data": exc.error.data}}
+            except ValidationError:
+                # ContextForge answers a refused call on SSE with `result: {}`, not a CallToolResult (M5 GO note)
+                return {"result": {}}
+            return {"result": result.model_dump(by_alias=True, exclude_none=True, mode="json")}
+
     def paths(self, agent: str) -> dict[str, str]:
-        """Call paths of the agent's own team: direct /rpc, global /mcp, its virtual server."""
-        return {"rpc": "/rpc", "mcp": "/mcp/", "virtual_server": f"/servers/{self.team(agent)['server_id']}/mcp/"}
+        """Call paths of the agent's own team: direct /rpc, global /mcp and /sse, its virtual server (MCP, SSE)."""
+        server = f"/servers/{self.team(agent)['server_id']}"
+        return {
+            "rpc": "/rpc",
+            "mcp": "/mcp/",
+            "sse": "/sse",
+            "virtual_server": f"{server}/mcp/",
+            "virtual_server_sse": f"{server}/sse",
+        }
 
     def call(
         self,

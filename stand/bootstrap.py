@@ -23,7 +23,7 @@ import httpx2 as httpx
 import jwt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from init import ENV, REPO, SECRETS, env_values, plugins_yaml
+from init import ENV, REPO, SECRETS, env_values, password, plugins_yaml
 
 CF = "http://127.0.0.1:4444"
 STATE = SECRETS / "state.json"
@@ -91,19 +91,28 @@ def main() -> None:
         team = teams.get(tenant) or api("POST", "/v1/teams/", {"name": tenant, "slug": tenant, "visibility": "private"})
         t = state["teams"].setdefault(tenant, {})
         t["id"] = team["id"]
+        members = {
+            m.get("user_email") or m.get("email")
+            for m in items(api("GET", f"/v1/teams/{team['id']}/members"), "members")
+        }
         for name in AGENTS:
             mail = email(tenant, name)
+            # SEC-02: an agent has only its token. Its password is random, used once and not kept, so nobody can log in
+            # as the agent and mint more tokens; reset on every run for users made before this rule.
             if mail not in users:
                 api(
                     "POST",
                     "/v1/auth/email/admin/users",
                     {
                         "email": mail,
-                        "password": env["DEFAULT_USER_PASSWORD"],
+                        "password": password(),
                         "full_name": f"agent:{tenant}:{name}",
                         "password_change_required": False,
                     },
                 )
+            else:
+                api("PATCH", f"/v1/auth/email/admin/users/{mail}", {"password": password()})
+            if mail not in members:  # also after an interrupted run
                 api("POST", f"/v1/teams/{team['id']}/members", {"email": mail, "role": "member"})
             agent = state["agents"].setdefault(f"agent:{tenant}:{name}", {"email": mail, "team": tenant})
             if "token" not in agent or token_expires(agent["token"]) < time.time() + 86400:  # reissue a day early
@@ -111,7 +120,7 @@ def main() -> None:
                     "POST",
                     "/v1/tokens",
                     {
-                        "name": f"agent-{tenant}-{name}",
+                        "name": f"agent-{tenant}-{name}-{int(time.time())}",
                         "team_id": team["id"],
                         "user_email": mail,
                         "expires_in_days": 30,

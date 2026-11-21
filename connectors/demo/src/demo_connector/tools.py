@@ -29,6 +29,7 @@ from fastmcp.tools.base import Tool, ToolResult
 from pydantic import Field
 from pydantic.json_schema import SkipJsonSchema
 
+from gxg_connector_kit import TokenError
 from gxg_connector_kit.errors import GxgError
 from gxg_connector_kit.grants import GrantResolver
 from gxg_connector_kit.identity import IdentityVerifier, VerifiedIdentity
@@ -93,6 +94,8 @@ class DemoTool(Tool):
             return ToolResult(structured_content=content)
         except GxgError as exc:
             entry["outcome"] = exc.code
+            if isinstance(exc, TokenError):  # why the identity was refused: unknown kid alerts (SEC-03); no token text
+                entry["reason"] = exc.reason
             return ToolResult(structured_content=exc.to_dict(), is_error=True)
         except Exception as exc:  # MCC-05 envelope; the text may hold provider secrets (SEC-18): class and frames only
             entry |= {"outcome": "internal_error", "error": type(exc).__name__}

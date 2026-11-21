@@ -19,7 +19,7 @@
 
 Проверено на dev-стенде M5 (2026-11-21, [stand/README.md](../../stand/README.md), [отчёт](../../reports/conformance/M5.json)). Встроенный плагин `unified_pdp` ContextForge v1.1.1: движок `native`, `default_decision: deny`, `combination_mode: all_must_allow`, кеш решений выключен. Правила — точный email агента × точное имя tool ([`stand/unified_pdp.rules.json`](../../stand/unified_pdp.rules.json)). Плагин стоит перед адаптером identity, поэтому запрещённый вызов не получает и JWS.
 
-- Без правила allow вызов отклоняется (`PDP_DENY`) на `/rpc`, на virtual server и по алиасу. До коннектора он не доходит (по аудиту `demo`).
+- Без правила allow вызов отклоняется (`PDP_DENY`) на `/rpc`, на virtual server (MCP и SSE), по алиасу и на глобальном `/sse`. До коннектора он не доходит (по аудиту `demo`). На SSE ContextForge отвечает на отказ пустым `result: {}` без причины: это не обход, но агент не видит, почему.
 - Глобальный `/mcp` отказывает team-scoped токену агента для любого tool (RBAC `tools.execute`), как в M4.
 - Deny-правило `tools.invoke.*execute*` срабатывает раньше allow. Проверено ошибочным allow на `demo-message-execute` для `t-alpha:reader`.
 - Неизвестный правилам субъект (токен platform admin) отклоняется.

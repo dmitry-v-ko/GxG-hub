@@ -723,7 +723,7 @@ async def test_audit_line_per_call(demo: Demo, caplog: pytest.LogCaptureFixture)
             "outcome": "ok",
         },
         {"request_id": jti(ids[3]), **who, "tool": "demo.note.get", "outcome": "not_found"},
-        {"tool": "demo.boards.list", "outcome": "unauthenticated"},
+        {"tool": "demo.boards.list", "outcome": "unauthenticated", "reason": "missing"},
     ]
     assert len(anonymous) == 36 and anonymous != jti(ids[0])  # a fresh UUID for calls without identity
 
@@ -1026,6 +1026,29 @@ async def test_contextforge_identity_keys_select_the_kit_verifier(env: Env) -> N
             assert await demo.error("demo.notes.search", args, identity={"x-gxg-identity": bad}) == "unauthenticated"
         stub = demo.identity(ALPHA_READER)  # the test issuer is not accepted next to the ContextForge keys
         assert await demo.error("demo.boards.list", identity=stub) == "unauthenticated"
+
+
+async def test_refused_identity_reason_is_audited(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+    """SEC-03: an unknown kid must be visible in the audit (alerting), apart from a missing or forged assertion."""
+    caplog.set_level(logging.INFO, logger="demo_connector")
+    key = Ed25519PrivateKey.generate()
+    settings = dataclasses.replace(
+        env.settings, profile="production", test_issuer_key=None, identity_keys=f"cf-1={public_key(key.public_key())}"
+    )
+    app, connector = server.build(settings, Backend(scan_delay_s=0))
+    claims = jwt.decode(cf_identity(key, "demo.boards.list", {}), options={"verify_signature": False})
+    unknown = jwt.encode(
+        claims, Ed25519PrivateKey.generate(), algorithm="EdDSA", headers={"typ": cf.TYP, "kid": "cf-9"}
+    )
+    forged = cf_identity(Ed25519PrivateKey.generate(), "demo.boards.list", {})
+    async with AsyncExitStack() as stack:
+        http, session = await connect(stack, app)
+        demo = Demo(connector, http, session, env.issuer)
+        for identity in ({"x-gxg-identity": unknown}, {}, {"x-gxg-identity": forged}):
+            assert await demo.error("demo.boards.list", identity=identity) == "unauthenticated"
+    reasons = [(e["outcome"], e.get("reason")) for e in audit_lines(caplog)]
+    assert reasons == [("unauthenticated", "kid"), ("unauthenticated", "missing"), ("unauthenticated", "signature")]
+    assert "eyJ" not in caplog.text  # the reason, never the assertion
 
 
 def test_identity_keys_come_from_the_environment_and_exclude_the_test_issuer() -> None:

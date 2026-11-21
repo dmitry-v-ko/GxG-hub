@@ -63,10 +63,10 @@
 
 | Условие | Результат | Тест |
 | --- | --- | --- |
-| 1. Изоляция tools и servers по team | Агент видит в `tools/list` (`/rpc`, virtual server) только tools своей team. Tool чужой team по имени отклоняется на `/rpc`, `/mcp`, своём и чужом virtual server, до коннектора | `test_sc01_*` |
+| 1. Изоляция tools и servers по team | Агент видит в `tools/list` (`/rpc`, `/sse`, virtual server по MCP и SSE) только tools своей team. Tool чужой team по имени отклоняется на `/rpc`, `/mcp`, `/sse`, своём и чужом virtual server (MCP и SSE), до коннектора | `test_sc01_*` |
 | 2. Проверяемая identity коннектору | Вариант C: `X-GxG-Identity` (EdDSA), `ContextForgeVerifier` кита. Подделка, повтор, чужой ключ, `aud`, `iss`, tool, аргументы, истёкший — `unauthenticated` до backend'а. Identity из аргументов, заголовков и `_meta` агента не действует | `test_sc03_*`, `test_sc04_*`, `test_mc04_*` |
 | 3. Запрет вызова скрытых tools | Скрытый tool (чужой team, исходное имя после алиаса, `*execute*`) по имени не вызывается | `test_sc01_*`, `test_sc08_*` |
-| 4. `unified_pdp` deny by default на всех путях | Встроенный `unified_pdp` (движок `native`, `default_decision: deny`). Вызов без правила allow → `PDP_DENY` на `/rpc`, virtual server и алиасе. Глобальный `/mcp` отказывает team-scoped токену всегда. Правило запрета `*execute*` бьёт ошибочный allow | `test_sc01_hidden_tool_and_default_deny_on_every_path` |
+| 4. `unified_pdp` deny by default на всех путях | Встроенный `unified_pdp` (движок `native`, `default_decision: deny`). Вызов без правила allow → `PDP_DENY` на `/rpc`, virtual server, алиасе и SSE (`/sse`, `/servers/{id}/sse`; там отказ приходит пустым `result: {}` без причины, вызов до коннектора не доходит). Глобальный `/mcp` отказывает team-scoped токену всегда. Правило запрета `*execute*` бьёт ошибочный allow | `test_sc01_hidden_tool_and_default_deny_on_every_path` |
 
 Запасной вариант ADR-0002 (ToolHive) не нужен. Известные ограничения v1.1.1, не влияющие на GO: ContextForge сам проверяет аргументы по `inputSchema` и отвечает `-32603` вместо `invalid_input`. Отзыв токена агента действует через `AUTH_CACHE_REVOCATION_TTL` (≥ 5 с). Вопросы владельцу — [reports/M5-ESCALATION.md](../../reports/M5-ESCALATION.md). Для production версия одобряется отдельно (SEC-22): нужны secret store для ключа адаптера, общий store `jti`, правила `unified_pdp` из реестра платформы.
 

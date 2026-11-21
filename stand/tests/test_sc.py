@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import json
-import shutil
 import subprocess
-import sys
 import time
-from pathlib import Path
+from datetime import datetime, timedelta
 from typing import Any
 
+import init
 import jwt
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from standlib import (
@@ -20,7 +20,6 @@ from standlib import (
     NET_CONNECTORS,
     NET_EDGE,
     PROBE_IMAGE,
-    REPO,
     SECRETS,
     Stand,
     denied,
@@ -53,8 +52,11 @@ def test_sc01_each_agent_lists_only_its_team_tools(stand: Stand) -> None:
     for agent in (ALPHA_READER, ALPHA_NOBODY, BETA_READER, BETA_NOBODY):
         tenant = stand.state["agents"][agent]["team"]
         own = {stand.tool(tenant, t) for t in ("demo.boards.list", "demo.notes.search", "demo.note.get")}
-        assert {t["name"] for t in stand.tools(agent)} == own | ({execute} if tenant == "t-alpha" else set()), agent
-        assert {t["name"] for t in stand.tools(agent, stand.paths(agent)["virtual_server"])} == own, agent
+        paths = stand.paths(agent)
+        for path in ("/rpc", paths["sse"]):
+            assert {t["name"] for t in stand.tools(agent, path)} == own | ({execute} if tenant == "t-alpha" else set())
+        for path in (paths["virtual_server"], paths["virtual_server_sse"]):
+            assert {t["name"] for t in stand.tools(agent, path)} == own, (agent, path)
 
 
 def test_sc01_other_team_tool_is_refused_by_name_on_every_path(stand: Stand) -> None:
@@ -82,17 +84,20 @@ def test_sc01_hidden_tool_and_default_deny_on_every_path(stand: Stand) -> None:
         if name == "mcp":
             continue  # global /mcp refuses every team-scoped agent token (test_sc01_global_mcp_refuses_agents)
         for tool, args in ((search, {"query": "status"}), (get, {"note_id": note_of("t-alpha", "a-public")})):
-            assert "PDP_DENY" in denied(stand.call(ALPHA_NOBODY, tool, args, path=path)), (name, tool)
+            why = denied(stand.call(ALPHA_NOBODY, tool, args, path=path))
+            # SSE carries no reason (result {}); that the call never reached demo is checked on the audit below
+            assert "PDP_DENY" in why or (name.endswith("sse") and why), (name, tool, why)
         assert ok(stand.call(ALPHA_NOBODY, stand.tool("t-alpha", "demo.boards.list"), path=path)) == {"boards": []}
     # the rules allow demo-message-execute to t-alpha:reader by mistake; the deny rule wins (EFF-02)
     resp = stand.call(ALPHA_READER, alpha["execute"]["name"])
     assert "PDP_DENY" in denied(resp) and "EFF-02" in denied(resp), resp
+    assert denied(stand.call(ALPHA_READER, alpha["execute"]["name"], path="/sse"))
     # an agent missing from the rules (here: platform admin's own token) is refused too
     admin = stand.admin().headers["Authorization"].split()[1]
     resp = stand.call(ALPHA_READER, stand.tool("t-alpha", "demo.boards.list"), token=admin)
     assert denied(resp), resp
     got = [(a["tool"], a["principal"]) for a in reached(stand, before)]
-    assert got == [("demo.boards.list", ALPHA_NOBODY)] * 2, got  # only the two allowed list calls
+    assert got == [("demo.boards.list", ALPHA_NOBODY)] * 4, got  # only the allowed list calls, one per path
 
 
 def test_sc01_alias_and_original_name(stand: Stand) -> None:
@@ -100,10 +105,11 @@ def test_sc01_alias_and_original_name(stand: Stand) -> None:
     before = len(stand.audit())
     alias = stand.tool("t-alpha", "demo.boards.list")
     assert alias == "demo-t-alpha-alpha-boards"
-    for path in ("/rpc", stand.paths(ALPHA_READER)["virtual_server"]):
+    paths = stand.paths(ALPHA_READER)
+    for path in ("/rpc", "/sse", paths["virtual_server"], paths["virtual_server_sse"]):
         assert [b["id"] for b in ok(stand.call(ALPHA_READER, alias, path=path))["boards"]] == ["a-public", "a-sales"]
         assert denied(stand.call(ALPHA_READER, "demo-t-alpha-demo-boards-list", path=path))
-    assert [a["tool"] for a in reached(stand, before)] == ["demo.boards.list"] * 2
+    assert [a["tool"] for a in reached(stand, before)] == ["demo.boards.list"] * 4
 
 
 def test_sc01_global_mcp_refuses_agents(stand: Stand) -> None:
@@ -141,7 +147,27 @@ def test_sc02_anonymous_expired_and_foreign_tokens(stand: Stand) -> None:
         for path in paths:
             status, resp = stand.rpc(path, "tools/call", {"name": tool, "arguments": {}}, token=token)
             assert status == 401, (name, path, status, resp)
+        for sse in ("/sse", stand.paths(ALPHA_READER)["virtual_server_sse"]):  # the stream itself is refused
+            with stand.http.stream("GET", sse, headers=stand.headers(token)) as r:
+                assert r.status_code == 401, (name, sse, r.status_code)
     assert reached(stand, before) == []
+
+
+def test_sc02_agents_cannot_log_in_with_a_password(stand: Stand) -> None:
+    """SEC-02: an agent's only credential is its token. No shared or known password lets anyone log in as an
+    agent and mint more tokens (bootstrap.py gives each agent a random password it never keeps)."""
+    admin = stand.admin()
+    tool = stand.tool("t-alpha", "demo.boards.list")
+    try:
+        for agent in stand.state["agents"].values():
+            for password in (stand.env["DEFAULT_USER_PASSWORD"], stand.env["PLATFORM_ADMIN_PASSWORD"]):
+                r = stand.http.post("/v1/auth/login", json={"email": agent["email"], "password": password})
+                assert r.status_code in (400, 401, 403, 423), (agent["email"], r.status_code)
+                assert "access_token" not in r.text
+    finally:  # failed logins count towards ContextForge's account lockout; the stand tests must not pile them up
+        for agent in stand.state["agents"].values():
+            admin.post(f"/v1/auth/email/admin/users/{agent['email']}/unlock")
+    assert ok(stand.call(ALPHA_READER, tool))["boards"]  # the agent's token still works
 
 
 # SC-03 ------------------------------------------------------------------------------------------
@@ -166,7 +192,8 @@ def test_sc03_identity_in_arguments_headers_and_meta_changes_nothing(stand: Stan
         ("demo.note.get", {"note_id": note_of("t-alpha", "a-public")}),
         ("demo.note.get", {"note_id": note_of("t-beta", "b-ops")}),
     ]
-    for path in ("/rpc", stand.paths(ALPHA_READER)["virtual_server"]):
+    paths = stand.paths(ALPHA_READER)
+    for path in ("/rpc", paths["virtual_server"], "/sse", paths["virtual_server_sse"]):
         for upstream, args in calls:
             tool = stand.tool("t-alpha", upstream)
             before = len(stand.audit())
@@ -200,7 +227,7 @@ def test_sc04_bad_identity_is_refused_by_the_connector_before_the_backend(stand:
         "garbage": {"X-GxG-Identity": "W10.e30.AA"},
         "test issuer header": {"X-GxG-Test-Identity": stand.sign()},
     }
-    calls_before = stand.backend_calls()
+    calls_before, audit_before = stand.backend_calls(), len(stand.audit())
     replies = stand.direct(NET_CONNECTORS, [(h, params) for h in cases.values()])
     results = dict(zip(cases, replies, strict=True))
     assert ok(results.pop("valid (control)"))["boards"] == [
@@ -210,6 +237,23 @@ def test_sc04_bad_identity_is_refused_by_the_connector_before_the_backend(stand:
     for name, resp in results.items():
         assert gxg_error(resp) == UNAUTH, (name, resp)
     assert stand.backend_calls() == calls_before + 1  # only the control reached the backend
+    # the refusal reason is audited (SEC-03: an unknown kid must be alertable), never the assertion itself
+    reasons = dict(zip(cases, [a.get("reason") for a in stand.audit()[audit_before:]], strict=True))
+    assert reasons == {
+        "valid (control)": None,
+        "replayed": "replay",
+        "forged signature": "signature",
+        "unknown kid": "kid",
+        "expired": "exp",
+        "too long ttl": "ttl",
+        "other issuer": "iss",
+        "other audience": "aud",
+        "other tool": "tool",
+        "other arguments": "ahs",
+        "sub of another tenant": "principal",
+        "garbage": "malformed",
+        "test issuer header": "missing",
+    }, reasons
 
 
 # SC-05 ------------------------------------------------------------------------------------------
@@ -483,43 +527,52 @@ def _restart_demo(stand: Stand) -> None:
     raise AssertionError("demo did not come back")
 
 
-def test_sc10_invalid_or_stale_bundle_means_not_ready_and_refused(stand: Stand, tmp_path: Path) -> None:
-    bundle = SECRETS / "bundle"
-    saved = tmp_path / "bundle"
-    shutil.copytree(bundle, saved)
+def _bundle(built_at: str | None = None) -> None:
+    """Re-sign the stand bundle (stand/init.py's builder), optionally with an old `built_at`."""
+    seed = base64.urlsafe_b64decode((SECRETS / "bundle.seed").read_text() + "=")
+    init.build_bundle(seed, SECRETS / "bundle", built_at)
+
+
+def _not_ready_reasons(stand: Stand, since: str) -> list[str]:
+    """Reasons of demo's not_ready log lines since `since` (/readyz keeps them out of its body: MCC-09)."""
+    out = sh("docker", "compose", "logs", "--no-log-prefix", "--since", since, "demo")
+    lines = [json.loads(ln) for ln in out.splitlines() if ln.startswith('{"event": "not_ready"')]
+    return [r for ln in lines for r in ln["reasons"]]
+
+
+def _ago(seconds: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - seconds))
+
+
+def test_sc10_invalid_rolled_back_or_stale_bundle_means_not_ready_and_refused(stand: Stand) -> None:
+    """GR-12 invalid signature, GR-13a rollback, GR-13 older than 24 h: each one not ready for its own reason,
+    every call refused before the backend."""
     tool = stand.tool("t-alpha", "demo.boards.list")
     unavailable = {"code": "temporarily_unavailable", "retryable": True}
-    try:
-        # invalid: signature of another key
-        sig = bundle / "grants-bundle.json.sig"
-        sig.write_text(sig.read_text()[::-1])
+    sig = SECRETS / "bundle" / "grants-bundle.json.sig"
+
+    def refused(reason: str) -> None:
+        since = _ago(1)
         _restart_demo(stand)
         assert stand.readyz() == 503
+        assert any(reason in r for r in _not_ready_reasons(stand, since)), (reason, _not_ready_reasons(stand, since))
         before = stand.backend_calls()
         err = gxg_error(stand.call(ALPHA_READER, tool))
         assert err and {k: err[k] for k in unavailable} == unavailable, err
         assert stand.backend_calls() == before
-        # stale: correctly signed, built 25 h ago (GR-13)
-        shutil.rmtree(bundle)
-        subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                "import sys; sys.path.insert(0, 'stand'); import init, base64, time;"
-                "seed = base64.urlsafe_b64decode((init.SECRETS / 'bundle.seed').read_text() + '=');"
-                "init.build_bundle(seed, init.SECRETS / 'bundle', time.strftime('%Y-%m-%dT%H:%M:%SZ',"
-                " time.gmtime(time.time() - 25 * 3600)))",
-            ],
-            cwd=REPO,
-            check=True,
-        )
-        _restart_demo(stand)
-        assert stand.readyz() == 503
-        err = gxg_error(stand.call(ALPHA_READER, tool))
-        assert err and {k: err[k] for k in unavailable} == unavailable, err
+
+    try:
+        sig.write_text(sig.read_text()[::-1])  # a signature that does not verify
+        refused("no valid grants bundle: ")
+        loaded = datetime.fromisoformat(json.loads((SECRETS / "bundle" / "grants-bundle.json").read_text())["built_at"])
+        _bundle((loaded - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"))  # a minute older than the loaded one
+        refused("rollback")
+        # without the rollback floor the same kind of bundle, 25 h old, is loaded and then too old
+        stand.in_demo("import os; os.remove('/var/lib/demo/bundle-state.json')")
+        _bundle(_ago(25 * 3600))
+        refused("is older than 24 h (GR-13)")
     finally:
-        shutil.rmtree(bundle, ignore_errors=True)
-        shutil.copytree(saved, bundle)
+        _bundle()
         _restart_demo(stand)
     assert stand.readyz() == 200
     assert ok(stand.call(ALPHA_READER, tool))["boards"]
