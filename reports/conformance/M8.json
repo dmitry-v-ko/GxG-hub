@@ -1,0 +1,224 @@
+{
+ "milestone": "M8",
+ "cycle": 1,
+ "branch": "claude/m8-executor",
+ "base": "3c2f0b0 (origin/claude/integration)",
+ "commit": "a01c564",
+ "run_at": "2026-11-21",
+ "author": "M8 milestone owner (Claude)",
+ "plan": "reports/plans/M8-cycle-1.md",
+ "environment": "cloud container, 4 cores; PostgreSQL 16.6 (postgres:16.6-alpine, --network none, Unix socket); Docker 29.10 (dockerd started by hand); Python 3.13.18 (uv venv, requires-python >= 3.12)",
+ "contextforge_image_digest": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
+ "sdk_versions": {
+  "mcp": "2.3.0",
+  "fastmcp": "4.1.8"
+ },
+ "tool_versions": {
+  "mutmut": "3.8.1",
+  "httpx": "0.28.1",
+  "httpx2": "2.16.2",
+  "psycopg": "3.3.9",
+  "fastapi": "0.165.0",
+  "pyjwt": "2.15.1",
+  "cryptography": "46.0.7",
+  "pynacl": "1.6.2",
+  "uvicorn": "0.54.0"
+ },
+ "policy_version": "test bundles built in the tests (bundle_version e*40 / git HEAD on the stand)",
+ "bundle_version": "tests: generated per test; stand: commit of the run",
+ "fixture_identity": "test issuer (GXG_PROFILE=test) in approval/tests_db and connectors/demo/tests; ContextForge gxg_identity adapter on the stand",
+ "acceptance": [
+  {
+   "id": "AC-M8-01",
+   "status": "passed",
+   "expected": "propose → auto-approve → executor → demo → provider; effects.status = succeeded ≤ 10 s; journal 1 row, same idempotency_key and text_hash",
+   "actual": "succeeded via the approval MCP facade (effects.status) in ~1 s; journal 1 row ok, idempotency_key cand-1:v1, text_hash = sha256(text); attempts 1; receipt stored; executed event and gxg_executions_total +1",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so",
+    "approval/tests_db/test_executor.py::test_human_approval_path"
+   ]
+  },
+  {
+   "id": "AC-M8-02",
+   "status": "passed",
+   "expected": "50 approved intents, 10 executors, no_dedupe, provider 200 ms → 50 journal rows, one per key (EX-10)",
+   "actual": "50 rows, keys race-0000…0049 once each, all ok; executions 50; reserved_by > 1 instance (real threads, one PostgreSQL)",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac02_50_intents_10_executors_no_dedupe_one_call_each"
+   ]
+  },
+  {
+   "id": "AC-M8-03",
+   "status": "passed",
+   "expected": "9 invalid execution tokens (AC-M1-03) on execute → 401, provider 0, no dispatch (EX-03)",
+   "actual": "foreign signature, unknown kid, iss, aud, exp −6 s, iat +10 s, missing idk, alg none, replayed jti → 401 unauthenticated each; no service JWT → 401; provider 0; no dispatch audit; execution still reserved",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac03_invalid_execution_tokens_are_401_without_dispatch",
+    "connectors/demo/tests/test_effects.py::test_replay_of_a_refused_token_is_401"
+   ]
+  },
+  {
+   "id": "AC-M8-04",
+   "status": "passed",
+   "expected": "repeat execute with the same token after success → 409, provider unchanged (EX-04)",
+   "actual": "409 conflict 'execution token already used'; a second dispatch with the token → refused (api jti cache / CAS); provider 1 call; 1 dispatch",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac04_replay_after_success_is_409_and_the_provider_is_called_once",
+    "connectors/demo/tests/test_effects.py::test_execute_dispatches_then_calls_the_provider_once"
+   ]
+  },
+  {
+   "id": "AC-M8-05",
+   "status": "passed",
+   "expected": "one changed character of text or the recipient → 422, provider 0 (EX-05)",
+   "actual": "422 invalid_input for text and recipient; provider 0; no dispatch",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac05_changed_args_are_422[text]",
+    "approval/tests_db/test_executor.py::test_ac05_changed_args_are_422[recipient]",
+    "connectors/demo/tests/test_effects.py::test_execute_refusals_before_dispatch"
+   ]
+  },
+  {
+   "id": "AC-M8-06",
+   "status": "passed",
+   "expected": "commit_then_drop → outcome_unknown, reconcile → reconciled_succeeded; provider 1 (EX-11)",
+   "actual": "audit complete_outcome_unknown then reconcile_executed; execution reconciled_executed; provider 1 call; no alert",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac06_commit_then_drop_is_unknown_then_reconciled_succeeded"
+   ]
+  },
+  {
+   "id": "AC-M8-07",
+   "status": "passed",
+   "expected": "kill the connector process after dispatch, before its answer → outcome_unknown within dispatch_timeout_s + 30 s; no new provider calls (T14)",
+   "actual": "demo in its own process, provider answer delayed 30 s, SIGKILL after dispatch: executor sees the broken connection → outcome_unknown (T13) at once; reconcile while down → unknown with backoff (1 h for 2 h waited); connector back → reconciled_succeeded; provider 1 call. Executor dead too: dispatch lease 90 s (60 + 30) → sweeper T14 → outcome_unknown",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac07_connector_killed_after_dispatch",
+    "approval/tests_db/test_executor.py::test_ac07_t14_when_the_executor_dies_too"
+   ]
+  },
+  {
+   "id": "AC-M8-08",
+   "status": "passed",
+   "expected": "timeout_before_start ×2 then ok → succeeded, attempts 3, same idempotency_key; max_attempts 2 → failed (EX-12, EX-23)",
+   "actual": "outcomes [timeout_before_start, timeout_before_start, ok], 3 execution ids, attempts 3, succeeded; with max_attempts 2 (set in test setup, see pending_owner_decision) → failed, attempts 2, 2 calls",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac08_timeout_before_start_twice_then_ok",
+    "approval/tests_db/test_executor.py::test_ac08_max_attempts_2_ends_failed"
+   ]
+  },
+  {
+   "id": "AC-M8-09",
+   "status": "passed",
+   "expected": "executor dies between reserve and dispatch → after 60 s released, intent approved, then executed; attempts counts dispatch only (T10)",
+   "actual": "reserve lease 60 s; after it the sweeper releases (T10); executions [(1, released), (2, succeeded)]; attempts 1; provider 1",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac09_executor_dies_between_reserve_and_dispatch"
+   ]
+  },
+  {
+   "id": "AC-M8-10",
+   "status": "passed",
+   "expected": "kill switch tenant:t-alpha after reserve, before dispatch → dispatch 423, provider not called; t-beta runs (EX-13)",
+   "actual": "execute → 423 effect_disabled; the executor's attempt → T12a; t-beta succeeded; t-alpha waits (T7 423, outbox row kept with backoff, 1 deferral); switch cleared → succeeded",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac10_kill_switch_after_reserve_before_dispatch"
+   ]
+  },
+  {
+   "id": "AC-M8-11",
+   "status": "passed",
+   "expected": "propose grant revoked (new bundle) between approve and execute → connector refuses, provider not called (EX-14)",
+   "actual": "new bundle without propose: 403 permission_denied, error_code http_403, provider 0, no dispatch; demo picks up the bundle file before the grant check",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac11_propose_grant_revoked_between_approve_and_execute",
+    "connectors/demo/tests/test_effects.py::test_execute_refreshes_the_bundle_before_the_grant_check"
+   ]
+  },
+  {
+   "id": "AC-M8-12",
+   "status": "passed",
+   "expected": "Approval Service down: propose → temporarily_unavailable, no intent; execute without dispatch → no provider call (EX-16)",
+   "actual": "api stopped: propose → temporarily_unavailable (retryable), intents unchanged; execute → 503, provider 0, execution reserved",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac12_approval_service_unavailable",
+    "connectors/demo/tests/test_effects.py::test_propose_when_the_approval_service_is_down",
+    "connectors/demo/tests/test_effects.py::test_execute_when_dispatch_is_unreachable"
+   ]
+  },
+  {
+   "id": "AC-M8-13",
+   "status": "passed",
+   "expected": "through ContextForge the agent does not see demo.message.execute in tools/list; a call by name is refused (EX-01)",
+   "actual": "M5 stand (ContextForge v1.1.1 by digest), 4 agents × 5 paths: no *execute*/*reconcile* listed; 5 name forms × 4 agents × 5 paths refused, nothing reached demo; a probe tool registered for the test is denied by unified_pdp (PDP_DENY, EFF-02) and deleted",
+   "tests": [
+    "stand/tests/test_ex.py::test_ex01_no_agent_lists_execute_on_any_path",
+    "stand/tests/test_ex.py::test_ex01_calls_by_name_are_refused_on_every_path",
+    "stand/tests/test_ex.py::test_ex01_unified_pdp_denies_a_registered_execute_tool",
+    "stand/tests/test_ex.py::test_ex01_probe_is_gone_after_the_test"
+   ]
+  },
+  {
+   "id": "AC-M8-14",
+   "status": "passed",
+   "expected": "key rotation without downtime: new kid accepted ≤ 10 min after publication; removed compromised kid refused ≤ 10 min (EX-24)",
+   "actual": "keys rotate: JWKS {old,new}, executor keeps old until not_before (+15 min); connector cache before 10 min → refused (401, no call), at 10 min → accepted; keys remove: api refuses at once (dispatch → 409 at the connector), connector at its 10 min refetch (401); AS-10 release of reserved executions; clock skew 4 s / 10 s covered by the kit (AC-M1-03)",
+   "tests": [
+    "approval/tests_db/test_executor.py::test_ac14_rotation_without_downtime_and_removal_of_a_compromised_kid",
+    "approval/tests_db/test_executor.py::test_ac14_removed_kid_is_refused_at_dispatch_at_once_and_by_the_connector_within_10_min",
+    "approval/tests/test_keys.py",
+    "connectors/demo/tests/test_effects.py::test_jwks_cache_follows_the_injected_clock"
+   ]
+  }
+ ],
+ "new_scope_from_m7": [
+  {
+   "item": "idempotency across requesters (M7-final #2)",
+   "status": "done",
+   "evidence": "intents.py: another requester's key → 409 conflict, same body as a hash conflict, no data of the other intent; approval/tests_db/test_propose.py::test_another_requesters_key_is_a_conflict_without_its_intent (two agents of t-alpha); AC-M7-04 for one requester unchanged (test_idempotent_repeat, 50 parallel). DDL UNIQUE (tenant_id, requester_principal, idempotency_key) not changed: pending_owner_decision"
+  },
+  {
+   "item": "T2 window mutant (M7-final #3)",
+   "status": "done",
+   "evidence": "test_state_machine.py::test_t2_deadline_is_the_window_frozen_at_t1 (window 10 min, later policy 20 min ignored); mutant `interval '1 hour'` in scripts/ci/mutate_m7_sql.py → killed"
+  }
+ ],
+ "dod": {
+  "DoD-1": "PR to main not created (instruction); GitHub CI not confirmed (runners); every CI step reproduced locally (self_check.check_all)",
+  "DoD-2": "all 14 AC by automated tests (AC-M8-13 on the live stand)",
+  "DoD-3": "this file",
+  "DoD-4": "mutmut on approval (executor, keys + M7 modules), connectors/demo (effects, provider, server, tools, backend), kit exec_token; SQL mutations of migration 0002 and executor SQL; survivors only listed equivalents (self_check.mutmut)",
+  "DoD-5": "no skip/xfail (repository policy)",
+  "DoD-6": "table in reports/plans/M8-cycle-1.md"
+ },
+ "spec_interpretations": [
+  "AS-12 / AC-M8-03 vs AC-M8-04: a replayed jti is 401, except a jti this connector already dispatched → 409",
+  "AS-12: any non-200 or unusable answer → the execution's state decides: reserved → T12a (attempt counted), dispatching → T13",
+  "AS-10: compromise → `gxg-approval keys remove --compromised` = remove from both files + gxg_release_reserved() (T10 move without lease wait), as the executor DB role",
+  "AS-27: gxg_release_reserved granted to gxg_executor (its row covers T7–T17 incl. T10 move semantics)",
+  "EFF-02 on the stand: no permanent *.execute registration; the PDP deny rule is proven on a probe tool for the duration of one test",
+  "demo reconcile looks up by intent_id (client reference passed to the provider): the reconcile body carries no tenant",
+  "fake provider: records a call when it receives it; slow:<ms> delays only the answer; dedupe per (tenant, idempotency_key)"
+ ],
+ "pending_owner_decision": [
+  "max_attempts per tool («Политика tool», EFF «Сроки»): approval-policy.schema.json has no field; default 3 from the DDL; AC-M8-08 sets the column in test setup",
+  "EFF-08 / DDL: UNIQUE (tenant_id, requester_principal, idempotency_key) instead of (tenant_id, idempotency_key) (key squatting by another agent of the tenant still makes the owner's propose 409)"
+ ],
+ "known_limitations": [
+  "the effect path through ContextForge (propose via CF) is not on the stand: no Approval Service there (plan decision 7)",
+  "executor has no /healthz,/readyz (M7 backlog for workers → M10/M14); refuses to start without key, DB role or valid bundle",
+  "metrics are counters in-process; no metrics endpoint for the executor yet (M10)",
+  "full scripts/ci/mutate_m7_sql.py run (96 rows) not repeated: the 82 M7 rows ran at M7 close on an unchanged 0001 migration; this cycle ran the 14 M8 rows + the 2 touched M7 rows"
+ ],
+ "self_check": {
+  "tests": "uv run pytest → 967 passed, 148 subtests; approval/tests + approval/tests_db on PostgreSQL 16.6 → 429 passed, 0 skipped; connectors/demo 142 passed; kit 375 passed, coverage gate _jwt/canonical/identity 100 % branches",
+  "stand": "stand/run.sh (fresh, after restart, after recreate): 31/33, 33/33, 33/33 — the 2 fresh failures were test_mc expecting the manifest's propose on the read-only stand, fixed before the other runs; re-run on the final demo image: 33/33",
+  "docker_smoke": "connectors/demo/docker_smoke.sh: OK",
+  "lint_types": "ruff check, ruff format --check, mypy --strict (kit, approval, scripts, tests/secrets, conftest+tests/ci, approval/tests_db), mypy (gxg-policy, demo, contract, stand): clean",
+  "mutmut": "see reports/mutmut/M8.txt",
+  "sql_mutations": "reports/mutmut/M8-sql.txt: 14 M8 rows + 2 M7 rows: all killed or listed equivalent (2), 0 not as expected",
+  "gitleaks": "scripts/ci/gitleaks.sh tree HEAD and range 3c2f0b0..HEAD: no leaks found",
+  "ponytail_review": "reports/conformance/M8-cycle-1.self-review.md",
+  "check_all": "uv lock --check ×2, schema_lock, prove_schema_guard 66/66, gxg-policy validate/lint, bundle_smoke, tests/secrets 21 passed, coverage gate — green; GitHub CI not confirmed (runners)"
+ }
+}
