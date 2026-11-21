@@ -41,7 +41,8 @@ NAMES='(?i)(?:^|/)(?!(?-i)\.env\.example$)(?:[^/]*\.(?:pem|key|p12|pfx)|\.env[^/
 
 names() {
   local bad
-  bad="$("$@" | { grep -zP "$NAMES" || true; } | tr '\0' '\n' | sort -u)" || return 2
+  # grep exit 1 (no match) passes; 2 (error, e.g. no -P) fails closed.
+  bad="$("$@" | { grep -zP "$NAMES" || [ $? -eq 1 ]; } | tr '\0' '\n' | sort -u)" || return 2
   [ -z "$bad" ] || { sed 's/^/gitleaks.sh: secret file name: /' <<<"$bad" >&2; return 1; }
 }
 

@@ -8,6 +8,10 @@ conftest.x_pytest_collectreport__mutmut_3: killed
 conftest.x_pytest_collectreport__mutmut_4: killed
 conftest.x_pytest_collectreport__mutmut_5: killed
 conftest.x_pytest_collectreport__mutmut_6: killed
+conftest.x_pytest_runtest_call__mutmut_1: killed
+conftest.x_pytest_runtest_call__mutmut_2: killed
+conftest.x_pytest_runtest_call__mutmut_3: killed
+conftest.x_pytest_runtest_call__mutmut_4: killed
 conftest.x_pytest_runtest_logreport__mutmut_10: killed
 conftest.x_pytest_runtest_logreport__mutmut_11: killed
 conftest.x_pytest_runtest_logreport__mutmut_12: killed

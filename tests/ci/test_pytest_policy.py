@@ -48,6 +48,31 @@ def test_internet_socket_is_blocked(use_network: Callable[[], None]) -> None:
         use_network()
 
 
+_UDP_BLOCKED = (
+    "import socket\nimport pytest\nfrom pytest_socket import SocketBlockedError\n\n{deco}\n"
+    "def test_a({args}):\n    with pytest.raises(SocketBlockedError):\n"
+    "        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:\n"
+    "            s.sendto(b'x', ('192.0.2.1', 9))\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("deco", "args"),
+    [
+        ("@pytest.mark.enable_socket", ""),
+        ("", "socket_enabled"),
+        ("@pytest.mark.allow_hosts(['192.0.2.1'])", ""),
+    ],
+    ids=["enable_socket-marker", "socket_enabled-fixture", "allow_hosts-marker"],
+)
+def test_no_per_test_network_opt_out(pytester: pytest.Pytester, deco: str, args: str) -> None:
+    """AC-M0-01, DoD-5 style: UDP sendto to 192.0.2.1 is blocked even when a test asks for the network."""
+    pytester.makeconftest(CONFTEST)
+    pytester.makepyfile(test_inner=_UDP_BLOCKED.format(deco=deco, args=args))
+    res = pytester.runpytest_inprocess("-q", "-p", "no:cacheprovider", "--disable-socket", "--allow-unix-socket")
+    res.assert_outcomes(passed=1)
+
+
 def _run_inner(pytester: pytest.Pytester, body: str) -> pytest.RunResult:
     # In-process run with the repository conftest, so mutmut sees the code under test.
     pytester.makeconftest(CONFTEST)

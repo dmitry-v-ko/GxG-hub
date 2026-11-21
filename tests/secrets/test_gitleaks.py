@@ -12,6 +12,7 @@ wrapper download it.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -84,8 +85,8 @@ def commit(repo: Path, files: dict[str, str | bytes], message: str, remove: tupl
     return git(repo, "rev-parse", "HEAD")
 
 
-def scan(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["bash", str(SCAN), *args], cwd=repo, capture_output=True, text=True, check=False)
+def scan(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["bash", str(SCAN), *args], cwd=repo, capture_output=True, text=True, check=False, env=env)
 
 
 def assert_red(res: subprocess.CompletedProcess[str], path: str, *secrets: str) -> None:
@@ -226,6 +227,37 @@ def test_key_in_a_merge_commit_fails(repo: Path, keys: dict[str, str]) -> None:
     git(repo, "add", "merged.txt")
     git(repo, "commit", "-q", "-m", "merge with a key in the merge commit only")
     assert_red(scan(repo, "range", f"{base}..HEAD"), "merged.txt", body(keys["ec"]))
+
+
+def test_empty_env_added_only_by_a_merge_commit_fails(repo: Path) -> None:
+    """Only `-m` in the name check's `git log` lists files a merge commit adds itself; gitleaks skips empty files."""
+    base = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", "-b", "side")
+    commit(repo, {"side.txt": "a\n"}, "side")
+    git(repo, "checkout", "-q", "main")
+    commit(repo, {"main.txt": "b\n"}, "main")
+    git(repo, "merge", "-q", "--no-commit", "side")
+    (repo / ".env").write_text("", encoding="utf-8")
+    git(repo, "add", "-f", ".env")
+    git(repo, "commit", "-q", "-m", "merge with an empty .env in the merge commit only")
+    res = scan(repo, "range", f"{base}..HEAD")
+    assert res.returncode == 1, res.stdout + res.stderr
+    assert "gitleaks.sh: secret file name: .env\n" in res.stderr, res.stderr
+
+
+def test_grep_error_in_the_name_check_fails(repo: Path, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """A grep without -P (BSD, busybox) must not turn the name check green: fail closed."""
+    bin_dir = tmp_path_factory.mktemp("bin")
+    fake = bin_dir / "grep"
+    fake.write_text("#!/bin/sh\necho 'grep: invalid option -- P' >&2\nexit 2\n", encoding="utf-8")
+    fake.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+    base = git(repo, "rev-parse", "HEAD")
+    commit(repo, {"notes.txt": "clean\n"}, "clean")  # nothing to find: only the grep error can make it red
+    for args in (("tree",), ("range", f"{base}..HEAD")):
+        res = scan(repo, *args, env=env)
+        assert res.returncode == 1, res.stdout + res.stderr
+        assert "grep: invalid option -- P" in res.stderr, res.stderr
 
 
 # The one quote of the header the repository keeps: the AC-M0-04 row of the plan.
