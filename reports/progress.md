@@ -12,6 +12,7 @@
 | AC-M2-04: метка `widening-approved`, secret подписи bundle, проверка на реальном PR | AC — manual_pending | ничего |
 | Мерж `claude/integration` в `main` | работаем от `claude/integration` | ничего |
 | Approver для пилота M13 | — | только M13 |
+| M7/EFF-08: идемпотентность в пределах tenant, хеш не покрывает requester — другой агент того же tenant получает чужой intent по ключу или занимает ключ (Signals-ключи предсказуемы) | в коде: `requester_principal` ≠ requester → `conflict` (закрывает a, c) — в M8; для (b) поменять в спеке DDL на UNIQUE (tenant_id, requester_principal, idempotency_key) и EFF-08 — решение владельца | M8 (частично) |
 | Доступ к `dmitry-v-ko/gxg_agents_v2` (код KB и Telegram-сервиса) для M6, M11: у оркестратора `add_repo` отклонён | треды M6/M11 пробуют сами; без доступа — fake по контракту из спек, gap-аудит не выполнен | gap-аудит M6, AC-M11-02/03 на реальном сервисе |
 | Тестовый Telegram-аккаунт и тестовые чаты (AC-M11-01) | локальный сервис с fake-транспортом | прогон на реальном тестовом аккаунте |
 | M7: скомпрометированный `ui` может подделать решение через `gxg_decide(p_approver, p_step_up)` | делать по матрице AS-27; закрыть в M9 | M9 |
@@ -136,3 +137,6 @@
 | M5 | final | независимый критик | claude/m5-readonly-poc | d39a1ff | **9.5** | ≥ 9 — **веха закрыта**: GO через ContextForge; 3 major + 3 minor missed_earlier → backlog | 2026-11-21 |
 | M6 | 1 | владелец вехи | claude/m6-kb | — | — | запущен (нужен read-доступ к gxg_agents_v2) | 2026-11-21 |
 | M11 | 1 | владелец вехи | claude/m11-telegram-read | — | — | запущен (нужен read-доступ к gxg_agents_v2; без живых аккаунтов) | 2026-11-21 |
+| M7 | final | независимый критик | claude/m7-approval-core | a843c11 | **9.0** | ≥ 9 — **веха закрыта**; major: затёрты результаты M4 в спеках ветки (missed_earlier, исправлено в ветке оркестратора), идемпотентность между агентами tenant'а (new_scope, вне AC M7 → M8 + вопрос владельцу), окно execution_deadline не под тестом (missed_earlier → backlog) | 2026-11-21 |
+| — | — | оркестратор | claude/admiring-planck-vzys0x | — | — | спеки ветки оркестратора выровнены с результатами M4/M4.1/M5 (ADR-0001 вариант C, SEC-02/03, TEN-01, ADR-0002, Roadmap GO) | 2026-11-21 |
+| — | — | интеграция | claude/integration | — | — | запущен интегратор: M3+M4.1+M5 (claude/m5-readonly-poc) и M7 → integration; затем M8, M9 | 2026-11-21 |
