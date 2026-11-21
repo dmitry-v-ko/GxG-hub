@@ -10,7 +10,7 @@
   "dimensions": {"spec": 3, "tests": 1.5, "security": 1.5, "code": 1.5, "ops": 1, "evidence": 0.5},
   "acceptance": [
     {"id": "AC-M0.1-01", "status": "passed", "evidence": "Clean clone 7e2a984, empty uv cache, Python 3.12.3: uv run pytest tests/secrets -> 19 passed, 150 subtests (43 s); CI run 44886113501 job secrets success. Critic cases via scripts/ci/gitleaks.sh (tree/range exit): empty .env 1/1, empty server.pem 1/1, .envrc 1/1 (empty and with a password), .env-local 1/1, .ENV_PROD 1/1, KEY.PEM 1/1, .ENV 1/1, inline key 1/1, key after KEY= 1/1, UTF-16 1/1, key added and deleted in PR 0/1, empty .env + s.pem added and deleted in PR 0/1, empty .env renamed away 0/1, empty .env merged from a side branch then deleted 0/1, symlink .env 1/1, .ENV.EXAMPLE 1/1, .env.example 0/0; plan-quote cases are in the suite. No key material in output."},
-    {"id": "AC-M0.1-02", "status": "passed", "evidence": "check_secrets.py and its tests stay deleted; the only code outside gitleaks is the owner-approved name check (NAMES + names(), gitleaks.sh:41-47, called at :66 and :79), git ls-tree / git log --name-only + grep -zP, reads no content. It lists names with ls-tree/log instead of the git ls-files named in the decision; needed for 'added and removed in the PR', same intent."},
+    {"id": "AC-M0.1-02", "status": "passed", "evidence": "check_secrets.py and its tests stay deleted; the only code outside gitleaks is the owner-approved name check (NAMES + names(), gitleaks.sh:41-47, called at :66 and :83), git ls-tree / git log --name-only + grep -zP, reads no content. It lists names with ls-tree/log instead of the git ls-files named in the decision; needed for 'added and removed in the PR', same intent."},
     {"id": "AC-M0.1-03", "status": "passed", "evidence": "scripts/ci/mutmut.sh in clean clone -> 'mutmut: all mutants killed', 631/631, exit 0, 47 s; result list identical to reports/mutmut/M0.1.txt; no tests_dir deprecation warning."},
     {"id": "AC-M0.1-04", "status": "passed", "evidence": "prove_schema_guard.py unchanged in logic (help text only); confirmed in cycle 1; 59/59 in clean clone and in CI job schema-guard."},
     {"id": "AC-M0-01", "status": "passed", "evidence": "uv sync --locked && uv run pytest -> 103 passed, 136 subtests, 0 skipped; again under unshare -rn with uv run --offline -> 103 passed. New ad-hoc test with UDP sendto to 192.0.2.1:9 -> SocketBlockedError (red). --force-enable-socket -> the 5 network tests fail. Opt-out via enable_socket marker possible (finding 3)."},
@@ -19,7 +19,7 @@
   ],
   "ci": {"run_id": 44886113501, "commit": "7e2a984017cbd63b07ab488831db447a3994cc7c", "ci_ok": "success", "jobs": "lint, types, tests, schema-guard, secrets, mutmut, ci-ok: success", "wall_time": "66 s", "note": "run 44820634977 on f78e6b3 was cancelled by the next push (concurrency); 44820402301 on 9583bd6 (tested code) success"},
   "findings": [
-    {"severity": "major", "ref": "review #1; AC-M0-04 x M0 merge-commit regression; DoD-4 spirit", "where": "scripts/ci/gitleaks.sh:79 (-m in the name-check git log)",
+    {"severity": "major", "ref": "review #1; AC-M0-04 x M0 merge-commit regression; DoD-4 spirit", "where": "scripts/ci/gitleaks.sh:83 (-m in the name-check git log)",
      "problem": "Risky security logic without a test: removing -m from the name check leaves tests/secrets fully green (19 passed, 150 subtests), yet without it a PR whose merge commit alone adds an empty .env goes green (range exit 0; with -m exit 1). gitleaks cannot see empty files, so this line is the only defence.",
      "required_improvement": "Add a test: merge commit that adds only an empty .env -> range red with 'gitleaks.sh: secret file name: .env'. Confirm it fails with -m removed."},
     {"severity": "minor", "ref": "review #2; security: fail closed", "where": "scripts/ci/gitleaks.sh:44",
@@ -44,7 +44,7 @@
     {"component": "conftest.py skip/xfail policy (DoD-5)", "alternative": "xfail_strict / pytest-error-for-skips miss collection-time skips and XPASS; unchanged", "verdict": "justified_custom"}
   ],
   "required_improvements": [
-    "Add a tests/secrets case: a PR range whose merge commit alone adds an empty .env must be red with 'gitleaks.sh: secret file name: .env'; verify it fails when -m is removed from the name-check git log (scripts/ci/gitleaks.sh:79).",
+    "Add a tests/secrets case: a PR range whose merge commit alone adds an empty .env must be red with 'gitleaks.sh: secret file name: .env'; verify it fails when -m is removed from the name-check git log (scripts/ci/gitleaks.sh:83).",
     "Make the name check fail closed on a grep error: replace `grep -zP \"$NAMES\" || true` with `grep -zP \"$NAMES\" || [ $? -eq 1 ]` (scripts/ci/gitleaks.sh:44).",
     "Re-run tests/secrets and CI; update reports/conformance/M0.1.json."
   ],
