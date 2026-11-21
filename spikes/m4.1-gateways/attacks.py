@@ -37,7 +37,7 @@ META_KEY = "gxg.dev/identity"  # where the ToolHive webhook variant puts the JWS
 META = {
     "user": {"id": "analyst@t-beta.spike.example.com", "teams": ["t-beta"], "is_admin": True},
     "tenant_id": "t-beta",
-    META_KEY: FORGED["X-GxG-Identity"],
+    META_KEY: "forged-by-client",  # not JWT-shaped: Docker MCP Gateway's secret scan blocks JWT-looking results
 }
 ARGS = {"text": "hi", "tenant_id": "t-beta", "principal": "agent:t-beta:analyst"}
 HOP = {"host", "content-length", "connection", "accept-encoding", "user-agent", "x-spike-attack"}
@@ -120,10 +120,13 @@ def run_replay(delay=65):
     retooled["params"]["name"] = "delete_all"
     spike.record("replay_other_tool", status=send(retooled, hdrs, "replay_other_tool"))
     meta = cap["body"]["params"].get("_meta") or {}
-    real = meta.get(META_KEY) or next((v for k, v in hdrs.items() if k.lower() == "x-gxg-identity"), None)
+    accepted = "accepted" in (cap.get("verdict") or {})  # a client-forged _meta value is not "the real one"
+    real = (meta.get(META_KEY) if accepted else None) or next(
+        (v for k, v in hdrs.items() if k.lower() == "x-gxg-identity"), None
+    )
     if real:  # forged JWS in the same place the real one came: _meta (webhook variant) or the header
         forged, h = json.loads(json.dumps(cap["body"])), {"X-GxG-Identity": spike.forged_jws(real)}
-        if META_KEY in meta:
+        if accepted and META_KEY in meta:
             forged["params"]["_meta"][META_KEY] = h.pop("X-GxG-Identity")
         spike.record("forged_jws_attacker_key", status=send(forged, h, "forged_jws_attacker_key"))
     time.sleep(delay)
