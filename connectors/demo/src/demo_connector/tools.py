@@ -15,6 +15,7 @@ import logging
 import re
 import secrets
 import time
+import traceback
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
@@ -40,6 +41,7 @@ DOMAIN, RTYPE = "demo", "board"
 EXCERPT_MAX = 500
 SEARCH_BUDGET_S = 15.0  # scan stops here with `source_timeout`, before the tool timeout (20 s, manifest)
 audit = logging.getLogger("demo_connector.audit")
+errors = logging.getLogger("demo_connector.errors")  # stack frames of internal errors; main() sends them to stderr
 
 Result = tuple[dict[str, Any], dict[str, Any]]  # (structuredContent, audit fields)
 Handler = Callable[[VerifiedIdentity, dict[str, Any]], Awaitable[Result]]
@@ -86,8 +88,10 @@ class DemoTool(Tool):
         except GxgError as exc:
             entry["outcome"] = exc.code
             return ToolResult(structured_content=exc.to_dict(), is_error=True)
-        except Exception:  # MCC-05 envelope; the text may hold provider secrets (SEC-18)
-            entry["outcome"] = "internal_error"
+        except Exception as exc:  # MCC-05 envelope; the text may hold provider secrets (SEC-18): class and frames only
+            entry |= {"outcome": "internal_error", "error": type(exc).__name__}
+            frames = "\n".join(f"{f.filename}:{f.lineno} in {f.name}" for f in traceback.extract_tb(exc.__traceback__))
+            errors.error("internal_error %s %s\n%s", entry["request_id"], entry["error"], frames)
             return ToolResult(structured_content=GxgError("internal_error", "internal error").to_dict(), is_error=True)
         finally:
             entry["duration_ms"] = round((time.monotonic() - started) * 1000)
@@ -157,20 +161,15 @@ class Connector:
         if requested is not None and any(b not in readable for b in requested):
             raise GxgError("not_found", NOT_FOUND)  # GR-17: a named board without a grant
         boards = sorted(set(requested) if requested is not None else readable)
-        if not boards:  # GR-16, MCC-06: nothing readable, no backend call (an empty filter may mean "all")
-            empty: dict[str, Any] = {
-                "items": [],
-                "next_cursor": None,
-                "complete": True,
-                "partial_reasons": [],
-                "source_refs": [],
-            }
-            return empty, {"grant_id": [], "method": None}
         binding = json.dumps([ident.tenant_id, ident.principal, query, boards, limit]).encode()
         cursor = args.get("cursor")
         offset = 0 if cursor is None else self._offset(binding, cursor)
-        notes, method, timed_out = await self.backend.search(
-            ident.tenant_id, boards, query, deadline=time.monotonic() + self.search_budget_s
+        # GR-16, MCC-06: nothing readable, no backend call (an empty filter may mean "all")
+        deadline = time.monotonic() + self.search_budget_s
+        notes, method, timed_out = (
+            await self.backend.search(ident.tenant_id, boards, query, deadline=deadline)
+            if boards
+            else ([], None, False)
         )
         # GR-16: every item is checked again, whatever the backend returned.
         grant_ids: set[str] = set()

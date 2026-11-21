@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,7 +32,7 @@ from gxg_connector_kit.grants import BundleError, BundleStore
 from gxg_connector_kit.identity import IdentityVerifier, StubVerifier, VerifiedIdentity
 
 from .backend import Backend
-from .tools import Connector
+from .tools import Connector, errors
 
 BUNDLE_FILE, SIG_FILE = "grants-bundle.json", "grants-bundle.json.sig"  # GR-11a
 CONNECTOR_ID = "demo"  # `aud` of identity assertions; id in the platform registry
@@ -152,22 +153,37 @@ def build(settings: Settings, backend: Backend | None = None) -> tuple[Starlette
     return create_app(connector, verifier, files.refresh, store), connector
 
 
+def configs(settings: Settings, app: Starlette, connector: Connector) -> list[uvicorn.Config]:
+    out = [uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")]  # noqa: S104
+    if settings.test_controls:
+        from .testctl import create_app as test_app  # noqa: PLC0415 - absent in the production image
+
+        out.append(uvicorn.Config(test_app(connector.backend), host="127.0.0.1", port=8090))
+    return out
+
+
+def serve(configs: list[uvicorn.Config]) -> None:
+    """Blocks until shut down."""
+
+    async def run() -> None:
+        await asyncio.gather(*(uvicorn.Server(c).serve() for c in configs))
+
+    asyncio.run(run())
+
+
 def main(env: Mapping[str, str] = os.environ) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    # JSON log lines (audit, events) to stdout; stack frames of internal errors to stderr only.
+    out, err = logging.StreamHandler(sys.stdout), logging.StreamHandler()  # stderr
+    out.addFilter(lambda r: r.name != errors.name)
+    err.addFilter(lambda r: r.name == errors.name)
+    for h in (out, err):
+        h.setFormatter(logging.Formatter())  # the message only
+    logging.basicConfig(level=logging.INFO, handlers=[out, err])
     try:
         settings = Settings.from_env(env)
         app, connector = build(settings)
     except (ConfigError, RuntimeError, ValueError, OSError) as exc:
         log.error(json.dumps({"event": "startup_refused", "reason": str(exc)}))
         return 2
-    servers = [uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning"))]  # noqa: S104
-    if settings.test_controls:
-        from .testctl import create_app as test_app  # noqa: PLC0415 - absent in the production image
-
-        servers.append(uvicorn.Server(uvicorn.Config(test_app(connector.backend), host="127.0.0.1", port=8090)))
-
-    async def serve() -> None:
-        await asyncio.gather(*(s.serve() for s in servers))
-
-    asyncio.run(serve())
+    serve(configs(settings, app, connector))
     return 0

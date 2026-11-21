@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import dataclasses
 import json
 import logging
 import os
 import random
+import re
 import secrets
 import shutil
 import subprocess
@@ -23,7 +25,7 @@ from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx2
 import jsonschema
@@ -480,6 +482,8 @@ async def test_cursor_is_bound_to_caller_and_query(demo: Demo) -> None:
         ({**args, "cursor": "²." + cursor[2:]}, ALPHA_READER),
         ({**args, "cursor": "1234567890." + cursor[2:]}, ALPHA_READER),
         ({**args, "cursor": "nonsense"}, ALPHA_READER),
+        ({**args, "board_ids": [], "cursor": "garbage"}, ALPHA_READER),  # also with no board to search
+        ({**args, "cursor": cursor}, ALPHA_NOBODY),
     ]
     for a, who in reuse:
         r = await demo.call("demo.notes.search", a, principal=who)
@@ -812,7 +816,12 @@ async def test_unexpected_error_is_internal_error_without_its_text(
     assert r["isError"] is True
     assert r["structuredContent"] == {"code": "internal_error", "message": "internal error", "retryable": False}
     assert "demo-secret-XYZ" not in json.dumps(r) + caplog.text
-    assert audit_lines(caplog)[-1]["outcome"] == "internal_error"
+    entry = audit_lines(caplog)[-1]
+    assert (entry["outcome"], entry["error"]) == ("internal_error", "RuntimeError")
+    [frames] = [r.getMessage() for r in caplog.records if r.name == "demo_connector.errors"]
+    head, *stack = frames.split("\n")
+    assert head == f"internal_error {entry['request_id']} RuntimeError"
+    assert stack[-1].endswith(" in explode") and all(re.fullmatch(r"/\S+\.py:\d+ in \S+", f) for f in stack), stack
 
 
 async def test_prompt_injection_is_data(demo: Demo) -> None:
@@ -852,7 +861,7 @@ def test_production_profile_with_test_switches_does_not_start(
         [sys.executable, "-m", "demo_connector"], check=False, env=env, capture_output=True, text=True, timeout=60
     )
     assert proc.returncode == 2, proc.stderr
-    assert "startup_refused" in proc.stderr
+    assert json.loads(proc.stdout) == {"event": "startup_refused", "reason": reason}
 
 
 def test_bad_bundle_keys_do_not_start(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -869,3 +878,80 @@ def test_test_profile_allows_the_switches(tmp_path: Path) -> None:
     # Defaults the image and the README rely on.
     assert (s.bundle_dir, s.bundle_keys, s.state_file) == (Path("/bundle"), "", Path("/var/lib/demo/bundle-state.json"))
     assert server.Settings.from_env({"DEMO_TEST_CONTROLS": "0"}).test_controls is False
+
+
+# Serving (main) ------------------------------------------------------------------------------------
+
+
+async def test_servers_listen_where_the_spec_says(env: Env) -> None:
+    """MCP on 0.0.0.0:8080 always; test controls on 127.0.0.1:8090 only with DEMO_TEST_CONTROLS=1."""
+    app, connector = server.build(env.settings)
+    prod = server.configs(dataclasses.replace(env.settings, test_controls=False), app, connector)
+    assert [(c.app, c.host, c.port, c.log_level) for c in prod] == [(app, "0.0.0.0", 8080, "warning")]  # noqa: S104
+    test = server.configs(dataclasses.replace(env.settings, test_controls=True), app, connector)
+    assert [(c.host, c.port) for c in test] == [("0.0.0.0", 8080), ("127.0.0.1", 8090)]  # noqa: S104
+    async with httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=cast(Any, test[1].app)), base_url="http://t"
+    ) as ctl:
+        assert (await ctl.post("/_test/index/fail")).status_code == 200
+    assert connector.backend.index_failure == "temporarily_unavailable"
+
+
+# `serve` replaced by two raw JSON-RPC calls through the app; everything else is the real main().
+CHILD = """
+import asyncio, sys
+import httpx2
+from demo_connector import server
+
+refuse = server.NoVerifier.verify
+
+def verify(self, headers):
+    if "x-boom" in headers:
+        raise RuntimeError("verifier exploded: demo-secret-XYZ")
+    return refuse(self, headers)
+
+def two_calls(configs):
+    app = configs[0].app
+    async def run():
+        async with app.router.lifespan_context(app), httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://demo"
+        ) as http:
+            for tool, extra in (("demo.boards.list", {}), ("demo.note.get", {"x-boom": "1"})):
+                body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": tool, "arguments": {}}}
+                headers = {"accept": "application/json, text/event-stream", **extra}
+                r = await http.post("/mcp", json=body, headers=headers)
+                assert r.json()["result"]["isError"] is True, r.text
+    asyncio.run(run())
+
+server.NoVerifier.verify = verify
+server.serve = two_calls
+sys.exit(server.main())
+"""
+
+
+def test_real_process_writes_audit_to_stdout_and_frames_to_stderr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MCC-08, spec «Логи и аудит»: JSON audit lines on stdout of the real process (pytest's own log handlers make
+    main()'s logging setup a no-op in-process). The child imports the copy under test and inherits
+    MUTANT_UNDER_TEST; the in-process main() call maps this test to main() for mutmut."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GXG_", "DEMO_"))}
+    env |= {"DEMO_BUNDLE_DIR": str(tmp_path), "DEMO_STATE_FILE": str(tmp_path / "state.json")}
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(Path(server.__file__).parents[1]), env.get("PYTHONPATH")]))
+    served: list[Any] = []
+    monkeypatch.setattr(server, "serve", served.append)
+    assert server.main(env | {"GXG_PROFILE": "test", "DEMO_TEST_CONTROLS": "1"}) == 0
+    assert [c.port for c in served[0]] == [8080, 8090]
+    proc = subprocess.run(
+        [sys.executable, "-c", CHILD], env=env, capture_output=True, text=True, timeout=60, check=False
+    )
+    assert proc.returncode == 0, proc.stderr
+    # Our lines are JSON; FastMCP and httpx log plain text at INFO too.
+    lines = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+    assert [(e["tool"], e["outcome"], e.get("error")) for e in lines] == [
+        ("demo.boards.list", "unauthenticated", None),
+        ("demo.note.get", "internal_error", "RuntimeError"),
+    ]
+    assert re.search(rf"^internal_error {lines[1]['request_id']} RuntimeError$", proc.stderr, re.M), proc.stderr
+    assert re.search(r"^\S+:\d+ in verify$", proc.stderr, re.M), proc.stderr
+    assert "demo-secret-XYZ" not in proc.stdout + proc.stderr
