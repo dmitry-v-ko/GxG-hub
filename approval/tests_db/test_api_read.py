@@ -18,6 +18,7 @@ from gxg_approval.api import create_app
 from gxg_connector_kit import _jwt, exec_token
 
 BOT, OTHER, BETA_BOT = "agent:t-alpha:bot", "agent:t-alpha:other", "agent:t-beta:bot"
+SHARED = "agent:shared"  # registered in both tenants
 HUMAN = "oidc:https://idp.example.invalid:1"
 
 
@@ -65,10 +66,44 @@ def test_foreign_and_missing_intents_are_the_same_404(
     assert bodies.pop() == b'{"code":"not_found","message":"intent not found","retryable":false}'
 
 
+def test_same_principal_in_another_tenant_is_not_found(
+    propose: Callable[..., Any], client: TestClient, world: Any, owner: psycopg.Connection[Any]
+) -> None:
+    """AC-M7-09, AS-11a: the tenant is part of the key, not only the principal ID (registered in both tenants)."""
+    intent = propose(requester=SHARED).json()["intent_id"]
+    beta = q(tenant="t-beta", principal=SHARED)
+    missing = client.get(
+        f"/v1/intents/{uuid.uuid4()}", params=q(principal=SHARED), headers=world.auth("approval-mcp")
+    ).content
+    assert missing == b'{"code":"not_found","message":"intent not found","retryable":false}'
+    assert client.get(f"/v1/intents/{intent}", params=beta, headers=world.auth("approval-mcp")).content == missing
+    r = client.post(
+        f"/v1/intents/{intent}/cancel",
+        json={"on_behalf_of": beta, "expected_version": 1},
+        headers=world.auth("approval-mcp"),
+    )
+    assert (r.status_code, r.content) == (404, missing)
+    assert owner.execute("SELECT status, version FROM intents").fetchall() == [("pending_approval", 1)]
+    assert owner.execute("SELECT count(*) FROM audit_events WHERE action = 'cancel'").fetchone() == (0,)
+    own = client.get(f"/v1/intents/{intent}", params=q(principal=SHARED), headers=world.auth("approval-mcp"))
+    assert own.status_code == 200 and own.json()["status"] == "pending_approval"
+
+
+def test_pool_exhausted_is_temporarily_unavailable(world: Any, pg: Any, owner: psycopg.Connection[Any]) -> None:
+    """A busy pool is a retryable 503, not a 500 (error table: temporarily_unavailable)."""
+    with ConnectionPool(pg.dsn("gxg_api"), min_size=1, max_size=1, timeout=0.2, kwargs={"autocommit": True}) as pool:
+        with TestClient(create_app(world.deps(pool)), raise_server_exceptions=False) as client, pool.connection():
+            r = client.post("/v1/intents", json=world.body(), headers=world.auth())
+    assert r.status_code == 503
+    assert r.json() == {"code": "temporarily_unavailable", "message": "approval service is busy", "retryable": True}
+
+
 def test_read_and_cancel_only_for_approval_mcp(propose: Callable[..., Any], client: TestClient, world: Any) -> None:
     intent = propose().json()["intent_id"]
     refused: list[dict[str, str]] = [
         {},
+        {"Authorization": "Basic " + world.token("approval-mcp")},  # a valid token, but not as a bearer token
+        {"Authorization": "Bearer "},
         world.auth("demo"),
         world.auth("executor"),
         world.auth("approval-mcp", aud="x"),
@@ -213,6 +248,19 @@ def test_dispatch(
             f"/v1/executions/{uuid.uuid4()}/dispatch", json={"execution_token": token()}, headers=world.auth()
         )
         assert r.status_code == 401
+
+
+def test_error_headers_and_unexpected_errors(client: TestClient, world: Any, api_pool: ConnectionPool[Any]) -> None:
+    """Retry-After only with retry_after_s; an unexpected exception is a 500 internal_error, no details."""
+    r = client.get(f"/v1/intents/{uuid.uuid4()}", params=q(), headers=world.auth("approval-mcp"))
+    assert r.status_code == 404 and "retry-after" not in r.headers
+    deps = dataclasses.replace(world.deps(api_pool), pool=None)  # every database call raises AttributeError
+    with TestClient(create_app(deps), raise_server_exceptions=False) as broken:
+        r = broken.get(f"/v1/intents/{uuid.uuid4()}", params=q(), headers=world.auth("approval-mcp"))
+    assert (r.status_code, r.json()) == (
+        500,
+        {"code": "internal_error", "message": "internal error", "retryable": False},
+    )
 
 
 def test_health(client: TestClient, world: Any) -> None:

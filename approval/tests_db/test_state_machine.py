@@ -310,6 +310,15 @@ def test_t2_needs_the_quorum_t3_records_the_vote(machine: Machine) -> None:
     assert (r["execution_deadline"] - r["approved_at"]).total_seconds() == r["execution_window_s"]
     topics = machine.owner.execute("SELECT topic FROM outbox WHERE intent_id = %s ORDER BY id", (intent,)).fetchall()
     assert topics == [("notify",), ("execute",), ("webhook",)]
+    rejected, _ = machine.make("pending_approval", approvals=2)
+    machine.approve(rejected, HUMAN)
+    rr = machine.row(rejected)
+    machine.call(
+        "ui", "SELECT gxg_decide(%s, %s, 'reject', %s, %s, false, 'no')", rejected, HUMAN2, rr["version"],
+        rr["canonical_args_hash"],
+    )  # fmt: skip
+    assert machine.row(rejected)["status"] == "rejected"  # T4 by the second approver
+    assert machine.call("api", "SELECT gxg_received_approvals(%s)", rejected) == 1  # a rejection is no approval
 
 
 def test_t2_refuses_what_the_ui_must_never_get_through(machine: Machine) -> None:
@@ -317,6 +326,7 @@ def test_t2_refuses_what_the_ui_must_never_get_through(machine: Machine) -> None
     r = machine.row(intent)
     cases = [
         ("agent:t-alpha:bot", r["version"], r["canonical_args_hash"], "permission_denied"),  # requester / machine
+        ("agent:t-alpha:other", r["version"], r["canonical_args_hash"], "permission_denied"),  # machine, not requester
         (HUMAN, r["version"] + 1, r["canonical_args_hash"], "conflict"),  # stale screen
         (HUMAN, r["version"], "0" * 64, "conflict"),  # changed args
     ]
@@ -378,6 +388,10 @@ def test_t7_t9_side_effects_and_guards(machine: Machine) -> None:
     with pytest.raises(GxgError) as err:  # T9 only for the connector of the intent
         machine.call("api", "SELECT gxg_dispatch(%s, %s, 'rogue', 30)", machine.execution(intent), intent)
     assert err.value.code == "not_found"
+    other, _ = machine.make("approved")
+    with pytest.raises(GxgError) as err:  # token `sub` is another intent of the same connector
+        machine.call("api", "SELECT gxg_dispatch(%s, %s, 'demo', 30)", machine.execution(intent), other)
+    assert err.value.code == "not_found"
     deadline = machine.call("api", "SELECT gxg_dispatch(%s, %s, 'demo', 30)", machine.execution(intent), intent)
     e = machine.owner.execute(
         "SELECT state, dispatch_lease_until - dispatched_at FROM executions WHERE intent_id = %s", (intent,)
@@ -396,7 +410,7 @@ def test_t7_t9_kill_switch_and_limits(machine: Machine) -> None:
     with pytest.raises(GxgError) as err:
         machine.reserve(intent)
     assert err.value.code == "effect_disabled"
-    machine.owner.execute("DELETE FROM switches")
+    machine.owner.execute("UPDATE switches SET blocked = false")  # cleared, the row stays (audit of the switch)
     machine.reserve(intent)
     machine.owner.execute("INSERT INTO switches VALUES ('tool:t-alpha:demo.message.propose', true, 'x', 'op', now())")
     with pytest.raises(GxgError) as err:
@@ -549,8 +563,12 @@ def test_t1_insert_guard(machine: Machine) -> None:
         ("version = 2", "GX400"),
         ("attempts = 1", "GX400"),
         ("args_ciphertext = null", "GX400"),
+        ("preview_ciphertext = null", "GX400"),
+        ("status = 'approved', approval_mode = 'not_required', required_approvals = 0", "GX400"),  # no deadline
         ("required_approvals = 0", "GX400"),
         ("terminal_at = now()", "GX400"),
+        ("approval_mode = 'auto', required_approvals = 0", "GX400"),  # pending, but not a human intent
+        ("status = 'approved', approved_at = now(), execution_deadline = now()", "GX400"),  # human, born approved
     ):
         owner.execute("DELETE FROM c")
         owner.execute("INSERT INTO c SELECT * FROM intents WHERE intent_id = %s", (intent,))

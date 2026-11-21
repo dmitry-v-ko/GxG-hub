@@ -39,6 +39,7 @@ API_ID, MCP_ID, EXECUTOR_ID = "approval-api", "approval-mcp", "executor"
 ALPHA, BETA = "t-alpha", "t-beta"
 BOT, OTHER, SIGNALS = "agent:t-alpha:bot", "agent:t-alpha:other", "agent:t-alpha:signals"
 BETA_BOT = "agent:t-beta:bot"
+SHARED = "agent:shared"  # the same principal ID registered in both tenants (the schema allows it)
 HUMAN1, HUMAN2 = "oidc:https://idp.example.invalid:1", "oidc:https://idp.example.invalid:2"
 CHAT = "demo:demo-main/board/b1"
 TOOLS = [
@@ -240,10 +241,13 @@ class World:
             "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "tenants": {
                 ALPHA: {
-                    "grants": tenant_file(ALPHA, [BOT, OTHER, SIGNALS], "demo-main"),
+                    "grants": tenant_file(ALPHA, [BOT, OTHER, SIGNALS, SHARED], "demo-main"),
                     "approval_policy": self.policies.get(ALPHA),
                 },
-                BETA: {"grants": tenant_file(BETA, [BETA_BOT], "demo-b"), "approval_policy": self.policies.get(BETA)},
+                BETA: {
+                    "grants": tenant_file(BETA, [BETA_BOT, SHARED], "demo-b"),
+                    "approval_policy": self.policies.get(BETA),
+                },
             },
             "platform": {"schema_version": 1, "services": self.services()},
         }

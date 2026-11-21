@@ -13,7 +13,7 @@ from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from jsonschema import Draft202012Validator
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
 from starlette.concurrency import run_in_threadpool
 
 from gxg_connector_kit.errors import GxgError
@@ -36,7 +36,6 @@ STATUS = {
     "rate_limited": 429,
     "temporarily_unavailable": 503,
 }
-ID_PATTERN = r"^[0-9a-fA-F-]{36}$"
 CANCEL_BODY: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -83,10 +82,7 @@ def _responses(*codes: int, ok: dict[str, Any] | None = None) -> dict[int | str,
             if code < 300 and ok is not None
             else {"$ref": "intent-status.schema.json" if code < 300 else "error.schema.json"}
         )
-        out[code] = {
-            "description": "OK" if code < 300 else "Error",
-            "content": {"application/json": {"schema": schema}},
-        }
+        out[code] = {"content": {"application/json": {"schema": schema}}}  # FastAPI adds the HTTP reason as description
     return out
 
 
@@ -122,6 +118,10 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (route table)
     @app.exception_handler(RequestValidationError)
     async def _invalid(_request: Request, _exc: RequestValidationError) -> JSONResponse:
         return _error(GxgError("invalid_input", "request does not match the API contract"))
+
+    @app.exception_handler(PoolTimeout)
+    async def _busy(_request: Request, _exc: PoolTimeout) -> JSONResponse:
+        return _error(GxgError("temporarily_unavailable", "approval service is busy"))
 
     @app.exception_handler(Exception)
     async def _internal(_request: Request, exc: Exception) -> JSONResponse:

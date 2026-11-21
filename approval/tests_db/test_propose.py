@@ -187,6 +187,15 @@ def test_pending_caps(propose: Callable[..., Any], world: Any, owner: psycopg.Co
     assert count(owner) == 3
 
 
+def test_quotas_count_only_the_tenant(propose: Callable[..., Any], world: Any) -> None:
+    """AP-05: another tenant's intents never count, even for the same principal ID (registered in both)."""
+    beta = {"tenant": "t-beta", "connection": "demo-b", "resource": "demo:demo-b/board/b2"}
+    assert propose(requester="agent:shared").status_code == 201  # t-alpha, pending
+    world.set_policy("t-beta", [], quotas={"propose_per_requester_per_hour": 1, "pending_per_tenant_max": 1})
+    assert propose(requester="agent:shared", **beta).status_code == 201
+    assert propose(requester="agent:t-beta:bot", **beta).status_code == 429  # t-beta's own pending counts
+
+
 def test_quota_window_is_one_hour(propose: Callable[..., Any], world: Any, owner: psycopg.Connection[Any]) -> None:
     world.set_policy("t-alpha", [], quotas={"propose_per_requester_per_hour": 1})
     assert propose().status_code == 201
@@ -282,9 +291,28 @@ def test_auto_approval_writes_policy_decision(
     doc = propose().json()
     assert doc["status"] == "approved" and doc["approval"]["mode"] == "auto"
     assert doc["approval"]["rule_ids"] == ["auto-b"]
+    assert doc["approval"]["received_approvals"] == 0  # human approvals only; the policy decision is not one
     rows = owner.execute("SELECT decided_by, decision, intent_version FROM decisions").fetchall()
     assert rows == [(f"policy:auto-b@{'b' * 40}", "approve", 1)]
     assert owner.execute("SELECT topic FROM outbox").fetchall() == [("execute",)]
+
+
+def test_policy_decision_only_for_auto_intents(
+    propose: Callable[..., Any], world: Any, pg: Any, owner: psycopg.Connection[Any]
+) -> None:
+    """EFF-03: gxg_api writes a policy decision only for its own fresh auto-approved intent."""
+    doc = propose(tool="demo.note.propose").json()
+    assert (doc["status"], doc["approval"]["mode"], doc["version"]) == ("approved", "not_required", 1)
+    world.set_policy("t-alpha", [{"id": "auto-b", "match": {"tools": ["demo.message.propose"]},
+                                  "decision": "auto_approve", "limits": {"max_per_hour": 5}}])  # fmt: skip
+    auto = propose().json()
+    assert auto["approval"]["mode"] == "auto"
+    with pg.connect("gxg_api") as api:
+        for intent in (doc["intent_id"], auto["intent_id"]):  # not an auto intent; already has its decision
+            with pytest.raises(psycopg.Error) as err:
+                api.execute("SELECT gxg_record_auto_decision(%s)", (intent,))
+            assert err.value.sqlstate == "GX409", intent
+    assert owner.execute("SELECT intent_id::text FROM decisions").fetchall() == [(auto["intent_id"],)]
 
 
 def test_auto_limits_use_sliding_hour_and_day(
@@ -312,6 +340,18 @@ def test_auto_limits_use_sliding_hour_and_day(
     assert propose().json()["approval"]["mode"] == "auto"
     owner.execute("UPDATE intents SET tenant_id = 't-beta', created_at = now() WHERE approval_mode = 'auto'")
     assert propose().json()["approval"]["mode"] == "auto"  # another tenant's auto intents do not count
+
+
+def test_auto_limit_counts_only_its_rule(propose: Callable[..., Any], world: Any) -> None:
+    """AP-03: each rule's limit counts the intents that rule auto-approved, not those of another rule."""
+    world.set_policy("t-alpha", [
+        {"id": f"auto-{who}", "match": {"requesters": [f"agent:t-alpha:{who}"]}, "decision": "auto_approve",
+         "limits": {"max_per_hour": 1}}
+        for who in ("bot", "other")
+    ])  # fmt: skip
+    assert propose().json()["approval"]["rule_ids"] == ["auto-bot"]
+    assert propose(requester="agent:t-alpha:other").json()["approval"]["mode"] == "auto"
+    assert propose().json()["approval"]["mode"] == "human"  # auto-bot used its one
 
 
 def test_30_parallel_proposes_with_auto_limit_10(
@@ -400,3 +440,41 @@ def test_allowed_approvers_are_stored(propose: Callable[..., Any], world: Any, o
     propose()
     rows = owner.execute("SELECT allowed_approvers, rule_ids FROM intents ORDER BY created_at, intent_id").fetchall()
     assert sorted(rows, key=lambda r: r[1]) == [(None, []), ([h1, h2], ["narrow"])]
+
+
+def _scans(plan: dict[str, Any]) -> list[str]:
+    here = f"{plan['Node Type']}:{plan.get('Relation Name', '')}"
+    return [here, *(scan for child in plan.get("Plans", []) for scan in _scans(child))]
+
+
+def test_t1_counts_use_indexes_on_a_long_history(owner: psycopg.Connection[Any]) -> None:
+    """AP-03, AP-05 under RET-02 history: the quota and auto-limit counts of T1 never scan the tenant's history."""
+    from gxg_approval import intents
+
+    with owner.transaction():  # 100 000 terminal intents of one year; the T1 guard does not allow such rows
+        owner.execute("ALTER TABLE intents DISABLE TRIGGER intents_insert_guard")
+        owner.execute(
+            """INSERT INTO intents (intent_id, tenant_id, requester_principal, tool_key, tool_version, connector_id,
+                 execute_tool, connection_id, resource_id, effect_class, canonical_args_hash, idempotency_key,
+                 policy_version, rule_ids, approval_mode, required_approvals, step_up_required, status, created_at,
+                 expires_at, execution_window_s)
+               SELECT gen_random_uuid(), 't-alpha', CASE WHEN i % 2 = 0 THEN 'agent:t-alpha:bot'
+                        ELSE 'agent:t-alpha:other' END, 'demo.message.propose', '1.0.0', 'demo',
+                      'demo.message.execute', 'demo-main', 'demo:demo-main/board/b1', 'external_effect',
+                      repeat('0', 64), 'h-' || i, 'b', CASE WHEN i % 3 = 0 THEN '{auto-b}'::text[] ELSE '{}' END,
+                      CASE WHEN i % 3 = 0 THEN 'auto' ELSE 'human' END, CASE WHEN i % 3 = 0 THEN 0 ELSE 1 END,
+                      false, 'expired', now() - interval '2 days' - make_interval(mins => i * 5),
+                      now() - interval '1 day', 3600
+                 FROM generate_series(1, 100000) AS i"""
+        )
+        owner.execute("ALTER TABLE intents ENABLE TRIGGER intents_insert_guard")
+    owner.execute("ANALYZE intents")
+    for sql, params in (
+        (intents._SQL_COUNTS, {"t": "t-alpha", "r": "agent:t-alpha:bot"}),
+        (intents._SQL_AUTO_USED, ("t-alpha", "auto-b")),
+    ):
+        row = owner.execute("EXPLAIN (FORMAT JSON) " + sql, params).fetchone()
+        assert row is not None
+        scans = _scans(row[0][0]["Plan"])
+        assert "Seq Scan:intents" not in scans and any(s.endswith(":intents") for s in scans), scans
+    owner.execute("TRUNCATE intents CASCADE")

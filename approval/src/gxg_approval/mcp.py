@@ -8,7 +8,7 @@ is `not_found`, byte for byte like a missing one.
 
 from __future__ import annotations
 
-import json
+import uuid
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -16,7 +16,7 @@ import httpx
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
 from fastmcp.tools.tool import ToolResult
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult
 
 from gxg_connector_kit.errors import GxgError
 from gxg_connector_kit.identity import IdentityVerifier
@@ -29,9 +29,16 @@ class ErrorResult(ToolResult):
         return CallToolResult(content=self.content, structuredContent=self.structured_content, isError=True)
 
 
+class Refused(Exception):
+    """The api answered with an error document (error.schema.json): passed to the agent as it is."""
+
+    def __init__(self, doc: dict[str, Any]) -> None:
+        self.doc = doc
+
+
 def _result(doc: dict[str, Any], *, error: bool) -> ToolResult:
-    text = [TextContent(type="text", text=json.dumps(doc, separators=(",", ":"), sort_keys=True))]
-    return ErrorResult(content=text, structured_content=doc) if error else ToolResult(text, doc)
+    """The text content is FastMCP's compact JSON of the same document."""
+    return ErrorResult(structured_content=doc) if error else ToolResult(structured_content=doc)
 
 
 def create_server(
@@ -45,21 +52,25 @@ def create_server(
 
     async def call(method: str, path: str, **kw: Any) -> dict[str, Any]:
         r = await api.request(method, path, headers={"Authorization": f"Bearer {token()}"}, **kw)
-        doc = r.json()
+        doc = dict(r.json())
         if r.status_code != 200:
-            raise GxgError(
-                doc["code"], doc["message"], retryable=doc["retryable"], retry_after_s=doc.get("retry_after_s")
-            )
-        return dict(doc)
+            raise Refused(doc)
+        return doc
 
     async def run(intent_id: str, cancel: bool) -> ToolResult:
         try:
             who = identity.verify(headers())
             scope = {"tenant_id": who.tenant_id, "principal": who.principal}
-            doc = await call("GET", f"/v1/intents/{intent_id}", params=scope)
+            try:  # only a UUID reaches the URL path: no `../` to other api endpoints
+                path = f"/v1/intents/{uuid.UUID(intent_id)}"
+            except ValueError:
+                raise GxgError("not_found", "intent not found") from None  # the bytes of api's 404
+            doc = await call("GET", path, params=scope)
             if cancel:
                 body = {"on_behalf_of": scope, "expected_version": doc["version"]}
-                doc = await call("POST", f"/v1/intents/{intent_id}/cancel", json=body)
+                doc = await call("POST", f"{path}/cancel", json=body)
+        except Refused as exc:
+            return _result(exc.doc, error=True)
         except GxgError as exc:
             return _result(exc.to_dict(), error=True)
         except httpx.HTTPError:

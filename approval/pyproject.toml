@@ -39,6 +39,8 @@ only_mutate = [
     "src/gxg_approval/transitions.py",
     "src/gxg_approval/quotas.py",
     "src/gxg_approval/intents.py",
+    "src/gxg_approval/api.py",
+    "src/gxg_approval/mcp.py",
 ]
 also_copy = ["tests_db/"]
 pytest_add_cli_args_test_selection = ["tests", "tests_db"]
