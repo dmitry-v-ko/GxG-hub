@@ -1,11 +1,11 @@
 # Local development ONLY. Do not expose directly to the internet.
 # ContextForge is used as an external OCI dependency, not forked.
 # Default image removed deliberately: no accidental fallback to insecure prerelease.
-# DEV-ONLY: a release tag in .env is NOT an immutable digest or production approval.
+# Pinned image (tag@digest) lives in .env.example; see ADR-0001 for the advisory check.
 # Effects are NOT enabled by this Compose; effect execution path / identity PoC is separate.
 services:
   contextforge:
-    image: ${CONTEXTFORGE_IMAGE:?Set CONTEXTFORGE_IMAGE to an audited, patched release in .env}
+    image: ${CONTEXTFORGE_IMAGE:?Set CONTEXTFORGE_IMAGE in .env (pinned digest in .env.example)}
     restart: unless-stopped
     ports:
       - "127.0.0.1:4444:4444"

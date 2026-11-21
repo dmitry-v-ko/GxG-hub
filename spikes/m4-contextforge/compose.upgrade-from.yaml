@@ -1,0 +1,4 @@
+# Criterion 5 / MC-05 rehearsal: start on the previous release, then drop this file to upgrade to the pinned one.
+services:
+  contextforge:
+    image: ghcr.io/ibm/mcp-context-forge:v1.1.0@sha256:7eb21fb9a8070df59435c03c76c40d8c71230c55ba89f884f2482d2cc81cff1c
