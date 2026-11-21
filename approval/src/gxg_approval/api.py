@@ -82,10 +82,7 @@ def _responses(*codes: int, ok: dict[str, Any] | None = None) -> dict[int | str,
             if code < 300 and ok is not None
             else {"$ref": "intent-status.schema.json" if code < 300 else "error.schema.json"}
         )
-        out[code] = {
-            "description": "OK" if code < 300 else "Error",
-            "content": {"application/json": {"schema": schema}},
-        }
+        out[code] = {"content": {"application/json": {"schema": schema}}}  # FastAPI adds the HTTP reason as description
     return out
 
 

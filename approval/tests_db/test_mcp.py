@@ -53,6 +53,7 @@ def call(server: Any, tool: str, intent_id: str) -> Any:
 def test_tools_are_listed(mcp: tuple[Any, Agent]) -> None:
     async def run() -> Any:
         async with Client(mcp[0]) as c:
+            assert c.initialize_result is not None and c.initialize_result.serverInfo.name == "gxg-approval"
             return await c.list_tools()
 
     tools = {t.name: t for t in asyncio.run(run())}
@@ -144,4 +145,6 @@ def test_api_down_is_temporarily_unavailable(world: Any, monkeypatch: pytest.Mon
     api = httpx.AsyncClient(transport=httpx.MockTransport(refuse), base_url="http://api")
     server = create_server(api, lambda: "t", StubVerifier("approval-mcp", issuer.public_key), lambda: agent.headers)
     res = call(server, "effects.status", str(uuid.uuid4()))
-    assert res.is_error and res.structured_content["code"] == "temporarily_unavailable"
+    assert res.is_error and res.structured_content == {
+        "code": "temporarily_unavailable", "message": "approval service is unavailable", "retryable": True,
+    }  # fmt: skip

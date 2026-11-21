@@ -7,6 +7,7 @@ from typing import Any, cast
 
 import pytest
 import yaml
+from fastapi.testclient import TestClient
 
 from gxg_approval.api import Deps, create_app
 from gxg_approval.crypto import Encryptor
@@ -21,11 +22,23 @@ REFS = {
 }
 
 
-@pytest.fixture(scope="module")
-def generated(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
-    store = BundleStore({}, state_file=tmp_path_factory.mktemp("b") / "state.json")
-    app = create_app(Deps("approval-api", cast(Any, None), store, Encryptor({}), {"keys": []}))
-    return app.openapi()
+def _app(tmp_path: Path) -> Any:
+    store = BundleStore({}, state_file=tmp_path / "state.json")
+    return create_app(Deps("approval-api", cast(Any, None), store, Encryptor({}), {"keys": []}))
+
+
+@pytest.fixture  # per test, not per module: mutmut attributes a module fixture's calls to one test only
+def generated(tmp_path: Path) -> dict[str, Any]:
+    doc: dict[str, Any] = _app(tmp_path).openapi()
+    return doc
+
+
+def test_info_and_no_doc_pages(generated: dict[str, Any], tmp_path: Path) -> None:
+    assert (generated["info"]["title"], generated["info"]["version"]) == (
+        CONTRACT["info"]["title"], CONTRACT["info"]["version"],
+    )  # fmt: skip
+    client = TestClient(_app(tmp_path))
+    assert [client.get(p).status_code for p in ("/docs", "/redoc")] == [404, 404]  # internal API: no doc pages
 
 
 OPERATIONS = [(path, m) for path, item in CONTRACT["paths"].items() for m in METHODS if m in item]
@@ -68,3 +81,4 @@ def test_operation(generated: dict[str, Any], path: str, method: str) -> None:
             assert got == {"$ref": REFS[response["$ref"]]}, code
         elif path.endswith("/dispatch"):
             assert got == response["content"]["application/json"]["schema"]
+        assert have["responses"][code]["description"], code

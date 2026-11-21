@@ -161,9 +161,10 @@ jobs:
 
   mutmut:
     # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed.
-    # M7 adds approval (~1400 mutants, DB tests on PostgreSQL in Docker): about an hour on a 4-core runner.
+    # M7 adds approval (~1700 mutants, DB tests on PostgreSQL in Docker) and its SQL mutation check
+    # (scripts/ci/mutate_m7_sql.py, ~80 runs of approval/tests_db): about two hours on a 4-core runner.
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

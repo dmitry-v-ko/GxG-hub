@@ -102,6 +102,8 @@ def test_read_and_cancel_only_for_approval_mcp(propose: Callable[..., Any], clie
     intent = propose().json()["intent_id"]
     refused: list[dict[str, str]] = [
         {},
+        {"Authorization": "Basic " + world.token("approval-mcp")},  # a valid token, but not as a bearer token
+        {"Authorization": "Bearer "},
         world.auth("demo"),
         world.auth("executor"),
         world.auth("approval-mcp", aud="x"),
@@ -246,6 +248,19 @@ def test_dispatch(
             f"/v1/executions/{uuid.uuid4()}/dispatch", json={"execution_token": token()}, headers=world.auth()
         )
         assert r.status_code == 401
+
+
+def test_error_headers_and_unexpected_errors(client: TestClient, world: Any, api_pool: ConnectionPool[Any]) -> None:
+    """Retry-After only with retry_after_s; an unexpected exception is a 500 internal_error, no details."""
+    r = client.get(f"/v1/intents/{uuid.uuid4()}", params=q(), headers=world.auth("approval-mcp"))
+    assert r.status_code == 404 and "retry-after" not in r.headers
+    deps = dataclasses.replace(world.deps(api_pool), pool=None)  # every database call raises AttributeError
+    with TestClient(create_app(deps), raise_server_exceptions=False) as broken:
+        r = broken.get(f"/v1/intents/{uuid.uuid4()}", params=q(), headers=world.auth("approval-mcp"))
+    assert (r.status_code, r.json()) == (
+        500,
+        {"code": "internal_error", "message": "internal error", "retryable": False},
+    )
 
 
 def test_health(client: TestClient, world: Any) -> None:

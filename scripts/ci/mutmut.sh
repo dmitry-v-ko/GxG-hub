@@ -54,5 +54,6 @@ stale=$(comm -13 "$tmp/left.txt" "$tmp/allowed.txt")
   else
     echo "mutmut: OK, no surviving non-equivalent mutants"
   fi
+  $sql_ok && echo "SQL mutations: OK" || echo "SQL mutations: FAILED (see above)"
 } | tee "$report"
 [ -z "$unexplained" ] && [ -z "$stale" ] && $sql_ok
