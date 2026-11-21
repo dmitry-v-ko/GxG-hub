@@ -27,7 +27,7 @@ def test_approve_then_status(browser: Any, propose: Any, row_of: Any, owner: Any
     r = browser.login(HUMAN1).decide(intent)
     assert r.status_code == 303 and r.headers["location"] == f"/intents/{intent['intent_id']}"
     assert row_of(intent["intent_id"])["status"] == "approved"
-    assert owner.execute("SELECT decided_by, step_up FROM decisions").fetchall() == [(HUMAN1, False)]
+    assert owner.execute("SELECT decided_by, step_up, comment FROM decisions").fetchall() == [(HUMAN1, False, None)]
 
 
 def test_reject(browser: Any, propose: Any, row_of: Any) -> None:
@@ -185,6 +185,8 @@ def test_step_up_challenge_names_intent_and_hash(browser: Any, passkey: Any, pro
     passkey(browser.login(HUMAN1))
     text = _challenge(browser.client.get(f"/intents/{intent['intent_id']}/step-up").text)
     assert f"|{intent['intent_id']}|{intent['canonical_args_hash']}|" in text
+    nonce = text.rsplit("|", 1)[1]
+    assert len(nonce) == 32 and int(nonce, 16) >= 0  # 16 random bytes
 
 
 def test_step_up_older_than_five_minutes(

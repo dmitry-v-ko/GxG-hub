@@ -1,12 +1,55 @@
-"""`gxg-approval-ui`: process wiring (configuration: config.py)."""
+"""`gxg-approval-ui`: process wiring — variables, secret files, bundle loader (variables: config.py docstring)."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import threading
+from collections.abc import Mapping
 from pathlib import Path
 
-from .config import LOOPBACK, bundle_store, env, preview_keys, require_tls, secret
+from gxg_connector_kit import _jwt
+from gxg_connector_kit.grants import BundleError, BundleStore
+
+from .config import LOOPBACK, preview_keys, require_tls
+
+log = logging.getLogger("gxg_approval_ui")
+BUNDLE_RELOAD_S = 60  # GR-13
+
+
+def env(name: str, environ: Mapping[str, str] = os.environ) -> str:
+    value = environ.get(name)
+    if not value:
+        raise SystemExit(f"missing configuration: {name}")
+    return value
+
+
+def secret(name: str, environ: Mapping[str, str] = os.environ) -> str:
+    return Path(env(f"{name}_FILE", environ)).read_text("utf-8").strip()
+
+
+def bundle_store(environ: Mapping[str, str] = os.environ) -> BundleStore:
+    """The signed grants bundle, reloaded every minute (same loader as approval/config.py; AS-29: own tree)."""
+    keys = {kid: _jwt.parse_public_key(k) for kid, k in json.loads(env("GXG_BUNDLE_KEYS", environ)).items()}
+    store = BundleStore(keys, state_file=Path(env("GXG_BUNDLE_STATE_FILE", environ)))
+    directory = Path(env("GXG_BUNDLE_DIR", environ))
+
+    def reload() -> None:
+        try:
+            store.load(
+                (directory / "grants-bundle.json").read_bytes(), (directory / "grants-bundle.json.sig").read_bytes()
+            )
+        except (OSError, BundleError) as exc:  # keep the previous bundle; /readyz reports it
+            log.warning("bundle not loaded: %s", exc)
+
+    def loop() -> None:
+        while not threading.Event().wait(BUNDLE_RELOAD_S):
+            reload()
+
+    reload()
+    threading.Thread(target=loop, name="bundle-reload", daemon=True).start()
+    return store
 
 
 def main() -> None:

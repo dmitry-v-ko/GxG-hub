@@ -171,3 +171,11 @@ def test_no_claims(client: Any, idp: FakeIdp) -> None:
     q = start(client, idp)
     idp.claims = {"sub": None}
     assert client.get(f"/auth/complete?code=code-1&state={q['state']}").status_code == 403
+
+
+def test_issuer_with_a_trailing_slash(idp: FakeIdp, ui_deps: Any, owner: Any) -> None:
+    from gxg_approval_ui.app import create_app
+
+    ui_deps.oidc_issuer = ISSUER + "/"
+    with TestClient(create_app(ui_deps), base_url="https://testserver", raise_server_exceptions=False) as c:
+        assert c.get("/login", follow_redirects=False).status_code == 302  # discovery at <issuer>/.well-known/…

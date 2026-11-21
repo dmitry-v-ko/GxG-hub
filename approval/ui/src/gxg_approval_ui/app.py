@@ -121,7 +121,6 @@ class Deps:
 
 class Refused(Exception):
     def __init__(self, status: int, message: str) -> None:
-        super().__init__(message)
         self.status, self.message = status, message
 
 
@@ -228,9 +227,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     def summary(row: Mapping[str, Any]) -> dict[str, Any]:
         opened = envelope(row)
         title, label = ("—", "—") if opened is None else (opened[0]["title"], opened[0]["target"]["label"])
-        group = hashlib.sha256(
-            json.dumps([row["requester_principal"], opened and opened[0]], sort_keys=True).encode()
-        ).hexdigest()
+        group = hashlib.sha256(canonical.dumps([row["requester_principal"], opened and opened[0]])).hexdigest()
         return {
             "id": str(row["intent_id"]),
             "tenant": row["tenant_id"],
@@ -488,9 +485,9 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             with conn.transaction():
                 return (conn.execute(sql, params).fetchone() or (None,))[0]
         except psycopg.Error as exc:
-            status = _HTTP.get(exc.sqlstate or "")
+            status = _HTTP.get(str(exc.sqlstate))
             if status is None:
                 raise
-            raise Refused(status, str(exc.diag.message_primary)[:200]) from None
+            raise Refused(status, str(exc.diag.message_primary)) from None  # our own _gxg_fail texts
 
     return app

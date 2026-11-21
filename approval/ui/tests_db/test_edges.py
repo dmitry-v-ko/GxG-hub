@@ -90,6 +90,7 @@ def test_session_without_csrf_token(browser: Any, propose: Any, row_of: Any, own
     signed = TimestampSigner(browser.key).sign(base64.b64encode(json.dumps(session).encode())).decode()
     browser.client.cookies.set(ui.SESSION_COOKIE, signed, domain="testserver.local")
     assert browser.decide(row, csrf="").status_code == 403
+    assert browser.decide(row, csrf="anything").status_code == 403
     assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)
 
 
@@ -267,3 +268,13 @@ def test_render_card_args_json() -> None:
     from gxg_approval_ui import render
 
     assert render.card({"title": "t"}, {"b": 1, "a": "é"})[1] == '{\n  "a": "é",\n  "b": 1\n}'
+
+
+def test_purged_row_in_the_list(browser: Any, propose: Any, owner: Any) -> None:
+    doc = propose().json()
+    owner.execute("ALTER TABLE intents DISABLE TRIGGER USER")
+    owner.execute("UPDATE intents SET preview_ciphertext = NULL")
+    owner.execute("ALTER TABLE intents ENABLE TRIGGER USER")
+    page = browser.login(HUMAN1).client.get("/").text
+    row = page.split(f'href="/intents/{doc["intent_id"]}">')[1].split(" · t-alpha")[0]
+    assert row == "—</a> · —"
