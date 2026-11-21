@@ -64,3 +64,7 @@
 | M0.1 | 1 | критик | claude/m0.1-standard-tools | 01ca42e | **5.0** | < 9: AC-M0-04 (пустой .env проходит), .envrc/.env-local, свой network guard вместо pytest-socket → цикл 2; вопрос владельцу: допустима ли однострочная проверка имён файлов (AC-M0.1-02) | 2026-11-20 |
 | M0.1 | 2 | исполнитель | claude/m0.1-standard-tools | — | — | запущен (session_01V6d5A7pfKjuUdxfWCvZmq7) | 2026-11-20 |
 | M0.1 | 2 | решение владельца | — | — | — | AC-M0.1-02: разрешена однострочная проверка запрещённых имён файлов | 2026-11-21 |
+| M0.1 | 2 | исполнитель | claude/m0.1-standard-tools | f78e6b3…7e2a984 | — | пустые файлы, .env*, pytest-socket; owner_decision записан | 2026-11-21 |
+| M2 | 3 | исполнитель | claude/m2-policy-tooling | e1dae73 (+285a99e) | — | base/FF/тег закрыты, mutmut, tools из manifest, вектор подписи | 2026-11-21 |
+| M4 | 3 | исполнитель | claude/m4-contextforge-spike | 27c676a (+140dbd3) | — | PyJWT, pytest+mutmut, кривой заголовок → отказ, депрекация headers в ADR | 2026-11-21 |
+| M0.1, M2, M4 | — | критики | — | — | — | запущены (M0.1 ц2, M2 ц3, M4 ц3) | 2026-11-21 |
