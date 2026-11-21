@@ -174,5 +174,5 @@ def test_key_rotation_by_kid(key: Ed25519PrivateKey, clock: Clock) -> None:
 
 
 def test_no_keys_does_not_start() -> None:
-    with pytest.raises(ValueError, match="^no identity adapter keys$"):
+    with pytest.raises(ValueError, match=r"^no identity adapter keys$"):
         ContextForgeVerifier("demo", {})
