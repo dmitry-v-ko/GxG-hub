@@ -131,3 +131,4 @@
 | M5 | 2 | критик-субагент | claude/m5-readonly-poc | d39a1ff | **9.5** | чек-лист ц1 выполнен; 3 minor → backlog; M5-READY.md; финальный независимый критик запущен | 2026-11-21 |
 | M7 | 2 | критик-субагент | claude/m7-approval-core | c6bb52f | **9.0** | чек-лист ц1 выполнен; 2 major missed_earlier (тест индекса не ловит удаление; окна auto-лимита 1 h/1 day не под мутациями) и 4 minor → по правилу в backlog; ждём M7-READY | 2026-11-21 |
 | M7 | 2 | владелец вехи | claude/m7-approval-core | a843c11 (+0fce3f3) | — | 2 major missed_earlier закрыты тестами; M7-READY.md; финальный независимый критик запущен | 2026-11-21 |
+| M5 | final | независимый критик | claude/m5-readonly-poc | d39a1ff | **9.5** | ≥ 9 — **веха закрыта**: GO через ContextForge; 3 major + 3 minor missed_earlier → backlog | 2026-11-21 |
