@@ -19,3 +19,4 @@
 | M0.1 | reports/critic/M0.1-cycle-4.json | Устаревшие base/notes в отчёте и mutmut-заметке | Поправить при следующем касании |
 | M2 | reports/critic/M2-cycle-5.json | Устаревшая ссылка на `dd0beb1` в отчёте conformance | Поправить при следующем касании |
 | M4.1 | reports/critic/M4.1-cycle-3.json | ADR-0002: стоимость ContextForge = 0 не учитывает работу M5 (unified_pdp, сетевая изоляция), статус «частично» для п.4 не из списка; webhook W пропускает не-tools/call методы; GHSA без patched-версий; run.sh midsession падает без WEBHOOK_DOWN | Уточнить ADR-0002 при принятии решения; починить скрипт |
+| M3 | reports/critic/M3-cycle-3.json | Логи: стек internal_error многострочным текстом в stderr (`tools.py:93-94`); корневой логгер INFO пускает текстовые строки FastMCP в stdout рядом с JSON-аудитом (`server.py:175-181`) | Однострочный JSON для ошибок, поднять уровень логгеров SDK |
