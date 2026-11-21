@@ -85,3 +85,4 @@
 | M2 | 5 | критик | claude/m2-policy-tooling | 6ffcadd | **9.5** | ≥ 9 — **веха закрыта**; threat_model: открытых путей нет; AC-M2-04 ждёт ручной проверки владельца | 2026-11-21 |
 | — | — | интеграция | claude/integration | — | — | тред слияния M0.1 + M2 запущен (конфликты CI/pyproject/uv.lock); после него — M3 и M7 | 2026-11-21 |
 | M4.1 | — | решение владельца | — | — | — | новая веха: спайк ADR-0002 (ToolHive, Docker MCP Gateway vs ContextForge) до M5 | 2026-11-21 |
+| M4.1 | 1 | исполнитель | claude/m4.1-gateway-comparison | — | — | запущен (спайк ADR-0002) | 2026-11-21 |
