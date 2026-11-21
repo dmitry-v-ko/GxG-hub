@@ -36,7 +36,7 @@ xfail_strict = true
 # Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh does it in CI).
 [tool.mutmut]
 source_paths = ["src/telegram_connector/"]
-only_mutate = ["*/tools.py", "*/server.py"]
-also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml"]
+only_mutate = ["*/tools.py", "*/server.py", "*/archive.py"]
+also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml", "archive/"]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]

@@ -9,3 +9,4 @@
 **/.pytest_cache
 connectors/telegram/tests
 connectors/telegram/archive
+connectors/telegram/fixtures
