@@ -2,7 +2,7 @@
 
 Critic: independent, first cycle. Load assumed: the dev stand, one replica of each connector, one test process making calls in sequence (`stand/README.md`, `compose.yaml`). In production: several agents at once against one wrapper.
 
-What I re-ran myself: `connectors/kb` pytest (40 passed), root `uv run pytest` (838 passed), ruff, ruff format, mypy, `uv lock --check`, `uv run mutmut run` in `connectors/kb` (670 mutants, 665 killed, 5 survived, all 5 listed as equivalent), mutmut on `server.py` in a throwaway worktree (234 mutants, 91 survived), a throwaway test with an oversized KB document, and `stand/run.sh` end to end (results in `reports/critic/M6-cycle-1.json`).
+What I re-ran myself: `connectors/kb` pytest (40 passed), root `uv run pytest` (838 passed), ruff, ruff format, mypy, `uv lock --check`, `uv run mutmut run` in `connectors/kb` (670 mutants, 665 killed, 5 survived, all 5 listed as equivalent), mutmut on `server.py` in a throwaway worktree (234 mutants, 91 survived), a throwaway test with an oversized KB document, and `stand/run.sh` end to end: 3 x 35 passed (fresh, after-restart, after-recreate), EXIT 0.
 
 **What this change does:** It adds a KB wrapper connector `connectors/kb` with three read tools (`kb.documents.search`, `kb.documents.get`, `kb.context.get`). They check identity, then the grants bundle, then the collection grants, and only then call a fake KB that lives in the same process. It plugs the wrapper into the M5 dev stand (gateway, virtual server, PDP rules, merged grants bundle) and adds stand tests through ContextForge. The real KB (`gxg_agents_v2`) was never accessed, so the gap audit is a template and three of four AC are not done.
 
@@ -48,7 +48,7 @@ What I re-ran myself: `connectors/kb` pytest (40 passed), root `uv run pytest` (
 
 7. **The CI stand job may run past its 30-minute limit** (`.github/workflows/ci.yml:197`)
    - **What this is:** `m5-stand` has `timeout-minutes: 30`.
-   - **Problem:** The suite now takes about 445 s per run instead of 336 s (the executor's M6.json and my rerun show about 115 s more per run, from the kb tests). Three runs come to about 22 min of tests, plus two image builds, three `up --wait`, a bootstrap and a ContextForge restart. My local run took the time recorded in the JSON report. On a cold GitHub runner this is close to the limit.
+   - **Problem:** The suite now takes about 445 s per run instead of 336 s (the executor's M6.json and my rerun show about 115 s more per run, from the kb tests). Three runs come to about 22 min of tests, plus two image builds, three `up --wait`, a bootstrap and a ContextForge restart. My local run took 24 min of wall time with cached images (3 x 35 passed). On a cold GitHub runner, with two image builds and a ContextForge pull, this is close to the limit.
    - **Fix:** Raise the limit to 45 min, or make the kb stand tests cheaper: they call `docker compose logs` on every audit read (about 30-45 s per test).
    - **If we skip it:** `all-green` becomes flaky on timeouts.
 
