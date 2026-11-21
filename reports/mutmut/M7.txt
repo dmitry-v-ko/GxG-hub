@@ -1,4 +1,6 @@
-M7 cycle 2 — DoD-4 evidence on the final code commit c6bb52f (approval/src, approval/tests, approval/tests_db
+M7 cycle 2 — DoD-4 evidence. mutmut on code commit c6bb52f (approval/src unchanged up to a843c11); SQL check on a843c11 (after the cycle-2 critic: tests and 4 more mutations only).
+scripts/ci/mutmut.sh is green from 33d0499 on: c6bb52f itself lacks the equivalent entry api.x__responses__mutmut_8.
+Originally: final code commit c6bb52f (approval/src, approval/tests, approval/tests_db
 identical in c47b541 and in the report commit; only scripts/ci/mutmut-equivalent.txt and reports/ change after it).
 PostgreSQL 16.15 (Ubuntu, initdb, Unix socket only, GXG_TEST_PG_SOCKET_DIR), 4 cores.
 
@@ -22,7 +24,7 @@ the container restarted at 1166/1635 and `mutmut run` resumed the same mutants/ 
   Kit (M1), tools/gxg-policy (M2), root (M0.1, M2): code unchanged in cycle 2 -> results of reports/mutmut/M7.txt
   cycle 1 / scripts/ci/mutmut.sh on 932645a stand (kit 978/988 with the 10 M1 equivalents).
 
-== 2. SQL mutation check, scripts/ci/mutate_m7_sql.py (one textual mutation at a time, pytest -x approval/tests_db)
+== 2. SQL mutation check, scripts/ci/mutate_m7_sql.py on a843c11 (one textual mutation at a time, pytest -x approval/tests_db)
 Why own code: mutmut mutates Python only and leaves SQL string constants and PL/pgSQL alone; no maintained
 mutation tool for application SQL exists (DoD-4 allows an own check; cycle-1 critic confirmed). Runs inside
 scripts/ci/mutmut.sh (CI job `mutmut`). Locking clauses are not in the list (races; see the module docstring).
@@ -81,6 +83,7 @@ scripts/ci/mutmut.sh (CI job `mutmut`). Locking clauses are not in the list (rac
   killed      0001_core.py: execution window expired early
   killed      0001_core.py: reservation released early
   killed      0001_core.py: dispatch declared unknown early
+  killed      0001_core.py: auto usage count without its index
   equivalent  0001_core.py: equivalent: an execution in outcome_unknown belongs to an intent in outcome_unknown, and T7 (the only insert into executions) is allowed only from approved: the index is a second guard
   killed      0001_core.py: two votes of one human
   killed      0001_core.py: ui reads args
@@ -102,10 +105,13 @@ scripts/ci/mutmut.sh (CI job `mutmut`). Locking clauses are not in the list (rac
   killed      intents.py: requester pending cap counts the whole tenant
   killed      intents.py: auto limit counts another tenant's intents
   killed      intents.py: auto day limit window too long
+  killed      intents.py: auto day limit window too short (fail open)
+  killed      intents.py: auto hour window too short (fail open)
+  killed      intents.py: retry_after_s from the newest intent
   killed      intents.py: auto hour limit counts the day
   killed      intents.py: auto limit counts human intents of the rule
   killed      intents.py: auto limit counts other rules
-  79 mutations listed: 0 not as expected (survivor, stale text, killed 'equivalent')
+  83 mutations listed: 0 not as expected (survivor, stale text, killed 'equivalent')
   sql_exit=0
   Equivalents explained (listed in the script, prefix "equivalent:"; the script fails if one is killed):
     - _gxg_move version CAS: every caller passes a row it locked FOR UPDATE; callers with a client version compare
@@ -118,4 +124,6 @@ scripts/ci/mutmut.sh (CI job `mutmut`). Locking clauses are not in the list (rac
       outcome_unknown; T7 (the only insert into executions) is allowed only from approved.
   Removed instead of listed: the live-execution check of gxg_cancel (unreachable: T6 only from
   pending_approval/approved, which never have a live execution).
+  Added after the cycle-2 critic (all killed): index (tenant_id, created_at) dropped, auto hour window 30 min,
+  auto day window 12 h (both fail open), retry_after_s from max(created_at).
   First run (on 7ba8c40^ code, before the new tests): 10 not as expected -> 8 killed by new tests, 2 equivalent.

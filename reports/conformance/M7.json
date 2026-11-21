@@ -4,7 +4,7 @@
   "branch": "claude/m7-approval-core",
   "base": "dd4f060 (cycle 1 + critic report) + docs/ and reports/GOAL.md merged from claude/admiring-planck-vzys0x",
   "commit": "c6bb52f53cf7f71e52939f8261c2bc9db1d8b477",
-  "commit_note": "Final code commit of cycle 2 (c47b541 merges a reports-only commit of cycle 1). The report commit adds reports/ and one line of scripts/ci/mutmut-equivalent.txt; approval/src, tests, tests_db unchanged.",
+  "commit_note": "Final code commit of cycle 2 (c47b541 merges a reports-only commit of cycle 1). The report commit adds reports/ and one line of scripts/ci/mutmut-equivalent.txt; approval/src, tests, tests_db unchanged. After the cycle-2 critic (56f580e): a843c11 adds tests and 4 SQL mutations only (approval/src unchanged); SQL check re-run on a843c11: 83 mutations, 79 killed, 4 equivalents. scripts/ci/mutmut.sh is green from 33d0499 (equivalent list entry api.x__responses__mutmut_8).",
   "run_at": "2026-11-21T18:00:00Z",
   "author": "Claude Code (milestone owner, M7 cycle 2)",
   "plan": "reports/plans/M7-cycle-2.md",
@@ -220,7 +220,7 @@
     "DoD-1": "push to claude/m7-approval-core; PR into main is the owner's step",
     "DoD-2": "all 13 AC automated",
     "DoD-3": "this file",
-    "DoD-4": "mutmut on policy/transitions/quotas/intents/api/mcp at c6bb52f: 1635 mutants, 1624 killed, 11 survived = all listed equivalents (scripts/ci/mutmut-equivalent.txt); SQL check scripts/ci/mutate_m7_sql.py at c6bb52f: 79 mutations, 75 killed, 4 listed equivalents, 0 not as expected; both run by scripts/ci/mutmut.sh (reports/mutmut/M7.txt)",
+    "DoD-4": "mutmut on policy/transitions/quotas/intents/api/mcp at c6bb52f: 1635 mutants, 1624 killed, 11 survived = all listed equivalents (scripts/ci/mutmut-equivalent.txt); SQL check scripts/ci/mutate_m7_sql.py at a843c11: 83 mutations, 79 killed, 4 listed equivalents, 0 not as expected; both run by scripts/ci/mutmut.sh (reports/mutmut/M7.txt)",
     "DoD-5": "0 skipped/xfailed",
     "DoD-6": "reports/plans/M7-cycle-1.md table + reports/plans/M7-cycle-2.md table (OpenAPI comparison vs oasdiff, SQL mutation driver, T1 counts, UUID check)"
   },
