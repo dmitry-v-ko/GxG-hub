@@ -94,10 +94,16 @@ class Keys:
         self.payload = {t: {p: crypto.generate() for p in ("args", "preview")} for t in TENANTS}
 
 
-def bundle(keys: Keys, *, built_at: float, grants: dict[str, Any] | None = None, policies: Any = None) -> bytes:
-    """GR-11a bundle (canonical JSON) of the demo fixtures; `grants` replaces a tenant's grants file."""
+def bundle(
+    keys: Keys, *, built_at: float, grants: dict[str, Any] | None = None, policies: Any = None, timeout: int = 0
+) -> bytes:
+    """GR-11a bundle (canonical JSON) of the demo fixtures; `grants` replaces a tenant's grants file; `timeout`
+    replaces the tools' dispatch_timeout_s."""
     manifest = yaml.safe_load((DEMO / "gxg-manifest.yaml").read_text(encoding="utf-8"))
     tools = [{k: t[k] for k in TOOL_KEYS if k in t} for t in manifest["tools"]]
+    for t in tools:
+        if timeout and "dispatch_timeout_s" in t:
+            t["dispatch_timeout_s"] = timeout
     files = {t: yaml.safe_load((DEMO / "fixtures" / "grants" / f"{t}.yaml").read_text("utf-8")) for t in TENANTS}
     files.update(grants or {})
     policies = policies or {"t-alpha": auto_policy("t-alpha", ACTOR_A), "t-beta": auto_policy("t-beta", ACTOR_B)}

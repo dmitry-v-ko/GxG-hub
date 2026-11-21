@@ -95,3 +95,28 @@ def test_json_file_reloads_on_change_and_keeps_the_last_good(tmp_path: Path) -> 
 def test_reconcile_backoff(waited: float, delay: int | None) -> None:
     """T17: the next reconcile after the time already waited (doubling), 5 s … 1 h; after 24 h a human (T18)."""
     assert reconcile_delay_s(waited) == delay
+
+
+def test_rotate_without_now_uses_the_clock_and_remove_keeps_the_modes(tmp_path: Path) -> None:
+    import time
+    from datetime import datetime
+
+    keys_file, jwks_file = tmp_path / "keys.json", tmp_path / "jwks.json"
+    before = time.time()
+    a = keys.rotate(keys_file, jwks_file)
+    b = keys.rotate(keys_file, jwks_file)
+    start = datetime.fromisoformat(json.loads(keys_file.read_text())[0]["not_before"]).timestamp()
+    assert before + 900 - 1 <= start <= time.time() + 900
+    keys.remove(keys_file, jwks_file, a)
+    assert oct(keys_file.stat().st_mode & 0o777) == "0o600" and oct(jwks_file.stat().st_mode & 0o777) == "0o644"
+    assert [k["kid"] for k in json.loads(jwks_file.read_text())["keys"]] == [b]
+
+
+def test_no_active_key_message() -> None:
+    with pytest.raises(GxgError) as err:
+        SigningKeys(lambda: [], lambda: T0).current()
+    assert err.value.to_dict() == {
+        "code": "temporarily_unavailable",
+        "message": "no executor signing key is active yet",
+        "retryable": True,
+    }

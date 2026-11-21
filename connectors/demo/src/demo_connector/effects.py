@@ -21,6 +21,7 @@ from typing import Any
 import anyio
 import httpx2
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from jsonschema import Draft202012Validator, FormatChecker
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -47,6 +48,21 @@ HTTP = {
     "temporarily_unavailable": 503,
 }
 NOT_FOUND = "not found"
+# Reconcile body (approval-service-v1, connector contract for the executor)
+RECONCILE_BODY = Draft202012Validator(
+    {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["intent_id", "execution_id", "idempotency_key"],
+        "properties": {
+            "intent_id": {"type": "string", "format": "uuid"},
+            "execution_id": {"type": "string", "format": "uuid"},
+            "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 256},
+            "provider_operation_id": {"type": "string", "maxLength": 256},
+        },
+    },
+    format_checker=FormatChecker(),
+)
 audit = logging.getLogger("demo_connector.audit")
 errors = logging.getLogger("demo_connector.errors")
 
@@ -71,10 +87,10 @@ def rid(connection: str, board: str) -> str:
     return f"{DOMAIN}:{connection}/{RTYPE}/{board}"
 
 
-def args_hash(target: tuple[str, str, str, str, str], args: Any) -> str:
-    """EFF-05 over (tool_key, tool_version, tenant_id, connection_id, resource_id) and the canonical args."""
-    keys = ("tool_key", "tool_version", "tenant_id", "connection_id", "resource_id")
-    return canonical.hash({**dict(zip(keys, target, strict=True)), "args": args})
+def args_hash(tool: str, version: str, tenant: str, connection: str, resource: str, args: Any) -> str:  # noqa: PLR0917
+    """EFF-05: hash of {tool_key, tool_version, tenant_id, connection_id, resource_id, args}."""
+    return canonical.hash({"tool_key": tool, "tool_version": version, "tenant_id": tenant, "connection_id": connection,
+                           "resource_id": resource, "args": args})  # fmt: skip
 
 
 class Effects:
@@ -100,7 +116,7 @@ class Effects:
     async def propose(self, ident: VerifiedIdentity, args: dict[str, Any]) -> Result:
         tenant, principal = ident.tenant_id, ident.principal
         connection = self.backend.connections.get(tenant)
-        board = self.backend.boards.get(tenant, {}).get(args["board_id"]) if connection else None
+        board = self.backend.boards[tenant].get(args["board_id"]) if connection else None
         if connection is None or board is None:
             raise GxgError("not_found", NOT_FOUND)
         resource = rid(connection, board.id)
@@ -118,7 +134,7 @@ class Effects:
             "connection_id": connection,
             "resource_id": resource,
             "canonical_args": canonical_args,
-            "canonical_args_hash": args_hash((PROPOSE, version, tenant, connection, resource), canonical_args),
+            "canonical_args_hash": args_hash(PROPOSE, version, tenant, connection, resource, canonical_args),
             # EFF-08: no key from the agent → our own; then repeats are not deduplicated
             "idempotency_key": args.get("idempotency_key") or f"demo:{uuid.uuid4()}",
             "preview": {  # EFF-06, EFF-30: from canonical args and the backend, labels from the manifest
@@ -139,7 +155,7 @@ class Effects:
                 "intent_id": doc["intent_id"],
                 "grant_id": [decision.grant_id],
             }
-        raise _refusal(resp.status_code, doc)
+        raise _refusal(doc)
 
     # --- internal HTTP (port 8081) ------------------------------------------------------------------
     def internal_app(self) -> Starlette:
@@ -150,7 +166,7 @@ class Effects:
             routes=[
                 Route(f"/internal/v1/execute/{EXECUTE}", self._endpoint(self.execute), methods=["POST"]),
                 Route(f"/internal/v1/reconcile/{EXECUTE}", self._endpoint(self.reconcile), methods=["POST"]),
-                Route("/healthz", healthz, methods=["GET"]),
+                Route("/healthz", healthz),
             ]
         )
 
@@ -177,7 +193,7 @@ class Effects:
                 entry["outcome"] = exc.code
                 if isinstance(exc, TokenError):
                     entry["reason"] = exc.reason  # why (kid, exp, replay…); never the token
-                return JSONResponse(exc.to_dict(), status_code=HTTP.get(exc.code, 500))
+                return JSONResponse(exc.to_dict(), status_code=HTTP[exc.code])  # every code raised here is mapped
             except Exception as exc:  # before dispatch (after it, execute catches everything): no provider call
                 entry |= {"outcome": "internal_error", "error": type(exc).__name__}
                 tb = traceback.extract_tb(exc.__traceback__)
@@ -235,21 +251,20 @@ class Effects:
             raise TokenError("binding")
         tenant, principal, resource = claims["ten"], claims["req"], claims["res"]
         entry |= {"tenant": tenant, "principal": principal, "intent_id": claims["sub"], "execution_id": claims["jti"]}
-        tool_key, _, version = claims["tool"].rpartition("@")
+        tool_key, _, version = claims["tool"].partition("@")  # tool names have no `@` (execution-token schema)
         args = body["args"]
         try:
-            same = args_hash((tool_key, version, tenant, claims["con"], resource), canonical.normalize(args))
-        except GxgError:
-            same = ""
+            same = args_hash(tool_key, version, tenant, claims["con"], resource, canonical.normalize(args))
+        except GxgError:  # a float or a lone surrogate: not what was approved
+            same = None
         if same != claims["ahs"]:  # EFF-18 п.2: one changed character of text or recipient
             raise GxgError("invalid_input", "args do not match the approved hash")
-        prefix = rid(str(self.backend.connections.get(tenant)), "")
         if (
             (tool_key, version) != (PROPOSE, self.tool["version"])
             or tenant not in self.backend.connections
+            # board ids are exact keys: a resource of another domain or connection is never one of them
+            or resource.removeprefix(rid(self.backend.connections[tenant], "")) not in self.backend.boards[tenant]
             or claims["con"] != self.backend.connections[tenant]
-            or not resource.startswith(prefix)
-            or resource.removeprefix(prefix) not in self.backend.boards.get(tenant, {})
         ):  # EFF-18 п.3: the token's tool, tenant, connection and resource are this connector's
             raise GxgError("permission_denied", "execution target is not served by this connector")
         self.refresh()
@@ -258,15 +273,13 @@ class Effects:
         return claims
 
     async def reconcile(self, body: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
-        try:
-            intent, execution = str(uuid.UUID(body["intent_id"])), str(uuid.UUID(body["execution_id"]))
-        except (KeyError, TypeError, ValueError):
-            raise GxgError("invalid_input", "intent_id and execution_id are required UUIDs") from None
-        entry |= {"intent_id": intent, "execution_id": execution}
-        executed, operation = self.provider.lookup(intent)
+        if not RECONCILE_BODY.is_valid(body):
+            raise GxgError("invalid_input", "body does not match the reconcile request")
+        entry |= {"intent_id": body["intent_id"], "execution_id": body["execution_id"]}
+        executed, operation = self.provider.lookup(body["intent_id"])
         return {
-            "intent_id": intent,
-            "execution_id": execution,
+            "intent_id": body["intent_id"],
+            "execution_id": body["execution_id"],
             "finding": "executed" if executed else "not_executed",
             "provider_operation_id": operation,
         }
@@ -290,24 +303,16 @@ def _json(resp: httpx2.Response) -> Any:
         return None
 
 
-def _refusal(status: int, doc: Any) -> GxgError:
-    """The Approval Service's error, as the agent should see it; anything unexpected is retryable unavailability."""
-    if (
-        status < 500
-        and isinstance(doc, dict)
-        and doc.get("code")
-        in (
-            "invalid_input",
-            "permission_denied",
-            "not_found",
-            "conflict",
-            "effect_disabled",
-            "rate_limited",
-        )
-    ):  # fmt: skip (unauthenticated is about our service JWT, not the agent: unavailable)
-        retry = doc.get("retry_after_s") if doc.get("code") == "rate_limited" else None
+# Refusals of the Approval Service passed to the agent; anything else (including unauthenticated, which is about our
+# service JWT, not the agent) is retryable unavailability.
+PASSED_ON = ("invalid_input", "permission_denied", "not_found", "conflict", "effect_disabled", "rate_limited")
+
+
+def _refusal(doc: Any) -> GxgError:
+    if isinstance(doc, dict) and doc.get("code") in PASSED_ON:
+        retry = doc.get("retry_after_s") if doc["code"] == "rate_limited" else None
         try:
-            return GxgError(doc["code"], str(doc.get("message", ""))[:200], retry_after_s=retry)
-        except ValueError:  # e.g. rate_limited without a valid retry_after_s
+            return GxgError(doc["code"], str(doc.get("message")), retry_after_s=retry)  # GxgError caps the length
+        except ValueError:  # rate_limited without a valid retry_after_s
             pass
     return GxgError("temporarily_unavailable", "approval service did not answer")

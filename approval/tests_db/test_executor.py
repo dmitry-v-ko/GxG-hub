@@ -19,7 +19,7 @@ import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import psycopg
@@ -49,6 +49,7 @@ from effects_stack import (
     write_bundle,
 )
 from fastmcp import Client
+from prometheus_client import REGISTRY
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
@@ -115,7 +116,7 @@ class Stack:
             decryptor=Decryptor("args", {t: v["args"][0] for t, v in self.keys.payload.items()}),
             keys=SigningKeys(lambda: self.signing, keys_now),
             svc_key=self.keys.services[EXECUTOR_ID],
-            http=lambda _service: client,
+            http=lambda service: client if service.id == CONNECTOR else httpx.Client(),
         )
         self.executors.append(ex)
         return ex
@@ -220,8 +221,14 @@ def stack(pg: Any, owner: psycopg.Connection[Any], api_pool: ConnectionPool[Any]
 # --- AC-M8-01 -------------------------------------------------------------------------------------
 
 
-def test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so(stack: Stack) -> None:
+def test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so(
+    stack: Stack, caplog: pytest.LogCaptureFixture
+) -> None:
     """propose → auto-approved → executor → demo → provider: `effects.status` = succeeded within 10 s."""
+    caplog.set_level("INFO")
+    before = REGISTRY.get_sample_value(
+        "gxg_executions_total", {"tenant": "t-alpha", "tool": "demo.message.propose", "outcome": "succeeded"}
+    )
     started = time.time()
     created = stack.propose(idempotency_key="cand-1:v1")
     assert created["status"] == "approved"  # EFF-22
@@ -249,6 +256,23 @@ def test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so(stack: S
     assert calls[0]["text_hash"] == hashlib.sha256(TEXT.encode()).hexdigest()
     assert stack.intent(created["intent_id"])["attempts"] == 1
     assert stack.executions(created["intent_id"]) == [(1, "succeeded", None)]
+    after = REGISTRY.get_sample_value(
+        "gxg_executions_total", {"tenant": "t-alpha", "tool": "demo.message.propose", "outcome": "succeeded"}
+    )
+    assert (after or 0) - (before or 0) == 1
+    (event,) = [json.loads(r.getMessage()) for r in caplog.records if r.name == "gxg_approval.executor"]
+    execution = str(stack.owner.execute("SELECT execution_id FROM executions").fetchone()[0])  # type: ignore[index]
+    assert event == {
+        "event": "executed",
+        "intent_id": created["intent_id"],
+        "execution_id": execution,
+        "tenant": "t-alpha",
+        "tool": "demo.message.propose",
+        "outcome": "succeeded",
+        "error": None,
+    }
+    receipt = stack.owner.execute("SELECT provider_operation_id, provider_receipt_ref FROM executions").fetchone()
+    assert receipt is not None and receipt[0] == receipt[1] and str(receipt[0]).startswith("demo-op-")
 
 
 def test_propose_is_listed_and_execute_is_not(stack: Stack) -> None:
@@ -398,7 +422,7 @@ def test_token_for_another_target_is_refused(stack: Stack, over: dict[str, str])
     r, _ = reserve_one(stack)
     claims = stack.claims(r, **over)
     target = (claims["tool"].split("@")[0], "1.0.0", claims["ten"], claims["con"], claims["res"])
-    claims["ahs"] = args_hash(target, {"recipient": RECIPIENT, "text": TEXT})
+    claims["ahs"] = args_hash(*target, {"recipient": RECIPIENT, "text": TEXT})
     resp = stack.execute(r, exec_token.sign(stack.keys.executor, claims))
     assert resp.status_code == 403, resp.text
     assert stack.demo.calls() == [] and stack.dispatches(str(r.intent_id)) == 0
@@ -407,7 +431,9 @@ def test_token_for_another_target_is_refused(stack: Stack, over: dict[str, str])
 # --- AC-M8-06 -------------------------------------------------------------------------------------
 
 
-def test_ac06_commit_then_drop_is_unknown_then_reconciled_succeeded(stack: Stack) -> None:
+def test_ac06_commit_then_drop_is_unknown_then_reconciled_succeeded(
+    stack: Stack, caplog: pytest.LogCaptureFixture
+) -> None:
     """EX-11: the provider executed and the answer was lost: outcome_unknown, reconcile → reconciled_succeeded."""
     stack.demo.mode("commit_then_drop", count=1)
     created = stack.propose()
@@ -420,6 +446,7 @@ def test_ac06_commit_then_drop_is_unknown_then_reconciled_succeeded(stack: Stack
     ).fetchall()
     assert ("complete_outcome_unknown", "outcome_unknown") in actions
     assert actions[-1] == ("reconcile_executed", "reconciled_succeeded")
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]  # no 24 h alert for a resolved intent
 
 
 # --- AC-M8-07 -------------------------------------------------------------------------------------
@@ -469,7 +496,7 @@ def test_ac07_connector_killed_after_dispatch(stack: Stack) -> None:
 
 
 def test_reconcile_gives_up_after_24_hours(stack: Stack, caplog: pytest.LogCaptureFixture) -> None:
-    """T17: after 24 h of `unknown` no further reconcile is queued; the intent waits for a human (T18), with an alert."""
+    """T17: after 24 h of `unknown` no reconcile is queued any more; a human decides (T18), with an alert."""
     stack.demo.mode("commit_then_drop", count=1)
     created = stack.propose()
     ex = stack.executor()
@@ -485,7 +512,8 @@ def test_reconcile_gives_up_after_24_hours(stack: Stack, caplog: pytest.LogCaptu
         (created["intent_id"],),
     ).fetchone()
     assert left == (0,)
-    assert any("ALERT executor" in r.getMessage() and created["intent_id"] in r.getMessage() for r in caplog.records)
+    alert = f"ALERT executor: intent {created['intent_id']} outcome_unknown for 24 h: manual review (T17, T18)"
+    assert [r.getMessage() for r in caplog.records if r.levelname == "ERROR"] == [alert]
     stack.demo_servers, stack.connector = serve_demo(stack.cfg)  # for the fixture's teardown
 
 
@@ -724,7 +752,7 @@ def test_connector_not_registered_for_the_tenant_gets_no_token(stack: Stack) -> 
     r, ex = reserve_one(stack)
     stack.store.load(*_bundle_without_tenant(stack))
     ex.execute(r)
-    assert stack.executions(str(r.intent_id))[0][1:] == ("failed_before_effect", "no_response")
+    assert stack.executions(str(r.intent_id))[0][1:] == ("failed_before_effect", "not_registered")
     assert stack.demo.calls() == []
 
 
@@ -750,3 +778,177 @@ def test_logs_carry_no_text_and_no_token(stack: Stack, caplog: pytest.LogCapture
 
 def test_policy_used_by_the_stack_is_valid() -> None:
     assert _schema.validator("approval-policy").is_valid(auto_policy("t-alpha", ACTOR_A))
+
+
+# --- executor branches (DoD-4) --------------------------------------------------------------------
+
+
+def mock_executor(stack: Stack, handler: Callable[[httpx.Request], httpx.Response]) -> Executor:
+    """An executor whose connector is a mock (answers the real connector never gives)."""
+    ex = stack.executor("mock")
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://demo.internal:8081")
+    ex.http = lambda _service: client
+    return ex
+
+
+def test_stale_outbox_rows_are_delivered_without_work(stack: Stack, pg: Any) -> None:
+    cancelled = stack.propose()
+    i = stack.intent(cancelled["intent_id"])
+    with pg.connect("gxg_api") as api:
+        api.execute("SELECT gxg_cancel(%s, 't-alpha', %s, %s)", (cancelled["intent_id"], ACTOR_A, i["version"]))
+    exhausted = stack.propose()
+    stack.owner.execute("UPDATE intents SET max_attempts = 0 WHERE intent_id = %s", (exhausted["intent_id"],))
+    stack.owner.execute(
+        "INSERT INTO outbox (topic, intent_id, payload, created_at, available_at) "
+        "VALUES ('reconcile', %s, '{}', now(), now())",
+        (exhausted["intent_id"],),
+    )  # a reconcile row for an intent that is not outcome_unknown
+    ex = stack.executor()
+    assert [ex.run_once() for _ in range(4)] == [True, True, True, False]
+    pending = stack.owner.execute("SELECT count(*) FROM outbox WHERE delivered_at IS NULL "
+                                  "AND topic IN ('execute', 'reconcile')").fetchone()  # fmt: skip
+    assert pending == (0,)
+    assert stack.owner.execute("SELECT count(*) FROM executions").fetchone() == (0,)
+    assert stack.demo.calls() == []
+
+
+@pytest.mark.parametrize(
+    ("answer", "error"),
+    [
+        (httpx.Response(200, text="<html>"), "http_200"),
+        (httpx.Response(200, json={"status": "succeeded"}), "http_200"),  # not an effect-result
+        (httpx.Response(500, json={"code": "internal_error"}), "http_500"),
+    ],
+)
+def test_unusable_answers_before_dispatch_are_refused_attempts(
+    stack: Stack, answer: httpx.Response, error: str
+) -> None:
+    created = stack.propose()
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return answer
+
+    ex = mock_executor(stack, handler)
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    ex.execute(r)
+    assert stack.executions(created["intent_id"]) == [(1, "failed_before_effect", error)]
+    assert stack.intent(created["intent_id"])["attempts"] == 1  # T12a counts
+    (req,) = seen
+    assert req.url.path == "/internal/v1/execute/demo.message.execute"
+    assert req.extensions["timeout"]["read"] == 60  # AS-13: dispatch_timeout_s of the tool from the bundle
+    claims = _jwt_payload(req.headers["authorization"].split()[1])
+    assert (claims["iss"], claims["aud"]) == (EXECUTOR_ID, CONNECTOR)
+
+
+def _jwt_payload(token: str) -> dict[str, Any]:
+    payload = token.split(".")[1]
+    doc: dict[str, Any] = json.loads(_jwt.b64url_decode(payload))
+    return doc
+
+
+def test_a_released_execution_is_not_completed(stack: Stack, pg: Any, caplog: pytest.LogCaptureFixture) -> None:
+    """The sweeper released the reservation (T10) while the executor was away: its late failure changes nothing."""
+    caplog.set_level("INFO")
+    created = stack.propose()
+    ex = mock_executor(stack, lambda _r: httpx.Response(503))
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    stack.owner.execute("UPDATE executions SET reserve_lease_until = now() - interval '1 second'")
+    with pg.connect("gxg_sweeper") as sweeper:
+        sweeper.execute("SELECT gxg_sweep(100)")
+    ex.execute(r)
+    assert stack.executions(created["intent_id"]) == [(1, "released", None)]
+    events = [json.loads(x.getMessage()) for x in caplog.records if x.name == "gxg_approval.executor"]
+    assert events == [{"event": "not_completed", "intent_id": created["intent_id"], "execution_id": str(r.execution_id),
+                       "tenant": "t-alpha", "tool": "demo.message.propose", "state": "released",
+                       "error": "http_503"}]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        lambda body: httpx.Response(
+            200, json={**body, "execution_id": "00000000-0000-4000-8000-000000000009", "finding": "executed"}
+        ),
+        lambda body: httpx.Response(200, json={"finding": "executed"}),
+        lambda body: httpx.Response(404, json={**body, "finding": "executed"}),
+        lambda body: httpx.Response(200, text="x"),
+    ],
+    ids=["other-execution", "invalid", "not-200", "not-json"],
+)
+def test_unusable_reconcile_answers_are_unknown(stack: Stack, answer: Callable[[dict[str, Any]], Any]) -> None:
+    stack.demo.mode("commit_then_drop", count=1)
+    created = stack.propose()
+    stack.drain(stack.executor(), lambda: stack.status(created["intent_id"]) == "outcome_unknown")
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies.append(body)
+        return cast(httpx.Response, answer({k: body[k] for k in ("intent_id", "execution_id")}))
+
+    version = stack.intent(created["intent_id"])["version"]
+    ex = mock_executor(stack, handler)
+    assert ex.run_once() is True
+    assert stack.status(created["intent_id"]) == "outcome_unknown"
+    assert stack.intent(created["intent_id"])["version"] == version + 1  # T17
+    execution = stack.owner.execute("SELECT execution_id FROM executions").fetchone()
+    assert execution is not None
+    assert bodies == [{"intent_id": created["intent_id"], "execution_id": str(execution[0]),
+                       "idempotency_key": stack.intent(created["intent_id"])["idempotency_key"]}]  # fmt: skip
+
+
+def test_connector_dropped_from_the_bundle_is_never_called(stack: Stack) -> None:
+    """AS-25, AS-26: the connector entry, or its tool, is gone: no token, no call; reconcile stays unknown."""
+    created = stack.propose()
+    data = json.loads(bundle(stack.keys, built_at=stack.built_at + 5))
+    for svc in data["platform"]["services"]:
+        if svc["id"] == CONNECTOR:
+            svc["tools"] = [t for t in svc["tools"] if t["name"] != "demo.message.propose"]
+    raw = canonical.dumps(data)
+    stack.store.load(
+        raw, json.dumps({"alg": "EdDSA", "kid": KID, "sig": _jwt.b64url_encode(stack.keys.ci.sign(raw))}).encode()
+    )
+    ex = stack.executor()
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    ex.execute(r)
+    assert stack.executions(created["intent_id"]) == [(1, "failed_before_effect", "not_registered")]
+    assert stack.demo.calls() == []
+
+
+def test_as13_the_executor_waits_only_dispatch_timeout_s(stack: Stack) -> None:
+    """AS-13: the HTTP timeout of `execute` is the tool's dispatch_timeout_s (1 s here); then T13."""
+    stack.reload(timeout=1)
+    stack.demo.mode("ok,slow:4000")
+    created = stack.propose()
+    ex = stack.executor()
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    started = time.time()
+    ex.execute(r)
+    assert time.time() - started < 3.5
+    assert stack.status(created["intent_id"]) == "outcome_unknown"
+    assert stack.executions(created["intent_id"]) == [(1, "outcome_unknown", "no_response")]
+
+
+def test_run_survives_an_error_and_stops(stack: Stack, caplog: pytest.LogCaptureFixture) -> None:
+    ex = stack.executor()
+    stop = threading.Event()
+    calls = []
+
+    def flaky() -> bool:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("one bad row")
+        stop.set()
+        return True
+
+    ex.run_once = flaky  # type: ignore[method-assign]
+    started = time.time()
+    ex.run(stop, poll_s=0.2)
+    assert len(calls) == 2 and 0.15 < time.time() - started < 5  # waited one poll after the error
+    assert [r.getMessage() for r in caplog.records if r.name == "gxg_approval.executor"] == ["executor: error"]

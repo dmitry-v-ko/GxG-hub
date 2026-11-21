@@ -14,7 +14,6 @@ Stage C (effects; without DEMO_APPROVAL_URL the connector is read-only: no propo
   DEMO_APPROVAL_AUDIENCE  its service ID in the platform registry (default approval-api)
   DEMO_SVC_KEY_FILE       secret file: Ed25519 seed (base64url) of this connector's service JWT key (AS-06)
   DEMO_PROVIDER_DB        fake provider journal, SQLite in the volume (default /var/lib/demo/provider.sqlite3)
-  DEMO_PROVIDER_TOKEN     fake provider credential (synthetic; never in answers or logs, SC-09)
 """
 
 from __future__ import annotations
@@ -74,7 +73,6 @@ class Settings:
     approval_audience: str = "approval-api"
     svc_key_file: Path | None = None
     provider_db: Path = Path("/var/lib/demo/provider.sqlite3")
-    provider_token: str = ""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:
@@ -90,7 +88,6 @@ class Settings:
             approval_audience=env.get("DEMO_APPROVAL_AUDIENCE", "approval-api"),
             svc_key_file=Path(env["DEMO_SVC_KEY_FILE"]) if env.get("DEMO_SVC_KEY_FILE") else None,
             provider_db=Path(env.get("DEMO_PROVIDER_DB", "/var/lib/demo/provider.sqlite3")),
-            provider_token=env.get("DEMO_PROVIDER_TOKEN", ""),
         )
         if s.approval_url is not None and s.svc_key_file is None:
             raise ConfigError("DEMO_APPROVAL_URL needs DEMO_SVC_KEY_FILE (service JWT key, AS-06)")
@@ -206,15 +203,15 @@ def effects(
     """Stage C wiring: Approval Service client (service JWT), executor JWKS from `api` (AS-09), fake provider."""
     url = str(settings.approval_url)
     key = Ed25519PrivateKey.from_private_bytes(b64url_decode((settings.svc_key_file or Path()).read_text().strip()))
-    jwks_client = httpx2.Client(base_url=url, timeout=5, transport=wiring.jwks)
+    jwks_client = httpx2.Client(base_url=url, transport=wiring.jwks)  # httpx timeouts: 5 s
     jwks = ExecutorJwks(
         lambda: jwks_client.get("/.well-known/gxg-exec-jwks.json").raise_for_status().content, now=wiring.clock
     )
-    approval = Approval(httpx2.AsyncClient(base_url=url, timeout=10, transport=wiring.approval), key,
+    approval = Approval(httpx2.AsyncClient(base_url=url, transport=wiring.approval), key,
                         connector_id=CONNECTOR_ID, audience=settings.approval_audience)  # fmt: skip
     manifest = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
     tool = next(t for t in manifest["tools"] if t["name"] == PROPOSE)
-    provider = Provider(settings.provider_db, settings.provider_token)
+    provider = Provider(settings.provider_db)
     return Effects(backend, store, approval, provider=provider, jwks=jwks, tool=tool, refresh=refresh)
 
 

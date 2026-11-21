@@ -30,7 +30,7 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS calls (
   id INTEGER PRIMARY KEY, tenant TEXT NOT NULL, intent_id TEXT NOT NULL, execution_id TEXT NOT NULL,
   idempotency_key TEXT NOT NULL, recipient TEXT NOT NULL, text_hash TEXT NOT NULL, attempt INTEGER NOT NULL,
   outcome TEXT NOT NULL, operation_id TEXT, at TEXT NOT NULL)"""
-_COLUMNS = ("tenant", "intent_id", "execution_id", "idempotency_key", "recipient", "text_hash", "attempt", "outcome")
+_COLUMNS = "tenant, intent_id, execution_id, idempotency_key, recipient, text_hash, attempt, outcome, at"
 
 
 class Dropped(Exception):
@@ -48,17 +48,18 @@ def text_hash(text: str) -> str:
 
 
 class Provider:
-    def __init__(self, path: Path, credential: str = "") -> None:
-        self._credential = credential  # the per-tenant provider token: used, never stored, logged or returned
+    def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        # one connection for the event loop and the test controls; autocommit; the lock serialises access
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
-        self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.row_factory = sqlite3.Row
         self._db.execute(_SCHEMA)
         self._lock = threading.Lock()
-        self.mode: Mode = "ok"
-        self.remaining: int | None = None  # calls left in `mode`, then `ok`; None: until changed
-        self.dedupe = True
-        self.delay_s = 0.0
+        self.mode: Mode
+        self.remaining: int | None  # calls left in `mode`, then `ok`; None: until changed
+        self.dedupe: bool
+        self.delay_s: float
+        self.set_mode("ok")
 
     def set_mode(self, spec: str, count: int | None = None) -> None:
         """`<mode>[,no_dedupe][,slow:<ms>]`; a bad spec raises ValueError and changes nothing."""
@@ -128,9 +129,9 @@ class Provider:
     def calls(self, idempotency_key: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute(
-                f"SELECT {', '.join(_COLUMNS)}, at FROM calls"  # noqa: S608 (constant column list)
+                f"SELECT {_COLUMNS} FROM calls"  # noqa: S608 (constant column list)
                 + (" WHERE idempotency_key = ?" if idempotency_key is not None else "")
                 + " ORDER BY id",
                 () if idempotency_key is None else (idempotency_key,),
             ).fetchall()
-        return [dict(zip((*_COLUMNS, "at"), r, strict=True)) for r in rows]
+        return [dict(r) for r in rows]
