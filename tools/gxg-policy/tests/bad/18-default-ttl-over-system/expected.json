@@ -1,0 +1,6 @@
+{
+  "description": "defaults.execution_window больше системного умолчания",
+  "code": "ttl-exceeds-default",
+  "file": "approval/t-alpha.yaml",
+  "path": "defaults.execution_window"
+}

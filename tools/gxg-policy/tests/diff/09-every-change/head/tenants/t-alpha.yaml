@@ -1,0 +1,22 @@
+tenant: t-alpha
+schema_version: 1
+connections:
+  - { id: kb-main, domain: kb, credential_ref: secret://t-alpha/kb/service }
+principals:
+  agents:
+    - id: agent:t-alpha:hermes
+    - id: agent:t-alpha:scout
+  humans:
+    - { id: "oidc:https://idp.example.invalid:1", roles: [approver] }
+    - { id: "oidc:https://idp.example.invalid:2", roles: [approver, tenant_admin] }
+groups:
+  researchers: [agent:t-alpha:hermes]
+grants:
+  - { id: a1, subjects: [group:researchers], actions: [read], resources: [kb:kb-main/collection/a], expires_at: "2027-03-01T00:00:00Z" }
+  - { id: a2, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/a], expires_at: "2027-02-01T00:00:00Z" }
+  - { id: b1, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/b] }
+  - { id: c1, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/c], expires_at: "2027-01-01T00:00:00Z" }
+  - { id: d1, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/d], expires_at: "2027-01-01T00:00:00Z" }
+  - { id: d2, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/d], expires_at: "2026-12-01T00:00:00Z" }
+  - { id: e1, subjects: [agent:t-alpha:scout], actions: [read], resources: [kb:kb-main/collection/e, kb:kb-main/collection/f] }
+  - { id: g1, subjects: [agent:t-alpha:scout], actions: [read], resources: [kb:kb-main/collection/g], expires_at: "2027-05-01T00:00:00Z" }

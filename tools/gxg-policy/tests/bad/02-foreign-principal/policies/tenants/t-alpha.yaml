@@ -1,0 +1,20 @@
+# AC-M2-02 fixture (synthetic)
+tenant: t-alpha
+schema_version: 1
+connections:
+  - id: kb-main
+    domain: kb
+    credential_ref: secret://t-alpha/kb/service
+principals:
+  agents:
+    - id: agent:t-alpha:hermes
+  humans:
+    - id: oidc:https://idp.example.invalid:1
+      roles: [approver]
+groups:
+  researchers: [agent:t-alpha:hermes]
+grants:
+  - id: kb-read
+    subjects: [agent:t-beta:spy]
+    actions: [read]
+    resources: [kb:kb-main/collection/public]

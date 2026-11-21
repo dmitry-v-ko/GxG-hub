@@ -1,0 +1,13 @@
+schema_version: 1
+services:
+  - { id: executor, kind: executor, public_keys: [ed25519:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA], tenants: ["*"] }
+  - id: demo
+    kind: connector
+    public_keys: [ed25519:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC]
+    tenants: [t-alpha, t-nowhere]
+    internal_url: https://demo.internal:8081
+    tools: [{ name: demo.notes.search, version: 1.0.0, effect_class: read, action: read }]
+  - { id: demo, kind: approval_mcp, public_keys: [ed25519:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD], tenants: [t-alpha] }
+webhooks:
+  - { id: wh, tenant: t-alpha, url: "https://hooks.example.invalid/a", secret_ref: "secret://t-alpha/hooks/a" }
+  - { id: wh, tenant: t-elsewhere, url: "https://hooks.example.invalid/b", secret_ref: "secret://t-alpha/hooks/b" }

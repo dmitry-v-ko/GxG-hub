@@ -22,5 +22,8 @@ uv run python scripts/ci/prove_schema_guard.py
 scripts/ci/gitleaks.sh tree HEAD
 scripts/ci/gitleaks.sh range "0000000000000000000000000000000000000000..HEAD"
 uv run pytest tests/secrets
+uv run gxg-policy validate policies/
+uv run gxg-policy lint policies/
+bash scripts/ci/bundle_smoke.sh
 scripts/ci/mutmut.sh >/dev/null
 echo "check-all: OK"

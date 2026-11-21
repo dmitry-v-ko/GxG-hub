@@ -115,10 +115,14 @@ quote-style = "preserve"
 exclude = ["*.md"]
 
 [tool.mutmut]
-# DoD-4 / AC-M0.1-03: modules with the key conditions of M0. Run: scripts/ci/mutmut.sh
+# DoD-4, one command for every root module with key conditions: scripts/ci/mutmut.sh
+# (also runs tools/gxg-policy, which has its own section; the kit has its own section too).
+# M0.1 (AC-M0.1-03): scripts/ci/ and conftest.py, every mutant killed.
+# M2: scripts/ci/widening_gate.py; survivors only if listed in scripts/ci/mutmut-equivalent.txt.
 source_paths = ["scripts/ci/", "conftest.py"]
-# M1 coverage gate (AC-M1-09): outside the DoD-4 scope of M0.1 and M1, tested end to end only.
-do_not_mutate = ["scripts/ci/check_coverage.py"]
-also_copy = ["schemas/", "policies/", "docs/", "tests/"]
+# Outside every DoD-4 scope, tested end to end only: the M1 coverage gate (AC-M1-09) and the
+# M2 bash/YAML mutation driver (scripts/ci/mutate_m2.py, not a key-condition module).
+do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py"]
+also_copy = ["schemas/", "policies/", "docs/", "tests/", ".github/"]
 pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider"]
 pytest_add_cli_args_test_selection = ["tests/ci/", "tests/contract/"]

@@ -1,0 +1,7 @@
+tenant: t-alpha
+schema_version: 1
+rules:
+  - id: r
+    match:
+      requesters: [agent:t-alpha:ghost]
+    decision: deny

@@ -14,9 +14,6 @@ services:
     public_keys: [ed25519:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC]
     tenants: [t-alpha, t-beta]
     internal_url: https://demo.internal:8081
-    tools:
-      - { name: demo.notes.search, version: 1.0.0, effect_class: read, action: read }
-      - { name: demo.message.propose, version: 1.0.0, effect_class: external_effect, action: propose, executes_via: demo.message.execute, dispatch_timeout_s: 60 }
 webhooks:
   - id: signals-alpha
     tenant: t-alpha

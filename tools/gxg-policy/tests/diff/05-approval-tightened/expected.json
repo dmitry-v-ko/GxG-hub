@@ -1,0 +1,52 @@
+{
+  "widening": [],
+  "narrowing": [
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "msg",
+      "change": "approvals",
+      "base": 1,
+      "head": 2
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "quota",
+      "field": "propose_per_requester_per_hour",
+      "change": "decreased",
+      "base": 30,
+      "head": 10
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "msg",
+      "change": "step_up",
+      "base": false,
+      "head": true
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "msg",
+      "change": "ttl",
+      "field": "approval_ttl",
+      "base": null,
+      "head": 14400
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "no-wire",
+      "change": "added",
+      "decision": "deny"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "msg-auto",
+      "change": "removed",
+      "decision": "auto_approve"
+    }
+  ]
+}

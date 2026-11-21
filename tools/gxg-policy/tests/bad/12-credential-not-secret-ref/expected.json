@@ -1,0 +1,6 @@
+{
+  "description": "credential без secret://",
+  "code": "schema",
+  "file": "tenants/t-alpha.yaml",
+  "path": "connections[0].credential_ref"
+}

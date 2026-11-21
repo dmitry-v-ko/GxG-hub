@@ -1,0 +1,29 @@
+tenant: t-alpha
+schema_version: 1
+defaults: { approval_ttl: 12h, execution_window: 30m }
+quotas: { propose_per_requester_per_hour: 10, pending_per_requester_max: 5 }
+rules:
+  - { id: relax, match: { tools: [demo.a.propose] }, decision: deny }
+  - { id: tighten, match: { tools: [demo.b.propose] }, decision: auto_approve, limits: { max_per_hour: 5 } }
+  - id: auto
+    match: { tools: [demo.c.propose], requesters: [agent:t-alpha:hermes] }
+    decision: auto_approve
+    limits: { max_per_hour: 5, max_per_day: 20 }
+  - id: auto-everyone
+    match: { tools: [demo.c.propose] }
+    decision: auto_approve
+    limits: { max_per_day: 3 }
+  - id: human
+    match: { tools: [demo.d.propose] }
+    decision: require_approval
+    approvals: 2
+    step_up: true
+    approval_ttl: 2h
+  - id: human-2
+    match: { tools: [demo.e.propose] }
+    decision: require_approval
+    approvers: ["oidc:https://idp.example.invalid:1"]
+    execution_window: 10m
+  - { id: gone-strict, match: { tools: [demo.f.propose] }, decision: require_approval }
+  - { id: gone-auto, match: { tools: [demo.g.propose] }, decision: auto_approve, limits: { max_per_hour: 1 } }
+  - { id: gone-deny, match: { tools: [demo.h.propose] }, decision: deny }

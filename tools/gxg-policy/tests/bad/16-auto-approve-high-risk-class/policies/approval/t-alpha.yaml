@@ -1,0 +1,8 @@
+tenant: t-alpha
+schema_version: 1
+rules:
+  - id: all-auto
+    match:
+      effect_classes: [high_risk]
+    decision: auto_approve
+    limits: { max_per_day: 1 }

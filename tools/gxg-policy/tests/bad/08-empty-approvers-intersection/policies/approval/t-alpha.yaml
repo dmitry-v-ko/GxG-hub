@@ -1,0 +1,13 @@
+tenant: t-alpha
+schema_version: 1
+rules:
+  - id: by-one
+    match:
+      tools: [demo.message.propose]
+    decision: require_approval
+    approvers: ['oidc:https://idp.example.invalid:1']
+  - id: by-two
+    match:
+      resources: [kb:kb-main/collection/public]
+    decision: require_approval
+    approvers: ['oidc:https://idp.example.invalid:2']

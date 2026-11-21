@@ -1,0 +1,33 @@
+connector: demo
+version: 1.0.0
+contract: gxg-mcp-connector/v1
+tools:
+  - name: demo.wire.propose
+    version: 1.0.0
+    effect_class: high_risk
+    action: propose
+    resource: { type: board, scope: single }
+    executes_via: demo.wire.execute
+    input_schema: schemas/x.json
+    preview: { title: "Перевод", fields: { amount: "Сумма" } }
+  - name: demo.message.propose
+    version: 1.0.0
+    effect_class: external_effect
+    action: propose
+    resource: { type: board, scope: single }
+    executes_via: demo.message.execute
+    dispatch_timeout_s: 30
+    input_schema: schemas/x.json
+    preview: { title: "Сообщение", fields: { text: "Текст" } }
+  - name: demo.notes.search
+    version: 1.0.0
+    effect_class: read
+    action: read
+    resource: { type: board, scope: list }
+    input_schema: schemas/x.json
+  - name: demo.note.get
+    version: 1.0.0
+    effect_class: read
+    action: read
+    resource: { type: board, scope: single }
+    input_schema: schemas/x.json

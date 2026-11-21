@@ -1,0 +1,6 @@
+{
+  "description": "webhook на не-HTTPS URL",
+  "code": "schema",
+  "file": "platform/registry.yaml",
+  "path": "webhooks[0].url"
+}

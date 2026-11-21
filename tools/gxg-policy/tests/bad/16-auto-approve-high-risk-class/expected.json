@@ -1,0 +1,6 @@
+{
+  "description": "auto_approve по effect_classes: [high_risk]",
+  "code": "auto-approve-high-risk",
+  "file": "approval/t-alpha.yaml",
+  "path": "rules[0].match.effect_classes"
+}

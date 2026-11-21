@@ -1,0 +1,42 @@
+# Many lint findings at once; expected in ../lint-golden.json (full messages and levels).
+tenant: t-alpha
+schema_version: 1
+connections:
+  - { id: kb-main, domain: kb, credential_ref: secret://t-alpha/kb/service }
+  - { id: kb-main, domain: kb, credential_ref: secret://t-alpha/kb/other }
+  - { id: tg, domain: telegram, credential_ref: secret://t-alpha/tg/bot }
+principals:
+  agents:
+    - id: agent:t-alpha:a
+    - id: agent:t-beta:x
+    - id: agent:t-alpha:a
+  humans:
+    - { id: "oidc:https://idp.example.invalid:1", roles: [approver] }
+    - { id: "oidc:https://idp.example.invalid:2", roles: [viewer] }
+    - { id: "oidc:https://idp.example.invalid:4", roles: [approver] }
+groups:
+  ga: ["oidc:https://idp.example.invalid:4"]
+  g1: [agent:t-alpha:a]
+  gh: ["oidc:https://idp.example.invalid:1"]
+  gf: [agent:t-gamma:z]
+  gd: [agent:t-alpha:ghost]
+grants:
+  - id: dup
+    subjects: [group:g1, group:gh, group:nope, agent:t-beta:y, agent:t-alpha:ghost, agent:t-alpha:a]
+    actions: [read]
+    resources: [kb:kb-main/collection/x, kb:nowhere/collection/x, telegram:kb-main/chat/1]
+    expires_at: "2026-11-01T00:00:00Z"
+  - id: dup
+    subjects: [agent:t-alpha:a]
+    actions: [read]
+    resources: [kb:kb-main/collection/y]
+    expires_at: "2026-11-30T00:00:00Z"
+  - id: far
+    subjects: [agent:t-alpha:a]
+    actions: [read]
+    resources: [kb:kb-main/collection/z, "kb:kb-main/chat/-100:7", "kb:tg/chat/a:b"]
+    expires_at: "2026-12-05T00:00:00Z"
+  # Boundaries at NOW = 2026-11-20: expires now -> expired; in 12 h and in exactly 14 days -> expiring.
+  - { id: now, subjects: [agent:t-alpha:a], actions: [read], resources: [kb:kb-main/collection/n], expires_at: "2026-11-20T00:00:00Z" }
+  - { id: half-day, subjects: [agent:t-alpha:a], actions: [read], resources: [kb:kb-main/collection/h], expires_at: "2026-11-20T12:00:00Z" }
+  - { id: two-weeks, subjects: [agent:t-alpha:a], actions: [read], resources: [kb:kb-main/collection/w], expires_at: "2026-12-04T00:00:00Z" }

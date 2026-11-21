@@ -1,0 +1,6 @@
+{
+  "description": "requester не из файла grants",
+  "code": "dangling-requester",
+  "file": "approval/t-alpha.yaml",
+  "path": "rules[0].match.requesters[0]"
+}

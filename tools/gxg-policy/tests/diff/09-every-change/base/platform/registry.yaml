@@ -1,0 +1,14 @@
+schema_version: 1
+services:
+  - { id: executor, kind: executor, public_keys: [ed25519:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA], tenants: ["*"] }
+  - id: demo
+    kind: connector
+    public_keys: [ed25519:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC]
+    tenants: [t-alpha, t-gone]
+    internal_url: https://demo.internal:8081
+  - { id: old-svc, kind: approval_mcp, public_keys: [ed25519:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD], tenants: [t-alpha] }
+  - { id: mcp, kind: approval_mcp, public_keys: [ed25519:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE], tenants: [t-alpha] }
+webhooks:
+  - { id: kept, tenant: t-alpha, url: "https://hooks.example.invalid/a", secret_ref: "secret://t-alpha/hooks/a" }
+  - { id: changed, tenant: t-alpha, url: "https://hooks.example.invalid/b", secret_ref: "secret://t-alpha/hooks/b" }
+  - { id: dropped, tenant: t-alpha, url: "https://hooks.example.invalid/c", secret_ref: "secret://t-alpha/hooks/c" }

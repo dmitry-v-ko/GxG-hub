@@ -1,0 +1,32 @@
+tenant: t-alpha
+schema_version: 1
+defaults: { approval_ttl: 48h, execution_window: 30m }
+rules:
+  - id: dup
+    match: { tools: [demo.message.propose], resources: [kb:nowhere/collection/x, telegram:kb-main/chat/1, kb:kb-main/collection/*] }
+    decision: require_approval
+    execution_window: 45m
+    approval_ttl: 47h
+    approvers: [group:nope, "oidc:https://idp.example.invalid:3", "oidc:https://idp.example.invalid:2", group:gh, group:g1]
+  - id: dup
+    match: { tools: [demo.message.propose], requesters: [group:nope, agent:t-beta:x, agent:t-alpha:ghost, group:g1, agent:t-alpha:a] }
+    decision: require_approval
+    execution_window: 30m
+    approvers: ["oidc:https://idp.example.invalid:1"]
+  - id: auto
+    match:
+      effect_classes: [high_risk, external_effect]
+      tools: [demo.wire.propose, demo.unknown.propose, demo.message.propose]
+    decision: auto_approve
+    limits: { max_per_day: 1 }
+  # Group refs on both sides of the approvers intersection (AP-01 p.4).
+  - id: s1
+    match: { tools: [demo.message.propose], requesters: [group:g1] }
+    decision: require_approval
+    approvers: ["oidc:https://idp.example.invalid:1"]
+  - id: s2
+    match: { tools: [demo.message.propose], requesters: [group:g1] }
+    decision: require_approval
+    approvers: [group:ga]
+  # Without `approvers` (any approver of the tenant): not part of the intersection.
+  - { id: plain, match: { tools: [demo.message.propose] }, decision: require_approval }

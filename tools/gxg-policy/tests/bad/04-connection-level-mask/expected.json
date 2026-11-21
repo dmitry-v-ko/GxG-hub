@@ -1,0 +1,6 @@
+{
+  "description": "маска уровня connection",
+  "code": "forbidden-mask",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].resources[0]"
+}

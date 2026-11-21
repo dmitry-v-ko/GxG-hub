@@ -1,0 +1,6 @@
+{
+  "description": "principal чужого tenant'а",
+  "code": "foreign-principal",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].subjects[0]"
+}

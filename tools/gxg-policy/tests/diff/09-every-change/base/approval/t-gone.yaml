@@ -1,0 +1,4 @@
+tenant: t-gone
+schema_version: 1
+rules:
+  - { id: r, match: { tools: [demo.a.propose] }, decision: require_approval }

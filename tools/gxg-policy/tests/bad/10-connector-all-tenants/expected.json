@@ -1,0 +1,6 @@
+{
+  "description": "коннектор с tenants: [\"*\"]",
+  "code": "schema",
+  "file": "platform/registry.yaml",
+  "path": "services[0].tenants[0]"
+}

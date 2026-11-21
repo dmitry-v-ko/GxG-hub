@@ -1,0 +1,21 @@
+{
+  "widening": [],
+  "narrowing": [
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "read",
+      "resource": "kb:kb-main/collection/drafts",
+      "change": "removed"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "write",
+      "resource": "kb:kb-main/collection/drafts",
+      "change": "removed"
+    }
+  ]
+}

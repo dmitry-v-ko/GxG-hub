@@ -1,0 +1,30 @@
+{
+  "widening": [
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "msg",
+      "change": "approvers_added",
+      "approvers": [
+        "oidc:https://idp.example.invalid:2"
+      ]
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "kb-auto",
+      "change": "match_changed"
+    }
+  ],
+  "narrowing": [
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "hermes-auto",
+      "change": "requesters_removed",
+      "requesters": [
+        "agent:t-alpha:analyst"
+      ]
+    }
+  ]
+}

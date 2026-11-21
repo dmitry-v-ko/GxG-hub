@@ -1,0 +1,67 @@
+{
+  "milestone": "M2",
+  "branch": "claude/m2-policy-tooling",
+  "commit": "e1dae73872945927f5a0fa6def3fd2f867f05ce0",
+  "cycle": 3,
+  "reviewed_at": "2026-11-21",
+  "score": 8.0,
+  "caps_applied": ["major"],
+  "dimensions": {"spec": 2.5, "tests": 2, "security": 1.5, "code": 1.5, "ops": 1, "evidence": 0.5},
+  "acceptance": [
+    {"id": "AC-M2-01", "status": "passed", "evidence": "Clean clone e1dae73, empty UV_CACHE_DIR, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1: `gxg-policy validate policies/` -> 0 error(s), exit 0; `lint policies/` -> exit 0, 3 warnings (unknown-tool, ignored-tools, unknown-tenant). CI run 44820686966 job policy: success."},
+    {"id": "AC-M2-02", "status": "passed", "evidence": "CLI `lint bad/<case>/policies [--manifest]` for 20 fixtures: 20/20 exit 1 with `error: <file>: <path>: [<code>]`, e.g. `tenants/t-alpha.yaml: grants[0].subjects[0]: [dangling-subject] ...`; all 12 AC cases present (10-12 via code `schema`)."},
+    {"id": "AC-M2-03", "status": "passed", "evidence": "CLI `diff base head` equals expected.json for 9/9 pairs (01..09; 09: 30 widening, 23 narrowing)."},
+    {"id": "AC-M2-04", "status": "partial", "evidence": "Automated: tests/ci pass (base change, fast-forward A/B/A/B, tag origin/main, push/dispatch red, cancel, label/reopen, groups, fork runs); mutmut on widening_gate.py 514/536 killed, 22 equivalent; mutate_m2.py 14/14; CI run 44820686966 (push) grants-widening red by design. Open: a PR that edits its own gate (finding 1) or weakens a manifest effect class (finding 2, reproduced: 0 widening) is green without the label. Owner end-to-end checklist steps 1-11 pending."},
+    {"id": "AC-M2-05", "status": "passed", "evidence": "Two `build policies` runs in separate processes (PYTHONHASHSEED 1 and 7, built_at 2 s apart): JSON equal after removing built_at, same length; bundle_smoke.sh cmp OK in check-all."},
+    {"id": "AC-M2-06", "status": "passed", "evidence": "`verify` on a fresh build -> `ok: bundle_version=e1dae73...`, exit 0; one bit flipped at byte 200 -> `bundle rejected: bad signature`, exit 1. test_signature_vector_is_reproduced_by_build_and_accepted_by_verify passes (bytes and .sig equal the vector)."}
+  ],
+  "findings": [
+    {"severity": "major", "ref": "AC-M2-04, GR-10",
+     "where": ".github/workflows/ci.yml:173-178; scripts/ci/grants_widening.sh; docs/setup/widening-approval.md «Ограничения»",
+     "problem": "pull_request runs execute the PR's own ci.yml, grants_widening.sh, widening_gate.py, gxg_policy and uv.lock. A PR that adds a grant and sets grants_widening.sh to `exit 0` (or edits diff.py, or pins a package in uv.lock) gets green grants-widening/ci-ok on its head without the label. Documented by the executor as a known limit, but no owner decision accepting it is recorded in the plan. Five of six paths are closable in-repo; only ci.yml itself is not on this GitHub plan.",
+     "required_improvement": "Executor: the gate step runs grants_widening.sh, widening_gate.py and gxg-policy from a worktree of refs/remotes/origin/main (uv run --project <main>), and that main-side gate requires the label when the PR diff vs main touches ci.yml, scripts/ci/, tools/gxg-policy/, schemas/, pyproject.toml, uv.lock; job test: PR that edits the gate script or diff.py with widening -> red. Owner: record in the plan that the remaining `.github/workflows/` path is accepted (owner reads every such PR) or use an org ruleset with a required workflow."},
+    {"severity": "major", "ref": "GR-10, GR-11a, AS-26, AP-01",
+     "where": "scripts/ci/grants_widening.sh:21; tools/gxg-policy/src/gxg_policy/bundle.py:73-77; diff.py",
+     "problem": "Since this cycle the signed bundle takes effect_class/action/executes_via from connectors/*/gxg-manifest.yaml, and the Approval Service trusts only those (AS-26). diff reads only policies/. Reproduced: same policies, manifest demo.message.propose external_effect -> write_reversible: bundles differ, diff reports 0 widening and 0 narrowing; after merge AP-01 gives `not_required` (no human). high_risk -> external_effect falls under an existing effect_classes auto_approve rule. connectors/ is not in CODEOWNERS. Latent until the first manifest lands (M3).",
+     "required_improvement": "diff takes base/head manifests (the job passes connectors/ of both worktrees); per connector tool: new tool, lower class (read < write_reversible < external_effect < high_risk), changed action or executes_via -> widening, reverse -> narrowing; one fixture pair with golden report; /connectors/*/gxg-manifest.yaml in CODEOWNERS."},
+    {"severity": "minor", "ref": "AP-02 lint",
+     "where": "tools/gxg-policy/src/gxg_policy/lint.py:71",
+     "problem": "Tool name -> class map over all manifests: two manifests declaring x.msg.propose as high_risk and external_effect -> the later wins, auto_approve passes lint although the bundle holds a high_risk tool of that name (runtime still ignores it).",
+     "required_improvement": "duplicate tool name across manifests is a lint error (or keep the strictest class)."},
+    {"severity": "minor", "ref": "AC-M2-04 docs",
+     "where": "docs/setup/widening-approval.md checklist; scripts/ci/widening_gate.py:129-148",
+     "problem": "Arrival rule assumes (a) re-running an old run keeps created_at, (b) a head returns to an older SHA only with a force-push event. Case for (b): B ran 09:00, branch deleted and recreated at A, PR reopened, label 10:00, fast-forward to B 11:00 -> arrival 09:00 < label -> green. GitHub normally refuses such a reopen; not checked.",
+     "required_improvement": "Two owner checklist steps: re-run an old run and compare created_at; delete/recreate the head branch at another SHA and try to reopen."},
+    {"severity": "minor", "ref": "Lean",
+     "where": "policies/platform/registry.example.yaml:18-20",
+     "problem": "Hand-written tools kept only to be dropped by build and warned about by lint (ignored-tools).",
+     "required_improvement": "Delete the two tool lines."}
+  ],
+  "required_improvements": [
+    "Finding 1: run the widening gate and gxg-policy from main's worktree; main-side gate requires the label when the PR touches gate paths (ci.yml, scripts/ci/, tools/gxg-policy/, schemas/, pyproject.toml, uv.lock); job test red for a PR that edits the gate with widening. Owner records in the plan the decision on the remaining `.github/workflows/` path (accept with 'owner reads such PRs', or org ruleset with a required workflow). Without that owner decision this is a plan/platform gap: stop and escalate.",
+    "Finding 2: manifest tool changes (new tool, lower effect_class, changed action/executes_via) reported as widening by gxg-policy diff and fed by grants_widening.sh from both worktrees; fixture pair with golden; connector manifests in CODEOWNERS.",
+    "Findings 3-4 (minor, do not block 9): duplicate tool name lint error; two owner checklist steps (re-run created_at, recreated branch reopen)."
+  ],
+  "ponytail_review": "reports/critic/M2-cycle-3.review.md",
+  "lean_lines": 2,
+  "existing_solutions": [
+    {"component": "mutation testing of gxg_policy diff/lint/bundle/load and widening_gate.py", "alternative": "mutmut 3.8.1 (DoD-4)", "verdict": "use_existing"},
+    {"component": "scripts/ci/mutmut.sh (two configs, equivalent-mutant allow-list, fail on survivors)", "alternative": "mutmut alone: exits 0 with survivors, no allow-list; `# pragma: no mutate` would drop non-equivalent mutants on the same line", "verdict": "justified_custom"},
+    {"component": "scripts/ci/mutate_m2.py (14 bash/workflow mutations)", "alternative": "no maintained mutation tool for shell scripts or GitHub Actions YAML", "verdict": "justified_custom"},
+    {"component": "bundle shape check (check_shape)", "alternative": "jsonschema + referencing.Registry with grants-bundle.schema.json (used)", "verdict": "use_existing"},
+    {"component": "manifest loading/validation (load_manifests)", "alternative": "jsonschema with gxg-manifest.schema.json (used)", "verdict": "use_existing"},
+    {"component": "RFC 3339 date-time check", "alternative": "rfc3339-validator via jsonschema FORMAT_CHECKER (used; custom guard deleted)", "verdict": "use_existing"},
+    {"component": "manifest -> bundle tools projection", "alternative": "none: GR-11a projection is project-specific, one dict comprehension", "verdict": "justified_custom"},
+    {"component": "diff base = merge-base with refs/remotes/origin/main", "alternative": "plain git merge-base (used); event base.sha rejected (can change)", "verdict": "use_existing"},
+    {"component": "head arrival / staleness (widening_gate.py)", "alternative": "GitHub dismiss-stale-approvals / most-recent-push approval need a second reviewer (excluded by AC-M0-03); environments with reviewers are not the label AC-M2-04 prescribes", "verdict": "justified_custom"},
+    {"component": "protecting the gate from PR edits (finding 1)", "alternative": "org ruleset required workflow, or required code-owner review by a second person: platform/owner decision, not code; in-repo part = run gate code from main", "verdict": "use_existing"},
+    {"component": "JCS, Ed25519, GitHub API client, lint/diff semantics (unchanged from cycle 2)", "alternative": "see M2-cycle-2.json existing_solutions", "verdict": "justified_custom"}
+  ],
+  "notes": [
+    "Re-run: clean clone of e1dae73, UV_CACHE_DIR empty, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1, uv 0.11.32: pytest 286 passed, 148 subtests, 0 skipped; check-all OK; scripts/ci/mutmut.sh exit 0 (gxg_policy 2424/2458 killed, gate 514/536, 56 survivors all listed equivalent; spot-checked 3); mutate_m2.py 14/14.",
+    "CI on e1dae73: run 44820686966 (push): all jobs success except grants-widening and ci-ok, red by design (widening vs main outside a PR, fail closed). Not a DoD violation: DoD-1 (main via PR) is pending.",
+    "Closed from cycle 2: critical 1 (base change), critical 2 (fast-forward), major 3 (tag), major 4 (mutmut), minor 5 (docs). Bundle: tools from manifests, schema check in build and verify, signature vector reproduced.",
+    "Finding 1 was known since cycle 1 and accepted by earlier critics as a documented limit; it is scored now because the brief asks to check it and no owner acceptance exists in the plan. If the owner accepts the ci.yml residual in writing, the in-repo hardening alone closes it.",
+    "Not checked: which same-name ci-ok GitHub counts, performed_via_github_app for agent tokens (owner checklist 3, 4, 11)."
+  ]
+}

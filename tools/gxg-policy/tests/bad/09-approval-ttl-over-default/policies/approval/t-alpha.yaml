@@ -1,0 +1,8 @@
+tenant: t-alpha
+schema_version: 1
+rules:
+  - id: slow
+    match:
+      tools: [demo.message.propose]
+    decision: require_approval
+    approval_ttl: 48h

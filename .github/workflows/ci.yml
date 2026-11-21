@@ -1,20 +1,27 @@
-# GxG Hub CI (milestone M0). Required status check for `main`: "ci-ok"
-# (see docs/setup/branch-protection.md).
+# GxG Hub CI. Required status check for `main`: "ci-ok" (see docs/setup/branch-protection.md).
+# `ci-ok` includes `grants-widening` (AC-M2-04, docs/setup/widening-approval.md), so label
+# changes re-run the workflow. The schedule re-signs the bundle on main (GR-13a).
 name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]  # edited: base branch changed
   push:
     branches: [main, "claude/**"]
   workflow_dispatch:
+  schedule:
+    # GR-13a: re-sign the bundle at least every 12 h; every 6 h leaves room for delayed or dropped runs.
+    - cron: "41 */6 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  # Superseded runs on feature branches are cancelled; runs on main always finish.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Pull request runs get their own group: none is cancelled or replaced while pending, so every
+  # head commit gets a run that reaches the grants-widening gate (F2). Superseded push runs on
+  # feature branches are cancelled; runs on main always finish.
+  group: ci-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'pull_request' && github.ref != 'refs/heads/main' }}
 
 env:
   UV_PYTHON: "3.12"
@@ -147,10 +154,61 @@ jobs:
       - run: uv sync
       - run: scripts/ci/mutmut.sh
 
+  policy:
+    # AC-M2-01, AC-M2-05, AC-M2-06 on the repository policies.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: uv run gxg-policy validate policies/
+      - run: uv run gxg-policy lint policies/
+      - name: Build twice with a throw-away key, compare, verify
+        run: bash scripts/ci/bundle_smoke.sh
+
+  grants-widening:
+    # AC-M2-04 / GR-10: red while the policy diff has widening and no code owner added the
+    # `widening-approved` label after the head commit. Posts the diff report to the PR.
+    # Always diffed against main (merge-base), not against the PR base. Outside a PR (push / dispatch
+    # to a branch other than main) any widening is red. Connector manifests and gate files count too.
+    # docs/setup/widening-approval.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read         # workflow runs of the head SHA: when it arrived on the PR
+      issues: write         # labels and the report comment
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      # No `uv sync` of the checkout: no code of the PR runs in this job. The gate, gxg-policy and the
+      # lockfile come from main; changes to them in the PR need the label (scripts/ci/grants_widening.sh).
+      - name: Policy diff and approval gate (code from main)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/gate" refs/remotes/origin/main
+          gate="$RUNNER_TEMP/gate/scripts/ci/grants_widening.sh"
+          if [ ! -f "$gate" ]; then
+            # Bootstrap only: main has no gate yet. This PR then adds gate files, so it needs the label anyway.
+            echo "::warning::main has no grants_widening.sh yet: running the PR copy (bootstrap)"
+            gate=scripts/ci/grants_widening.sh
+          fi
+          bash "$gate"
+
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
     if: always()
-    needs: [lint, types, tests, schema-guard, secrets, mutmut]
+    needs: [lint, types, tests, schema-guard, secrets, mutmut, policy, grants-widening]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -160,3 +218,35 @@ jobs:
         run: |
           echo "results: $RESULTS"
           for r in $RESULTS; do [ "$r" = "success" ] || exit 1; done
+
+  bundle:
+    # GR-11: signed grants-bundle.json after a merge into main. Key from secrets, never in the repo.
+    # Not part of ci-ok. Setup: docs/setup/bundle-signing.md
+    # GR-13a: also on schedule (default branch = main): same commit, same content, new built_at.
+    if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
+    needs: [ci-ok]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - name: Build, sign, verify against the published public key
+        env:
+          GXG_BUNDLE_SIGNING_KEY: ${{ secrets.GXG_BUNDLE_SIGNING_KEY }}
+          GXG_BUNDLE_KID: ${{ vars.GXG_BUNDLE_KID }}
+          GXG_BUNDLE_PUBLIC_KEY: ${{ vars.GXG_BUNDLE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$GXG_BUNDLE_SIGNING_KEY" ] || [ -z "$GXG_BUNDLE_KID" ] || [ -z "$GXG_BUNDLE_PUBLIC_KEY" ]; then
+            echo "::error::secret GXG_BUNDLE_SIGNING_KEY and variables GXG_BUNDLE_KID, GXG_BUNDLE_PUBLIC_KEY are required"
+            exit 1
+          fi
+          uv run gxg-policy build policies/ --out dist --bundle-version "$GITHUB_SHA"
+          uv run gxg-policy verify dist --kid "$GXG_BUNDLE_KID" --public-key "$GXG_BUNDLE_PUBLIC_KEY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: grants-bundle
+          path: dist/
+          if-no-files-found: error
