@@ -382,7 +382,7 @@ flowchart TD
 
 ### M7 — Approval Service: ядро
 
-**Делаем:** миграции БД (модель из [approval-service-v1](specs/approval-service-v1.md#модель-данных)); процесс `api` (`POST /v1/intents`, `GET`, `cancel`); движок политики ([approval-policy-v1](specs/approval-policy-v1.md)); квоты; `sweeper` для T5/T8; `mcp` (`effects.status`, `effects.cancel`); шифрование payload.
+**Делаем:** миграции БД (модель из [approval-service-v1](specs/approval-service-v1.md#модель-данных)) с отдельной ролью на процесс (AS-27); процесс `api` (`POST /v1/intents`, `GET`, `cancel`); движок политики ([approval-policy-v1](specs/approval-policy-v1.md)); квоты; `sweeper` для T5/T8; `mcp` (`effects.status`, `effects.cancel`); шифрование payload.
 
 | ID | Критерий |
 | --- | --- |
@@ -398,6 +398,7 @@ flowchart TD
 | AC-M7-10 | В БД `args_ciphertext` и `preview_ciphertext` не содержат открытого текста args (поиск подстроки по 100 intents = 0 совпадений) |
 | AC-M7-11 | Роль БД приложения: `UPDATE`/`DELETE` на `audit_events`, `DELETE` на `intents` → ошибка прав (OPS-05) |
 | AC-M7-12 | Sweeper: intent с `expires_at` в прошлом переходит в `expired` не позже чем через 60 с |
+| AC-M7-13 | Изоляция процессов (AS-27, AS-28): для каждой роли БД тест подтверждает разрешённые действия и отказ во всех остальных из матрицы, в частности `gxg_ui` не может INSERT/UPDATE `executions` и не читает `args_ciphertext`, `gxg_executor` не может INSERT в `decisions`, `gxg_notifier` не читает `intents`; конфигурация каждого процесса содержит только секреты из таблицы AS-28 (проверка по манифестам/compose) |
 
 ### M8 — Executor и исполнение
 
@@ -437,6 +438,7 @@ flowchart TD
 | AC-M9-09 | 8 новых intents за 2 минуты одному approver'у → не больше 5 отдельных уведомлений + 1 дайджест (AP-08) |
 | AC-M9-10 | Привязка Telegram: код действует 10 минут и один раз; повторное и просроченное использование отклоняется |
 | AC-M9-11 | Ручной reconcile `outcome_unknown` без обоснования (< 10 символов) отклоняется; с обоснованием — статус меняется, запись в `audit_events` с автором |
+| AC-M9-12 | AS-29: `ui` и `notifier` собираются отдельными образами со своим lockfile; сетевые политики стенда (compose/k8s) разрешают `ui` только входящий HTTPS и исходящие в БД и OIDC, `notifier` — только исходящие в БД, Telegram Bot API и allowlist webhooks; попытка исходящего соединения вне политики из каждого контейнера отклоняется (тест) |
 
 ### M10 — webhooks и эксплуатация
 

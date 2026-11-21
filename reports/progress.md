@@ -86,3 +86,4 @@
 | — | — | интеграция | claude/integration | — | — | тред слияния M0.1 + M2 запущен (конфликты CI/pyproject/uv.lock); после него — M3 и M7 | 2026-11-21 |
 | M4.1 | — | решение владельца | — | — | — | новая веха: спайк ADR-0002 (ToolHive, Docker MCP Gateway vs ContextForge) до M5 | 2026-11-21 |
 | M4.1 | 1 | исполнитель | claude/m4.1-gateway-comparison | — | — | запущен (спайк ADR-0002) | 2026-11-21 |
+| — | — | решение владельца | — | — | — | Изоляция процессов Approval Service: AS-27 роли БД на процесс, AS-28 секреты на процесс, AS-29 отдельные deployable ui/notifier; AC-M7-13, AC-M9-12 | 2026-11-21 |
