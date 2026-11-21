@@ -8,6 +8,7 @@ dependencies = [
     "authlib>=1.9,<2",
     "fastapi>=0.115,<1",
     "gxg-connector-kit",
+    "httpx2>=2.16,<3",  # authlib 1.9's HTTP client (it falls back to httpx; tests and image use the same one)
     "itsdangerous>=2.2,<3",  # Starlette SessionMiddleware
     "jinja2>=3.1,<4",
     "psycopg-pool>=3.2,<4",
