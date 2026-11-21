@@ -143,3 +143,6 @@
 | — | — | оркестратор | claude/admiring-planck-vzys0x | — | — | спеки ветки оркестратора выровнены с результатами M4/M4.1/M5 (ADR-0001 вариант C, SEC-02/03, TEN-01, ADR-0002, Roadmap GO) | 2026-11-21 |
 | — | — | интеграция | claude/integration | — | — | запущен интегратор: M3+M4.1+M5 (claude/m5-readonly-poc) и M7 → integration; затем M8, M9 | 2026-11-21 |
 | M11 | 1 | владелец вехи | claude/m11-telegram-read | 3d590e4 | — | коннектор на fake-порту, стенд, live-тесты через ContextForge; доступ к gxg_agents_v2 получен; 3 вопроса `pending_owner_decision` | 2026-11-21 |
+| — | — | интеграция | claude/integration | fc87e27 (+3c2f0b0) | — | M3+M4.1+M5+M7 влиты; 868 + 307 (PG) passed, стенд M5 29/29 ×3, gitleaks чисто; спеки = ветка оркестратора; mutmut идёт (~2 ч) | 2026-11-21 |
+| M8 | 1 | владелец вехи | claude/m8-executor | — | — | запущен от integration (+ идемпотентность по requester, окно execution_deadline) | 2026-11-21 |
+| M9 | 1 | владелец вехи | claude/m9-ui-bot | — | — | запущен от integration (+ компрометация ui через gxg_decide — по умолчанию AS-27) | 2026-11-21 |
