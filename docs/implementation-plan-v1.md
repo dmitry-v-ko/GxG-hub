@@ -54,7 +54,7 @@ flowchart LR
 | M3 `demo` read-only | B | 4–5 | M1, M2 |
 | M4 Спайк ContextForge | B | 3 (timebox) | M0 |
 | M4.1 Спайк ADR-0002 (альтернативные шлюзы) | B | 2–3 (timebox) | M4 |
-| M5 Read-only PoC через шлюзом из ADR-0002 | B | 4–6 | M3, M4, M4.1 |
+| M5 Read-only PoC через шлюз из ADR-0002 | B | 4–6 | M3, M4, M4.1 |
 | M6 KB | B | 3–8 | M5 |
 | M7 Approval Service core | C | 8–10 | M1, M2 |
 | M8 Executor и исполнение | C | 7–9 | M3, M7 |
