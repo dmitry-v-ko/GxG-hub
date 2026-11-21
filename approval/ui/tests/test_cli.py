@@ -73,6 +73,7 @@ def test_tls_listener_with_every_setting(environ: dict[str, str], started: dict[
     )  # fmt: skip
     assert (deps.session_key, deps.oidc_client_secret) == ("session-key", "client-secret")
     assert set(deps.preview_keys) == {"t-alpha"} and deps.bundles.readiness().ready
+    assert deps.pool.kwargs == {"autocommit": True} and deps.pool.min_size == 1 and not deps.pool.closed
     deps.pool.close()
 
 
@@ -82,11 +83,13 @@ def test_default_listener_needs_tls(environ: dict[str, str], started: dict[str, 
     assert (started["host"], started["port"]) == ("0.0.0.0", 8443)  # noqa: S104
     started["deps"].pool.close()
     monkeypatch.delenv("GXG_UI_TLS_CERT_FILE")
-    with pytest.raises(SystemExit, match="GXG_UI_TLS_CERT_FILE/GXG_UI_TLS_KEY_FILE are required"):
+    with pytest.raises(
+        SystemExit, match=r"^GXG_UI_TLS_CERT_FILE/GXG_UI_TLS_KEY_FILE are required on a non-loopback listener$"
+    ):
         cli.main()
 
 
-@pytest.mark.parametrize("host", ["127.0.0.1", "localhost"])
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
 def test_loopback_without_tls(environ: dict[str, str], started: dict[str, Any], monkeypatch: Any, host: str) -> None:
     monkeypatch.delenv("GXG_UI_TLS_CERT_FILE")
     monkeypatch.setenv("GXG_LISTEN", f"{host}:8000")
@@ -122,3 +125,15 @@ def test_every_setting_is_required(
     monkeypatch.delenv(name)
     with pytest.raises(SystemExit, match=name):
         cli.main()
+
+
+def test_logging_is_info_with_the_shared_format(
+    environ: dict[str, str], started: dict[str, Any], monkeypatch: Any
+) -> None:
+    import logging
+
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(logging, "basicConfig", lambda **kw: seen.update(kw))
+    cli.main()
+    assert seen == {"level": logging.INFO, "format": "%(asctime)s %(levelname)s %(name)s %(message)s"}
+    started["deps"].pool.close()

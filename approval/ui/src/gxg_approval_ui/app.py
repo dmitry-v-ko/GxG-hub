@@ -244,9 +244,9 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     def summary(row: Mapping[str, Any]) -> dict[str, Any]:
         try:
             opened = envelope(row)
+            title, label = ("—", "—") if opened is None else (opened[0]["title"], opened[0]["target"]["label"])
         except Refused:  # one unreadable preview must not hide the rest of the list (EFF-14: the list is the source)
-            opened = ({"title": PREVIEW_UNAVAILABLE, "target": {"label": "—"}}, None, False)
-        title, label = ("—", "—") if opened is None else (opened[0]["title"], opened[0]["target"]["label"])
+            opened, title, label = None, PREVIEW_UNAVAILABLE, "—"
         group = hashlib.sha256(canonical.dumps([row["requester_principal"], opened and opened[0]])).hexdigest()
         return {
             "id": str(row["intent_id"]),

@@ -513,8 +513,8 @@ def test_bundle_store_from_env_keeps_running_without_a_bundle(tmp_path: Path, ca
     kit = BundleKit(tmp_path / "state.json")
     store = bundle_store_from_env(_dir_env(tmp_path, kit), reload_s=3600)
     assert store.readiness().ready is False
-    assert any(r.name == "gxg_connector_kit" and r.levelname == "WARNING" and r.getMessage().startswith(
-        "bundle not loaded: ") for r in caplog.records)  # fmt: skip
+    (record,) = [r for r in caplog.records if r.name == "gxg_connector_kit"]
+    assert record.levelname == "WARNING" and record.getMessage().startswith("bundle not loaded: [Errno 2] No such file")
     _publish(tmp_path, (b"{}", b"{}"))
     caplog.clear()
     store2 = bundle_store_from_env(_dir_env(tmp_path, kit), reload_s=3600)

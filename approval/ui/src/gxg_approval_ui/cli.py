@@ -6,12 +6,15 @@ import logging
 import os
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from gxg_connector_kit.grants import bundle_store_from_env
 
 from .config import LOOPBACK, preview_keys, require_tls
 
 log = logging.getLogger("gxg_approval_ui")
+LOGGING: dict[str, Any] = {"level": logging.INFO, "format": "%(asctime)s %(levelname)s %(name)s %(message)s"}
+POOL: dict[str, Any] = {"kwargs": {"autocommit": True}, "open": True, "min_size": 1}  # opens in the background
 
 
 def env(name: str, environ: Mapping[str, str] = os.environ) -> str:
@@ -22,7 +25,7 @@ def env(name: str, environ: Mapping[str, str] = os.environ) -> str:
 
 
 def secret(name: str, environ: Mapping[str, str] = os.environ) -> str:
-    return Path(env(f"{name}_FILE", environ)).read_text("utf-8").strip()
+    return Path(env(f"{name}_FILE", environ)).read_bytes().decode().strip()
 
 
 def main() -> None:
@@ -31,7 +34,7 @@ def main() -> None:
 
     from .app import Deps, create_app
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.basicConfig(**LOGGING)
     public_url, issuer = env("GXG_UI_PUBLIC_URL"), env("GXG_OIDC_ISSUER")
     require_tls(public_url, "GXG_UI_PUBLIC_URL")
     require_tls(issuer, "GXG_OIDC_ISSUER")
@@ -42,7 +45,7 @@ def main() -> None:
     elif host not in LOOPBACK:
         raise SystemExit("GXG_UI_TLS_CERT_FILE/GXG_UI_TLS_KEY_FILE are required on a non-loopback listener")
     deps = Deps(
-        pool=ConnectionPool(secret("GXG_DB_DSN"), kwargs={"autocommit": True}, open=True, min_size=1),
+        pool=ConnectionPool(secret("GXG_DB_DSN"), **POOL),
         bundles=bundle_store_from_env(os.environ),
         preview_keys=preview_keys(Path(env("GXG_PREVIEW_KEYS_FILE"))),
         session_key=secret("GXG_UI_SESSION_KEY"),
