@@ -1,0 +1,295 @@
+{
+ "milestone": "M4.1",
+ "branch": "claude/m4.1-gateway-comparison",
+ "commit": "185162e9c7194e8b25d2d85d6a244d31b4e24599",
+ "executor_report_commit": "c2f505f",
+ "cycle": 3,
+ "previous_score": 8.0,
+ "score": 9.0,
+ "caps_applied": [],
+ "dimensions": {
+  "spec": 3,
+  "tests": 1.5,
+  "security": 1.5,
+  "code": 1.5,
+  "ops": 1,
+  "evidence": 0.5
+ },
+ "acceptance": [
+  {
+   "id": "AC-M4.1-01",
+   "status": "passed",
+   "evidence": "Матрица ADR п.1–9 для обоих кандидатов со статусами и ссылками; цикл 3 перепрогнан критиком: token-exchange + verify_tx.py (все итоговые поля совпали), webhook-c-mid-down (25/25 наблюдений совпали по kind/path/status/seen); not_run с причинами (оператор, --authz-config, --oidc-audience, путь G)"
+  },
+  {
+   "id": "AC-M4.1-02",
+   "status": "passed",
+   "evidence": "webhook-c перепрогнан после правки attacks.call(pk=…): direct_to_connector = check_verdicts.EXPECTED 7/7; тот же attacks.py для обоих кандидатов (Docker MCP Gateway проверен критиком цикла 2, код не менялся)"
+  },
+  {
+   "id": "AC-M4.1-03",
+   "status": "passed",
+   "evidence": "docs/adr/0002-gateway-choice.md: статус Proposed, таблица трёх шлюзов, рекомендация с обоснованием, стоимость по топологиям (а) 11,5–17 и (б) 8,5–12 пересчитана критиком"
+  },
+  {
+   "id": "AC-M4.1-04",
+   "status": "passed",
+   "evidence": "все образы скачаны критиком по digest из run.sh; GHSA-g7gq/GHSA-wj8g сверены со страницами GitHub (patched 0.51.4, v0.67.0 не затронута)"
+  }
+ ],
+ "previous_required_improvements": [
+  {
+   "n": 1,
+   "status": "done",
+   "evidence": "ADR:10–14,134–135,138,140,144"
+  },
+  {
+   "n": 2,
+   "status": "done",
+   "evidence": "ADR п.2 (2), п.5, path_w_threats; aud claims из сырого echo.jsonl: exchange aud=None, прямой aud=vmcp, 3600 с; меры неполны — finding 2"
+  },
+  {
+   "n": 3,
+   "status": "done",
+   "evidence": "verify_tx.json воспроизведён, replay_other_connector=false, остальные 4 rejected"
+  },
+  {
+   "n": 4,
+   "status": "done",
+   "evidence": "webhook-c-mid-down воспроизведён: после docker stop прямо 500 Webhook error, через vMCP isError на re-initialize, 0 tools/call до echo"
+  },
+  {
+   "n": 5,
+   "status": "done",
+   "evidence": "ADR п.2 (3), п.5, п.9, 'Что не проверено'"
+  },
+  {
+   "n": 6,
+   "status": "done",
+   "evidence": "ADR п.2 (5), п.7, M4.1.json; patched-версия не указана — finding 5"
+  }
+ ],
+ "findings": [
+  {
+   "severity": "minor",
+   "origin": "missed_earlier",
+   "ref": "SEC-03, SEC-04, ADR-0002 п.2 (3)/(5)",
+   "where": "spikes/m4.1-gateways/toolhive/webhook.py:46-47; docs/adr/0002-gateway-choice.md:92; reports/conformance/M4.1.json path_w_threats[2]",
+   "problem": "Webhook пути W для всех методов кроме tools/call отвечает allowed без проверки tenant и без JWS. Критик вживую: агент t-beta своим токеном IdP напрямую на прокси t-alpha (8091) получил tools/list коннектора t-alpha (200, до echo без JWS), tools/call — 403. ADR пишет 'tenant проверит webhook' и выводит 'JWS обязателен на коннекторе для всех методов' — но webhook не подписывает не-tools/call методы: буквально следовать выводу = отказ в initialize/tools/list всем агентам; не следовать = методы кроме tools/call без tenant-проверки. Ни то, ни другое не учтено в стоимости (JWS без tool/ahs — ещё одна правка SEC-03). Запасной вариант, рекомендацию не меняет; вызовы tools/call действительно получают 403, поэтому не ложное утверждение, а неполнота.",
+   "required_improvement": "В п.2 (3)/(5), path_w_threats и п.9: webhook стенда закрывает tenant только на tools/call; для остальных методов выбрать tenant-проверку в webhook для всех методов, --authz-config/сеть как обязательную меру или JWS на всех методах с правкой SEC-03, и учесть в днях."
+  },
+  {
+   "severity": "minor",
+   "origin": "missed_earlier",
+   "ref": "AS-08, ADR-0002 п.2 (2)",
+   "where": "docs/adr/0002-gateway-choice.md:92; reports/conformance/M4.1.json path_w_threats[0]",
+   "problem": "Меры против переиспользования Bearer (aud=прокси + --oidc-audience; сеть 'коннектор не видит vMCP и чужие прокси') не закрывают случай, который ADR сам называет: скомпрометированный коннектор с exchange-токеном (3600 с на стенде) вызывает свой прокси и получает от webhook свежий валидный JWS агента с любыми tool/ahs, затем передаёт его как requester.assertion в Approval Service — проверка AS-08 проходит. В ContextForge + C assertion привязана к реальному вызову агента. Остаётся только strip-auth, совместимость не проверена. Критик цикла 2 предложил те же неполные меры.",
+   "required_improvement": "Добавить меру 'коннектор не может открыть соединение к своему прокси' (или strip-auth / короткий exp exchange-токена) и последствие для AS-08."
+  },
+  {
+   "severity": "minor",
+   "origin": "missed_earlier",
+   "ref": "AC-M4.1-03 (стоимость перехода)",
+   "where": "docs/adr/0002-gateway-choice.md:133,134,138,140; docs/implementation-plan-v1.md M5 'Делаем'",
+   "problem": "ContextForge = 0 дней, хотя 'правила unified_pdp' и 'сетевая изоляция demo' — работа M5, ещё не сделанная; у ToolHive их аналоги (генерация Cedar, NetworkPolicy) включены в стоимость перехода. Разница завышена в пользу ContextForge грубо на 1–3 дня; вывод не меняется.",
+   "required_improvement": "Одна фраза у п.9: 0 — без M5; unified_pdp и сетевая изоляция есть в обоих вариантах, у ToolHive их заменяют Cedar и NetworkPolicy."
+  },
+  {
+   "severity": "minor",
+   "origin": "missed_earlier",
+   "ref": "AC-M4.1-01 (статусы)",
+   "where": "docs/adr/0002-gateway-choice.md:69; reports/conformance/M4.1.json matrix[3].contextforge",
+   "problem": "Для ContextForge п.4 в ADR стоит 'частично' — такого статуса нет в списке ADR. В отчёте стоит not_run. Из-за этого строка ContextForge выглядит лучше доказанного, а это пункт, где ToolHive выигрывает.",
+   "required_improvement": "not_run (скрытые tools не проверялись, unified_pdp — M5) в обоих местах."
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "AC-M4.1-04",
+   "where": "docs/adr/0002-gateway-choice.md:92,124; reports/conformance/M4.1.json advisories.toolhive.webhook_middleware_bypasses",
+   "problem": "GHSA-g7gq-2r4g-3qw8 и GHSA-wj8g-gmv2-mpmv указаны без patched-версии. Обе patched 0.51.4, v0.67.0 не затронута, но из ADR это не видно. g7gq к тому же говорит, что такие запросы отклоняет только Cedar authz прокси — ещё один довод за --authz-config.",
+   "required_improvement": "Добавить 'patched 0.51.4, v0.67.0 не затронута' и отметку про Cedar authz."
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "—",
+   "where": "spikes/m4.1-gateways/attacks.py:106",
+   "problem": "Запуск 'WEBHOOK=1 STEPS=midsession ./run.sh' без WEBHOOK_DOWN=mid записывает stop_mid: null, и subprocess.run(None) падает с TypeError после половины вызовов.",
+   "required_improvement": "assert ST['stop_mid'] с понятным сообщением, или пропуск остановки."
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "Lean",
+   "where": "docs/adr/0002-gateway-choice.md:86,88",
+   "problem": "Вывод 'повтор на другой коннектор закрывает только aud' повторён в двух соседних пунктах.",
+   "required_improvement": "Слить :88 в :86."
+  }
+ ],
+ "required_improvements": [],
+ "backlog_minors": [
+  "M4.1: webhook пути W — tenant/JWS только на tools/call; решить для остальных методов и учесть в стоимости (finding 1)",
+  "M4.1: мера 'коннектор не достаёт до своего прокси' и последствие для AS-08 (finding 2)",
+  "M4.1: п.9 — оговорка про M5 (unified_pdp, сетевая изоляция) у '0 дней' ContextForge (finding 3)",
+  "M4.1: п.4 ContextForge 'частично' → not_run (finding 4)",
+  "M4.1: patched 0.51.4 для GHSA-g7gq/GHSA-wj8g (finding 5)",
+  "M4.1: attacks.run_midsession без stop_mid (finding 6); дубль ADR:86/88 (finding 7)",
+  "M4.1: в 'Когда пересмотреть' упомянуть путь G (~8–12 дней, без docker socket и кластера, своя сборка) как обход проблемы топологии W"
+ ],
+ "ponytail_review": "reports/critic/M4.1-cycle-3.review.md",
+ "lean_lines": 3,
+ "existing_solutions": [
+  {
+   "component": "attacks.run_midsession (цикл 3)",
+   "alternative": "attacks.call + spike.call_tool('rpc', extra=заголовки сессии) из M4, docker stop — переиспользованы",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "verify_tx.py — хранилище jti по (path, jti) (цикл 3)",
+   "alternative": "PyJWT PyJWKClient (используется); хранилище jti — модель SEEN_JTI echo M4; jti store коннектора будет в ките (M7/M8) — для спайка 3 строки оправданы",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "run.sh WEBHOOK_DOWN=mid",
+   "alternative": "существующий run.sh с переменными окружения (расширен, не скопирован)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "Cedar на прокси против обхода vMCP",
+   "alternative": "thv run --authz-config (штатный, записан в ADR, вживую не запускался)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "Ограничение aud на прокси",
+   "alternative": "thv run --oidc-audience (штатный, записан)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "Топология прокси пути W",
+   "alternative": "оператор ToolHive (MCPServer + MCPWebhookConfig, Helm) или thv run; rootless Podman (TOOLHIVE_PODMAN_SOCKET), docker socket-proxy — готовые, не проверены, честно отмечены",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "toolhive/webhook.py — подписант пути W (без изменений в цикле 3)",
+   "alternative": "плагин gxg_identity (это хук ContextForge, не сервис), embedded auth server ToolHive (JWS ADR-0001 не выпускает), Go-стратегия RegisterOBOStrategy (своя сборка)",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "Проверка advisories",
+   "alternative": "страницы GitHub GHSA (api.github.com закрыт прокси), OSV",
+   "verdict": "use_existing"
+  }
+ ],
+ "threat_model": [
+  {
+   "candidate": "ContextForge + C",
+   "path": "подделка заголовков/_meta/аргументов, повтор, прямой вызов коннектора, чужой tenant, admin",
+   "status": "closed",
+   "evidence": "ADR-0001, M4.json (в M4.1 не перепрогонялось)"
+  },
+  {
+   "candidate": "ContextForge + C",
+   "path": "Bearer агента доходит до коннектора",
+   "status": "closed",
+   "evidence": "spikes/m4-contextforge/evidence/variant-c.echo-received.jsonl: Authorization нет ни в одном из 77 запросов (проверено критиком)"
+  },
+  {
+   "candidate": "ContextForge + C",
+   "path": "скрытый tool по имени / unified_pdp deny by default",
+   "status": "open",
+   "evidence": "не проверено в M4, перенесено в M5 (GO/NO-GO условие 4)"
+  },
+  {
+   "candidate": "ToolHive vMCP",
+   "path": "поддельные X-Forwarded-User-*/X-Tenant-Id/X-GxG-Identity через vMCP",
+   "status": "closed",
+   "evidence": "default/summary.json (критик цикла 2)"
+  },
+  {
+   "candidate": "ToolHive vMCP",
+   "path": "чужой tenant, admin, скрытый tool через vMCP",
+   "status": "closed",
+   "evidence": "403 / tool not found (default, webhook-c)"
+  },
+  {
+   "candidate": "ToolHive path W",
+   "path": "прямые атаки на коннектор (без identity, повтор, подмена аргументов, другой коннектор/tool, 65 с, чужой ключ)",
+   "status": "closed",
+   "evidence": "webhook-c перепрогнан критиком в цикле 3: 7/7 = check_verdicts.EXPECTED"
+  },
+  {
+   "candidate": "ToolHive path W",
+   "path": "webhook недоступен со старта / посреди сессии",
+   "status": "closed",
+   "evidence": "webhook-c-down (цикл 2), webhook-c-mid-down перепрогнан критиком: 0 tools/call до коннектора после остановки"
+  },
+  {
+   "candidate": "ToolHive path W",
+   "path": "агент напрямую на прокси мимо vMCP: tools/call скрытых tools своего tenant'а",
+   "status": "open",
+   "evidence": "webhook-c thv-proxy:direct; меры сеть / aud+--oidc-audience / --authz-config — по коду"
+  },
+  {
+   "candidate": "ToolHive path W",
+   "path": "агент чужого tenant'а напрямую на прокси: initialize/tools/list (и resources/prompts) без tenant-проверки и без JWS",
+   "status": "open",
+   "evidence": "проверено критиком вживую: t-beta → 8091 tools/list 200 со списком t-alpha; webhook.py:46-47 (finding 1)"
+  },
+  {
+   "candidate": "ToolHive path W",
+   "path": "скомпрометированный коннектор переиспользует токен агента (aud=vmcp) через vMCP",
+   "status": "open",
+   "evidence": "сырой echo.jsonl webhook-c: aud=vmcp 3600 с; меры aud+--oidc-audience, сеть — не проверены"
+  },
+  {
+   "candidate": "ToolHive path W",
+   "path": "скомпрометированный коннектор с exchange-токеном получает через свой прокси свежий JWS агента и подделывает requester.assertion (AS-08)",
+   "status": "open",
+   "evidence": "ADR п.2 (2) признаёт; перечисленные меры не закрывают (finding 2)"
+  },
+  {
+   "candidate": "ToolHive path W",
+   "path": "обход webhook-middleware (класс GHSA-g7gq/GHSA-wj8g) на tools/call",
+   "status": "closed",
+   "evidence": "обе patched 0.51.4, v0.67.0 не затронута; запрос без JWS отклоняет коннектор (missing X-GxG-Identity в webhook-c)"
+  },
+  {
+   "candidate": "ToolHive path W",
+   "path": "RCE в прокси thv run с docker socket → root на хосте",
+   "status": "open",
+   "evidence": "топология (б) отклонена для продакшна без доказанной меры; (а) Kubernetes не проверена"
+  },
+  {
+   "candidate": "ToolHive token_exchange",
+   "path": "повтор токена на другой коннектор",
+   "status": "open",
+   "evidence": "verify_tx.json воспроизведён: хранилище (path, jti) не видит, закрывает только aud (mock IdP aud не ставит)"
+  },
+  {
+   "candidate": "ToolHive token_exchange",
+   "path": "подмена tool/аргументов перехватчиком до легитимного вызова",
+   "status": "open",
+   "evidence": "нет tool/ahs в токене — провал по SEC-03"
+  },
+  {
+   "candidate": "Docker MCP Gateway",
+   "path": "чужой tenant на общем инстансе",
+   "status": "open",
+   "evidence": "default/summary.json: t-alpha дошёл до beta__echo (критик цикла 2)"
+  },
+  {
+   "candidate": "Docker MCP Gateway",
+   "path": "identity вызывающего / различение агентов",
+   "status": "open",
+   "evidence": "один токен на инстанс, transport.go#L59-L61"
+  },
+  {
+   "candidate": "все",
+   "path": "агент действует против владельца своей же учётной записью",
+   "status": "out_of_scope",
+   "evidence": "правило 4 'Правил против холостых циклов'"
+  }
+ ],
+ "verdict_summary": "Все 6 пунктов цикла 2 закрыты и воспроизведены вживую. Новых major и critical нет. Сравнение честное, рекомендация следует из доказательств. Семь minor относятся к запасному ToolHive и к формулировкам, их переносим в бэклог."
+}
