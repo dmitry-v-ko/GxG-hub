@@ -86,6 +86,7 @@ def test_body_outside_the_schema_is_invalid_input(
     bodies: list[tuple[Any, str]] = [
         ({**world.body(), "extra": 1}, "body"),
         ({**world.body(), "idempotency_key": "short"}, "idempotency_key"),
+        ({**world.body(), "requester": {"principal": "", "tenant_id": "t-alpha"}}, "requester/principal"),
         ([], "body"),
         ("x", "body"),
     ]
@@ -388,3 +389,14 @@ def test_ap02_alert_is_logged(propose: Callable[..., Any], world: Any, caplog: p
     assert doc["approval"]["mode"] == "human"
     assert ("gxg_approval", 30, "ALERT policy tenant=t-alpha: auto_approve ignored for high_risk tool "
             "demo.wire.propose: ['auto-w']") in caplog.record_tuples  # fmt: skip
+
+
+def test_allowed_approvers_are_stored(propose: Callable[..., Any], world: Any, owner: psycopg.Connection[Any]) -> None:
+    """AP-01.4: the narrowed approver set is frozen into the intent (NULL = any approver of the tenant)."""
+    h1, h2 = "oidc:https://idp.example.invalid:1", "oidc:https://idp.example.invalid:2"
+    propose()
+    world.set_policy("t-alpha", [{"id": "narrow", "match": {"tools": ["demo.message.propose"]},
+                                  "decision": "require_approval", "approvers": [h2, h1]}])  # fmt: skip
+    propose()
+    rows = owner.execute("SELECT allowed_approvers, rule_ids FROM intents ORDER BY created_at, intent_id").fetchall()
+    assert sorted(rows, key=lambda r: r[1]) == [(None, []), ([h1, h2], ["narrow"])]

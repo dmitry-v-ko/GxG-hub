@@ -43,3 +43,5 @@ only_mutate = [
 also_copy = ["tests_db/"]
 pytest_add_cli_args_test_selection = ["tests", "tests_db"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
+# Each mutant's session creates and migrates a database (not in the measured test durations).
+timeout_constant = 60.0
