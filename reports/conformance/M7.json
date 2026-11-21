@@ -17,8 +17,10 @@
     },
     "ci": {
       "workflow": ".github/workflows/ci.yml",
-      "run_id": 44913263210,
-      "commit": "7c68ff8",
+      "run_id": 44918795404,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44918795404",
+      "status": "completed",
+      "commit": "dd4f060 (critic report on top of b752d31; code identical to 7c68ff8)",
       "jobs": {
         "lint": "success",
         "types": "success",
@@ -26,15 +28,16 @@
         "approval-db": "success",
         "schema-guard": "success",
         "secrets": "success",
+        "mutmut": "success (scripts/ci/mutmut.sh incl. approval, ~37 min)",
         "policy": "success",
         "grants-widening": "failure (by design)",
-        "mutmut": "in_progress (~1 h)",
-        "ci-ok": "pending"
+        "ci-ok": "failure (only because of grants-widening)"
       },
-      "grants_widening": "red by design: 'widening change(s) outside a pull request' on push (M2 gate, policies differ from main); not a milestone failure",
-      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44913263210",
-      "status": "in_progress",
-      "note": "Pushing this report commit cancels run 44913263210 (cancel-in-progress on claude/**); the run of the report commit tests the same code (reports/ only differ). Final status follows in a separate commit."
+      "grants_widening": "red by design: '226 widening change(s) outside a pull request' on push (M2 gate, policies differ from main); not a milestone failure",
+      "earlier_runs": {
+        "44913263210": "7c68ff8, cancelled by the push of b752d31",
+        "44914149094": "b752d31, all green except grants-widening; mutmut cancelled after 53 min by the push of dd4f060"
+      }
     }
   },
   "contextforge_image_digest": null,
