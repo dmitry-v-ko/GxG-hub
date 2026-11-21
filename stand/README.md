@@ -51,6 +51,7 @@ docker compose down               # остановить; -v удалит и Б�
 | Вызовы → `PDP_DENY` | Нет правила allow для этого email и имени tool. Правила — `stand/unified_pdp.rules.json`, после правки — `docker compose restart contextforge` |
 | `demo` `/readyz` = 503, вызовы → `temporarily_unavailable` | Нет валидного bundle: `stand/secrets/bundle/` повреждён, старше 24 ч (GR-13) или старше уже загруженного (GR-13a). Причина — в логе `demo` (`not_ready`). `stand/init.py` переподписывает bundle при каждом запуске (и `run.sh`), `demo` подхватывает его без рестарта |
 | Вызовы → `unauthenticated` | Причина отказа — поле `reason` в строке аудита `demo` (`kid`, `signature`, `exp`, `replay`, `missing`…). Неизвестный `kid` — повод для алерта (SEC-03) |
+| Изменилась схема tool'а коннектора (`Invalid structured content returned by tool`) | ContextForge хранит схемы с момента регистрации. `bootstrap.py` вызывает `POST /v1/gateways/{id}/tools/refresh` для каждого gateway при каждом запуске: перезапустить его |
 | Новый tool у `demo` | После `bootstrap.py` добавить имя ContextForge (`demo-<tenant>-<tool>`) в правила нужных агентов. По умолчанию он запрещён |
 | Отозвать токен агента | `DELETE /v1/tokens/{id}` от admin. Действует через ≤ `AUTH_CACHE_REVOCATION_TTL` (на стенде 5 с) |
 | Ротация ключа адаптера | Новый `kid` добавить в `DEMO_IDENTITY_KEYS` (через запятую), сменить ключ и `kid` в `plugins.yaml`, перезапустить ContextForge, затем убрать старый `kid` и пересоздать `demo` (MC-04) |

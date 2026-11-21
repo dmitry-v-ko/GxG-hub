@@ -165,6 +165,8 @@ def main() -> None:
                 },
             )
             t.setdefault("gateways", {})[connector] = gw["id"]
+            # the connector's current tools and schemas: ContextForge keeps what it saw at registration (M6)
+            api("POST", f"/v1/gateways/{gw['id']}/tools/refresh")
         t["gateway_id"] = t["gateways"]["demo"]
     tools = virtual_servers(api, state)
     alpha = state["teams"]["t-alpha"]
