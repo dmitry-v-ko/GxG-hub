@@ -1,25 +1,25 @@
 {
   "milestone": "M2",
-  "cycle": 4,
+  "cycle": 5,
   "branch": "claude/m2-policy-tooling",
-  "base": "claude/m2-policy-tooling@93634d7 (cycle 3 + critic report)",
-  "commit": "dd0beb1020c40af51567ccf8dd2d53e345fd97ef",
-  "commit_note": "Tested code commit (90d4985 code, dd0beb1 mutmut list and assertions). This report is added by the next commit (reports/ only).",
-  "run_at": "2026-11-21T09:25:00Z",
-  "author": "Claude Code (executor, M2 cycle 4)",
-  "plan": "reports/plans/M2-cycle-4.md",
+  "base": "claude/m2-policy-tooling@ed3faad (cycle 4 + critic report)",
+  "commit": "6ffcaddc03c9dafc94d9961526f2dec905ebbcb1",
+  "commit_note": "Tested code commit (17ce7f4 code, 6ffcadd mutmut list and reports). This report is added by the next commit (reports/ only).",
+  "run_at": "2026-11-21T10:50:00Z",
+  "author": "Claude Code (executor, M2 cycle 5)",
+  "plan": "reports/plans/M2-cycle-5.md",
   "environment": {
     "local": {
       "os": "linux x86_64",
       "python": "3.12 (UV_PYTHON=3.12)",
-      "command": "bash scripts/ci/check-all.sh -> check-all: OK; uv run pytest -> 304 passed, 148 subtests passed, 0 skipped"
+      "command": "bash scripts/ci/check-all.sh -> check-all: OK; uv run pytest -> 307 passed, 148 subtests passed, 0 skipped"
     },
     "ci": {
       "runner": "ubuntu-latest",
       "python": "3.12",
       "workflow": ".github/workflows/ci.yml",
-      "run_id": 44889079000,
-      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44889079000",
+      "run_id": 44894175225,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44894175225",
       "event": "push",
       "jobs": {
         "lint": "success",
@@ -32,7 +32,8 @@
         "ci-ok": "failure (follows grants-widening)",
         "bundle": "skipped (not main)"
       },
-      "why_red": "push to claude/** : main has no gate yet, so the step runs the PR copy (bootstrap warning in the log); '225 widening change(s) outside a pull request' = 12 policy widening + 213 changed gate paths vs merge-base with main. Fail closed by design (F1)."
+      "why_red": "push to claude/** : main has no gate yet, so the step runs the PR copy (bootstrap); policy and gate-path widening vs merge-base with main outside a pull request -> fail closed by design (F1).",
+      "commit": "17ce7f4 (code commit; 6ffcadd changes only the mutmut list and reports/)"
     }
   },
   "contextforge_image_digest": null,
@@ -67,18 +68,19 @@
         "tools/gxg-policy/tests/test_lint.py::test_repo_policies_lint_clean"
       ],
       "evidence": [
-        "CI job `policy` (run 44889079000): validate, lint, bundle smoke — success"
+        "CI job `policy` (run 44894175225): validate, lint, bundle smoke — success"
       ]
     },
     {
       "id": "AC-M2-02",
       "status": "passed",
       "expected": ">= 12 prepared errors in tools/gxg-policy/tests/bad/, each found with non-zero exit and file + path",
-      "actual": "20 fixtures (12 from the AC + 8 more; new 20: auto_approve with limits: {}). Each: exactly one error equal to expected.json; CLI exit 1 with `<file>: <path>: [<code>]`. Full messages and levels of all fixtures plus a multi-error fixture (lint-all, 48 findings) are pinned in tools/gxg-policy/tests/lint-golden.json. Cycle 4: same tool name in two manifests -> error `duplicate-tool` with file and tools[i].name (test_lint.py::test_same_tool_name_in_two_manifests_is_an_error; not a tests/bad fixture because bad fixtures carry one manifest)",
+      "actual": "20 fixtures (12 from the AC + 8 more; new 20: auto_approve with limits: {}). Each: exactly one error equal to expected.json; CLI exit 1 with `<file>: <path>: [<code>]`. Full messages and levels of all fixtures plus a multi-error fixture (lint-all, 48 findings) are pinned in tools/gxg-policy/tests/lint-golden.json. Cycle 4: same tool name in two manifests -> error `duplicate-tool` with file and tools[i].name (test_lint.py::test_same_tool_name_in_two_manifests_is_an_error; not a tests/bad fixture because bad fixtures carry one manifest). Cycle 5: the same name twice inside one manifest -> `duplicate-tool` on the second tools[i].name, manifest not loaded (test_lint.py::test_same_tool_name_twice_in_one_manifest_is_an_error)",
       "tests": [
         "tools/gxg-policy/tests/test_lint.py::test_ac_m2_02_lint_finds_error[*] (20)",
         "tools/gxg-policy/tests/test_lint.py::test_ac_m2_02_has_all_required_cases",
-        "tools/gxg-policy/tests/test_lint.py::test_lint_findings_match_golden"
+        "tools/gxg-policy/tests/test_lint.py::test_lint_findings_match_golden",
+        "tools/gxg-policy/tests/test_lint.py::test_same_tool_name_twice_in_one_manifest_is_an_error"
       ],
       "notes": "connector tenants ['*'], webhook non-HTTPS and credential without secret:// are rejected by the JSON Schemas (code `schema`); lint includes schema validation"
     },
@@ -86,7 +88,7 @@
       "id": "AC-M2-03",
       "status": "passed",
       "expected": "added (subject, action, resource) pairs and new auto_approve marked widening, removed — narrowing; 6 fixture pairs with golden reports",
-      "actual": "10 pairs with expected.json, all equal. New 10-manifest-tools (base/head-connectors, expected.json + expected-reverse.json): tool added, effect_class lowered (high_risk->external_effect, external_effect->write_reversible), action and executes_via changed -> widening; class raised, tool removed -> narrowing. CLI: --base-connectors/--head-connectors",
+      "actual": "10 pairs with expected.json, all equal. 10-manifest-tools (base/head-connectors, expected.json + expected-reverse.json): tool added, any effect_class change (`effect_class_changed`, both directions: rules may match by match.effect_classes, cycle 4 finding 2), action and executes_via changed -> widening; tool removed -> narrowing. Raised class under a class-matched deny -> widening (test_raised_effect_class_under_a_class_matched_deny_is_widening). Duplicate tool name inside one manifest -> diff exit 2 (test_duplicate_tool_inside_one_manifest_fails_the_diff). CLI: --base-connectors/--head-connectors",
       "tests": [
         "tools/gxg-policy/tests/test_diff.py::test_ac_m2_03_report_matches_golden[*] (8)",
         "tools/gxg-policy/tests/test_diff.py::test_ac_m2_03_core_classification",
@@ -98,7 +100,9 @@
         "tools/gxg-policy/tests/test_diff.py::test_manifest_tool_changes",
         "tools/gxg-policy/tests/test_diff.py::test_manifest_moved_to_another_connector_is_widening",
         "tools/gxg-policy/tests/test_diff.py::test_invalid_manifest_is_an_input_error",
-        "tools/gxg-policy/tests/test_diff.py::test_reverse_report_matches_golden[10-manifest-tools]"
+        "tools/gxg-policy/tests/test_diff.py::test_reverse_report_matches_golden[10-manifest-tools]",
+        "tools/gxg-policy/tests/test_diff.py::test_raised_effect_class_under_a_class_matched_deny_is_widening",
+        "tools/gxg-policy/tests/test_diff.py::test_duplicate_tool_inside_one_manifest_fails_the_diff"
       ],
       "notes": "Goldens 07, 08 and the 03 change were generated by the tool and checked entry by entry; the two new tests assert the classification independently of the goldens"
     },
@@ -112,8 +116,9 @@
         "No PR code in the job: steps are checkout, setup-uv, gate step only; no `uv` call in the step (tests/ci/test_ci_workflow.py::test_grants_widening_runs_no_pr_code); gate paths -> widening entries and Markdown section (tests/ci/test_widening_gate.py::test_changed_gate_paths_count_as_widening)",
         "Cycle 3 finding 2 (manifests): same policies, manifest weakened on the branch -> job report equals 10-manifest-tools/expected.json, red (::test_manifest_weakening_is_widening)",
         "Earlier cycles unchanged: base change, fast-forward A/B/A/B, tag origin/main, push/dispatch red, cancel, label/reopen, groups, fork runs",
-        "Real CI: run 44889079000 (push) grants-widening red: '225 widening change(s) outside a pull request' with the bootstrap warning",
-        "DoD-4: mutmut on widening_gate.py 581 mutants, 557 killed, 24 equivalent; 24/24 bash/YAML mutations of grants_widening.sh and ci.yml (10 new: PR copy runs, uv sync of the PR, gate paths dropped/narrowed/not passed, manifests not compared, PR gxg-policy / widening_gate.py runs)"
+        "Real CI: run 44894175225 (push, 17ce7f4) grants-widening red outside a PR with the bootstrap warning (fail closed by design)",
+        "DoD-4 (cycle 5 re-run): mutmut on widening_gate.py 581 mutants, 557 killed, 24 equivalent; 24/24 bash/YAML mutations of grants_widening.sh and ci.yml (10 new: PR copy runs, uv sync of the PR, gate paths dropped/narrowed/not passed, manifests not compared, PR gxg-policy / widening_gate.py runs)",
+        "Cycle 4 findings: a lower-class duplicate of a tool inside one manifest fails the diff (exit 2, red); a raised effect_class is widening, so a class-matched deny/quorum cannot be dropped without the label (tools/gxg-policy/tests/test_diff.py, two tests above)"
       ],
       "owner_pending": [
         "docs/setup/widening-approval.md checklist steps 1-13 on a real PR; step 7 now expects red (gate from main); new 12 (re-run keeps created_at) and 13 (deleted/recreated head branch cannot be reopened, or the fast-forward is red)",
@@ -128,9 +133,9 @@
       ],
       "evidence": [
         "docs/setup/widening-approval.md",
-        "CI run 44889079000 grants-widening log",
-        "reports/mutations/M2-cycle-4-mutmut.txt",
-        "reports/mutations/M2-cycle-4-bash-yaml.txt"
+        "CI run 44894175225 grants-widening log",
+        "reports/mutations/M2-cycle-5-mutmut.txt",
+        "reports/mutations/M2-cycle-5-bash-yaml.txt"
       ],
       "owner_decision": "accepted risk (2026-11-21): ci.yml-rewrite path covered by the owner's own review of every PR touching .github/workflows/; see top-level owner_decision"
     },
@@ -164,12 +169,12 @@
     }
   ],
   "dod": {
-    "1_main_via_pr_ci_green": "Not yet: run 44889079000 green except grants-widening/ci-ok, red by design (push with widening and gate paths vs main); merging into main via PR with the owner's label is the owner's step",
+    "1_main_via_pr_ci_green": "Not yet: run 44894175225 green except grants-widening/ci-ok, red by design (push with widening and gate paths vs main); merging into main via PR with the owner's label is the owner's step",
     "2_automated_tests": "AC-M2-01, 02, 03, 05, 06 automated; AC-M2-04 automated for gate, job script and workflow; real-PR steps owner-pending",
     "3_report": "this file",
-    "4_tests_catch_mutation": "mutmut 3.8.1, `bash scripts/ci/mutmut.sh`: gxg_policy diff/lint/bundle/load 2592 mutants, 2556 killed, 36 equivalent; widening_gate.py 581, 557 killed, 24 equivalent; no surviving non-equivalent mutant (reports/mutations/M2-cycle-4-mutmut.txt; reasons in scripts/ci/mutmut-equivalent.txt; list renumbered after the new lines shifted mutant ids, two new equivalents in _Diff.tools: add(None) and <= under `bc != hc`). Non-Python: mutate_m2.py 24/24 (reports/mutations/M2-cycle-4-bash-yaml.txt)",
+    "4_tests_catch_mutation": "mutmut 3.8.1, `bash scripts/ci/mutmut.sh`: gxg_policy diff/lint/bundle/load 2590 mutants, 2555 killed, 35 equivalent; widening_gate.py 581, 557 killed, 24 equivalent; no surviving non-equivalent mutant (reports/mutations/M2-cycle-5-mutmut.txt; reasons in scripts/ci/mutmut-equivalent.txt; one stale entry removed: the < / <= mutant under `bc != hc` no longer exists). Non-Python: mutate_m2.py 24/24 (reports/mutations/M2-cycle-5-bash-yaml.txt)",
     "5_no_skips": "0 skipped, 0 xfail (conftest.py)",
-    "6_existing_solutions": "reports/plans/M2-cycle-4.md «DoD-6»"
+    "6_existing_solutions": "reports/plans/M2-cycle-4.md «DoD-6» (cycle 5 adds no component: two edits of existing checks)"
   },
   "gr_11a_format": {
     "grants-bundle.json": "JCS (RFC 8785, float-free), keys schema_version=1, bundle_version (git SHA), built_at (RFC 3339 UTC, seconds, Z), tenants {tenant: {grants: <file with group subjects expanded; groups map kept for approval requesters/approvers>, approval_policy: <file or null>}}, platform: <registry>",
@@ -246,5 +251,9 @@
       "mitigation": "the owner reviews every PR that changes .github/workflows/ personally, not by a green ci-ok; CODEOWNERS marks /.github/",
       "docs": "docs/setup/widening-approval.md «Ограничения»"
     }
-  ]
+  ],
+  "critic_cycle_4": {
+    "major_1_duplicate_in_one_manifest": "done: load_manifests adds names to `seen` while iterating -> duplicate-tool error; diff._load fails closed (exit 2); tests in lint and diff",
+    "major_2_effect_class_any_change": "done: every effect_class change is widening (`effect_class_changed`); goldens of 10-manifest-tools updated; test with a class-matched deny; docs/setup/widening-approval.md updated"
+  }
 }
