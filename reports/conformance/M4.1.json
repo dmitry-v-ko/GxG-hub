@@ -1,263 +1,296 @@
 {
-  "milestone": "M4.1",
-  "cycle": 1,
-  "branch": "claude/m4.1-gateway-comparison",
-  "base": "claude/m4-contextforge-spike @ 1d54921 (M4 closed, critic 9.5)",
-  "commit": "1054d056b4d476b8015ef32197604cef79f4827f",
-  "commit_note": "Tested commit; this report's commit field is set by the next commit, which changes only reports/.",
-  "run_at": "2026-11-21T11:45:00Z",
-  "author": "Claude Code (executor, M4.1 cycle 1)",
-  "plan": "reports/plans/M4.1-cycle-1.md",
-  "environment": {
-    "where": "Claude Code cloud container, linux x86_64; dockerd 29.10.0 started manually",
-    "live": true,
-    "network": "ghcr.io, docker.io, github.com (git), api.osv.dev OK; api.github.com 403 from egress proxy (advisory pages read via web fetch)",
-    "reproduce": "see spikes/m4.1-gateways/README.md"
+ "milestone": "M4.1",
+ "cycle": 2,
+ "branch": "claude/m4.1-gateway-comparison",
+ "base": "cycle 1 @ 5e3540f (critic 8.0)",
+ "commit": "set by the next commit",
+ "commit_note": "Tested commit; this report's commit field is set by the next commit, which changes only reports/.",
+ "run_at": "2026-11-21T13:00:00Z",
+ "author": "Claude Code (executor, M4.1 cycle 2)",
+ "plan": "reports/plans/M4.1-cycle-2.md",
+ "environment": {
+  "where": "Claude Code cloud container, linux x86_64; dockerd 29.10.0 started manually",
+  "live": true,
+  "network": "ghcr.io, docker.io, github.com (git), api.osv.dev OK; api.github.com 403 from egress proxy (advisory pages read via web fetch)",
+  "reproduce": "see spikes/m4.1-gateways/README.md"
+ },
+ "candidates": {
+  "toolhive": {
+   "source": "stacklok/toolhive v0.67.0 @ 884ee1fbc4e6b8059797bc0a523b3908c2955ce0 (release 2026-11-20, Latest)",
+   "images": {
+    "vmcp": "ghcr.io/stacklok/toolhive/vmcp:v0.67.0@sha256:6416a07efaec881c1eee208f1818dcb997374ee3270a31487a47907d877c2be1",
+    "thv": "ghcr.io/stacklok/toolhive:v0.67.0@sha256:32579286003a97e67ab5fe324757d4945950e4aa25d7e84b3a96c8a9e16ef292",
+    "proxyrunner": "ghcr.io/stacklok/toolhive/proxyrunner:v0.67.0@sha256:7e6598e490947e0cb0f0c68d7a869165af4b93aa96ec56304bf769676ca51d1c",
+    "upgrade_from": "ghcr.io/stacklok/toolhive/vmcp:v0.66.0@sha256:4f5ac6d239c6e7de6d6b141cb9e406bd38c3144dca8f618011fe491c7777f352",
+    "thv_note": "thv run (remote URL) run live in the webhook variant; needs a container runtime (docker socket) even for --help; proxyrunner image not run"
+   }
   },
-  "candidates": {
-    "toolhive": {
-      "source": "stacklok/toolhive v0.67.0 @ 884ee1fbc4e6b8059797bc0a523b3908c2955ce0 (release 2026-11-20, Latest)",
-      "images": {
-        "vmcp": "ghcr.io/stacklok/toolhive/vmcp:v0.67.0@sha256:6416a07efaec881c1eee208f1818dcb997374ee3270a31487a47907d877c2be1",
-        "thv": "ghcr.io/stacklok/toolhive:v0.67.0@sha256:32579286003a97e67ab5fe324757d4945950e4aa25d7e84b3a96c8a9e16ef292",
-        "proxyrunner": "ghcr.io/stacklok/toolhive/proxyrunner:v0.67.0@sha256:7e6598e490947e0cb0f0c68d7a869165af4b93aa96ec56304bf769676ca51d1c",
-        "upgrade_from": "ghcr.io/stacklok/toolhive/vmcp:v0.66.0@sha256:4f5ac6d239c6e7de6d6b141cb9e406bd38c3144dca8f618011fe491c7777f352"
-      }
+  "docker_mcp_gateway": {
+   "source": "docker/mcp-gateway v0.44.3 @ 7e0f34277c91855ad861eeff536b4fdc77420593 (2026-10-26, pre-release; all releases on pages 1-2 are pre-release)",
+   "images": {
+    "gateway": "docker/mcp-gateway:v0.44.3@sha256:bae58d801fd4b73f6ad91e609b8ce5ec8868713825f33a2bb20a98f956d0bd46",
+    "upgrade_from": "docker/mcp-gateway:v0.44.2@sha256:bc104370585ec26e2e7243ace354caa8ba7b05d9f8cea01b177016b0598dbcb1",
+    "note": "Docker Hub tag latest = image of 2026-07-23 (older than v0.44.3), not used"
+   }
+  },
+  "contextforge": {
+   "source": "not re-run: docs/adr/0001-identity-propagation.md, reports/conformance/M4.json",
+   "image": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5"
+  }
+ },
+ "stand_only_images": {
+  "mock_idp": "ghcr.io/navikt/mock-oauth2-server:3.0.1@sha256:4f3660e5f3586b81fe2e0d42d0c9fcd3c8c64268db0d3ade261dadd70d27020b",
+  "echo_runtime": "ContextForge v1.1.1 image as in M4 (PyJWT 2.15.1)"
+ },
+ "advisories_checked_at": "2026-11-21",
+ "advisories": {
+  "toolhive": {
+   "github": "https://github.com/stacklok/toolhive/security/advisories",
+   "count": 55,
+   "published_range": "2025-05-12..2026-11-06 (all before v0.67.0)",
+   "patched_checked": "12 opened one by one (10 in cycle 1: patched <= 0.62.0; 2 newest: 0.63.0); 43 not opened",
+   "osv": "Go github.com/stacklok/toolhive@v0.67.0: 0 (3 records total, fixed <= 0.31.0)",
+   "count_note": "pages 1-5 x10 + 5 on page 6 on 2026-11-21; critic cycle 1 counted 54; none published after 2026-11-06",
+   "newest": [
+    {
+     "id": "GHSA-v869-pp2g-ff4q",
+     "published": "2026-11-06",
+     "patched": "0.63.0",
+     "severity": "low",
+     "what": "Cedar list-response filter passes gzip/br responses unfiltered (hidden tools/prompts/resources disclosed; calls still authorized)"
     },
-    "docker_mcp_gateway": {
-      "source": "docker/mcp-gateway v0.44.3 @ 7e0f34277c91855ad861eeff536b4fdc77420593 (2026-10-26, pre-release; all releases on pages 1-2 are pre-release)",
-      "images": {
-        "gateway": "docker/mcp-gateway:v0.44.3@sha256:bae58d801fd4b73f6ad91e609b8ce5ec8868713825f33a2bb20a98f956d0bd46",
-        "upgrade_from": "docker/mcp-gateway:v0.44.2@sha256:bc104370585ec26e2e7243ace354caa8ba7b05d9f8cea01b177016b0598dbcb1",
-        "note": "Docker Hub tag latest = image of 2026-07-23 (older than v0.44.3), not used"
-      }
-    },
-    "contextforge": {
-      "source": "not re-run: docs/adr/0001-identity-propagation.md, reports/conformance/M4.json",
-      "image": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5"
+    {
+     "id": "GHSA-v9xx-q4mg-gwmv",
+     "published": "2026-11-06",
+     "patched": "0.63.0",
+     "severity": "low",
+     "what": "tool filter (thv run --tools / MCPToolConfig) passes unfiltered tools/list on decode type error or case-folded tools key"
     }
+   ],
+   "affects_v0.67.0": false
   },
-  "stand_only_images": {
-    "mock_idp": "ghcr.io/navikt/mock-oauth2-server:3.0.1@sha256:4f3660e5f3586b81fe2e0d42d0c9fcd3c8c64268db0d3ade261dadd70d27020b",
-    "echo_runtime": "ContextForge v1.1.1 image as in M4 (PyJWT 2.15.1)"
+  "docker_mcp_gateway": {
+   "github": "https://github.com/docker/mcp-gateway/security/advisories",
+   "count": 10,
+   "patched_max": "0.44.1",
+   "affects_v0.44.3": false,
+   "osv": "Go github.com/docker/mcp-gateway@v0.44.3: 0"
   },
-  "advisories_checked_at": "2026-11-21",
-  "advisories": {
-    "toolhive": {
-      "github": "https://github.com/stacklok/toolhive/security/advisories",
-      "count": 60,
-      "published_range": "2025-05-12..2026-11-06 (all before v0.67.0)",
-      "patched_checked": "10 newest: patched <= 0.62.0; 50 on pages 2-6 not opened one by one",
-      "osv": "Go github.com/stacklok/toolhive@v0.67.0: 0 (3 records total, fixed <= 0.31.0)"
-    },
-    "docker_mcp_gateway": {
-      "github": "https://github.com/docker/mcp-gateway/security/advisories",
-      "count": 10,
-      "patched_max": "0.44.1",
-      "affects_v0.44.3": false,
-      "osv": "Go github.com/docker/mcp-gateway@v0.44.3: 0"
-    },
-    "caveat": "affected ranges are the maintainers' statements; not re-verified against code"
+  "caveat": "affected ranges are the maintainers' statements; not re-verified against code"
+ },
+ "matrix": [
+  {
+   "id": 1,
+   "item": "tenant isolation",
+   "contextforge": {
+    "status": "passed",
+    "evidence": "ADR-0001 criterion 4 (cross-team refused on all paths)"
+   },
+   "toolhive": {
+    "status": "passed",
+    "note": "no tenant model: tenant = IdP claim + our Cedar policies",
+    "evidence": "spikes/m4.1-gateways/toolhive/evidence/default/visibility.json, summary.json (attack_cross_tenant 403)"
+   },
+   "docker_mcp_gateway": {
+    "status": "failed",
+    "note": "one mcp.Server and one shared token per instance; shared instance: t-alpha reached beta__echo; isolation only by instance per tenant",
+    "evidence": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/default/summary.json; DG/pkg/gateway/transport.go#L59-L61"
+   }
   },
-  "matrix": [
-    {
-      "id": 1,
-      "item": "tenant isolation",
-      "contextforge": {
-        "status": "passed",
-        "evidence": "ADR-0001 criterion 4 (cross-team refused on all paths)"
-      },
-      "toolhive": {
-        "status": "passed",
-        "note": "no tenant model: tenant = IdP claim + our Cedar policies",
-        "evidence": "spikes/m4.1-gateways/toolhive/evidence/default/visibility.json, summary.json (attack_cross_tenant 403)"
-      },
-      "docker_mcp_gateway": {
-        "status": "failed",
-        "note": "one mcp.Server and one shared token per instance; shared instance: t-alpha reached beta__echo; isolation only by instance per tenant",
-        "evidence": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/default/summary.json; DG/pkg/gateway/transport.go#L59-L61"
-      }
-    },
-    {
-      "id": 2,
-      "item": "verifiable identity to connector / path to variant C",
-      "contextforge": {
-        "status": "passed",
-        "note": "A failed, C passed",
-        "evidence": "ADR-0001, M4.json"
-      },
-      "toolhive": {
-        "status": "failed",
-        "variant_c": "not_run: only own Go build of vMCP (custom outgoing auth Strategy via RegisterOBOStrategy or library); webhook on thv proxy can patch _meta only, not wired in vMCP",
-        "note": "no built-in signed identity; token_exchange: IdP-signed JWT with sub/tenant_id, but replay/tampered args/other tool/after 65 s all verify",
-        "evidence": "spikes/m4.1-gateways/toolhive/evidence/token-exchange/verify_tx.json"
-      },
-      "docker_mcp_gateway": {
-        "status": "failed",
-        "variant_c": "impossible without fork: no caller identity; interceptors cannot modify the request; before-interceptors fail on streaming",
-        "evidence": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/default/summary.json, spikes/m4.1-gateways/docker-mcp-gateway/evidence/interceptors/; DG/pkg/interceptors/interceptors.go#L109-L116"
-      }
-    },
-    {
-      "id": 3,
-      "item": "fail closed",
-      "contextforge": {
-        "status": "passed",
-        "evidence": "ADR-0001 (PLUGINS_FAIL_ON_PLUGIN_ERROR=true)"
-      },
-      "toolhive": {
-        "status": "passed",
-        "evidence": "spikes/m4.1-gateways/toolhive/evidence/fail-closed/vmcp-bad-cedar-policy.log, vmcp-sts-down.log, token-exchange-sts-down/observations.jsonl",
-        "note": "no authz section = allow all (admission.go#L85-L87); webhook failure_policy ignore = fail open"
-      },
-      "docker_mcp_gateway": {
-        "status": "n/a",
-        "note": "no identity mechanism; interceptor error -> call fails (live, streaming); HTTP 500 empty body -> passes (code, not run)"
-      }
-    },
-    {
-      "id": 4,
-      "item": "hidden tools / deny by default",
-      "contextforge": {
-        "status": "not_run",
-        "note": "hidden tools not checked in M4; unified_pdp is M5"
-      },
-      "toolhive": {
-        "status": "passed",
-        "evidence": "spikes/m4.1-gateways/toolhive/evidence/default/summary.json (hidden_echo not found although Cedar permits; admin 403)"
-      },
-      "docker_mcp_gateway": {
-        "status": "failed",
-        "note": "--tools hides (live: unknown tool); policy outside Docker Desktop is NoopClient allow-all (DG/pkg/policy/policy.go#L104-L112); mcp-add on by default"
-      }
-    },
-    {
-      "id": 5,
-      "item": "call paths, identity on each",
-      "contextforge": {
-        "status": "passed",
-        "evidence": "ADR-0001 criterion 4"
-      },
-      "toolhive": {
-        "status": "passed",
-        "scope": "vMCP aggregated prefixed path",
-        "not_run": "thv run / proxyrunner single-server proxy, tool overrides: thv needs docker socket and container management, not stood up"
-      },
-      "docker_mcp_gateway": {
-        "status": "failed",
-        "note": "no identity on any path; mcp-exec/code-mode bypass interceptors (code)"
-      }
-    },
-    {
-      "id": 6,
-      "item": "upgrade",
-      "contextforge": {
-        "status": "passed",
-        "note": "rehearsal v1.1.0 -> v1.1.1"
-      },
-      "toolhive": {
-        "status": "passed",
-        "note": "rehearsal v0.66.0 -> v0.67.0, same config",
-        "evidence": "spikes/m4.1-gateways/toolhive/evidence/upgrade-from-v0.66.0/summary.json"
-      },
-      "docker_mcp_gateway": {
-        "status": "passed",
-        "note": "rehearsal v0.44.2 -> v0.44.3",
-        "evidence": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/previous-v0.44.2/summary.json"
-      }
-    },
-    {
-      "id": 7,
-      "item": "maturity and security",
-      "contextforge": {
-        "status": "passed",
-        "note": "Apache-2.0; 19 GHSA + IBM bulletin, none affect v1.1.1"
-      },
-      "toolhive": {
-        "status": "passed",
-        "note": "Apache-2.0; weekly pre-1.0 releases with breaking changes; 60 GHSA, many authz bypasses, all fixed before v0.67.0 per published ranges"
-      },
-      "docker_mcp_gateway": {
-        "status": "failed",
-        "note": "MIT; every release is pre-release; Docker Desktop oriented; 10 GHSA none affect v0.44.3"
-      }
-    },
-    {
-      "id": 8,
-      "item": "operations",
-      "contextforge": {
-        "status": "passed",
-        "note": "PostgreSQL; audit/metrics not assessed in M4"
-      },
-      "toolhive": {
-        "status": "passed",
-        "note": "no PostgreSQL (files/CRD/Redis); YAML/CRD; JSON audit verified live; OTel/Prometheus by config (not run)"
-      },
-      "docker_mcp_gateway": {
-        "status": "failed",
-        "note": "no DB (files + SQLite); audit only to Docker Desktop policy client"
-      }
-    },
-    {
-      "id": 9,
-      "item": "migration cost",
-      "contextforge": {
-        "status": "n/a",
-        "note": "0, done in M4"
-      },
-      "toolhive": {
-        "status": "n/a",
-        "note": "~8-12 days: Go strategy for JWS, IdP with tenant_id claim, Cedar generation, own vMCP image; IdentityVerifier and JWS format reused"
-      },
-      "docker_mcp_gateway": {
-        "status": "n/a",
-        "note": "not estimated: requires fork"
-      }
-    }
-  ],
-  "m4_attacks": {
-    "script": "spikes/m4.1-gateways/attacks.py (imports spikes/m4-contextforge/spike.py helpers and check_verdicts.EXPECTED)",
-    "toolhive": "spikes/m4.1-gateways/toolhive/evidence/default/summary.json, spikes/m4.1-gateways/toolhive/evidence/token-exchange/summary.json + verify_tx.json",
-    "docker_mcp_gateway": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/default/summary.json",
-    "result": "forged headers did not reach the connector on both; forged _meta and arguments reach the connector as is on both; no token 401 on both; cross-tenant 403 (ToolHive), 401 per-instance / reached on shared instance (Docker); admin 403 (ToolHive), n/a (Docker); direct replays: no identity to replay on either, ToolHive token_exchange bearer replays verify"
+  {
+   "id": 2,
+   "item": "verifiable identity to connector / path to variant C",
+   "contextforge": {
+    "status": "passed",
+    "note": "A failed, C passed",
+    "evidence": "ADR-0001, M4.json"
+   },
+   "toolhive": {
+    "status": "passed",
+    "variant_c": "path W (mutating webhook of thv run proxy behind vMCP, failure_policy fail, JWS in params._meta[gxg.dev/identity]): passed live, all 8 agent calls accepted by the M4 verifier, all 7 direct attacks rejected with check_verdicts.EXPECTED; path G (own vMCP Strategy via RegisterOBOStrategy, own build): not_run; operator MCPServer+MCPWebhookConfig: not_run (no cluster)",
+    "token_exchange": "failed per SEC-03: IdP-signed, new token and jti per call (no cache), jti store rejects all 5 direct replays, exp is the IdP's (stand 3600 s); no tool/ahs binding",
+    "costs": "JWS in _meta -> SEC-03/IdentityVerifier change; client headers reach the connector via the proxy; direct access to the proxy bypasses vMCP Cedar -> network isolation or IdP aud required",
+    "evidence": "spikes/m4.1-gateways/toolhive/evidence/webhook-c/summary.json, webhook.log; token-exchange/verify_tx.json"
+   },
+   "docker_mcp_gateway": {
+    "status": "failed",
+    "variant_c": "impossible without fork: no caller identity; interceptors cannot modify the request; before-interceptors fail on streaming",
+    "evidence": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/default/summary.json, spikes/m4.1-gateways/docker-mcp-gateway/evidence/interceptors/; DG/pkg/interceptors/interceptors.go#L109-L116"
+   }
   },
-  "recommendation": "keep ContextForge with variant C; ToolHive as fallback/hybrid if ContextForge fails GO/NO-GO condition 4 in M5; reject Docker MCP Gateway",
-  "acceptance_criteria": [
-    {
-      "id": "AC-M4.1-01",
-      "status": "passed",
-      "evidence": "docs/adr/0002-gateway-choice.md section Матрица; this file matrix (not_run items with reasons)"
-    },
-    {
-      "id": "AC-M4.1-02",
-      "status": "passed",
-      "evidence": "spikes/m4.1-gateways/attacks.py run on both candidates; */evidence/default/summary.json"
-    },
-    {
-      "id": "AC-M4.1-03",
-      "status": "passed",
-      "evidence": "docs/adr/0002-gateway-choice.md, status Proposed"
-    },
-    {
-      "id": "AC-M4.1-04",
-      "status": "passed",
-      "evidence": "pinned digests in run.sh and ADR-0002; advisories section with links"
-    }
-  ],
-  "dod": {
-    "1_main_via_pr": "not_run: branch pushed, PR is the owner's/orchestrator's step",
-    "2_automated": "spike: run.sh scripts reproduce; ADR conclusions are manual analysis as in M4",
-    "3_report": "this file",
-    "4_mutmut": "n/a: no new verifier logic; key conditions stay in spikes/m4-contextforge/echo/verify_jws.py (mutmut M4). verify_tx.py/attacks.py are evidence drivers, not tested (shortcut)",
-    "5_no_skip": "passed: uv run pytest spikes/m4-contextforge/tests -> 30 passed",
-    "6_existing_solutions": "reports/plans/M4.1-cycle-1.md DoD-6; mock-oauth2-server used instead of own IdP stub"
+  {
+   "id": 3,
+   "item": "fail closed",
+   "contextforge": {
+    "status": "passed",
+    "evidence": "ADR-0001 (PLUGINS_FAIL_ON_PLUGIN_ERROR=true)"
+   },
+   "toolhive": {
+    "status": "passed",
+    "evidence": "spikes/m4.1-gateways/toolhive/evidence/fail-closed/vmcp-bad-cedar-policy.log, vmcp-sts-down.log, token-exchange-sts-down/observations.jsonl, webhook-c-down/observations.jsonl",
+    "note": "no authz section = allow all (admission.go#L85-L87); webhook failure_policy ignore = fail open; webhook down: direct 500 Webhook error, via vMCP tool not found, nothing reached the connector"
+   },
+   "docker_mcp_gateway": {
+    "status": "n/a",
+    "note": "no identity mechanism; interceptor error -> call fails (live, streaming); HTTP 500 empty body -> passes (code, not run)"
+   }
   },
-  "tests": [
-    {
-      "id": "spikes/m4-contextforge/tests",
-      "status": "passed",
-      "count": 30
-    }
-  ],
-  "lint": "uv run ruff check spikes/ && ruff format --check spikes/: passed"
+  {
+   "id": 4,
+   "item": "hidden tools / deny by default",
+   "contextforge": {
+    "status": "not_run",
+    "note": "hidden tools not checked in M4; unified_pdp is M5"
+   },
+   "toolhive": {
+    "status": "passed",
+    "evidence": "spikes/m4.1-gateways/toolhive/evidence/default/summary.json (hidden_echo not found although Cedar permits; admin 403)",
+    "note": "list filters bypassed twice in Nov 2026 (GHSA-v869-pp2g-ff4q, GHSA-v9xx-q4mg-gwmv, patched 0.63.0; proxy/thv filters per advisory text, vMCP aggregation not checked against code)"
+   },
+   "docker_mcp_gateway": {
+    "status": "failed",
+    "note": "--tools hides (live: unknown tool); policy outside Docker Desktop is NoopClient allow-all (DG/pkg/policy/policy.go#L104-L112); mcp-add on by default"
+   }
+  },
+  {
+   "id": 5,
+   "item": "call paths, identity on each",
+   "contextforge": {
+    "status": "passed",
+    "evidence": "ADR-0001 criterion 4"
+   },
+   "toolhive": {
+    "status": "passed",
+    "scope": "vMCP aggregated prefixed path; thv run proxy with webhook (live)",
+    "note": "thv proxy forwards client headers (forged X-Forwarded-User-*, X-GxG-Identity reached echo); identity correct because taken only from the JWS; direct path to the proxy bypasses Cedar",
+    "not_run": "tool overrides"
+   },
+   "docker_mcp_gateway": {
+    "status": "failed",
+    "note": "no identity on any path; mcp-exec/code-mode bypass interceptors (code)"
+   }
+  },
+  {
+   "id": 6,
+   "item": "upgrade",
+   "contextforge": {
+    "status": "passed",
+    "note": "rehearsal v1.1.0 -> v1.1.1"
+   },
+   "toolhive": {
+    "status": "passed",
+    "note": "rehearsal v0.66.0 -> v0.67.0, same config",
+    "evidence": "spikes/m4.1-gateways/toolhive/evidence/upgrade-from-v0.66.0/summary.json"
+   },
+   "docker_mcp_gateway": {
+    "status": "passed",
+    "note": "rehearsal v0.44.2 -> v0.44.3",
+    "evidence": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/previous-v0.44.2/summary.json"
+   }
+  },
+  {
+   "id": 7,
+   "item": "maturity and security",
+   "contextforge": {
+    "status": "passed",
+    "note": "Apache-2.0; 19 GHSA + IBM bulletin, none affect v1.1.1"
+   },
+   "toolhive": {
+    "status": "passed",
+    "note": "Apache-2.0; weekly pre-1.0 releases with breaking changes; 55 GHSA, all fixed before v0.67.0 per published ranges; the two newest (2026-11-06) are list-filter bypasses"
+   },
+   "docker_mcp_gateway": {
+    "status": "failed",
+    "note": "MIT; every release is pre-release; Docker Desktop oriented; 10 GHSA none affect v0.44.3"
+   }
+  },
+  {
+   "id": 8,
+   "item": "operations",
+   "contextforge": {
+    "status": "passed",
+    "note": "PostgreSQL; audit/metrics not assessed in M4"
+   },
+   "toolhive": {
+    "status": "passed",
+    "note": "no PostgreSQL (files/CRD/Redis); YAML/CRD; JSON audit verified live; OTel/Prometheus by config (not run)"
+   },
+   "docker_mcp_gateway": {
+    "status": "failed",
+    "note": "no DB (files + SQLite); audit only to Docker Desktop policy client"
+   }
+  },
+  {
+   "id": 9,
+   "item": "migration cost",
+   "contextforge": {
+    "status": "n/a",
+    "note": "0, done in M4"
+   },
+   "toolhive": {
+    "status": "n/a",
+    "note": "path W ~7-10 days, no own build (IdentityVerifier/SEC-03 to _meta 1-2, Python signer 2, IdP tenant_id + Cedar generation 3-4, topology/NetworkPolicy 1-2); path G ~8-12 days + rebuild per release; ContextForge 0"
+   },
+   "docker_mcp_gateway": {
+    "status": "n/a",
+    "note": "not estimated: requires fork"
+   }
+  }
+ ],
+ "m4_attacks": {
+  "script": "spikes/m4.1-gateways/attacks.py (imports spikes/m4-contextforge/spike.py helpers and check_verdicts.EXPECTED)",
+  "toolhive": "spikes/m4.1-gateways/toolhive/evidence/default/summary.json, spikes/m4.1-gateways/toolhive/evidence/token-exchange/summary.json + verify_tx.json",
+  "docker_mcp_gateway": "spikes/m4.1-gateways/docker-mcp-gateway/evidence/default/summary.json",
+  "result": "forged headers did not reach the connector via vMCP/Docker, did via the thv proxy (identity still only from the JWS); forged _meta and arguments reach the connector on both; no token 401; cross-tenant 403 (ToolHive, also from the webhook on the direct proxy path), 401 per-instance / reached on shared instance (Docker); admin 403 (ToolHive), n/a (Docker); direct replays: with the ToolHive webhook all 7 rejected with the M4 expected reasons; token_exchange bearers verify by signature but a jti store rejects them; Docker: nothing to replay",
+  "toolhive_webhook": "spikes/m4.1-gateways/toolhive/evidence/webhook-c/summary.json"
+ },
+ "recommendation": "unchanged: keep ContextForge with variant C (cost 0, verified on all M4 paths); ToolHive is now a real fallback with path C verified without a fork (~7-10 days, SEC-03 channel change to _meta, proxy per connector); reject Docker MCP Gateway",
+ "acceptance_criteria": [
+  {
+   "id": "AC-M4.1-01",
+   "status": "passed",
+   "evidence": "docs/adr/0002-gateway-choice.md section Матрица; this file matrix (not_run items with reasons); cycle 2: item 2/9 ToolHive path W live, path G not_run"
+  },
+  {
+   "id": "AC-M4.1-02",
+   "status": "passed",
+   "evidence": "spikes/m4.1-gateways/attacks.py run on both candidates; */evidence/default/summary.json; toolhive/evidence/webhook-c/summary.json (all 7 M4 expected rejections)"
+  },
+  {
+   "id": "AC-M4.1-03",
+   "status": "passed",
+   "evidence": "docs/adr/0002-gateway-choice.md, status Proposed; cost table with paths W/G, recommendation section 'Что изменилось после цикла 2'"
+  },
+  {
+   "id": "AC-M4.1-04",
+   "status": "passed",
+   "evidence": "pinned digests in run.sh and ADR-0002; advisories section with links; ToolHive 55 GHSA, two newest added (patched 0.63.0)"
+  }
+ ],
+ "dod": {
+  "1_main_via_pr": "not_run: branch pushed, PR is the owner's/orchestrator's step",
+  "2_automated": "spike: run.sh scripts reproduce; ADR conclusions are manual analysis as in M4",
+  "3_report": "this file",
+  "4_mutmut": "n/a: verifier unchanged (verify_jws.py, mutmut M4); webhook.py has a self-check (spikes/m4.1-gateways/tests/test_webhook.py), not mutated (shortcut)",
+  "5_no_skip": "passed: uv run pytest -> 134 passed, 0 skipped",
+  "6_existing_solutions": "reports/plans/M4.1-cycle-2.md DoD-6: webhook reuses verify_jws.canonical and the gxg_identity claim set; thv run instead of the operator"
+ },
+ "tests": [
+  {
+   "id": "uv run pytest (all testpaths)",
+   "status": "passed",
+   "count": 134
+  },
+  {
+   "id": "spikes/m4.1-gateways/tests/test_webhook.py",
+   "status": "passed",
+   "count": 3
+  }
+ ],
+ "lint": "uv run ruff check spikes/ && ruff format --check spikes/: passed",
+ "recommendation_change": "reason changed, conclusion not: ToolHive cost was estimated from the worst path in cycle 1",
+ "stand_variants_rerun": [
+  "toolhive: default, token-exchange (+verify_tx), token-exchange-sts-down, upgrade-from-v0.66.0, webhook-c, webhook-c-down, bad policy",
+  "docker: default, previous-v0.44.2, interceptors.sh"
+ ]
 }

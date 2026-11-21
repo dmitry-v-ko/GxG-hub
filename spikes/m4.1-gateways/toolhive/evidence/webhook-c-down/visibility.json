@@ -1,0 +1,62 @@
+{
+ "admin": {
+  "status": 200,
+  "tools": {
+   "id": 2,
+   "jsonrpc": "2.0",
+   "result": {
+    "cacheScope": "private",
+    "tools": [],
+    "ttlMs": 0
+   }
+  }
+ },
+ "agent:t-alpha:analyst": {
+  "status": 200,
+  "tools": {
+   "id": 2,
+   "jsonrpc": "2.0",
+   "result": {
+    "cacheScope": "private",
+    "tools": [],
+    "ttlMs": 0
+   }
+  }
+ },
+ "agent:t-alpha:hermes": {
+  "status": 200,
+  "tools": {
+   "id": 2,
+   "jsonrpc": "2.0",
+   "result": {
+    "cacheScope": "private",
+    "tools": [],
+    "ttlMs": 0
+   }
+  }
+ },
+ "agent:t-beta:analyst": {
+  "status": 200,
+  "tools": {
+   "id": 2,
+   "jsonrpc": "2.0",
+   "result": {
+    "cacheScope": "private",
+    "tools": [],
+    "ttlMs": 0
+   }
+  }
+ },
+ "agent:t-beta:hermes": {
+  "status": 200,
+  "tools": {
+   "id": 2,
+   "jsonrpc": "2.0",
+   "result": {
+    "cacheScope": "private",
+    "tools": [],
+    "ttlMs": 0
+   }
+  }
+ }
+}

@@ -2,7 +2,7 @@ Note: dynamic-tools disabled when using --servers flag
 - Reading configuration...
   - Reading catalog from [gxg.yaml]
 Warning: Failed to fetch secrets from secrets engine: secrets engine is not available: unavailable: dial unix /root/.cache/docker-secrets-engine/engine.sock: connect: no such file or directory
-- Configuration read in 702.964µs
+- Configuration read in 2.40846ms
 - Those servers are enabled: echo-alpha, echo-hidden
 - Listing MCP tools...
 ! no Docker config found
@@ -10,18 +10,18 @@ Warning: Failed to fetch secrets from secrets engine: secrets engine is not avai
 ! Install a credential helper from: https://github.com/docker/docker-credential-helpers
 ! Then configure Docker to use it (see repo for platform-specific instructions)
 - Using credential helper: docker-credential-notfound
-    - Connecting to remote server: http://m41-echo:9000/mcp/t-hidden (transport=http)
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
 ! no Docker config found
 ! No credential helper found
 ! Install a credential helper from: https://github.com/docker/docker-credential-helpers
 ! Then configure Docker to use it (see repo for platform-specific instructions)
 - Using credential helper: docker-credential-notfound
-    - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
-    - Connected successfully to: echo-hidden
+    - Connecting to remote server: http://m41-echo:9000/mcp/t-hidden (transport=http)
     - Connected successfully to: echo-alpha
+    - Connected successfully to: echo-hidden
   > echo-alpha: (1 tools)
-> 1 tools listed in 190.460784ms
-> Initialized in 191.666213ms
+> 1 tools listed in 195.154736ms
+> Initialized in 197.898016ms
 > Start streaming server on port 8811
 > Gateway URL: http://localhost:8811/mcp
 > Use Bearer <redacted> from MCP_GATEWAY_AUTH_TOKEN environment variable
@@ -48,7 +48,7 @@ Warning: Failed to fetch secrets from secrets engine: secrets engine is not avai
 - Using credential helper: docker-credential-notfound
     - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
     - Connected successfully to: echo-alpha
-  > Calling tool alpha__echo took: 44.25754ms
+  > Calling tool alpha__echo took: 47.088935ms
   - Scanning tool call response for secrets...
   > No secret found in response.
 - Client initialized spike@0 
@@ -74,7 +74,7 @@ Warning: Failed to fetch secrets from secrets engine: secrets engine is not avai
 - Using credential helper: docker-credential-notfound
     - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
     - Connected successfully to: echo-alpha
-  > Calling tool alpha__echo took: 44.355133ms
+  > Calling tool alpha__echo took: 43.982042ms
   - Scanning tool call response for secrets...
   > No secret found in response.
 - Client initialized spike@0 
@@ -100,7 +100,7 @@ Warning: Failed to fetch secrets from secrets engine: secrets engine is not avai
 - Using credential helper: docker-credential-notfound
     - Connecting to remote server: http://m41-echo:9000/mcp/t-alpha (transport=http)
     - Connected successfully to: echo-alpha
-  > Calling tool alpha__echo took: 44.430522ms
+  > Calling tool alpha__echo took: 48.489596ms
   - Scanning tool call response for secrets...
   > No secret found in response.
 - Client initialized spike@0 

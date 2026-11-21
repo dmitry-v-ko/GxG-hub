@@ -2,7 +2,7 @@ Note: dynamic-tools disabled when using --servers flag
 - Reading configuration...
   - Reading catalog from [gxg.yaml]
 Warning: Failed to fetch secrets from secrets engine: secrets engine is not available: unavailable: dial unix /root/.cache/docker-secrets-engine/engine.sock: connect: no such file or directory
-- Configuration read in 568.611µs
+- Configuration read in 752.145µs
 - Those servers are enabled: echo-beta
 - Listing MCP tools...
 ! no Docker config found
@@ -13,8 +13,8 @@ Warning: Failed to fetch secrets from secrets engine: secrets engine is not avai
     - Connecting to remote server: http://m41-echo:9000/mcp/t-beta (transport=http)
     - Connected successfully to: echo-beta
   > echo-beta: (1 tools)
-> 1 tools listed in 193.490089ms
-> Initialized in 194.759746ms
+> 1 tools listed in 180.608287ms
+> Initialized in 181.647424ms
 > Start streaming server on port 8812
 > Gateway URL: http://localhost:8812/mcp
 > Use Bearer <redacted> from MCP_GATEWAY_AUTH_TOKEN environment variable
@@ -41,7 +41,7 @@ Warning: Failed to fetch secrets from secrets engine: secrets engine is not avai
 - Using credential helper: docker-credential-notfound
     - Connecting to remote server: http://m41-echo:9000/mcp/t-beta (transport=http)
     - Connected successfully to: echo-beta
-  > Calling tool beta__echo took: 43.639417ms
+  > Calling tool beta__echo took: 47.437625ms
   - Scanning tool call response for secrets...
   > No secret found in response.
 - Client initialized spike@0 
@@ -67,7 +67,7 @@ Warning: Failed to fetch secrets from secrets engine: secrets engine is not avai
 - Using credential helper: docker-credential-notfound
     - Connecting to remote server: http://m41-echo:9000/mcp/t-beta (transport=http)
     - Connected successfully to: echo-beta
-  > Calling tool beta__echo took: 47.235275ms
+  > Calling tool beta__echo took: 44.386717ms
   - Scanning tool call response for secrets...
   > No secret found in response.
 - Client initialized spike@0 
