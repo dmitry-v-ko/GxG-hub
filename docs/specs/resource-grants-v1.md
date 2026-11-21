@@ -19,7 +19,7 @@
 <domain>:<connection_id>/<type>/<id>
 ```
 
-Примеры: `telegram:tg-main/chat/-1001234567890`, `kb:kb-main/collection/sales`, `crm:crm-main/account/42`, `demo:demo-main/board/b1`.
+Примеры: `telegram:tg-main/chat/c-sales-team`, `kb:kb-main/collection/sales`, `crm:crm-main/account/42`, `demo:demo-main/board/b1`.
 
 - **GR-01.** RID строит коннектор из проверенных данных backend'а. Аргумент модели — только ключ для поиска ресурса. Например, для документа KB коннектор сам узнаёт у backend'а его коллекцию, а не верит полю `collection` в аргументах.
 - **GR-02.** `connection_id` в RID MUST принадлежать tenant'у вызывающего. Если connection чужой, ответ `not_found`.
@@ -59,7 +59,7 @@ connections:                       # что есть у tenant'а; секрет�
 
 principals:
   agents:
-    - id: agent:t-alpha:hermes      # точный формат — по итогам спайка ContextForge (VERIFY)
+    - id: agent:t-alpha:hermes      # agent:<tenant>:<name>: <tenant> = slug team, <name> = local-part email агента в ContextForge (<name>@<домен агентов tenant'а>); это `sub` из X-GxG-Identity (ADR-0001)
     - id: agent:t-alpha:analyst
   humans:
     - id: oidc:https://accounts.google.com:1234567890
@@ -79,7 +79,7 @@ grants:
     subjects: [agent:t-alpha:hermes]
     actions: [read]
     resources:
-      - telegram:tg-main/chat/-1001234567890
+      - telegram:tg-main/chat/c-sales-team
     expires_at: 2027-03-01T00:00:00Z
     reason: "Пилот мониторинга чата партнёров"
 ```
