@@ -8,7 +8,6 @@ dependencies = [
     "authlib>=1.9,<2",
     "fastapi>=0.115,<1",
     "gxg-connector-kit",
-    "httpx>=0.27,<1",  # authlib's Starlette client
     "itsdangerous>=2.2,<3",  # Starlette SessionMiddleware
     "jinja2>=3.1,<4",
     "psycopg-pool>=3.2,<4",

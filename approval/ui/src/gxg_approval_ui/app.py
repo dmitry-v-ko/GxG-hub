@@ -15,18 +15,16 @@ import time
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from importlib.resources import files
 from typing import Any
 from urllib.parse import urlsplit
 
 import psycopg
-from authlib.integrations.base_client import OAuthError
 from authlib.integrations.starlette_client import OAuth
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, PackageLoader
 from nacl.public import PrivateKey, SealedBox
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -48,21 +46,36 @@ LIST_LIMIT = 200
 COMMENT_MAX = 500  # approval-decision.schema.json
 LINK_CODE_TRIES = 5
 
-# Texts for people (module constants: mutation testing leaves them alone, tests check the status codes).
-MSG_UNAVAILABLE = "Сервис временно недоступен"
-MSG_SIGN_IN = "Войдите заново"
-MSG_STALE_FORM = "Форма устарела: обновите страницу"
-MSG_NOT_FOUND = "Заявка не найдена"
-MSG_LOGIN_FAILED = "Вход не удался"
-MSG_NOT_APPROVER = "Нет роли approver в этом tenant'е"
-MSG_NO_VERSION = "Нет версии заявки"
-MSG_HASH_MISMATCH = "Параметры не совпадают с хешем: заявку нужно отклонить (EFF-33)"
-MSG_STEP_UP = "Нужно подтверждение passkey (step-up) для этой заявки"
-MSG_NOT_RESOLVER = "Нужна роль approver или tenant_admin"
-MSG_TELEGRAM_APPROVERS = "Привязка Telegram — только для approver'ов"
-MSG_NO_CODE = "Не удалось выдать код, попробуйте ещё раз"
-MSG_LONG_COMMENT = f"Комментарий длиннее {COMMENT_MAX} символов"
-MSG_REFUSED = "отказано"
+# Refusals (status, text for people). Module constants: mutation testing leaves them alone; tests check both.
+UNAVAILABLE = (503, "Сервис временно недоступен")
+SIGN_IN = (403, "Войдите заново")
+STALE_FORM = (403, "Форма устарела: обновите страницу")
+NOT_FOUND = (404, "Заявка не найдена")
+LOGIN_FAILED = (403, "Вход не удался")
+NOT_APPROVER = (403, "Нет роли approver в этом tenant'е")
+NO_VERSION = (400, "Нет версии заявки")
+HASH_MISMATCH = (409, "Параметры не совпадают с хешем: заявку нужно отклонить (EFF-33)")
+STEP_UP = (403, "Нужно подтверждение passkey (step-up) для этой заявки")
+NOT_RESOLVER = (403, "Нужна роль approver или tenant_admin")
+TELEGRAM_APPROVERS = (403, "Привязка Telegram — только для approver'ов")
+NO_CODE = (503, "Не удалось выдать код, попробуйте ещё раз")
+LONG_COMMENT = (400, f"Комментарий длиннее {COMMENT_MAX} символов")
+SECURITY_HEADERS = {
+    "Content-Security-Policy": CSP,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+    "Strict-Transport-Security": "max-age=31536000",  # the ui is served over HTTPS only (AS-29)
+}
+NO_DOC_PAGES = {"docs_url": None, "redoc_url": None, "openapi_url": None}
+SESSION_COOKIE_FLAGS = {"session_cookie": SESSION_COOKIE, "max_age": SESSION_MAX_S, "same_site": "strict",
+                        "https_only": True, "path": "/"}  # fmt: skip
+OIDC_CLIENT = {"scope": "openid", "code_challenge_method": "S256"}  # code flow with PKCE; authlib adds the nonce
+OIDC_DISCOVERY = "/.well-known/openid-configuration"
+TEMPLATES = Jinja2Templates(
+    env=Environment(loader=PackageLoader("gxg_approval_ui"), autoescape=True)  # AS-15: every value escaped
+)
 
 _COLUMNS = (
     "intent_id, tenant_id, requester_principal, business_task_id, tool_key, tool_version, connection_id, "
@@ -111,50 +124,34 @@ class Refused(Exception):
         self.status, self.message = status, message
 
 
-def _templates() -> Jinja2Templates:
-    env = Environment(
-        loader=FileSystemLoader(str(files("gxg_approval_ui") / "templates")),
-        autoescape=select_autoescape(default=True, default_for_string=True),  # AS-15: every value escaped
-    )
-    return Jinja2Templates(env=env)
+def _field(form: Mapping[str, Any], name: str) -> str:
+    """A form value as text; a missing or file field is empty."""
+    value = form.get(name)
+    return value if isinstance(value, str) else ""
 
 
 def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
-    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    templates = _templates()
+    app = FastAPI(**NO_DOC_PAGES)  # type: ignore[arg-type]
+    templates = TEMPLATES
     split = urlsplit(deps.public_url)
-    rp = stepup.RelyingParty(rp_id=split.hostname or "", origin=f"{split.scheme}://{split.netloc}")
+    rp = stepup.RelyingParty(rp_id=str(split.hostname), origin=f"{split.scheme}://{split.netloc}")
     oauth = OAuth()
     oauth.register(
         "oidc",
         client_id=deps.oidc_client_id,
         client_secret=deps.oidc_client_secret,
-        server_metadata_url=deps.oidc_issuer.rstrip("/") + "/.well-known/openid-configuration",
-        client_kwargs={"scope": "openid", "code_challenge_method": "S256", **deps.oidc_client_kwargs},
+        server_metadata_url=deps.oidc_issuer.rstrip("/") + OIDC_DISCOVERY,
+        client_kwargs=OIDC_CLIENT | deps.oidc_client_kwargs,
     )
 
     @app.middleware("http")
     async def headers(request: Request, call_next: Callable[[Request], Any]) -> Response:
         response: Response = await call_next(request)
-        response.headers["Content-Security-Policy"] = CSP
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Cache-Control"] = "no-store"
-        if split.scheme == "https":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        response.headers.update(SECURITY_HEADERS)
         return response
 
-    app.add_middleware(
-        SessionMiddleware,
-        secret_key=deps.session_key,
-        session_cookie=SESSION_COOKIE,
-        max_age=SESSION_MAX_S,
-        same_site="strict",
-        https_only=True,
-        path="/",
-    )
-    app.mount("/static", StaticFiles(packages=[("gxg_approval_ui", "static")]), name="static")
+    app.add_middleware(SessionMiddleware, secret_key=deps.session_key, **SESSION_COOKIE_FLAGS)  # type: ignore[arg-type]
+    app.mount("/static", StaticFiles(packages=[("gxg_approval_ui", "static")]))
 
     @app.exception_handler(Refused)
     def refused(request: Request, exc: Refused) -> Response:
@@ -162,27 +159,30 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
 
     @app.exception_handler(GxgError)
     def unavailable(request: Request, exc: GxgError) -> Response:  # bundle not ready, no payload key
-        return page(request, "error.html", {"message": MSG_UNAVAILABLE}, status=503)
+        return page(request, "error.html", {"message": UNAVAILABLE[1]}, status=UNAVAILABLE[0])
 
     def page(request: Request, name: str, ctx: dict[str, Any], status: int = 200) -> Response:
         session = request.session
-        base = {"human": session.get("sub"), "csrf": session.get("csrf", "")}
+        base = {"human": session.get("sub"), "csrf": session.get("csrf")}
         return templates.TemplateResponse(request, name, base | ctx, status_code=status)
 
     def human(request: Request) -> str:
         """The signed-in human, or 403 (machine credentials and no session alike: SEC-06)."""
         session, now = request.session, deps.clock()
-        sub = session.get("sub")
-        if not sub or now - session.get("iat", 0) > SESSION_MAX_S or now - session.get("seen", 0) > SESSION_IDLE_S:
+        try:
+            sub, iat, seen = session["sub"], session["iat"], session["seen"]
+        except KeyError:
+            raise Refused(*SIGN_IN) from None
+        if now - iat > SESSION_MAX_S or now - seen > SESSION_IDLE_S:
             session.clear()
-            raise Refused(403, MSG_SIGN_IN)
+            raise Refused(*SIGN_IN)
         session["seen"] = now
         return str(sub)
 
     def check_csrf(request: Request, token: str | None) -> None:
         expected = request.session.get("csrf")
         if not expected or not token or not hmac.compare_digest(token, expected):
-            raise Refused(403, MSG_STALE_FORM)
+            raise Refused(*STALE_FORM)
 
     def roles(who: str) -> dict[str, frozenset[str]]:
         return {t: g.roles[who] for t, g in deps.bundles.current.tenants.items() if who in g.roles}
@@ -194,10 +194,10 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         try:
             key = uuid.UUID(intent_id)
         except ValueError:
-            raise Refused(404, MSG_NOT_FOUND) from None
+            raise Refused(*NOT_FOUND) from None
         row = conn.cursor(row_factory=dict_row).execute(_SQL_INTENT, (key,)).fetchone()
         if row is None:
-            raise Refused(404, MSG_NOT_FOUND)
+            raise Refused(*NOT_FOUND)
         return row
 
     def envelope(row: Mapping[str, Any]) -> tuple[dict[str, Any], Any, bool] | None:
@@ -206,7 +206,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             return None
         box = deps.preview_keys.get(row["tenant_id"])
         if box is None:
-            raise GxgError("temporarily_unavailable", "no preview key for this tenant")
+            raise Refused(*UNAVAILABLE)  # no preview key for this tenant
         doc = json.loads(box.decrypt(bytes(row["preview_ciphertext"])))
         args = doc["canonical_args"]
         recomputed = canonical.hash(
@@ -275,12 +275,12 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     async def complete(request: Request) -> Response:
         try:
             token = await oauth.oidc.authorize_access_token(request)
-        except OAuthError:
+        except Exception:  # state, PKCE, token endpoint, ID token signature or claims (authlib/joserfc errors)
             request.session.clear()
-            raise Refused(403, MSG_LOGIN_FAILED) from None
+            raise Refused(*LOGIN_FAILED) from None
         claims = token.get("userinfo") or {}
         if not claims.get("iss") or not claims.get("sub"):
-            raise Refused(403, MSG_LOGIN_FAILED)
+            raise Refused(*LOGIN_FAILED)
         now = deps.clock()
         request.session.clear()
         request.session.update(
@@ -291,7 +291,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     @app.post("/logout")
     async def logout(request: Request) -> Response:
         form = await request.form()
-        check_csrf(request, str(form.get("csrf", "")))
+        check_csrf(request, _field(form, "csrf"))
         request.session.clear()
         return RedirectResponse("/signed-out", status_code=303)
 
@@ -341,7 +341,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             row = load(conn, intent_id)
             mine = roles(who).get(row["tenant_id"], frozenset())
             if not mine & {"approver", "viewer", "tenant_admin"}:
-                raise Refused(404, MSG_NOT_FOUND)  # another tenant's intent looks like a missing one
+                raise Refused(*NOT_FOUND)  # another tenant's intent looks like a missing one
             opened = envelope(row)
             preview, args_json, hidden = render.card(*opened[:2]) if opened else (None, None, False)
             decisions = conn.execute(_SQL_DECISIONS, (row["intent_id"],)).fetchall()
@@ -368,7 +368,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         with deps.pool.connection() as conn:
             row = load(conn, intent_id)
             if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
-                raise Refused(403, MSG_NOT_APPROVER)
+                raise Refused(*NOT_APPROVER)
             options = stepup.authentication_options(
                 rp, conn, request.session, human=who, intent_id=str(row["intent_id"]),
                 args_hash=row["canonical_args_hash"], now=deps.clock(),
@@ -379,53 +379,56 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     async def decide(request: Request, intent_id: str) -> Response:
         form = await request.form()
         who = human(request)
-        check_csrf(request, str(form.get("csrf", "")))
-        return await run_in_threadpool(lambda: _decide(request, who, intent_id, {k: str(v) for k, v in form.items()}))
+        check_csrf(request, _field(form, "csrf"))
+        return await run_in_threadpool(lambda: _decide(request, who, intent_id, form))
 
-    def _decide(request: Request, who: str, intent_id: str, form: dict[str, str]) -> Response:
-        decision, args_hash, comment = form.get("decision", ""), form.get("args_hash", ""), form.get("comment") or None
+    def _decide(request: Request, who: str, intent_id: str, form: Mapping[str, Any]) -> Response:
+        decision, args_hash, comment = _field(form, "decision"), _field(form, "args_hash"), _field(form, "comment")
         try:
-            version = int(form.get("version", ""))
+            version = int(_field(form, "version"))
         except ValueError:
-            raise Refused(400, MSG_NO_VERSION) from None
-        if comment is not None and len(comment) > COMMENT_MAX:
-            raise Refused(400, MSG_LONG_COMMENT)
+            raise Refused(*NO_VERSION) from None
+        if len(comment) > COMMENT_MAX:
+            raise Refused(*LONG_COMMENT)
         with deps.pool.connection() as conn:
             row = load(conn, intent_id)  # EFF-15: re-read before the decision
             if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
-                raise Refused(403, MSG_NOT_APPROVER)  # current bundle (T2)
+                raise Refused(*NOT_APPROVER)  # current bundle (T2)
             step_up = False
             if decision == "approve":
                 opened = envelope(row)
                 if opened is None or not opened[2]:
-                    raise Refused(409, MSG_HASH_MISMATCH)
+                    raise Refused(*HASH_MISMATCH)
                 if row["step_up_required"]:
                     step_up = stepup.verify(
                         rp, conn, request.session, human=who, intent_id=str(row["intent_id"]), args_hash=args_hash,
-                        assertion_json=form.get("assertion", ""), now=deps.clock(),
+                        assertion_json=_field(form, "assertion"), now=deps.clock(),
                     )  # fmt: skip
                     if not step_up:
-                        raise Refused(403, MSG_STEP_UP)
-            call(conn, _SQL_DECIDE, (row["intent_id"], who, decision, version, args_hash, step_up, comment))
+                        raise Refused(*STEP_UP)
+            call(conn, _SQL_DECIDE, (row["intent_id"], who, decision, version, args_hash, step_up, comment or None))
         return RedirectResponse(f"/intents/{row['intent_id']}", status_code=303)
 
     @app.post("/intents/{intent_id}/resolve")
     async def resolve(request: Request, intent_id: str) -> Response:
         form = await request.form()
         who = human(request)
-        check_csrf(request, str(form.get("csrf", "")))
-        data = {k: str(v) for k, v in form.items()}
+        check_csrf(request, _field(form, "csrf"))
 
         def work() -> Response:
             try:
-                version = int(data.get("version", ""))
+                version = int(_field(form, "version"))
             except ValueError:
-                raise Refused(400, MSG_NO_VERSION) from None
+                raise Refused(*NO_VERSION) from None
             with deps.pool.connection() as conn:
                 row = load(conn, intent_id)
                 if not roles(who).get(row["tenant_id"], frozenset()) & {"approver", "tenant_admin"}:
-                    raise Refused(403, MSG_NOT_RESOLVER)
-                call(conn, _SQL_RESOLVE, (row["intent_id"], who, data.get("outcome", ""), version, data.get("reason")))
+                    raise Refused(*NOT_RESOLVER)
+                call(
+                    conn,
+                    _SQL_RESOLVE,
+                    (row["intent_id"], who, _field(form, "outcome"), version, _field(form, "reason")),
+                )
             return RedirectResponse(f"/intents/{row['intent_id']}", status_code=303)
 
         return await run_in_threadpool(work)
@@ -463,17 +466,17 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     async def telegram_code(request: Request) -> Response:
         form = await request.form()
         who = human(request)
-        check_csrf(request, str(form.get("csrf", "")))
+        check_csrf(request, _field(form, "csrf"))
         tenants = tenants_with(who, "approver")
         if not tenants:
-            raise Refused(403, MSG_TELEGRAM_APPROVERS)
+            raise Refused(*TELEGRAM_APPROVERS)
         with deps.pool.connection() as conn:
             for _ in range(LINK_CODE_TRIES):
                 code = f"{secrets.randbelow(10**6):06d}"
                 if call(conn, _SQL_LINK_CODE, (who, tenants, code)):
                     links = conn.execute(_SQL_LINKS, (who,)).fetchall()
                     return page(request, "telegram.html", {"links": links, "code": code})
-        raise Refused(503, MSG_NO_CODE)
+        raise Refused(*NO_CODE)
 
     def call(conn: psycopg.Connection[Any], sql: str, params: tuple[Any, ...]) -> Any:
         """A transition function; its refusal (SQLSTATE GXnnn) becomes the HTTP status, nothing is written."""
@@ -484,6 +487,6 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             status = _HTTP.get(exc.sqlstate or "")
             if status is None:
                 raise
-            raise Refused(status, (exc.diag.message_primary or MSG_REFUSED)[:200]) from None
+            raise Refused(status, str(exc.diag.message_primary)[:200]) from None
 
     return app

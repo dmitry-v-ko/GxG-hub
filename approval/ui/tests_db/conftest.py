@@ -150,12 +150,12 @@ def _b64(data: bytes) -> str:
 class SoftAuthenticator:
     """A software passkey (ES256, attestation `none`) producing the JSON the browser's `toJSON()` sends."""
 
-    def __init__(self, rp_id: str = "ui.example.test", origin: str = PUBLIC_URL) -> None:
+    def __init__(self, rp_id: str = "ui.example.test", origin: str = PUBLIC_URL, user_verified: bool = True) -> None:
         import os
 
         from cryptography.hazmat.primitives.asymmetric import ec
 
-        self.rp_id, self.origin = rp_id, origin
+        self.rp_id, self.origin, self.user_verified = rp_id, origin, user_verified
         self.key = ec.generate_private_key(ec.SECP256R1())
         self.credential_id = os.urandom(16)
         self.count = 0
@@ -171,8 +171,9 @@ class SoftAuthenticator:
 
         numbers = self.key.public_key().public_numbers()
         cose = {1: 2, 3: -7, -1: 1, -2: numbers.x.to_bytes(32, "big"), -3: numbers.y.to_bytes(32, "big")}
+        flags = 0x45 if self.user_verified else 0x41  # UP | UV | AT
         auth = (
-            hashlib.sha256(self.rp_id.encode()).digest() + bytes([0x45]) + self.count.to_bytes(4, "big")
+            hashlib.sha256(self.rp_id.encode()).digest() + bytes([flags]) + self.count.to_bytes(4, "big")
             + bytes(16) + len(self.credential_id).to_bytes(2, "big") + self.credential_id + cbor2.dumps(cose)
         )  # fmt: skip
         attestation = cbor2.dumps({"fmt": "none", "attStmt": {}, "authData": auth})
@@ -188,7 +189,11 @@ class SoftAuthenticator:
         from cryptography.hazmat.primitives.asymmetric import ec
 
         self.count += 1
-        auth = hashlib.sha256(self.rp_id.encode()).digest() + bytes([0x05]) + self.count.to_bytes(4, "big")
+        auth = (
+            hashlib.sha256(self.rp_id.encode()).digest()
+            + bytes([0x05 if self.user_verified else 0x01])
+            + self.count.to_bytes(4, "big")
+        )
         client = self._client_data("webauthn.get", options_json, origin)
         signature = self.key.sign(auth + hashlib.sha256(client).digest(), ec.ECDSA(hashes.SHA256()))
         return json.dumps({"id": _b64(self.credential_id), "rawId": _b64(self.credential_id), "type": "public-key",

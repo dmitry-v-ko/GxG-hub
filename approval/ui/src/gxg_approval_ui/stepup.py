@@ -6,7 +6,6 @@ It is popped on the first verification attempt, so one assertion serves one deci
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import secrets
 from collections.abc import MutableMapping
@@ -21,7 +20,12 @@ from webauthn import (
     verify_authentication_response,
     verify_registration_response,
 )
-from webauthn.helpers import parse_authentication_credential_json, parse_registration_credential_json
+from webauthn.helpers import (
+    base64url_to_bytes,
+    bytes_to_base64url,
+    parse_authentication_credential_json,
+    parse_registration_credential_json,
+)
 from webauthn.helpers.structs import (
     AuthenticatorSelectionCriteria,
     PublicKeyCredentialDescriptor,
@@ -44,18 +48,19 @@ _SQL_ADD = (
 _SQL_AUDIT = "INSERT INTO audit_events (at, actor, action, details) VALUES (now(), %s, 'passkey_registered', '{}')"
 
 
+RP_NAME = "GxG Approval"
+CHALLENGE_BYTES = 32
+# AS-16: a passkey with user verification (biometrics or PIN), not presence only
+SELECTION = AuthenticatorSelectionCriteria(
+    resident_key=ResidentKeyRequirement.PREFERRED, user_verification=UserVerificationRequirement.REQUIRED
+)
+UV = UserVerificationRequirement.REQUIRED
+
+
 @dataclass(frozen=True)
 class RelyingParty:
     rp_id: str  # host of the public URL
     origin: str  # scheme://host[:port] of the public URL
-
-
-def _b64(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode().rstrip("=")
-
-
-def _unb64(text: str) -> bytes:
-    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
 def has_passkey(conn: psycopg.Connection[Any], human: str) -> bool:
@@ -65,20 +70,18 @@ def has_passkey(conn: psycopg.Connection[Any], human: str) -> bool:
 def registration_options(
     rp: RelyingParty, conn: psycopg.Connection[Any], session: MutableMapping[str, Any], *, human: str, now: float
 ) -> str:
-    challenge = secrets.token_bytes(32)
-    session["reg"] = {"challenge": _b64(challenge), "at": now}
+    challenge = secrets.token_bytes(CHALLENGE_BYTES)
+    session["reg"] = {"challenge": bytes_to_base64url(challenge), "at": now}
     options = generate_registration_options(
         rp_id=rp.rp_id,
-        rp_name="GxG Approval",
+        rp_name=RP_NAME,
         user_id=hashlib.sha256(human.encode()).digest(),
         user_name=human,
         challenge=challenge,
         exclude_credentials=[
             PublicKeyCredentialDescriptor(id=bytes(r[0])) for r in conn.execute(_SQL_CREDENTIALS, (human,))
         ],
-        authenticator_selection=AuthenticatorSelectionCriteria(
-            resident_key=ResidentKeyRequirement.PREFERRED, user_verification=UserVerificationRequirement.REQUIRED
-        ),
+        authenticator_selection=SELECTION,
     )
     return options_to_json(options)
 
@@ -98,7 +101,7 @@ def register(
     try:
         verified = verify_registration_response(
             credential=parse_registration_credential_json(credential_json),
-            expected_challenge=_unb64(pending["challenge"]),
+            expected_challenge=base64url_to_bytes(pending["challenge"]),
             expected_rp_id=rp.rp_id,
             expected_origin=rp.origin,
             require_user_verification=True,
@@ -113,7 +116,7 @@ def register(
 
 def challenge_for(intent_id: str, args_hash: str) -> bytes:
     """AS-16: the challenge names the intent and its args hash, plus a nonce."""
-    return f"gxg-step-up|{intent_id}|{args_hash}|{secrets.token_hex(16)}".encode()
+    return f"gxg-step-up|{intent_id}|{args_hash}|{secrets.token_hex(CHALLENGE_BYTES // 2)}".encode()
 
 
 def authentication_options(
@@ -127,14 +130,14 @@ def authentication_options(
     now: float,
 ) -> str:
     challenge = challenge_for(intent_id, args_hash)
-    session["stepup"] = {"intent": intent_id, "hash": args_hash, "challenge": _b64(challenge), "at": now}
+    session["stepup"] = {"intent": intent_id, "hash": args_hash, "challenge": bytes_to_base64url(challenge), "at": now}
     options = generate_authentication_options(
         rp_id=rp.rp_id,
         challenge=challenge,
         allow_credentials=[
             PublicKeyCredentialDescriptor(id=bytes(r[0])) for r in conn.execute(_SQL_CREDENTIALS, (human,))
         ],
-        user_verification=UserVerificationRequirement.REQUIRED,
+        user_verification=UV,
     )
     return options_to_json(options)
 
@@ -166,7 +169,7 @@ def verify(
             return False
         verified = verify_authentication_response(
             credential=credential,
-            expected_challenge=_unb64(pending["challenge"]),
+            expected_challenge=base64url_to_bytes(pending["challenge"]),
             expected_rp_id=rp.rp_id,
             expected_origin=rp.origin,
             credential_public_key=bytes(row[0]),
