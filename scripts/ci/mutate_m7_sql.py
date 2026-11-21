@@ -73,8 +73,10 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG, "OR now() >= r.expires_at THEN", " THEN", "decision after the approval deadline"),
     (MIG, "IF p_approver = r.requester_principal OR", "IF", "requester approves own intent"),
     (MIG, "OR NOT p_approver LIKE 'oidc:%'", "", "a machine principal approves"),
-    (MIG, "     OR (r.allowed_approvers IS NOT NULL AND NOT p_approver = ANY (r.allowed_approvers))\n", "",
+    (MIG, "     OR NOT p_approver = ANY (coalesce(r.allowed_approvers, ARRAY[]::text[]))\n", "",
      "approver outside allowed_approvers"),
+    (MIG, "coalesce(r.allowed_approvers, ARRAY[]::text[])", "coalesce(r.allowed_approvers, ARRAY[p_approver])",
+     "intent without a frozen approver set decided by anyone"),
     (MIG, "\n     OR (p_decision = 'approve' AND r.step_up_required AND NOT p_step_up) THEN", " THEN",
      "approve without required step-up"),
     (MIG, "PERFORM _gxg_fail('GX409', 'this approver has already decided')", "NULL", "second vote of one human"),
@@ -86,6 +88,8 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG, "    PERFORM _gxg_outbox('execute', r);\n    PERFORM _gxg_outbox('webhook', r);\n",
      "    PERFORM _gxg_outbox('webhook', r);\n", "approved intent never queued for execution"),
     # T18 manual resolution
+    (MIG, "IF NOT p_actor LIKE 'oidc:%' THEN PERFORM _gxg_fail('GX403', 'only a human resolves manually'); END IF;",
+     "", "a machine principal resolves manually"),
     (MIG, "OR length(coalesce(p_reason, '')) < 10 THEN", " THEN", "manual outcome without a reason"),
     (MIG, "IF r.version <> p_version THEN PERFORM _gxg_fail('GX409', 'intent version changed'); END IF;\n"
      "  r := _gxg_move(r, 'resolve_manual'", "r := _gxg_move(r, 'resolve_manual'", "manual outcome, stale version"),

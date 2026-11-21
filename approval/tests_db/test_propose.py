@@ -19,6 +19,8 @@ from gxg_approval.api import create_app
 from gxg_approval.crypto import Decryptor
 from gxg_connector_kit import _schema
 
+HUMAN1, HUMAN2 = "oidc:https://idp.example.invalid:1", "oidc:https://idp.example.invalid:2"
+
 
 def stored_hash(owner: psycopg.Connection[Any]) -> str:
     row = owner.execute("SELECT canonical_args_hash FROM intents").fetchone()
@@ -46,8 +48,10 @@ def test_human_approval_by_default_for_external_effect(
     assert doc["approval"] == {"mode": "human", "required_approvals": 1, "received_approvals": 0, "rule_ids": []}
     row = owner.execute("SELECT topic, payload FROM outbox").fetchall()
     assert row == [
-        ("notify", {"intent_id": doc["intent_id"], "tenant_id": "t-alpha", "status": "pending_approval", "version": 1})
-    ]
+        ("notify", {"intent_id": doc["intent_id"], "tenant_id": "t-alpha", "status": "pending_approval", "version": 1,
+                    "title": "Send a message", "target_label": "Board b1", "requester": "agent:t-alpha:bot",
+                    "expires_at": doc["expires_at"], "approvers": [HUMAN1, HUMAN2]})
+    ]  # fmt: skip  # AS-19: no fields, changes or args
     audit = owner.execute("SELECT actor, action, tenant_id, intent_id::text, to_status, details FROM audit_events")
     assert audit.fetchall() == [
         ("demo", "propose", "t-alpha", doc["intent_id"], "pending_approval",
@@ -435,14 +439,23 @@ def test_ap02_alert_is_logged(propose: Callable[..., Any], world: Any, caplog: p
 
 
 def test_allowed_approvers_are_stored(propose: Callable[..., Any], world: Any, owner: psycopg.Connection[Any]) -> None:
-    """AP-01.4: the narrowed approver set is frozen into the intent (NULL = any approver of the tenant)."""
+    """AP-01.4: the approver set is frozen into the intent: every approver of the tenant by role, narrowed by the
+    policy (M9: gxg_decide checks it, so the database refuses a decision by anyone else)."""
     h1, h2 = "oidc:https://idp.example.invalid:1", "oidc:https://idp.example.invalid:2"
     propose()
     world.set_policy("t-alpha", [{"id": "narrow", "match": {"tools": ["demo.message.propose"]},
                                   "decision": "require_approval", "approvers": [h2, h1]}])  # fmt: skip
     propose()
     rows = owner.execute("SELECT allowed_approvers, rule_ids FROM intents ORDER BY created_at, intent_id").fetchall()
-    assert sorted(rows, key=lambda r: r[1]) == [(None, []), ([h1, h2], ["narrow"])]
+    assert sorted(rows, key=lambda r: r[1]) == [([h1, h2], []), ([h1, h2], ["narrow"])]
+    outsider = "oidc:https://not-an-approver:9"
+    world.set_policy("t-alpha", [{"id": "one", "match": {"tools": ["demo.message.propose"]},
+                                  "decision": "require_approval", "approvers": [h2, outsider]}])  # fmt: skip
+    propose()
+    row = owner.execute("SELECT allowed_approvers FROM intents WHERE rule_ids = '{one}'").fetchone()
+    assert row == ([h2],)  # a policy approver without the role is not an approver
+    propose(tool="demo.note.propose")  # not a human decision: no set
+    assert owner.execute("SELECT allowed_approvers FROM intents WHERE approval_mode <> 'human'").fetchall() == [(None,)]
 
 
 def _scans(plan: dict[str, Any]) -> list[str]:

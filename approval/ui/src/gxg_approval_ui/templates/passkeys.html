@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Passkey</h1>
+<p id="passkey-state">{% if has_passkey %}Passkey зарегистрирован.{% else %}Passkey нет: заявки со step-up решить нельзя.{% endif %}</p>
+<button id="register" data-csrf="{{ csrf }}">Зарегистрировать passkey</button>
+<p id="register-result"></p>
+{% endblock %}

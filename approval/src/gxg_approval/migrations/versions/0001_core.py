@@ -287,7 +287,9 @@ BEGIN
   PERFORM _gxg_outbox('webhook', r);
 END $$;
 
--- T2, T3, T4 (ui). Role `approver` by bundle is checked by the ui before the call (M9).
+-- T2, T3, T4 (ui). The approver set of the tenant is frozen into allowed_approvers at T1, so even a compromised ui
+-- can decide only as a human the bundle made an approver of this intent's tenant (M9); the ui also checks the
+-- current bundle (an approver removed after T1).
 CREATE FUNCTION gxg_decide(p_intent uuid, p_approver text, p_decision text, p_version integer, p_args_hash text,
                            p_step_up boolean, p_comment text) RETURNS void {DEFINER} AS $$
 DECLARE r intents := _gxg_intent(p_intent); approvals integer; target text;
@@ -298,7 +300,7 @@ BEGIN
     PERFORM _gxg_fail('GX409', 'stale decision: version, args hash or deadline');
   END IF;
   IF p_approver = r.requester_principal OR NOT p_approver LIKE 'oidc:%'
-     OR (r.allowed_approvers IS NOT NULL AND NOT p_approver = ANY (r.allowed_approvers))
+     OR NOT p_approver = ANY (coalesce(r.allowed_approvers, ARRAY[]::text[]))
      OR (p_decision = 'approve' AND r.step_up_required AND NOT p_step_up) THEN
     PERFORM _gxg_fail('GX403', 'approver is not allowed to decide this intent');
   END IF;
@@ -330,6 +332,7 @@ CREATE FUNCTION gxg_resolve_manual(p_intent uuid, p_actor text, p_outcome text, 
                                    p_reason text) RETURNS void {DEFINER} AS $$
 DECLARE r intents := _gxg_intent(p_intent);
 BEGIN
+  IF NOT p_actor LIKE 'oidc:%' THEN PERFORM _gxg_fail('GX403', 'only a human resolves manually'); END IF;
   IF p_outcome NOT IN ('executed', 'not_executed') OR length(coalesce(p_reason, '')) < 10 THEN
     PERFORM _gxg_fail('GX400', 'outcome executed|not_executed and a reason of at least 10 characters');
   END IF;

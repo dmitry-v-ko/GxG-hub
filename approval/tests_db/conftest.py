@@ -33,7 +33,9 @@ BUNDLE_KID = "ci-test"
 ADMIN = "test"  # superuser of the test container; trust auth on the Unix socket
 REPO = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 ROLES = ("gxg_api", "gxg_mcp", "gxg_ui", "gxg_executor", "gxg_sweeper", "gxg_notifier", "gxg_admin")
-TABLES = "intents, decisions, executions, outbox, switches, approver_links, audit_events"
+TABLES = (
+    "intents, decisions, executions, outbox, switches, approver_links, audit_events, link_codes, webauthn_credentials"
+)
 
 API_ID, MCP_ID, EXECUTOR_ID = "approval-api", "approval-mcp", "executor"
 ALPHA, BETA = "t-alpha", "t-beta"
@@ -41,6 +43,9 @@ BOT, OTHER, SIGNALS = "agent:t-alpha:bot", "agent:t-alpha:other", "agent:t-alpha
 BETA_BOT = "agent:t-beta:bot"
 SHARED = "agent:shared"  # the same principal ID registered in both tenants (the schema allows it)
 HUMAN1, HUMAN2 = "oidc:https://idp.example.invalid:1", "oidc:https://idp.example.invalid:2"
+# M9 (ui): a viewer and a tenant_admin of t-alpha, an approver of t-beta only
+VIEWER, ADMIN_HUMAN = "oidc:https://idp.example.invalid:viewer", "oidc:https://idp.example.invalid:admin"
+BETA_HUMAN = "oidc:https://idp.example.invalid:beta"
 CHAT = "demo:demo-main/board/b1"
 TOOLS = [
     {
@@ -173,7 +178,16 @@ def owner(pg: Pg) -> Iterator[psycopg.Connection[Any]]:
 
 
 def tenant_file(tenant: str, agents: list[str], connection: str) -> dict[str, Any]:
-    humans = [{"id": HUMAN1, "roles": ["approver"]}, {"id": HUMAN2, "roles": ["approver"]}] if tenant == ALPHA else []
+    humans = (
+        [
+            {"id": HUMAN1, "roles": ["approver"]},
+            {"id": HUMAN2, "roles": ["approver"]},
+            {"id": VIEWER, "roles": ["viewer"]},
+            {"id": ADMIN_HUMAN, "roles": ["tenant_admin"]},
+        ]
+        if tenant == ALPHA
+        else [{"id": BETA_HUMAN, "roles": ["approver"]}]
+    )
     return {
         "tenant": tenant,
         "schema_version": 1,

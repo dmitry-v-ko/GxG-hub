@@ -28,14 +28,16 @@ MATRIX: dict[str, dict[str, dict[str, set[str] | str]]] = {
         "audit_events": {"INSERT": ALL},
     },
     "gxg_mcp": {"audit_events": {"INSERT": ALL}},
+    # M9 narrowing of the AS-27 row: no outbox INSERT and no direct approver_links write (gxg_link_claim writes
+    # links for the notifier); passkeys (M9, a table AS-27 does not list, pending_owner_decision).
     "gxg_ui": {
         "intents": {"SELECT": "-args_ciphertext"},
         "decisions": {"SELECT": ALL},
         "executions": {"SELECT": ALL},
-        "outbox": {"INSERT": ALL},
         "switches": {"SELECT": ALL},
         "audit_events": {"INSERT": ALL},
-        "approver_links": {"SELECT": ALL, "INSERT": ALL, "UPDATE": ALL},
+        "approver_links": {"SELECT": ALL},
+        "webauthn_credentials": {"SELECT": ALL, "INSERT": ALL, "UPDATE": {"sign_count"}},
     },
     "gxg_executor": {
         "intents": {"SELECT": "-preview_ciphertext"},
@@ -65,7 +67,8 @@ MATRIX: dict[str, dict[str, dict[str, set[str] | str]]] = {
 }
 FUNCTIONS = {
     "gxg_api": {"gxg_record_auto_decision", "gxg_received_approvals", "gxg_cancel", "gxg_dispatch"},  # T1, T6, T9
-    "gxg_ui": {"gxg_decide", "gxg_resolve_manual"},  # T2-T4, T18
+    "gxg_ui": {"gxg_decide", "gxg_resolve_manual", "gxg_link_code"},  # T2-T4, T18; Telegram link code (M9)
+    "gxg_notifier": {"gxg_link_claim"},  # `/link <code>` (M9)
     "gxg_executor": {"gxg_reserve", "gxg_complete", "gxg_reconcile"},  # T7, T11-T13, T12a, T15-T17
     "gxg_sweeper": {
         "gxg_expire_approval",
@@ -84,6 +87,8 @@ TABLES = (
     "approver_links",
     "audit_events",
     "transition_rules",
+    "link_codes",
+    "webauthn_credentials",
 )
 
 
@@ -201,6 +206,10 @@ STATEMENTS = {
     "read_links": "SELECT telegram_user_id FROM approver_links",
     "read_rules": "SELECT * FROM transition_rules",
     "call_decide": "SELECT gxg_decide(gen_random_uuid(), 'oidc:x', 'approve', 1, '', true, null)",
+    "add_passkey": "INSERT INTO webauthn_credentials VALUES ('\\x01', 'oidc:x', '\\x02', 0, now())",
+    "read_link_codes": "SELECT code_hash FROM link_codes",
+    "call_link_code": "SELECT gxg_link_code('oidc:x', '{t-alpha}', '123456')",
+    "call_link_claim": "SELECT gxg_link_claim('123456', 42)",
     "call_sweep": "SELECT gxg_sweep(1)",
     "call_reserve": "SELECT gxg_reserve(gen_random_uuid(), 'x')",
     "call_move_helper": "SELECT _gxg_blocked('t', 'x')",
@@ -214,12 +223,11 @@ ALLOWED = {
         "read_decisions",
         "read_executions",
         "insert_audit",
-        "insert_outbox",
         "read_switches",
-        "link_approver",
-        "relink_approver",
         "read_links",
         "call_decide",
+        "add_passkey",
+        "call_link_code",
     },
     "gxg_executor": {
         "read_intents",
@@ -233,7 +241,7 @@ ALLOWED = {
         "call_reserve",
     },
     "gxg_sweeper": {"read_intents", "read_executions", "insert_audit", "insert_outbox", "read_switches", "call_sweep"},
-    "gxg_notifier": {"insert_audit", "read_outbox", "deliver_outbox", "read_links"},
+    "gxg_notifier": {"insert_audit", "read_outbox", "deliver_outbox", "read_links", "call_link_claim"},
     "gxg_admin": {"insert_audit", "insert_outbox", "read_switches", "set_switch", "clear_switch"},
 }
 
