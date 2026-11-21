@@ -49,3 +49,26 @@
 | M1 | 2 | критик | claude/m1-connector-kit | c64693a | — | запущен | 2026-11-20 |
 | M4 | 2 | исполнитель | claude/m4-contextforge-spike | 98f7ce1/d2b62b0 (+e90d7ea) | — | 8 пунктов критика; 10/10 мутантов (свой скрипт); вердикт «NO-GO-триггеров не найдено» | 2026-11-20 |
 | M4 | 2 | критик | claude/m4-contextforge-spike | d2b62b0 | — | запущен | 2026-11-20 |
+| — | — | интеграция | claude/integration | e7d245f | — | база волны 3: m0-foundation + спеки оркестратора (аудит A, Must fix 5); check-all зелёный | 2026-11-20 |
+| M2 | 2 | критик | claude/m2-policy-tooling | fbd522a | **5.0** | < 9: 2× critical (смена base PR; fast-forward A→B после метки), major (тег origin/main, DoD-4 mutmut) → цикл 3 (+ tools из manifest в bundle, вектор подписи) | 2026-11-20 |
+| M2 | 3 | исполнитель | claude/m2-policy-tooling | — | — | запущен | 2026-11-20 |
+| M1 | 2 | критик | claude/m1-connector-kit | c64693a | **6.0** | < 9: DoD-4 (самописный скрипт вместо mutmut, 20 выживших), 2× major (thumbprint, jti) → цикл 3 (+ спеки аудита); без роста 1 цикл | 2026-11-20 |
+| M1 | 3 | исполнитель | claude/m1-connector-kit | — | — | запущен | 2026-11-20 |
+| M4 | 2 | критик | claude/m4-contextforge-spike | d2b62b0 | **6.0** | < 9: DoD-4 (свой скрипт мутаций, 27 неэкв. выживших), major (кривой заголовок → crash; свой JWS вместо PyJWT, DoD-6) → цикл 3 в очереди (лимит 3 исполнителя) | 2026-11-20 |
+| M1 | 3 | исполнитель | claude/m1-connector-kit | a0c0b4a (+0eb244b) | — | mutmut, выжившие убиты, back-off JWKS, приведение к спекам аудита | 2026-11-20 |
+| M1 | 3 | критик | claude/m1-connector-kit | a0c0b4a | — | запущен | 2026-11-20 |
+| M4 | 3 | исполнитель | claude/m4-contextforge-spike | — | — | запущен (слот освободился) | 2026-11-20 |
+| M0.1 | 1 | исполнитель | claude/m0.1-standard-tools | 01ca42e (+f7f88f7) | — | gitleaks + mutmut, AC-M0.1-01…04 passed по отчёту, CI 44815259928 | 2026-11-20 |
+| M0.1 | 1 | критик | claude/m0.1-standard-tools | 01ca42e | — | запущен | 2026-11-20 |
+| M1 | 3 | критик | claude/m1-connector-kit | a0c0b4a | **9.0** | ≥ 9 — **веха закрыта**; 4 minor → backlog | 2026-11-20 |
+| M0.1 | 1 | критик | claude/m0.1-standard-tools | 01ca42e | **5.0** | < 9: AC-M0-04 (пустой .env проходит), .envrc/.env-local, свой network guard вместо pytest-socket → цикл 2; вопрос владельцу: допустима ли однострочная проверка имён файлов (AC-M0.1-02) | 2026-11-20 |
+| M0.1 | 2 | исполнитель | claude/m0.1-standard-tools | — | — | запущен (session_01V6d5A7pfKjuUdxfWCvZmq7) | 2026-11-20 |
+| M0.1 | 2 | решение владельца | — | — | — | AC-M0.1-02: разрешена однострочная проверка запрещённых имён файлов | 2026-11-21 |
+| M0.1 | 2 | исполнитель | claude/m0.1-standard-tools | f78e6b3…7e2a984 | — | пустые файлы, .env*, pytest-socket; owner_decision записан | 2026-11-21 |
+| M2 | 3 | исполнитель | claude/m2-policy-tooling | e1dae73 (+285a99e) | — | base/FF/тег закрыты, mutmut, tools из manifest, вектор подписи | 2026-11-21 |
+| M4 | 3 | исполнитель | claude/m4-contextforge-spike | 27c676a (+140dbd3) | — | PyJWT, pytest+mutmut, кривой заголовок → отказ, депрекация headers в ADR | 2026-11-21 |
+| M0.1, M2, M4 | — | критики | — | — | — | запущены (M0.1 ц2, M2 ц3, M4 ц3) | 2026-11-21 |
+| M0.1 | 2 | критик | claude/m0.1-standard-tools | 7e2a984 | **8.0** | < 9: major (merge-коммит с пустым .env не покрыт тестом), grep fail-open → цикл 3 | 2026-11-21 |
+| M2 | 3 | критик | claude/m2-policy-tooling | e1dae73 | **8.0** | < 9: major (gate исполняется из PR; manifest не в diff) → цикл 4 (последний по лимиту); остаточный риск ci.yml → решение владельца | 2026-11-21 |
+| M2 | 4 | решение владельца | — | — | — | Остаточный риск: PR, правящий .github/workflows/, может отключить gate — риск принят, владелец смотрит такие PR сам (CODEOWNERS) | 2026-11-21 |
+| M4 | 3 | критик | claude/m4-contextforge-spike | 27c676a | **9.5** | ≥ 9 — **веха закрыта**: GO ContextForge v1.1.1 + вариант C (PyJWT); minor → backlog | 2026-11-21 |
