@@ -1,0 +1,358 @@
+{
+  "milestone": "M7",
+  "branch": "claude/m7-approval-core",
+  "commit": "c6bb52f53cf7f71e52939f8261c2bc9db1d8b477",
+  "report_commit": "33d049908e187bcd60faba5fce6089b7fc0209cd",
+  "base": "dd4f060 (cycle 1 + critic report)",
+  "cycle": 2,
+  "reviewed_at": "2026-11-21",
+  "score": 9.0,
+  "score_before_caps": 9.0,
+  "caps_applied": [],
+  "cap_note": "All 13 AC pass on re-run; all 6 checklist items done. No critical, no new_regression of major level. Two major findings are missed_earlier (test gaps that existed in cycle 1 and were not on its checklist) -> backlog, no effect on the score by «Зафиксированная планка» п.3.",
+  "dimensions": {
+    "spec": 3.0,
+    "tests": 1.5,
+    "security": 2.0,
+    "code": 1.5,
+    "ops": 0.5,
+    "evidence": 0.5
+  },
+  "reproduction": {
+    "postgres": "PostgreSQL 16 (Ubuntu), unix socket only, GXG_TEST_PG_SOCKET_DIR=/var/tmp/m7pg/sock; clean git worktree at c6bb52f",
+    "tests": "uv run pytest approval/tests approval/tests_db -> 372 passed, 0 skipped (26 s); ruff check / format --check clean; mypy --strict approval/src approval/tests_db clean",
+    "sql_mutations": "full re-run of scripts/ci/mutate_m7_sql.py at c6bb52f, alone on the host: 79 listed, 75 killed, 4 equivalent, 0 not as expected, exit 0 (equals reports/mutmut/M7.txt)",
+    "own_sql_mutants": "10 one-line mutants outside the list: killed 5 (pending mine/total swapped, status index dropped, quota hour 30 min, T10 leaves execution live, T12->approved leaves execution live); survived 5: auto hour window 1h->30min, auto day window 1d->12h (finding 2), DROP index (tenant_id, created_at) (finding 1), _SQL_COUNTS min->max created_at (finding 3), LIKE 'policy:%'->'policy%' (equivalent: principals match ^(agent|oidc):)",
+    "mutmut": "selective re-run at c6bb52f: gxg_approval.mcp* 102 mutants -> 97 killed, 5 survived = listed equivalents; gxg_approval.api* 140 -> 134 killed, 6 survived = listed equivalents (x__responses__mutmut_8 listed only in 33d0499). Full 1635-mutant run not repeated (policy/transitions/quotas unchanged; intents.py change is SQL text)",
+    "explain": "500k rows: _SQL_AUTO_USED Index Scan on intents_tenant_id_created_at_idx 0.06 ms; index dropped -> Parallel Seq Scan 52 ms. 100k rows, index dropped -> Index Scan on (tenant_id, requester_principal, created_at), 1283 buffers, 5.3 ms, no Seq Scan (why the guard test misses it). Sweeper candidate queries at 500k: index scans < 1 ms",
+    "ci": "not observable here (no GitHub API/CI logs); grants-widening red by M2 design on push without PR"
+  },
+  "acceptance": [
+    {
+      "id": "AC-M7-01",
+      "status": "passed",
+      "evidence": "approval/tests/test_openapi.py passes; refs by exact codes 200/201; info/title/version, no /docs,/redoc"
+    },
+    {
+      "id": "AC-M7-02",
+      "status": "passed",
+      "evidence": "test_state_machine.py::test_every_status_event_pair 216 passed after deleting the gxg_cancel live-execution check; driver transition-table mutants killed"
+    },
+    {
+      "id": "AC-M7-03",
+      "status": "passed",
+      "evidence": "test_hash_mismatch_is_invalid_input"
+    },
+    {
+      "id": "AC-M7-04",
+      "status": "passed",
+      "evidence": "test_idempotent_repeat, test_50_parallel_identical_requests_make_one_row; idempotency tenant mutant killed"
+    },
+    {
+      "id": "AC-M7-05",
+      "status": "passed",
+      "evidence": "approval/tests/test_policy.py 12 scenarios"
+    },
+    {
+      "id": "AC-M7-06",
+      "status": "passed",
+      "evidence": "test_30_parallel_proposes_with_auto_limit_10; lock mutant killed"
+    },
+    {
+      "id": "AC-M7-07",
+      "status": "passed",
+      "evidence": "test_31st_propose_within_an_hour_is_rate_limited (429, retry_after_s > 0, 30 rows, outbox empty)"
+    },
+    {
+      "id": "AC-M7-08",
+      "status": "passed",
+      "evidence": "test_unknown_connector_or_foreign_key"
+    },
+    {
+      "id": "AC-M7-09",
+      "status": "passed",
+      "evidence": "test_foreign_intent_is_not_found_byte_for_byte, test_foreign_and_missing_intents_are_the_same_404, test_same_principal_in_another_tenant_is_not_found, test_intent_id_is_a_uuid_not_a_path; tenant/principal mutants of _SQL_OWN and gxg_cancel killed"
+    },
+    {
+      "id": "AC-M7-10",
+      "status": "passed",
+      "evidence": "test_payload_is_encrypted"
+    },
+    {
+      "id": "AC-M7-11",
+      "status": "passed",
+      "evidence": "test_roles.py statements; 'audit rows can be changed' mutant killed"
+    },
+    {
+      "id": "AC-M7-12",
+      "status": "passed",
+      "evidence": "test_sweeper.py; driver 'approval expired early' killed"
+    },
+    {
+      "id": "AC-M7-13",
+      "status": "passed",
+      "evidence": "test_roles.py catalogue + statements, test_deploy.py; grant mutants killed"
+    }
+  ],
+  "dod": {
+    "DoD-1": "not yet (branch, no PR: owner's step); CI of c47b541/33d0499 not observable here; grants-widening red by design",
+    "DoD-2": "met",
+    "DoD-3": "met (reports/conformance/M7.json; minor staleness, finding 4)",
+    "DoD-4": "met for the AC tests: mutmut on policy/transitions/quotas/intents/api/mcp with only listed equivalents (api/mcp re-run by the critic), SQL driver 79/0 (re-run by the critic). Test gaps outside the AC behaviours: findings 1-3 (missed_earlier, backlog)",
+    "DoD-5": "met (0 skipped)",
+    "DoD-6": "met: M7-cycle-2.md table has OpenAPI vs oasdiff (reason holds), SQL driver vs mutmut/pgTAP/SQLancer, T1 counters vs counter rows, UUID check vs Pydantic UUID4"
+  },
+  "checklist": [
+    {
+      "item": 1,
+      "status": "done",
+      "evidence": "all named survivors in the driver and killed at c6bb52f: _SQL_OWN tenant, gxg_cancel tenant, oidc guard, dispatch sub, insert guard status<->mode, auto decision mode, received_approvals policy; tests: same_principal (GET+cancel, byte-identical), agent:t-alpha:other approver, gxg_dispatch with another intent, insert-guard rows, gxg_record_auto_decision on not_required -> GX409, received_approvals of auto = 0"
+    },
+    {
+      "item": 2,
+      "status": "done",
+      "evidence": "scripts/ci/mutate_m7_sql.py committed, called from scripts/ci/mutmut.sh (fails the job), results + 4 explained equivalents in reports/mutmut/M7.txt; api.py, mcp.py in [tool.mutmut] only_mutate; live-execution check deleted with a comment and the invariant guarded (critic mutants T10/T12 killed). Coverage gap at window boundaries -> finding 2"
+    },
+    {
+      "item": 3,
+      "status": "done",
+      "evidence": "uuid.UUID in mcp.run, URL from the canonical form, GxgError not_found with api's bytes; test with ../../readyz and 4 more values on both tools"
+    },
+    {
+      "item": 4,
+      "status": "done",
+      "evidence": "_SQL_COUNTS split into per-hour (tenant, requester, created_at) and pending (tenant, status) sub-selects; _SQL_AUTO_USED with 1-day window on new index (tenant_id, created_at); EXPLAIN ANALYZE at 100k/500k in M7.json load_evidence (critic reproduced: 0.06 ms index scan). Guard test weak -> finding 1"
+    },
+    {
+      "item": 5,
+      "status": "done",
+      "evidence": "reports/plans/M7-cycle-2.md DoD-6 row: own containment test vs oasdiff, reasons (containment not breaking-change diff, FastAPI extras 422/HTTPValidationError, external $refs, Go binary outside uv), re-evaluate when versioned"
+    },
+    {
+      "item": 6,
+      "status": "done",
+      "evidence": "reports/mutmut/M7.txt: mutmut 1635 (1624 killed + 11 equivalents) and SQL 79/0 on c6bb52f; critic re-ran SQL fully and api/mcp selectively with the same result. Equivalent list entry for x__responses__mutmut_8 only in 33d0499 (finding 4)"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "origin": "missed_earlier",
+      "ref": "AP-05/AP-03 under RET-02 load, checklist item 4 (guard)",
+      "where": "approval/tests_db/test_propose.py:450-480 (test_t1_counts_use_indexes_on_a_long_history)",
+      "problem": "The test asserts only 'no Seq Scan'. Dropping the new index (tenant_id, created_at) keeps all tests green: at 100k rows the planner scans the tenant part of (tenant_id, requester_principal, created_at) (1283 buffers, 5.3 ms vs 0.06 ms); at 500k it becomes a 52 ms Seq Scan. No effective guard of index-boundedness existed in cycle 1 either; the checklist asked for the queries and EXPLAIN evidence, both delivered.",
+      "reproduction": "delete 'CREATE INDEX ON intents (tenant_id, created_at);' in 0001_core.py -> uv run pytest approval/tests_db: all pass",
+      "required_improvement": "backlog: assert the _SQL_AUTO_USED scan uses intents_tenant_id_created_at_idx (or created_at in Index Cond, or BUFFERS under a small bound); add the index drop to mutate_m7_sql.py"
+    },
+    {
+      "severity": "major",
+      "origin": "missed_earlier",
+      "ref": "AP-03 (sliding hour/day auto limits)",
+      "where": "approval/src/gxg_approval/intents.py:51-54; approval/tests_db/test_propose.py:318-342",
+      "problem": "Fail-open window mutants survive: auto hour window '1 hour'->'30 minutes' and day window '1 day'->'12 hours' pass all tests (rule max_per_hour 10 would allow ~20/h). The test only places rows at 2, 3 and 25 hours; the driver mutates windows only in the fail-closed direction. Query and test unchanged in substance since cycle 1. Code is correct today.",
+      "reproduction": "replace \"interval '1 hour'), count(*)\" with \"interval '30 minutes'), count(*)\" in _SQL_AUTO_USED -> approval/tests_db green; same for '1 day' -> '12 hours'",
+      "required_improvement": "backlog: in the existing test put an auto row at now()-50 min (still counts for the hour) and at now()-23 h (still counts for the day); add both mutants to the driver"
+    },
+    {
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "AP-05 retry_after_s",
+      "where": "approval/src/gxg_approval/intents.py:47; approval/tests_db/test_propose.py:198-205",
+      "problem": "min(created_at) -> max(created_at) survives: the window test has a single row, so retry_after_s from the newest row is not caught (agent told to wait too long)",
+      "required_improvement": "backlog: two rows in test_quota_window_is_one_hour, assert retry_after_s follows the oldest"
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "DoD-3/4 evidence",
+      "where": "reports/mutmut/M7.txt, reports/conformance/M7.json (known_limitations)",
+      "problem": "Evidence names c6bb52f, but its scripts/ci/mutmut-equivalent.txt lacks gxg_approval.api.x__responses__mutmut_8 (added in 33d0499), so scripts/ci/mutmut.sh is red on the named commit; known_limitations still says 'timeout 120 min' (now 240)",
+      "required_improvement": "name the commit where the gate is green (33d0499) or note it; fix the stale line"
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "Lean",
+      "where": "approval/src/gxg_approval/api.py:79-86 (_responses ok=)",
+      "problem": "'ok' schema option and 'code in (200, 201)' serve one caller (dispatch); the generality creates an equivalent mutant that must be listed",
+      "required_improvement": "inline the dispatch response schema or simplify the branch (~-3 lines)"
+    },
+    {
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "MCC-05 error envelope",
+      "where": "approval/src/gxg_approval/mcp.py:55",
+      "problem": "non-JSON api answer raises ValueError (not httpx.HTTPError) -> FastMCP generic error instead of temporarily_unavailable (executor's own nice-to-have 4); no proxy between mcp and api in M7",
+      "required_improvement": "backlog: catch ValueError in call() as temporarily_unavailable"
+    }
+  ],
+  "required_improvements": [],
+  "backlog": [
+    "M7: test_t1_counts_use_indexes_on_a_long_history must fail when index (tenant_id, created_at) is dropped (assert index name / Index Cond / buffers); add the drop to mutate_m7_sql.py (finding 1)",
+    "M7: AP-03 window boundaries: auto rows at now()-50 min and now()-23 h in test_auto_limits_use_sliding_hour_and_day; add the 30 min / 12 h mutants to the driver (finding 2)",
+    "M7: retry_after_s of the hourly quota from the oldest row: second row in test_quota_window_is_one_hour (finding 3)",
+    "M7: mcp call(): non-JSON api answer -> temporarily_unavailable (finding 6)",
+    "M7: _responses(ok=) inline for dispatch (finding 5); M7.json known_limitations timeout 240",
+    "carried from cycle 1 (already in docs/backlog.md): sweeper/mcp probes (M10/M14), request body cap, signing_key/compose mcp until M5, 422 in generated OpenAPI",
+    "M9 (owner decision, pending): compromised ui forging a human decision (AS-27 vs gxg_decide)",
+    "M5: AS-08 verify requester.assertion (ADR-0001 variant C)"
+  ],
+  "existing_solutions": [
+    {
+      "component": "SQL / PL/pgSQL mutation driver (scripts/ci/mutate_m7_sql.py)",
+      "alternative": "mutmut (Python AST only, leaves string constants), pgTAP (assertions, no mutation), SQLancer (DBMS bugs), no maintained SQL mutation tool known to the critic",
+      "verdict": "justified_custom",
+      "note": "critic confirms no ready tool (DoD-4 allows own check for non-Python); same pattern as M2 mutate_m2.py"
+    },
+    {
+      "component": "OpenAPI containment test (AC-M7-01)",
+      "alternative": "oasdiff",
+      "verdict": "justified_custom",
+      "note": "reason recorded in M7-cycle-2.md holds: containment check, FastAPI extras, external $refs, Go binary outside uv; revisit for versioned contract"
+    },
+    {
+      "component": "intent_id validation in mcp",
+      "alternative": "stdlib uuid.UUID (used); Pydantic UUID type rejected because its validation error bytes differ from not_found",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "T1 count queries",
+      "alternative": "PostgreSQL indexes (used) vs counter rows",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "PoolTimeout -> 503",
+      "alternative": "psycopg_pool.PoolTimeout + FastAPI exception_handler (used)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "mcp error text content",
+      "alternative": "FastMCP derives text from structuredContent (used, hand-made TextContent/json.dumps deleted)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "Refused exception in mcp",
+      "alternative": "httpx Response.raise_for_status (loses the error document) / FastMCP ToolError (no structuredContent)",
+      "verdict": "justified_custom",
+      "note": "5-line class"
+    }
+  ],
+  "threat_model": [
+    {
+      "path": "forged intent: caller impersonates a connector",
+      "status": "closed",
+      "evidence": "Ed25519 service JWT by bundle registry, kid thumbprint, aud, kind allowlist, jti cache; foreign key 401, other aud/kind 401 (test_unknown_connector_or_foreign_key); hand mutants of the kind allowlist killed",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "connector not registered for the tenant creates an intent (AS-25)",
+      "status": "closed",
+      "evidence": "rogue 403, 0 rows; dispatch re-checks serves() by the current bundle (mutant killed)",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "connector lies about effect_class / executes_via / dispatch timeout (AS-26)",
+      "status": "closed",
+      "evidence": "taken from bundle tools only; read/write/orphan/unknown/version tools 403",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "connector forges the requester principal of its tenant (AS-08)",
+      "status": "out_of_scope",
+      "evidence": "requester must exist in the tenant; otherwise connector_attested until ADR-0001 variant C (M5)",
+      "cycle_1_status": "out_of_scope"
+    },
+    {
+      "path": "args changed after hashing",
+      "status": "closed",
+      "evidence": "AC-M7-03; hash recomputed from normalized args; decisions bound to args_hash (decide_no_hash mutant killed)",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "policy bypass: deny/require/auto merge, auto for high_risk",
+      "status": "closed",
+      "evidence": "12 AP-01 scenarios; policy.py mutants 100 % killed",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "auto-limit or quota bypass with parallel proposes",
+      "status": "closed",
+      "evidence": "per-tenant advisory lock (driver mutant 'T1 without the tenant lock' killed); AC-M7-06/04 pass. Separate gap, not a bypass in the code: shorter AP-03 windows (30 min / 12 h) survive the tests (finding 2, backlog)",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "kill switch bypass at T1/T7/T9 (AS-05)",
+      "status": "closed",
+      "evidence": "checked inside the transactions; reserve/dispatch/blocked-scope mutants killed; a switch committed concurrently after the check is inherent to READ COMMITTED",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "agent reads or cancels another requester's intent (AS-11a)",
+      "status": "closed",
+      "evidence": "principal filter mutants killed; byte-identical 404",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "agent reads or cancels another tenant's intent with the same principal ID",
+      "status": "closed",
+      "evidence": "test_same_principal_in_another_tenant_is_not_found (GET + cancel, byte-identical 404, row unchanged); _SQL_OWN and gxg_cancel tenant mutants killed (critic's driver re-run). Through MCP the identity is agent:<tenant>:<name>, so it cannot occur there",
+      "cycle_1_status": "open"
+    },
+    {
+      "path": "agent passes a crafted intent_id to reach other api endpoints",
+      "status": "closed",
+      "evidence": "mcp.run parses uuid.UUID and builds the URL from the canonical form; test_intent_id_is_a_uuid_not_a_path: ../../readyz, JWKS, healthz, '<id>/../x', '' x 2 tools -> identical not_found; mcp mutants 97/102 killed, 5 listed equivalents",
+      "cycle_1_status": "open"
+    },
+    {
+      "path": "repeated execution: second dispatch / token replay / token of another connector",
+      "status": "closed",
+      "evidence": "jti cache 401, second api instance 409 via CAS, aud check; dispatch mutants killed",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "repeated execution after terminal or via a released reservation",
+      "status": "closed",
+      "evidence": "AC-M7-02 full product; one_active_execution index; T10/T12/T12a tests",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "compromised ui reads args / writes executions; executor writes decisions; notifier reads intents",
+      "status": "closed",
+      "evidence": "AC-M7-13 catalogue and statement tests; sweeper_reads_cipher mutant killed",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "compromised ui forges a human decision (any oidc: approver, step_up=true, two people for a quorum)",
+      "status": "open",
+      "evidence": "gxg_decide takes p_approver/p_step_up from the ui role as given; the AS-27 matrix grants it; needs an owner decision before M9 (not scored for M7)",
+      "cycle_1_status": "open"
+    },
+    {
+      "path": "agent principal approves through ui-supplied ID",
+      "status": "closed",
+      "evidence": "'oidc:' guard mutant killed by the agent:t-alpha:other case in test_t2_refuses_what_the_ui_must_never_get_through",
+      "cycle_1_status": "open"
+    },
+    {
+      "path": "compromised api inserts an approved intent bypassing policy",
+      "status": "out_of_scope",
+      "evidence": "unchanged; insert guard row shape now fully guarded (status<->mode, preview, deadline mutants killed)",
+      "cycle_1_status": "out_of_scope"
+    },
+    {
+      "path": "audit tampering",
+      "status": "closed",
+      "evidence": "no UPDATE/DELETE on audit_events for any role (AC-M7-11)",
+      "cycle_1_status": "closed"
+    },
+    {
+      "path": "cancel of an intent that has a live execution (T6 guard 'нет живого исполнения') after the explicit check was deleted",
+      "status": "closed",
+      "origin": "new_scope",
+      "evidence": "structural: T6 only from pending_approval/approved; every move back to approved (T10, T12) ends the execution in the same function; critic mutants 'T10 leaves execution live' and 'T12 back to approved leaves execution live' killed; AC-M7-02 216 pairs pass"
+    }
+  ],
+  "ponytail_review": "reports/critic/M7-cycle-2.review.md",
+  "lean_lines": 3
+}
