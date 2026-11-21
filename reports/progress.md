@@ -76,3 +76,5 @@
 | M0.1 | 3 | исполнитель | claude/m0.1-standard-tools | 91e6e09 (+9dd74c1) | — | merge-коммит, grep fail closed, без opt-out сети; CI 44887393111 | 2026-11-21 |
 | M2 | 4 | исполнитель | claude/m2-policy-tooling | dd0beb1 (+40c6595, 8f6754e) | — | gate из main, manifest = widening, duplicate-tool lint, mutmut | 2026-11-21 |
 | M0.1, M2 | — | критики | — | — | — | запущены (M0.1 ц3, M2 ц4) | 2026-11-21 |
+| M0.1 | 3 | критик | claude/m0.1-standard-tools | 91e6e09 | **8.0** | < 9 (без роста 1 цикл): major — сетевой opt-out через фикстуру, политика не под тестом → цикл 4 | 2026-11-21 |
+| M2 | 4 | критик | claude/m2-policy-tooling | dd0beb1 | **8.0** | < 9 (без роста 1 цикл): дубли tool внутри manifest; повышение effect_class при матче по классу → цикл 5 (последний) | 2026-11-21 |
