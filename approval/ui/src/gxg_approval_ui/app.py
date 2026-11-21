@@ -25,6 +25,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, PackageLoader
+from nacl.exceptions import CryptoError
 from nacl.public import PrivateKey, SealedBox
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -207,7 +208,10 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         box = deps.preview_keys.get(row["tenant_id"])
         if box is None:
             raise Refused(*UNAVAILABLE)  # no preview key for this tenant
-        doc = json.loads(box.decrypt(bytes(row["preview_ciphertext"])))
+        try:
+            doc = json.loads(box.decrypt(bytes(row["preview_ciphertext"])))
+        except CryptoError:  # a key that does not open it (rotated or wrong file): unavailable, not a crash
+            raise Refused(*UNAVAILABLE) from None
         args = doc["canonical_args"]
         recomputed = canonical.hash(
             {

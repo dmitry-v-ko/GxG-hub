@@ -315,3 +315,11 @@ def test_no_preview_key_is_unavailable(browser: Any, propose: Any, ui_deps: Any)
     intent = propose().json()["intent_id"]
     ui_deps.preview_keys.pop("t-alpha")
     assert browser.login(HUMAN1).client.get(f"/intents/{intent}").status_code == 503
+
+
+def test_preview_key_that_does_not_open_it(browser: Any, propose: Any, ui_deps: Any) -> None:
+    from nacl.public import PrivateKey, SealedBox
+
+    intent = propose().json()["intent_id"]
+    ui_deps.preview_keys["t-alpha"] = SealedBox(PrivateKey.generate())
+    assert browser.login(HUMAN1).client.get(f"/intents/{intent}").status_code == 503

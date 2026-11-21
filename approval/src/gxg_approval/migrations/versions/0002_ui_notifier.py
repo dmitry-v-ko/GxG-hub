@@ -41,6 +41,9 @@ CREATE TABLE webauthn_credentials (
 );
 CREATE INDEX ON webauthn_credentials (human_principal);
 
+-- gxg_link_claim counts a sender's refused claims: without this the count scans a year of audit (RET-02).
+CREATE INDEX ON audit_events (at) WHERE action = 'telegram_link_refused';
+
 CREATE FUNCTION _gxg_code_hash(p_code text) RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT encode(sha256(convert_to(p_code, 'UTF8')), 'hex')
 $$;

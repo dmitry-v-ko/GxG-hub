@@ -363,3 +363,15 @@ def test_messages_without_text_are_ignored(notifier: Any, telegram: Any) -> None
                                "from": {"id": "1001"}, "text": "/start"}})  # fmt: skip
     notifier.poll(None)
     assert telegram.sent == []
+
+
+def test_refused_claims_are_counted_on_an_index(owner: Any) -> None:
+    owner.execute("SET enable_seqscan = off")  # empty table: ask whether the index can serve the query at all
+    try:
+        plan = owner.execute(
+            "EXPLAIN SELECT count(*) FROM audit_events WHERE action = 'telegram_link_refused' "
+            "AND at > now() - interval '10 minutes' AND details->>'telegram_user_id' = '1'"
+        ).fetchall()
+    finally:
+        owner.execute("RESET enable_seqscan")
+    assert any("audit_events_at_idx" in r[0] for r in plan), plan
