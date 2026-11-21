@@ -4,7 +4,7 @@
 # Root ([tool.mutmut] in pyproject.toml): M0.1 (AC-M0.1-03) scripts/ci/ and conftest.py, M2 widening_gate.py.
 # tools/gxg-policy (its own [tool.mutmut]): M2 gxg_policy {diff,lint,bundle,load}; mutmut maps src/ paths
 # to module names, so it runs from that directory. gxg-connector-kit (M1) has its own section and command.
-# approval (its own [tool.mutmut]): M7 policy, transitions, quotas, intents (T1). Its DB tests need one
+# approval (its own [tool.mutmut]): M7 policy, transitions, quotas, intents (T1), api, mcp. Its DB tests need one
 # PostgreSQL for all mutants: a container without network, reached over a Unix socket (needs Docker).
 # mutmut exits 0 with survivors, so this script fails on any survivor, untested or timed-out mutant not
 # listed in scripts/ci/mutmut-equivalent.txt (each with a reason; the list has no M0.1 mutant, so every
@@ -34,6 +34,9 @@ for dir in tools/gxg-policy approval .; do
     uv run --quiet mutmut results --all true 2> /dev/null | sed 's/^ *//' >> "$tmp/all.txt"
   ) >> "$tmp/results.txt"
 done
+# M7 SQL (migration PL/pgSQL, SQL constants of intents.py): mutmut does not mutate SQL text.
+sql_ok=true
+uv run --quiet python scripts/ci/mutate_m7_sql.py > "$tmp/sql.txt" 2>&1 || sql_ok=false
 sort "$tmp/all.txt" > "$all"
 grep -E '^\s+\S+: ' "$tmp/results.txt" | sed -E 's/^\s+//; s/: .*//' | sort > "$tmp/left.txt" || true
 { grep -oE "^[^ #]+" "$equivalent" || true; } | sort > "$tmp/allowed.txt"
@@ -44,10 +47,12 @@ stale=$(comm -13 "$tmp/left.txt" "$tmp/allowed.txt")
   echo "not killed: $(wc -l < "$tmp/left.txt"), listed as equivalent: $(comm -12 "$tmp/left.txt" "$tmp/allowed.txt" | wc -l)"
   grep -F -f "$tmp/left.txt" "$equivalent" || true
   [ -z "$stale" ] || printf 'listed but killed now (remove from the list):\n%s\n' "$stale"
+  echo "== M7 SQL mutations (scripts/ci/mutate_m7_sql.py)"
+  cat "$tmp/sql.txt"
   if [ -n "$unexplained" ]; then
     printf 'SURVIVED, not equivalent:\n%s\n' "$unexplained"
   else
     echo "mutmut: OK, no surviving non-equivalent mutants"
   fi
 } | tee "$report"
-[ -z "$unexplained" ] && [ -z "$stale" ]
+[ -z "$unexplained" ] && [ -z "$stale" ] && $sql_ok

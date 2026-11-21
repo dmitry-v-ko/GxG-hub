@@ -126,8 +126,8 @@ exclude = ["*.md"]
 # M2: scripts/ci/widening_gate.py; survivors only if listed in scripts/ci/mutmut-equivalent.txt.
 source_paths = ["scripts/ci/", "conftest.py"]
 # Outside every DoD-4 scope, tested end to end only: the M1 coverage gate (AC-M1-09) and the
-# M2 bash/YAML mutation driver (scripts/ci/mutate_m2.py, not a key-condition module).
-do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py"]
+# M2 bash/YAML and M7 SQL mutation drivers (scripts/ci/mutate_m*.py, not key-condition modules).
+do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py", "scripts/ci/mutate_m7_sql.py"]
 also_copy = ["schemas/", "policies/", "docs/", "tests/", ".github/"]
 # test_grants_widening_job.py runs the M2 job script in temp repos (subprocesses, like the e2e tests):
 # in neither milestone's mutmut test selection.

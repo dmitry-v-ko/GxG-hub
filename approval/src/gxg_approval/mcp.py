@@ -9,6 +9,7 @@ is `not_found`, byte for byte like a missing one.
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -56,10 +57,14 @@ def create_server(
         try:
             who = identity.verify(headers())
             scope = {"tenant_id": who.tenant_id, "principal": who.principal}
-            doc = await call("GET", f"/v1/intents/{intent_id}", params=scope)
+            try:  # only a UUID reaches the URL path: no `../` to other api endpoints
+                path = f"/v1/intents/{uuid.UUID(intent_id)}"
+            except ValueError:
+                raise GxgError("not_found", "intent not found") from None  # the bytes of api's 404
+            doc = await call("GET", path, params=scope)
             if cancel:
                 body = {"on_behalf_of": scope, "expected_version": doc["version"]}
-                doc = await call("POST", f"/v1/intents/{intent_id}/cancel", json=body)
+                doc = await call("POST", f"{path}/cancel", json=body)
         except GxgError as exc:
             return _result(exc.to_dict(), error=True)
         except httpx.HTTPError:

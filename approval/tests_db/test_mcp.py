@@ -88,6 +88,25 @@ def test_foreign_intent_is_not_found_byte_for_byte(mcp: tuple[Any, Agent], propo
             results.append((res.content[0].text, repr(res.structured_content)))
     assert len(set(results)) == 1
     assert results[0][0] == '{"code":"not_found","message":"intent not found","retryable":false}'
+    # The same principal ID in two tenants cannot come through here: the identity is `agent:<tenant>:<name>`
+    # (TEN-06, IdentityVerifier); the api guards it for any approval_mcp (test_api_read.py, same_principal).
+
+
+def test_intent_id_is_a_uuid_not_a_path(mcp: tuple[Any, Agent], propose: Callable[..., Any]) -> None:
+    """AS-11a: a crafted intent_id does not reach other api endpoints; it is `not_found` like a missing intent."""
+    server, agent = mcp
+    intent = propose().json()["intent_id"]
+    texts = set()
+    for tool in ("effects.status", "effects.cancel"):
+        for crafted in ("../../readyz", "../../.well-known/gxg-exec-jwks.json", "../../healthz", f"{intent}/../x", ""):
+            agent.be("t-alpha", BOT)
+            res = call(server, tool, crafted)
+            assert res.is_error, crafted
+            texts.add(res.content[0].text)
+    assert texts == {'{"code":"not_found","message":"intent not found","retryable":false}'}
+    agent.be("t-alpha", BOT)
+    upper = call(server, "effects.cancel", intent.upper())  # any UUID spelling reaches the same intent
+    assert not upper.is_error and upper.structured_content["status"] == "cancelled"
 
 
 def test_cancel_own_intent(mcp: tuple[Any, Agent], propose: Callable[..., Any]) -> None:

@@ -43,16 +43,15 @@ _SQL_AUDIT = (
 )
 _SQL_BLOCKED = "SELECT EXISTS (SELECT 1 FROM switches WHERE blocked AND scope = ANY(%s))"
 _SQL_COUNTS = """
-SELECT count(*) FILTER (WHERE requester_principal = %(r)s AND created_at > now() - interval '1 hour'),
-       coalesce(extract(epoch FROM now() - min(created_at) FILTER (
-           WHERE requester_principal = %(r)s AND created_at > now() - interval '1 hour')), 0),
-       count(*) FILTER (WHERE requester_principal = %(r)s AND status = 'pending_approval'),
-       count(*) FILTER (WHERE status = 'pending_approval')
-  FROM intents WHERE tenant_id = %(t)s"""
+SELECT h.n, h.age, p.mine, p.total FROM
+  (SELECT count(*) AS n, coalesce(extract(epoch FROM now() - min(created_at)), 0) AS age FROM intents
+    WHERE tenant_id = %(t)s AND requester_principal = %(r)s AND created_at > now() - interval '1 hour') h,
+  (SELECT count(*) FILTER (WHERE requester_principal = %(r)s) AS mine, count(*) AS total FROM intents
+    WHERE tenant_id = %(t)s AND status = 'pending_approval') p"""  # each side bounded by an index (AP-05)
 _SQL_AUTO_USED = """
 SELECT count(*) FILTER (WHERE created_at > now() - interval '1 hour'), count(*)
-  FROM intents WHERE tenant_id = %s AND approval_mode = 'auto' AND %s = ANY(rule_ids)
-   AND created_at > now() - interval '1 day'"""
+  FROM intents WHERE tenant_id = %s AND created_at > now() - interval '1 day'
+   AND approval_mode = 'auto' AND %s = ANY(rule_ids)"""  # index (tenant_id, created_at)
 _SQL_LOCK = "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))"
 _SQL_BY_KEY = f"SELECT {STATUS_COLUMNS} FROM intents WHERE tenant_id = %s AND idempotency_key = %s"  # noqa: S608
 _SQL_OWN = f"SELECT {STATUS_COLUMNS} FROM intents WHERE intent_id = %s AND tenant_id = %s AND requester_principal = %s"  # noqa: S608

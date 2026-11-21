@@ -114,6 +114,7 @@ CREATE TABLE intents (
 );
 CREATE INDEX ON intents (tenant_id, status, expires_at);
 CREATE INDEX ON intents (tenant_id, requester_principal, created_at);
+CREATE INDEX ON intents (tenant_id, created_at);  -- AP-03 auto usage window (T1)
 
 CREATE TABLE decisions (
   decision_id      uuid PRIMARY KEY,
@@ -273,6 +274,8 @@ CREATE FUNCTION gxg_received_approvals(p_intent uuid) RETURNS integer
 $$;
 
 -- T6 by the requester (api on behalf of the agent, AS-11a): another tenant's or requester's intent is not found.
+-- No live-execution check: T6 is allowed only from pending_approval/approved (_gxg_move), and an intent with a
+-- live execution is always executing/outcome_unknown (T7 moves it in the same transaction that reserves).
 CREATE FUNCTION gxg_cancel(p_intent uuid, p_tenant text, p_principal text, p_version integer) RETURNS void {DEFINER} AS $$
 DECLARE r intents;
 BEGIN
@@ -280,9 +283,6 @@ BEGIN
                                  AND requester_principal = p_principal FOR UPDATE;
   IF NOT FOUND THEN PERFORM _gxg_fail('GX404', 'intent not found'); END IF;
   IF r.version <> p_version THEN PERFORM _gxg_fail('GX409', 'intent version changed'); END IF;
-  IF EXISTS (SELECT 1 FROM executions WHERE intent_id = p_intent AND state IN ('reserved','dispatching','outcome_unknown')) THEN
-    PERFORM _gxg_fail('GX409', 'intent has a live execution');
-  END IF;
   r := _gxg_move(r, 'cancel', NULL, 'cancelled', p_principal);
   PERFORM _gxg_outbox('webhook', r);
 END $$;
