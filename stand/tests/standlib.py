@@ -227,19 +227,19 @@ class Stand:
         return httpx.Client(base_url=CF, timeout=60, headers={"Authorization": "Bearer " + r.json()["access_token"]})
 
     # ---- demo, from the inside
-    def audit(self) -> list[dict[str, Any]]:
-        """demo's JSON audit lines (one per tools/call that reached it), oldest first."""
-        out = sh("docker", "compose", "logs", "--no-log-prefix", "demo")
+    def audit(self, service: str = "demo") -> list[dict[str, Any]]:
+        """A connector's JSON audit lines (one per tools/call that reached it), oldest first."""
+        out = sh("docker", "compose", "logs", "--no-log-prefix", service)
         return [json.loads(ln) for ln in out.splitlines() if ln.startswith('{"') and '"tool"' in ln]
 
-    def ctl(self, method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        """demo's test controls on 127.0.0.1:8090 inside its container."""
+    def ctl(self, method: str, path: str, body: dict[str, Any] | None = None, service: str = "demo") -> dict[str, Any]:
+        """A connector's test controls on 127.0.0.1:8090 inside its container."""
         script = (
             "import json,sys,urllib.request as u;"
             f"r=u.Request('http://127.0.0.1:8090{path}',data=sys.stdin.read().encode() or None,method='{method}',"
             "headers={'content-type':'application/json'});print(u.urlopen(r,timeout=10).read().decode())"
         )
-        return dict(json.loads(self.in_demo(script, json.dumps(body) if body else "")))
+        return dict(json.loads(self.in_demo(script, json.dumps(body) if body else "", service)))
 
     def backend_calls(self) -> int:
         return sum(self.ctl("GET", "/_test/backend/calls").values())
@@ -252,12 +252,12 @@ class Stand:
         )
         return int(self.in_demo(script))
 
-    def in_demo(self, script: str, stdin: str = "") -> str:
-        """Python inside the demo container; one retry: a `docker exec` sometimes hangs in CI sandboxes."""
+    def in_demo(self, script: str, stdin: str = "", service: str = "demo") -> str:
+        """Python inside a connector's container; one retry: a `docker exec` sometimes hangs in CI sandboxes."""
         for attempt in (1, 2):
             try:
                 return sh(
-                    "docker", "exec", "-i", self.container("demo"), "python", "-c", script, stdin=stdin, timeout=30
+                    "docker", "exec", "-i", self.container(service), "python", "-c", script, stdin=stdin, timeout=30
                 )
             except subprocess.TimeoutExpired:
                 if attempt == 2:
@@ -315,11 +315,11 @@ class Stand:
         } | overrides
         return core.sign(claims, key, kid)
 
-    def direct(self, network: str, calls: list[tuple[dict[str, str], dict[str, Any]]]) -> list[dict[str, Any]]:
-        """tools/call straight to demo from `network`: [(headers, params)] -> parsed replies or {error}."""
-        reqs = [
-            {"url": DEMO_URL, "headers": self.headers(None, h), "body": mcp_body("tools/call", p)} for h, p in calls
-        ]
+    def direct(
+        self, network: str, calls: list[tuple[dict[str, str], dict[str, Any]]], url: str = DEMO_URL
+    ) -> list[dict[str, Any]]:
+        """tools/call straight to a connector from `network`: [(headers, params)] -> parsed replies or {error}."""
+        reqs = [{"url": url, "headers": self.headers(None, h), "body": mcp_body("tools/call", p)} for h, p in calls]
         return [parse(r["body"]) if "body" in r else r for r in self.probe(network, reqs)]
 
 

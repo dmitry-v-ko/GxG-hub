@@ -9,9 +9,16 @@ The service is the fake of fixtures/service.json behind the `TelegramService` po
 from __future__ import annotations
 
 import base64
+import dataclasses
 import json
 import logging
+import os
+import re
+import secrets
 import shutil
+import subprocess
+import sys
+import time
 import tomllib
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
@@ -21,12 +28,15 @@ from typing import Any
 
 import httpx2
 import jsonschema
+import jwt
 import pytest
 import yaml
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from gxg_connector_kit import TokenError
+from gxg_connector_kit import cf_identity as cf
 from gxg_connector_kit.identity import StubIssuer
 from gxg_policy import cli as policy_cli
 from telegram_connector import server, testctl, tools
@@ -760,3 +770,350 @@ def test_manifest_tools_are_read_only_and_schemas_exist() -> None:
     for t in manifest["tools"]:
         jsonschema.Draft202012Validator.check_schema(tools.load_schema(t["input_schema"]))
         jsonschema.Draft202012Validator.check_schema(tools.load_schema(t["output_schema"]))
+
+
+# configuration, bundle reload, audit and logging (server.py and TelegramTool.run are copies of demo's:
+# tested the same way) ---------------------------------------------------------------------------
+
+BASE = {"GXG_PROFILE": "test", "TELEGRAM_SERVICE": "fake"}
+THREAD = "telegram.thread.read"
+
+
+def jti(identity: dict[str, str]) -> str:
+    payload = identity["x-gxg-test-identity"].split(".")[1]
+    claim: str = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))["jti"]
+    return claim
+
+
+def clean_env(tmp: Path) -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GXG_", "TELEGRAM_"))}
+    return env | {"TELEGRAM_BUNDLE_DIR": str(tmp), "TELEGRAM_STATE_FILE": str(tmp / "state.json")}
+
+
+# Settings -------------------------------------------------------------------------------------
+
+
+def test_defaults_and_values_come_from_the_environment(tmp_path: Path) -> None:
+    s = server.Settings.from_env(BASE)
+    assert (s.profile, s.service, s.connections, s.test_controls, s.test_issuer_key, s.identity_keys) == (
+        "test",
+        "fake",
+        {},
+        False,
+        None,
+        "",
+    )
+    assert (s.bundle_dir, s.bundle_keys, s.state_file) == (
+        Path("/bundle"),
+        "",
+        Path("/var/lib/telegram/bundle-state.json"),
+    )
+    path = tmp_path / "elsewhere" / "state.json"
+    s = server.Settings.from_env(
+        BASE
+        | {
+            "TELEGRAM_STATE_FILE": str(path),
+            "TELEGRAM_BUNDLE_DIR": str(tmp_path),
+            "TELEGRAM_BUNDLE_KEYS": "k=v",
+            "TELEGRAM_TEST_CONTROLS": "1",
+            "TELEGRAM_TEST_ISSUER_KEY": "i",
+        }
+    )
+    assert (s.state_file, s.bundle_dir, s.bundle_keys, s.test_controls, s.test_issuer_key) == (
+        path,
+        tmp_path,
+        "k=v",
+        True,
+        "i",
+    )
+    assert server.Settings.from_env(BASE | {"TELEGRAM_IDENTITY_KEYS": "k=v"}).identity_keys == "k=v"
+    assert server.Settings.from_env(BASE | {"TELEGRAM_TEST_CONTROLS": "0"}).test_controls is False
+
+
+@pytest.mark.parametrize(
+    ("env", "reason"),
+    [
+        ({"TELEGRAM_TEST_ISSUER_KEY": "k"}, "test issuer and test controls are allowed only with GXG_PROFILE=test"),
+        ({"TELEGRAM_TEST_CONTROLS": "1"}, "test issuer and test controls are allowed only with GXG_PROFILE=test"),
+        (
+            BASE | {"TELEGRAM_TEST_ISSUER_KEY": "k", "TELEGRAM_IDENTITY_KEYS": "k=v"},
+            "TELEGRAM_TEST_ISSUER_KEY and TELEGRAM_IDENTITY_KEYS are exclusive",
+        ),
+        ({}, "TELEGRAM_SERVICE: only `fake` with GXG_PROFILE=test; no adapter to the service yet"),
+        (
+            {"TELEGRAM_SERVICE": "fake"},
+            "TELEGRAM_SERVICE: only `fake` with GXG_PROFILE=test; no adapter to the service yet",
+        ),
+        ({"GXG_PROFILE": "test"}, "TELEGRAM_SERVICE: only `fake` with GXG_PROFILE=test; no adapter to the service yet"),
+        (
+            BASE | {"TELEGRAM_CONNECTIONS": "x"},
+            "TELEGRAM_CONNECTIONS: expected tenant=hub_connection:service_connection, once per tenant",
+        ),
+        (BASE | {"TELEGRAM_BUNDLE_KEYS": "x"}, "TELEGRAM_BUNDLE_KEYS: expected kid=ed25519:<base64url>"),
+        (BASE | {"TELEGRAM_IDENTITY_KEYS": "x"}, "TELEGRAM_IDENTITY_KEYS: expected kid=ed25519:<base64url>"),
+        (BASE | {"TELEGRAM_IDENTITY_KEYS": "=ed25519:x"}, "TELEGRAM_IDENTITY_KEYS: expected kid=ed25519:<base64url>"),
+    ],
+)
+def test_bad_configuration_does_not_start_and_says_why(
+    env: dict[str, str], reason: str, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    assert server.main(clean_env(tmp_path) | env) == 2
+    assert [json.loads(r.getMessage()) for r in caplog.records] == [{"event": "startup_refused", "reason": reason}]
+
+
+def test_the_real_process_refuses_without_the_fake(tmp_path: Path) -> None:
+    proc = subprocess.run(
+        [sys.executable, "-m", "telegram_connector"],
+        check=False,
+        env=clean_env(tmp_path),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 2, proc.stderr
+    assert json.loads(proc.stdout)["event"] == "startup_refused"
+
+
+def test_bad_key_value_names_the_variable() -> None:
+    with pytest.raises(server.ConfigError, match=r"^X: "):
+        server.parse_keys("k=ed25519:short", "X")
+    assert server.parse_keys(" , ", "X") == {}
+
+
+def test_no_verifier_refuses_with_a_reason() -> None:
+    with pytest.raises(TokenError) as exc:
+        server.NoVerifier().verify({})
+    assert exc.value.reason == "no identity verifier configured"
+
+
+def test_servers_listen_where_the_spec_says(env: Env) -> None:
+    app, connector = server.build(env.settings)
+    assert isinstance(connector.service, FakeTelegramService)
+    (only,) = server.configs(env.settings, app, connector)
+    assert (only.host, only.port, only.log_level) == ("0.0.0.0", 8080, "warning")  # noqa: S104
+    with_ctl = dataclasses.replace(env.settings, test_controls=True)
+    ctl = server.configs(with_ctl, app, connector)[1]
+    assert (ctl.host, ctl.port) == ("127.0.0.1", 8090)
+
+
+# bundle, readiness ------------------------------------------------------------------------------
+
+
+async def test_bundle_is_reloaded_when_its_files_change(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="telegram_connector")
+    good = {p.name: p.read_bytes() for p in env.settings.bundle_dir.iterdir()}
+    shutil.rmtree(env.settings.bundle_dir)
+    server.build(env.settings)  # a second build over the same state directory is fine
+    service = FakeTelegramService()
+    app, connector = server.build(env.settings, service)
+    assert connector.service is service
+    async with AsyncExitStack() as stack:
+        http, session = await connect(stack, app)
+        t = Tg(connector, http, session, env.issuer)
+        assert (await http.get("/readyz")).status_code == 503
+        assert (await t.error(THREAD, {"chat_ref": REF["a-sales"]}))["code"] == "temporarily_unavailable"
+        env.settings.bundle_dir.mkdir()
+        for name, data in good.items():
+            (env.settings.bundle_dir / name).write_bytes(data)
+        assert (await http.get("/readyz")).status_code == 200
+        assert (await t.ok(THREAD, {"chat_ref": REF["a-sales"]}))["messages"]
+        (env.settings.bundle_dir / "grants-bundle.json").write_bytes(b"{}")  # a broken update keeps the previous one
+        assert (await http.get("/readyz")).status_code == 200
+    events = [json.loads(r.getMessage()) for r in caplog.records if r.name == "telegram_connector"]
+    assert {"event": "bundle_loaded", "bundle_version": "0" * 40} in events
+    rejected = [e for e in events if e["event"] == "bundle_rejected"]
+    assert len(rejected) == 1 and sorted(rejected[0]) == ["event", "reason"] and "signature" in rejected[0]["reason"]
+    not_ready = [e for e in events if e["event"] == "not_ready"]
+    assert not_ready and all(e["reasons"] for e in not_ready)
+
+
+async def test_not_ready_service_is_logged_with_its_reason(tg: Tg, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="telegram_connector")
+    tg.service.failure = "busy"
+    assert (await tg.http.get("/readyz")).status_code == 503
+    [line] = [json.loads(r.getMessage()) for r in caplog.records if r.name == "telegram_connector"]
+    assert line == {"event": "not_ready", "reasons": ["telegram service is not available"]}
+
+
+async def test_mcp_endpoint_is_stateless_json(tg: Tg) -> None:
+    headers = {"accept": "application/json, text/event-stream", "content-type": "application/json"}
+    init = {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}
+    r = await tg.http.post(
+        "/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": init}
+    )
+    assert r.headers["content-type"].startswith("application/json")
+    assert r.json()["result"]["serverInfo"]["name"] == "telegram" and "mcp-session-id" not in r.headers
+    r = await tg.http.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    tools = r.json()["result"]["tools"]
+    assert tools[0]["description"].startswith("Full-text search")
+    assert all(t["outputSchema"]["type"] == "object" for t in tools)
+
+
+# audit ------------------------------------------------------------------------------------------
+
+
+async def test_audit_line_per_call(tg: Tg, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="telegram_connector")
+    ids = [tg.identity(ALPHA_READER) for _ in range(5)]
+    await tg.ok("telegram.messages.search", {"query": "status"}, identity=ids[0])
+    await tg.ok(THREAD, {"chat_ref": REF["a-sales"]}, identity=ids[1])
+    await tg.ok("telegram.messages.collect", {"chat_ref": REF["a-partners"]}, identity=ids[2])
+    await tg.error(THREAD, {"chat_ref": REF["a-hidden"]}, identity=ids[3])
+    tg.service.failure, tg.service.retry_after_s = "flood_wait", 9
+    await tg.error(THREAD, {"chat_ref": REF["a-sales"]}, identity=ids[4])
+    await tg.error(THREAD, {"chat_ref": REF["a-sales"]}, identity={})
+    lines = audit_lines(caplog)
+    assert all(isinstance(a.pop("duration_ms"), int) for a in lines)
+    who = {"tenant": "t-alpha", "principal": ALPHA_READER, "authorization_header": False}
+    anonymous = lines[5].pop("request_id")
+    assert lines == [
+        {
+            "request_id": jti(ids[0]),
+            **who,
+            "tool": "telegram.messages.search",
+            "grant_id": ["alpha-reader-chats"],
+            "outcome": "ok",
+        },
+        {"request_id": jti(ids[1]), **who, "tool": THREAD, "grant_id": ["alpha-reader-chats"], "outcome": "ok"},
+        {
+            "request_id": jti(ids[2]),
+            **who,
+            "tool": "telegram.messages.collect",
+            "grant_id": ["alpha-reader-collect"],
+            "outcome": "ok",
+        },
+        {"request_id": jti(ids[3]), **who, "tool": THREAD, "outcome": "not_found"},
+        {"request_id": jti(ids[4]), **who, "tool": THREAD, "service_error": "flood_wait", "outcome": "rate_limited"},
+        {"tool": THREAD, "authorization_header": False, "outcome": "unauthenticated", "reason": "missing"},
+    ]
+    assert len(anonymous) == 36 and anonymous != jti(ids[0])
+
+
+async def test_duration_is_in_milliseconds(tg: Tg, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="telegram_connector")
+    tg.service.delay_s = 0.3
+    await tg.ok(THREAD, {"chat_ref": REF["a-sales"]})
+    assert 300 <= audit_lines(caplog)[0]["duration_ms"] < 5000
+
+
+def cf_identity(key: Ed25519PrivateKey, tool: str, args: dict[str, Any], kid: str = "cf-1") -> str:
+    now = int(time.time())
+    claims = {
+        "iss": cf.ISSUER,
+        "aud": "telegram",
+        "sub": ALPHA_READER,
+        "tenant_id": "t-alpha",
+        "tool": tool,
+        "iat": now,
+        "exp": now + 60,
+        "jti": secrets.token_hex(16),
+        "request_id": "cf-req",
+        "ahs": cf.args_hash(args),
+    }
+    return jwt.encode(claims, key, algorithm="EdDSA", headers={"typ": cf.TYP, "kid": kid})
+
+
+async def test_contextforge_identity_is_verified_and_refusals_are_audited(
+    env: Env, caplog: pytest.LogCaptureFixture
+) -> None:
+    """ADR-0001 C: TELEGRAM_IDENTITY_KEYS -> the kit's ContextForgeVerifier with aud `telegram`; SEC-03 reasons."""
+    caplog.set_level(logging.INFO, logger="telegram_connector")
+    key = Ed25519PrivateKey.generate()
+    settings = dataclasses.replace(
+        env.settings, test_issuer_key=None, identity_keys=f"cf-1={public_key(key.public_key())}"
+    )
+    app, connector = server.build(settings, FakeTelegramService())
+    args = {"chat_ref": REF["a-sales"]}
+    async with AsyncExitStack() as stack:
+        http, session = await connect(stack, app)
+        t = Tg(connector, http, session, env.issuer)
+        assert (await t.ok(THREAD, args, identity={"x-gxg-identity": cf_identity(key, THREAD, args)}))["messages"]
+        for identity in (
+            {"x-gxg-identity": cf_identity(Ed25519PrivateKey.generate(), THREAD, args, "cf-9")},
+            {},
+            {"x-gxg-identity": cf_identity(Ed25519PrivateKey.generate(), THREAD, args)},
+        ):
+            assert (await t.error(THREAD, args, identity=identity))["code"] == "unauthenticated"
+    reasons = [(e["outcome"], e.get("reason")) for e in audit_lines(caplog)]
+    assert reasons == [
+        ("ok", None),
+        ("unauthenticated", "kid"),
+        ("unauthenticated", "missing"),
+        ("unauthenticated", "signature"),
+    ]
+    assert "eyJ" not in caplog.text
+
+
+async def test_unexpected_error_is_internal_error_with_frames_only(tg: Tg, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="telegram_connector")
+
+    async def explode(*_: Any) -> Any:
+        raise RuntimeError("service exploded: tg-secret-XYZ")
+
+    tg.service.read_thread = explode  # type: ignore[method-assign,assignment]
+    r = await tg.call(THREAD, {"chat_ref": REF["a-sales"]})
+    assert r["structuredContent"] == {"code": "internal_error", "message": "internal error", "retryable": False}
+    assert "tg-secret-XYZ" not in json.dumps(r) + caplog.text
+    entry = audit_lines(caplog)[-1]
+    assert (entry["outcome"], entry["error"]) == ("internal_error", "RuntimeError")
+    [frames] = [r.getMessage() for r in caplog.records if r.name == "telegram_connector.errors"]
+    head, *stack = frames.split("\n")
+    assert head == f"internal_error {entry['request_id']} RuntimeError"
+    assert stack[-1].endswith(" in explode") and all(re.fullmatch(r"/\S+\.py:\d+ in \S+", f) for f in stack), stack
+
+
+CHILD = """
+import asyncio, sys
+import httpx2
+from telegram_connector import server
+
+def two_calls(configs):
+    app = configs[0].app
+    connector_service = None
+    async def run():
+        async with app.router.lifespan_context(app), httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://t"
+        ) as http:
+            for extra in ({}, {"x-boom": "1"}):
+                body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                        "params": {"name": "telegram.thread.read", "arguments": {"chat_ref": "tgc1_" + "A" * 32}}}
+                accept = {"accept": "application/json, text/event-stream"}
+                r = await http.post("/mcp", json=body, headers={**accept, **extra})
+                assert r.json()["result"]["isError"] is True, r.text
+    asyncio.run(run())
+
+refuse = server.NoVerifier.verify
+def verify(self, headers, **binding):
+    if "x-boom" in headers:
+        raise RuntimeError("verifier exploded: tg-secret-XYZ")
+    return refuse(self, headers, **binding)
+
+server.NoVerifier.verify = verify
+server.serve = two_calls
+sys.exit(server.main())
+"""
+
+
+def test_real_process_writes_audit_to_stdout_and_frames_to_stderr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = clean_env(tmp_path) | BASE
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(Path(server.__file__).parents[1]), env.get("PYTHONPATH")]))
+    served: list[Any] = []
+    monkeypatch.setattr(server, "serve", served.append)
+    assert server.main(env | {"TELEGRAM_TEST_CONTROLS": "1"}) == 0
+    assert [c.port for c in served[0]] == [8080, 8090]
+    proc = subprocess.run(
+        [sys.executable, "-c", CHILD], env=env, capture_output=True, text=True, timeout=60, check=False
+    )
+    assert proc.returncode == 0, proc.stderr
+    lines = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+    assert [(e.get("tool"), e.get("outcome"), e.get("error")) for e in lines if "tool" in e] == [
+        ("telegram.thread.read", "unauthenticated", None),
+        ("telegram.thread.read", "internal_error", "RuntimeError"),
+    ]
+    assert all(line.startswith("{") for line in proc.stdout.splitlines()), proc.stdout  # no SDK text lines on stdout
+    req = next(e["request_id"] for e in lines if e.get("outcome") == "internal_error")
+    assert re.search(rf"^internal_error {req} RuntimeError$", proc.stderr, re.M), proc.stderr
+    assert re.search(r"^\S+:\d+ in verify$", proc.stderr, re.M), proc.stderr
+    assert "tg-secret-XYZ" not in proc.stdout + proc.stderr

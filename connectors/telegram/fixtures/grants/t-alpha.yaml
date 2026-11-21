@@ -26,7 +26,7 @@ grants:
     resources:
       - telegram:tg-main/chat/tgc1_p_9lawHi_ooJlPEFNsEP-_cyzUfsAMqZ
       - telegram:tg-main/chat/tgc1_hcImubsK1nq6gEYGfX-8XKMpfwDXlvJ0
-  - id: alpha-reader-secret-expired   # GR-06: expired, gives nothing (SC-10)
+  - id: alpha-reader-chat-expired     # GR-06: expired, gives nothing (SC-10)
     subjects: [agent:t-alpha:reader]
     actions: [read, collect]
     resources:

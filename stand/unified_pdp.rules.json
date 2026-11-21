@@ -15,20 +15,23 @@
       "tools.invoke.demo-t-alpha-alpha-boards",
       "tools.invoke.demo-t-alpha-demo-notes-search",
       "tools.invoke.demo-t-alpha-demo-note-get",
+      "tools.invoke.telegram-t-alpha-telegram-messages-search",
+      "tools.invoke.telegram-t-alpha-telegram-thread-read",
+      "tools.invoke.telegram-t-alpha-telegram-messages-collect",
       "tools.invoke.demo-message-execute"
     ],
     "resource_types": ["tool"],
     "resource_ids": ["*"],
-    "reason": "t-alpha reader: the demo read tools. demo-message-execute is a deliberate mistake: the deny rule above must win"
+    "reason": "t-alpha reader: the demo and telegram read tools (M11). demo-message-execute is a deliberate mistake: the deny rule above must win"
   },
   {
     "id": "t-alpha.nobody",
     "roles": ["*"],
     "conditions": {"subject.email": "nobody@t-alpha.agents.gxg.example.com"},
-    "actions": ["tools.invoke.demo-t-alpha-alpha-boards"],
+    "actions": ["tools.invoke.demo-t-alpha-alpha-boards", "tools.invoke.telegram-t-alpha-telegram-thread-read"],
     "resource_types": ["tool"],
     "resource_ids": ["*"],
-    "reason": "t-alpha nobody: boards list only; every other tool falls to the default deny"
+    "reason": "t-alpha nobody: boards list and telegram thread.read (no chat grant: not_found); every other tool falls to the default deny"
   },
   {
     "id": "t-beta.reader",
@@ -37,11 +40,14 @@
     "actions": [
       "tools.invoke.demo-t-beta-demo-boards-list",
       "tools.invoke.demo-t-beta-demo-notes-search",
-      "tools.invoke.demo-t-beta-demo-note-get"
+      "tools.invoke.demo-t-beta-demo-note-get",
+      "tools.invoke.telegram-t-beta-telegram-messages-search",
+      "tools.invoke.telegram-t-beta-telegram-thread-read",
+      "tools.invoke.telegram-t-beta-telegram-messages-collect"
     ],
     "resource_types": ["tool"],
     "resource_ids": ["*"],
-    "reason": "t-beta reader: the demo read tools"
+    "reason": "t-beta reader: the demo and telegram read tools (M11)"
   },
   {
     "id": "t-beta.nobody",

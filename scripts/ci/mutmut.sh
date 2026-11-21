@@ -4,7 +4,7 @@
 # Root ([tool.mutmut] in pyproject.toml): M0.1 (AC-M0.1-03) scripts/ci/ and conftest.py, M2 widening_gate.py.
 # tools/gxg-policy (its own [tool.mutmut]): M2 gxg_policy {diff,lint,bundle,load}; mutmut maps src/ paths
 # to module names, so it runs from that directory. connectors/demo (M3, its own lockfile and [tool.mutmut]):
-# tools.py, backend.py. gateway/contextforge (M5, setup.cfg): gxg_identity/core.py. packages/gxg-connector-kit
+# tools.py, backend.py. connectors/telegram (M11, the same layout): tools.py, server.py. gateway/contextforge (M5, setup.cfg): gxg_identity/core.py. packages/gxg-connector-kit
 # (M1, its own [tool.mutmut]; in this loop since M5): _jwt, exec_token, svc_jwt, grants, canonical, cf_identity.
 # mutmut exits 0 with survivors, so this script fails on any survivor, untested or timed-out mutant not
 # listed in scripts/ci/mutmut-equivalent.txt (each with a reason; the list has no M0.1 mutant, so every
@@ -16,7 +16,7 @@ report="${1:-/dev/stdout}"
 all="${2:-/dev/null}"
 equivalent=scripts/ci/mutmut-equivalent.txt
 tmp=$(mktemp -d)
-for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit .; do
+for dir in tools/gxg-policy connectors/demo connectors/telegram gateway/contextforge packages/gxg-connector-kit .; do
   (
     cd "$dir"
     rm -rf mutants  # no stale results from an earlier run

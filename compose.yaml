@@ -112,6 +112,33 @@ services:
     networks:
       connectors: {ipv4_address: 10.250.0.10}
 
+  telegram:
+    # M11: the Telegram connector over the fake of the existing Telegram service (test profile only: no real
+    # account, no session). Same identity adapter key and grants bundle as demo.
+    image: gxg-telegram:stand
+    build:
+      context: .
+      dockerfile: connectors/telegram/Dockerfile
+      args:
+        KEEP_TEST_CONTROLS: "1"  # stand only: the fake service's counters and failure modes on 127.0.0.1:8090
+    restart: unless-stopped
+    environment:
+      GXG_PROFILE: test  # only for the fake service and its controls; identity comes from ContextForge
+      TELEGRAM_SERVICE: fake
+      TELEGRAM_TEST_CONTROLS: "1"
+      TELEGRAM_CONNECTIONS: "t-alpha=tg-main:svc-alpha,t-beta=tg-main:svc-beta"
+      TELEGRAM_IDENTITY_KEYS: ${DEMO_IDENTITY_KEYS:?run stand/init.py}
+      TELEGRAM_BUNDLE_KEYS: ${DEMO_BUNDLE_KEYS:?run stand/init.py}
+    volumes:
+      - ./stand/secrets/bundle:/bundle:ro
+      - telegram-state:/var/lib/telegram
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]
+      interval: 3s
+      retries: 30
+    networks:
+      connectors: {ipv4_address: 10.250.0.11}  # inside SSRF_ALLOWED_NETWORKS 10.250.0.8/30 with demo
+
 networks:
   edge: {}
   db: {internal: true}
@@ -125,3 +152,4 @@ networks:
 volumes:
   pgdata:
   demo-state:
+  telegram-state:

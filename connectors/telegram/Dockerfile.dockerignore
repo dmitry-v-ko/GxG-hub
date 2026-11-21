@@ -1,0 +1,10 @@
+# Build context is the repository root; only what the image needs goes in.
+*
+!packages/gxg-connector-kit
+!schemas/search-result.schema.json
+!connectors/telegram
+**/.venv
+**/__pycache__
+**/mutants
+**/.pytest_cache
+connectors/telegram/tests

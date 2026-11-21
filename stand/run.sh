@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # M5 end to end on the dev stand (AC-M5-01, AC-M5-04): init, build, up, bootstrap, the stage B suite through
 # ContextForge; then every container restarted, and then recreated (same volumes), each time the same suite
-# with no setup in between. Writes reports/conformance/M5.json. Needs Docker with compose and uv.
+# with no setup in between. Writes reports/conformance/M5.json and M11.json (telegram, M11). Needs Docker with compose and uv.
 #   stand/run.sh            (extra `docker build` flags, e.g. a proxy CA secret: DOCKER_BUILD_FLAGS)
 #   KEEP=1 stand/run.sh     leave the stand running afterwards
 set -euo pipefail
@@ -11,6 +11,9 @@ uv run python stand/init.py
 # shellcheck disable=SC2086 # DOCKER_BUILD_FLAGS is a list of flags
 docker build -q ${DOCKER_BUILD_FLAGS:-} --build-arg KEEP_TEST_CONTROLS=1 -t gxg-demo:stand \
   -f connectors/demo/Dockerfile . > /dev/null
+# shellcheck disable=SC2086
+docker build -q ${DOCKER_BUILD_FLAGS:-} --build-arg KEEP_TEST_CONTROLS=1 -t gxg-telegram:stand \
+  -f connectors/telegram/Dockerfile . > /dev/null
 docker compose up -d --wait
 uv run python stand/bootstrap.py
 mkdir -p "$out"
@@ -26,5 +29,8 @@ docker compose down                        # containers removed, volumes and sta
 docker compose up -d --wait
 suite after-recreate
 [ "${KEEP:-}" = 1 ] || docker compose down
-uv run python stand/report.py fresh="$out/fresh.xml" after-restart="$out/after-restart.xml" \
-  after-recreate="$out/after-recreate.xml"
+reports=(fresh="$out/fresh.xml" after-restart="$out/after-restart.xml" after-recreate="$out/after-recreate.xml")
+status=0
+uv run python stand/report.py "${reports[@]}" || status=1                  # M5.json: the whole stand suite
+MILESTONE=M11 uv run python stand/report.py "${reports[@]}" || status=1    # M11.json: the same runs, M11 ids
+exit "$status"
