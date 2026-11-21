@@ -12,6 +12,8 @@
 | AC-M2-04: метка `widening-approved`, secret подписи bundle, проверка на реальном PR | AC — manual_pending | ничего |
 | Мерж `claude/integration` в `main` | работаем от `claude/integration` | ничего |
 | Approver для пилота M13 | — | только M13 |
+| Доступ к `dmitry-v-ko/gxg_agents_v2` (код KB и Telegram-сервиса) для M6, M11: у оркестратора `add_repo` отклонён | треды M6/M11 пробуют сами; без доступа — fake по контракту из спек, gap-аудит не выполнен | gap-аудит M6, AC-M11-02/03 на реальном сервисе |
+| Тестовый Telegram-аккаунт и тестовые чаты (AC-M11-01) | локальный сервис с fake-транспортом | прогон на реальном тестовом аккаунте |
 | M7: скомпрометированный `ui` может подделать решение через `gxg_decide(p_approver, p_step_up)` | делать по матрице AS-27; закрыть в M9 | M9 |
 | CI без раннеров: прогоны 44932350759 (M5) и M7 падают за 2–3 с без шагов — вероятно, исчерпаны минуты GitHub Actions или ограничение аккаунта | проверяем CI локально; перед PR в main нужен зелёный CI на GitHub | подтверждение DoD «CI зелёный» на GitHub |
 | M5-1: MC-04 для read-only `demo` (провайдера нет) | проверять отзыв токена агента, ротацию `kid` адаптера identity, изоляцию credentials по tenant; ротация provider credentials — с M11 | ничего |
@@ -132,3 +134,5 @@
 | M7 | 2 | критик-субагент | claude/m7-approval-core | c6bb52f | **9.0** | чек-лист ц1 выполнен; 2 major missed_earlier (тест индекса не ловит удаление; окна auto-лимита 1 h/1 day не под мутациями) и 4 minor → по правилу в backlog; ждём M7-READY | 2026-11-21 |
 | M7 | 2 | владелец вехи | claude/m7-approval-core | a843c11 (+0fce3f3) | — | 2 major missed_earlier закрыты тестами; M7-READY.md; финальный независимый критик запущен | 2026-11-21 |
 | M5 | final | независимый критик | claude/m5-readonly-poc | d39a1ff | **9.5** | ≥ 9 — **веха закрыта**: GO через ContextForge; 3 major + 3 minor missed_earlier → backlog | 2026-11-21 |
+| M6 | 1 | владелец вехи | claude/m6-kb | — | — | запущен (нужен read-доступ к gxg_agents_v2) | 2026-11-21 |
+| M11 | 1 | владелец вехи | claude/m11-telegram-read | — | — | запущен (нужен read-доступ к gxg_agents_v2; без живых аккаунтов) | 2026-11-21 |
