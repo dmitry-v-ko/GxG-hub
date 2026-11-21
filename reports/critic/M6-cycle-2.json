@@ -1,0 +1,110 @@
+{
+  "milestone": "M6",
+  "branch": "claude/m6-kb",
+  "commit": "80e3f20",
+  "cycle": 2,
+  "threshold": 9,
+  "score": 5.0,
+  "caps_applied": ["ac_not_met"],
+  "dimensions": {"spec": 2.0, "tests": 2.0, "security": 2.0, "code": 1.0, "ops": 1.0, "evidence": 0.5},
+  "dimensions_note": "Raw sum 8.5; capped at 5 because AC-M6-01, AC-M6-03 and AC-M6-04 are still not met (blocked_by_access). No critical or major finding remains in the access-independent part: checklist items 5-9 are done and verified. Spec 2.0: KB data still not fully bounded (ids, backlog), kb.context.get pending owner decision. Code 1.0: demo copies (F9, backlog) and 3 minor new_regressions.",
+  "acceptance": [
+    {"id": "AC-M6-01", "status": "failed", "blocked_by_access": true, "evidence": "docs/audits/kb-gap-audit.md is still a template ('аудит НЕ выполнен'); no KB tool rows. M6.json marks it blocked_no_access: honest."},
+    {"id": "AC-M6-02", "status": "partial", "evidence": "Only on the in-process fake-KB. Critic rerun of stand/run.sh at 80e3f20 (clean tree, 23:28-23:52 UTC): fresh / after-restart / after-recreate = 35/35 each (461 s, 464 s, 463 s test time), 0 failures, 0 skips, EXIT 0; stand.tests.test_kb included; M5 report from the same runs 3 x 29. Unit: connectors/kb 55 passed. The AC is about the existing KB, so partial."},
+    {"id": "AC-M6-03", "status": "failed", "blocked_by_access": true, "evidence": "No KB repository, no diff check. M6.json: blocked_no_access (honest)."},
+    {"id": "AC-M6-04", "status": "failed", "blocked_by_access": true, "evidence": "No KB, no service key, no KB client. Plan only. M6.json: blocked_no_access (honest)."}
+  ],
+  "reruns": {
+    "root_pytest": "853 passed, 148 subtests passed (53 s)",
+    "connectors_kb_pytest": "uv sync; 55 passed (3.7 s)",
+    "mutmut_kb": "cd connectors/kb && uv run mutmut run: 923 mutants (tools.py, backend.py, server.py), 917 killed, 6 survived, 0 timeout/no_tests. All 6 are in scripts/ci/mutmut-equivalent.txt and I checked each diff: load_schema '..' -> 'XX..XX' (same file by parent walk), duration_ms*1001 (log field), encoding None / 'UTF-8' (ASCII manifest, codec names case-insensitive), _readable returns 'XXXX' with an empty set (never used), BundleFiles._seen None -> '' (both never equal a tuple). Equivalences hold. server.py survivors went from 91 (cycle 1 probe) to 1 equivalent.",
+    "stand": "export DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt'; stand/run.sh: EXIT 0, wall 24 min; M5 3 x 29, M6 3 x 35 passed; bootstrap's POST /v1/gateways/{id}/tools/refresh works on the pinned ContextForge. reports/conformance restored with git checkout 80e3f20 -- reports/conformance.",
+    "probes": "throwaway test (deleted): a sales document with a 100-char id -> kb.documents.search OK, kb.context.get -> MCP client RuntimeError 'Invalid structured content ... is too long' (context-get.output id maxLength 64 vs search 256). updated_at 'yesterday' passes (format not enforced). Long content/title: cut and valid (executor test reproduced by reading).",
+    "github_ci": "Every job of every run on this branch (and on all other branches) is refused before start: 'recent account payments have failed or your spending limit needs to be increased'. Account billing, not code; M6.json says 'not checked' with a different guessed cause."
+  },
+  "checklist": [
+    {"item": "1. [blocked_by_access] gap audit (AC-M6-01)", "status": "not_done_blocked_by_access", "evidence": "kb-gap-audit.md still a template; M6.json acceptance blocked_no_access; cycle_2_checklist '1-4: blocked_by_access'. Honestly reflected."},
+    {"item": "2. [blocked_by_access] real KB client, per-tenant credentials, AC-M6-02 on the real KB, kb.context.get", "status": "not_done_blocked_by_access", "evidence": "backend.py still the fake (marked shortcut); kb_backend field and known_limits say so; F15 moved to backlog as pending owner decision. Honest."},
+    {"item": "3. [blocked_by_access] AC-M6-03 check", "status": "not_done_blocked_by_access", "evidence": "M6.json blocked_no_access. Honest."},
+    {"item": "4. [blocked_by_access] AC-M6-04 test", "status": "not_done_blocked_by_access", "evidence": "M6.json blocked_no_access. Honest."},
+    {"item": "5. F5 async bounded port + tests", "status": "done", "evidence": "backend.py: async list_collections/get_document/search, search(offset, limit) -> (page, more); tools.py passes offset/limit, no slicing after the KB. test_a_slow_kb_times_out_by_the_manifest (delay 5 s, timeout 0.2 s, all three tools -> temporarily_unavailable in < 3 s); test asserting seen == [(['sales'],0,2),(['sales'],2,2),(['sales'],0,3)]. Killed by mutmut."},
+    {"item": "6. F2 bound content/title + oversized test", "status": "done", "evidence": "TITLE_MAX/CONTENT_MAX in get/search/context, document-get.output 'truncated'; test_long_kb_documents_are_cut_to_the_output_schemas validates all three outputs against their schemas, plus the exact-20000 boundary. Ids are still unbounded (backlog B1)."},
+    {"item": "7. F3 bundle_version in every audit line", "status": "done", "evidence": "tools.py:91 entry['bundle_version'] = self.ready(); test_audit_lines_exactly asserts it, and its absence before the bundle check. Trace can be off under concurrent bundle swap (N1, minor)."},
+    {"item": "8. F4 mutation coverage of server.py, mutmut.sh comment", "status": "done", "evidence": "only_mutate includes server.py; production ContextForgeVerifier test (aud, tool, args, unknown key, two kids, test issuer refused); 1 equivalent survivor; mutmut.sh comment lists kb tools.py, backend.py, server.py. Kit move not done (F9 backlog), the allowed alternative was chosen."},
+    {"item": "9. F6/F7 CI M6.json upload, no '|| true', M5.json not rewritten, timeout", "status": "done", "evidence": "ci.yml uploads M5.json and M6.json, timeout 45; run.sh rc=0/|| rc=1, exit $rc; M5 report via --exclude stand.tests.test_kb (junit classname confirmed, M5 = 29 tests); git diff origin/claude/m5-readonly-poc..80e3f20 -- reports/conformance/M5.json is empty."},
+    {"item": "10. minors F8, F10-F14 (backlog allowed); F9", "status": "done", "evidence": "F8 duplicate check added (no test, N3); F11 shortcut comment + README; F12 /readyz hook (sync, N2); F13 argparse with label=path check; F14 backlog row fixed; F9, F10, F15 in docs/backlog.md."}
+  ],
+  "findings": [
+    {"id": "N1", "severity": "minor", "origin": "new_regression", "ref": "GR-14 traceability", "where": "connectors/kb/src/kb_connector/tools.py:91, 159-164, 219-225", "problem": "bundle_version is recorded once before the handler, while each grant check reads the store's current bundle. With the now-async port another call can load a new bundle while this one awaits the KB. Case: A records v1, awaits get_document, B's ready() loads v2, A's final check uses v2; the audit line says v1. Decisions stay correct (newest bundle), the trace does not.", "required_improvement": "Take the bundle once per call and check against that snapshot (or record the version after the last check)."},
+    {"id": "N2", "severity": "minor", "origin": "new_regression", "ref": "MCC-09, README claim 'the port is already what the network client must be'", "where": "connectors/kb/src/kb_connector/backend.py:50-52; server.py:137", "problem": "Backend.ready() is synchronous. A real KB probe is network I/O; a blocking probe in /readyz stalls the event loop for every tool call, and making it async later changes server.py.", "required_improvement": "async def ready(); await it in /readyz."},
+    {"id": "N3", "severity": "minor", "origin": "new_regression", "ref": "cycle 1 F8 ('add one test')", "where": "stand/init.py:57-60", "problem": "The duplicate group/connection check has no test. Case: dropping the connection ids from `names` passes every test.", "required_improvement": "One test with two fixture files sharing a group name -> SystemExit."},
+    {"id": "N4", "severity": "minor", "origin": "new_regression", "ref": "ponytail lean", "where": ".github/workflows/ci.yml:209; connectors/kb/tests/test_kb.py:929-940", "problem": "Artifact still named m5-conformance while holding M6.json; test_backend_is_fast_by_default has a wall-clock assertion that adds nothing to `delay_s == 0`.", "required_improvement": "Rename the artifact; drop the timing part (~10 lines)."}
+  ],
+  "backlog_candidates": [
+    {"id": "B1", "severity": "minor", "origin": "missed_earlier", "ref": "MCC-04 / MCC-08, cycle 1 F2 class", "where": "connectors/kb/src/kb_connector/tools.py:197-205, 256-258; schemas/context-get.output.json:17; schemas/document-get.output.json:8-9", "problem": "KB ids and collection names are passed through unchecked, and the limits disagree (search id 256, context/get id 64). Reproduced: a 100-char id -> search OK, kb.context.get -> client RuntimeError, no MCC-05 error. Depends on the real KB id format (unknown until the audit).", "required_improvement": "One id limit across the three schemas, refuse/skip KB items that do not fit (never cut an id), test with a long id. Do it with the KB client after the audit."},
+    {"id": "B2", "severity": "minor", "origin": "missed_earlier", "ref": "MCC-05 error mapping", "where": "connectors/kb/src/kb_connector/tools.py:92-107", "problem": "Only asyncio TimeoutError maps to temporarily_unavailable. A real HTTP client raising its own timeout/connection error (e.g. httpx.ReadTimeout) before the manifest timeout becomes internal_error, not retryable.", "required_improvement": "With the KB client: map its transport errors to temporarily_unavailable in the client, plus a test."},
+    {"id": "B3", "severity": "minor", "origin": "missed_earlier", "ref": "process / DoD-1 evidence", "where": "reports/conformance/M6.json self_check.ci_github", "problem": "Says 'GitHub runners may not pick up jobs'; the real cause is account billing (every job refused at start).", "required_improvement": "Record the billing refusal and rerun CI on the head once billing is fixed, before the PR."}
+  ],
+  "required_improvements": [
+    "1. [blocked_by_access] Read access to dmitry-v-ko/gxg_agents_v2; complete the gap audit (AC-M6-01): one row per real KB MCP tool with schemas, errors -> MCC-05, limits, auth, tenant/agent/collection isolation, verdict; verify the 6 assumptions in kb-gap-audit.md; settle kb.context.get (F15).",
+    "2. [blocked_by_access] Replace backend.py with a client of a local KB copy built from the repository's migrations, keeping the current async paged port; per-tenant credentials by connection (MCC-03); real /readyz probe; map client transport errors to temporarily_unavailable (B2); bound/refuse KB ids per the real format (B1). Rerun connectors/kb tests and stand/tests/test_kb.py against it (AC-M6-02 on the real KB).",
+    "3. [blocked_by_access] AC-M6-03: automated check of the KB checkout (commit before/after, empty git status and git diff, no migrations applied) with its output in M6.json.",
+    "4. [blocked_by_access] AC-M6-04: test where the wrapper's read-only service key attempts a write in the local KB; the KB refuses it and a select shows no row.",
+    "5. Minors N1-N4 (can be done now, do not block 9): per-call bundle snapshot for the audit, async Backend.ready(), a test for the merged_grants duplicate check, artifact rename and the timing assertion removed."
+  ],
+  "ponytail_review": "reports/critic/M6-cycle-2.review.md",
+  "existing_solutions": [
+    {"component": "async paged KB port (Backend.search offset/limit, async methods)", "alternative": "none for an unknown KB protocol; offset/limit is the plain stdlib form; the real client will be httpx/MCP client (already dependencies)", "verdict": "justified_custom"},
+    {"component": "tool timeout", "alternative": "asyncio.wait_for (stdlib, used)", "verdict": "use_existing"},
+    {"component": "output truncation to schema limits", "alternative": "string slicing against the schema maxLength; no library needed", "verdict": "justified_custom"},
+    {"component": "fake slow KB (delay_s)", "alternative": "asyncio.sleep (stdlib, used)", "verdict": "use_existing"},
+    {"component": "log_handlers (stdout audit / stderr frames split)", "alternative": "logging.StreamHandler + filters (stdlib, used); a copy of demo's", "verdict": "justified_custom", "note": "part of the F9 copy, backlog"},
+    {"component": "stand/report.py CLI", "alternative": "argparse (stdlib, now used; closes cycle 1 F13)", "verdict": "use_existing"},
+    {"component": "M5 report test exclusion (--exclude classname prefix)", "alternative": "pytest -k/--deselect on a separate run (would double stand time); filtering junit is the cheapest", "verdict": "justified_custom"},
+    {"component": "ContextForge tool schema refresh", "alternative": "ContextForge's own POST /v1/gateways/{id}/tools/refresh (used)", "verdict": "use_existing"},
+    {"component": "merged_grants duplicate check", "alternative": "gxg-policy lint would catch duplicate ids only within one file; 3 lines are the cheapest", "verdict": "justified_custom"},
+    {"component": "mutation testing of server.py", "alternative": "mutmut (used)", "verdict": "use_existing"}
+  ],
+  "threat_model": [
+    {"path": "Tenant/agent spoofing via tool arguments", "status": "closed", "evidence": "unchanged; test_identity_in_arguments_changes_nothing passes"},
+    {"path": "Forged, expired, replayed, foreign-issuer or wrong-audience identity", "status": "closed", "evidence": "now also on the production path: test_contextforge_identity_keys_select_the_kit_verifier (aud=demo, other tool, other args, unknown key, test issuer refused); server.py mutants killed"},
+    {"path": "Direct call to kb bypassing ContextForge", "status": "closed", "evidence": "stand test_sc06 passed 3 x in the critic rerun"},
+    {"path": "Calling the other team's kb tools, or kb tools without a PDP allow", "status": "closed", "evidence": "stand test_sc01 passed 3 x"},
+    {"path": "Agent registers its own gateway pointing at kb", "status": "closed", "evidence": "unchanged (gxg_identity core refuses unregistered gateway); residual is M5 backlog (3)"},
+    {"path": "Cross-tenant data through a mis-scoped gateway", "status": "closed", "evidence": "tenant from the signed identity; stand test_sc05 passed 3 x"},
+    {"path": "Document of another collection or tenant by id (existence oracle)", "status": "closed", "evidence": "identical not_found, one KB call in each case; unit + stand pass"},
+    {"path": "Named collection without a grant / expired grant / mixed list", "status": "closed", "evidence": "_readable before any KB call; stand test_sc10 kb_calls 0"},
+    {"path": "Collection-name injection ('*', '../', whitespace)", "status": "closed", "evidence": "kit RID pattern; for the real KB assumption 6 still needs the audit"},
+    {"path": "Hidden-match count or cost leak in search/context (GR-16)", "status": "closed", "evidence": "KB query narrowed to readable collections and now paged at the KB; 'more' computed by the KB over allowed collections only; per-item re-check kept (test with a KB that ignores the filter)"},
+    {"path": "Cursor forgery or reuse", "status": "closed", "evidence": "HMAC binding unchanged; offset now goes to the KB only after HMAC check; per-process key marked shortcut"},
+    {"path": "Old or tampered bundle to bring back a revoked grant", "status": "closed", "evidence": "unchanged kit BundleStore; new test_bundle_is_reloaded_when_its_files_change (bad signature, other key keep the previous bundle)"},
+    {"path": "Leak of query, text, tokens or exception text in logs/errors", "status": "closed", "evidence": "audit fields fixed, now with bundle_version; log_handlers test: stdout audit JSON only, frames to stderr"},
+    {"path": "Oversized KB data breaks the response", "status": "closed", "evidence": "content/title cut in all three tools, schema-validated test. Residual for ids/collection names (B1, backlog, depends on real KB format)"},
+    {"path": "Slow or hung KB blocks the wrapper", "status": "closed", "evidence": "async port; wait_for cancels; test_a_slow_kb_times_out_by_the_manifest. Real client must be non-blocking (README states it)"},
+    {"path": "Wrapper's service key can write to the KB / shared credentials between tenants", "status": "open", "evidence": "blocked_by_access: no KB, no key, no client"},
+    {"path": "The real KB does not isolate tenants/collections in the query", "status": "open", "evidence": "blocked_by_access: audit assumptions 1-4 unverified"},
+    {"path": "Prompt injection in KB document text (SC-08)", "status": "out_of_scope", "evidence": "read-only tools, no effect path"},
+    {"path": "Concurrent calls corrupt the audit (kb_calls) or cursors across replicas", "status": "out_of_scope", "evidence": "shortcut for one replica (F10 backlog, F11 marked); N1 adds the bundle_version trace to this group (minor)"}
+  ],
+  "scaffold_assessment": {
+    "summary": "Yes. The access-independent part is now ready to close the milestone after access without rework of the tools or the stand: the port is async and paged, KB data is bounded to the schemas, the audit carries bundle_version, server.py is mutation-covered, and the stand and CI carry M6 evidence. After access the work is additive: write the KB client behind the existing Backend interface, the audit table and the two AC checks. Small known adjustments: async ready() (N2), id bounds once the real id format is known (B1), transport-error mapping in the client (B2).",
+    "ready_after_access": [
+      "tools.py grant/isolation logic, paging, truncation, audit shape and their 55 unit tests",
+      "Backend port interface (async list_collections/get_document/search(offset, limit)->(page, more), ready())",
+      "server.py verifier selection, profile guard, bundle loading, readiness hook",
+      "stand integration and stand/tests/test_kb.py (3 x 35 green), CI upload of M6.json"
+    ],
+    "rework_needed_now": [],
+    "after_access_work": [
+      "gap audit table (AC-M6-01) and the kb.context.get decision",
+      "KB client + per-tenant credentials + real readiness probe + local KB copy on the stand",
+      "AC-M6-03 check and AC-M6-04 test"
+    ],
+    "scaffold_score_if_access_were_not_required": 9.0
+  },
+  "lean_lines": 10,
+  "process_notes": [
+    "GitHub Actions refuses every job on every branch of this account (billing). DoD-1 'CI green' cannot be shown on GitHub for any milestone right now; local check-all, root pytest, mutmut and the stand were rerun by the critic and are green. Not counted as a cap, same as at M5 closure.",
+    "Score cannot pass 5 until access to gxg_agents_v2 is granted: the cap comes only from blocked_by_access AC. Another executor cycle cannot raise it (5.0 in cycles 1 and 2); under «Лимиты и эскалация» a second flat cycle means a stop, so access is an owner decision now, not executor work."
+  ]
+}
