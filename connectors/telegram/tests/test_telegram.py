@@ -90,7 +90,7 @@ def env_of(tmp: Path, keys: str, issuer: StubIssuer, **extra: str) -> dict[str, 
         "TELEGRAM_CONNECTIONS": CONNECTIONS,
         "TELEGRAM_BUNDLE_DIR": str(tmp / "bundle"),
         "TELEGRAM_BUNDLE_KEYS": keys,
-        "TELEGRAM_STATE_FILE": str(tmp / "state" / "bundle-state.json"),
+        "TELEGRAM_STATE_FILE": str(tmp / "state" / "deep" / "bundle-state.json"),  # parents are created
         "TELEGRAM_TEST_ISSUER_KEY": public_key(issuer.public_key),
     } | extra
 
@@ -570,7 +570,7 @@ async def test_mc02_search_schema_pagination_and_cursor_binding(tg: Tg) -> None:
 async def test_mc02_search_stops_at_the_service_limit_with_truncated(tg: Tg) -> None:
     """The service returns at most 100 ranked results: the last page says so instead of inventing more."""
     cursor, pages = None, 0
-    while True:
+    for _ in range(5):
         page = await tg.ok(
             "telegram.messages.search", {"query": "message", "limit": 50} | ({"cursor": cursor} if cursor else {})
         )
@@ -597,9 +597,9 @@ async def test_mc02_valid_empty_result_is_success(tg: Tg) -> None:
         ("telegram.messages.search", {"query": "   "}),
         ("telegram.messages.search", {"query": "x" * 201}),
         ("telegram.messages.search", {"query": "x", "chat_refs": [REF["a-sales"]] * 2}),
-        ("telegram.messages.search", {"query": "x", "chat_refs": ["-1001000000101"]}),
+        ("telegram.messages.search", {"query": "x", "chat_refs": ["not-a-chat-ref"]}),
         ("telegram.thread.read", {"chat_ref": REF["a-sales"], "limit": 0}),
-        ("telegram.thread.read", {"chat_ref": "-1001000000101"}),
+        ("telegram.thread.read", {"chat_ref": "not-a-chat-ref"}),
         ("telegram.thread.read", {"chat_ref": REF["a-sales"], "before_message_id": 0}),
         ("telegram.messages.collect", {"chat_ref": REF["a-partners"], "limit": 101}),
         ("telegram.messages.collect", {"chat_ref": REF["a-partners"], "cursor": "tgk1.x.1"}),
@@ -1117,3 +1117,169 @@ def test_real_process_writes_audit_to_stdout_and_frames_to_stderr(
     assert re.search(rf"^internal_error {req} RuntimeError$", proc.stderr, re.M), proc.stderr
     assert re.search(r"^\S+:\d+ in verify$", proc.stderr, re.M), proc.stderr
     assert "tg-secret-XYZ" not in proc.stdout + proc.stderr
+
+
+# DoD-4: the exact behaviour mutmut probes -------------------------------------------------------------
+
+
+def test_errors_are_exact() -> None:
+    flood = tools.service_error(ServiceError("flood_wait", 2.5)).to_dict()
+    assert flood == {"code": "rate_limited", "message": "Telegram flood wait", "retryable": True, "retry_after_s": 3}
+    down = tools.service_error(ServiceError("busy")).to_dict()
+    assert down == {
+        "code": "temporarily_unavailable",
+        "message": "Telegram service is not available",
+        "retryable": True,
+    }
+    assert tools.other(["sync_gap"]) == tools.other(["not_synced"]) == ["other"]
+    assert tools.other(["semantic_pending", "result_limit"]) == []
+
+
+async def test_invalid_input_names_the_path(tg: Tg) -> None:
+    err = await tg.error("telegram.messages.search", {"query": "x", "chat_refs": ["ok", "-1"]})
+    assert err == {
+        "code": "invalid_input",
+        "message": "arguments do not match the input schema",
+        "retryable": False,
+        "details": {"path": "/chat_refs/0"},
+    }
+
+
+async def test_defaults_page_sizes(tg: Tg) -> None:
+    assert len((await tg.ok("telegram.messages.search", {"query": "message"}))["items"]) == 20
+    assert len((await tg.ok(THREAD, {"chat_ref": REF["a-partners"]}))["messages"]) == 20
+    assert len((await tg.ok("telegram.messages.collect", {"chat_ref": REF["a-partners"]}))["messages"]) == 50
+    assert len((await tg.ok("telegram.messages.collect", {"chat_ref": REF["a-partners"], "limit": 9}))["messages"]) == 9
+
+
+async def test_media_without_text_and_text_at_the_budget(tg: Tg) -> None:
+    import random
+
+    ref = REF["a-sales"]
+    tg.service._append("svc-alpha", ref, "y" * 4000, random.Random(3))  # noqa: S311
+    chat = tg.service.chats["svc-alpha"][ref]
+    last = chat.messages[-1]
+    chat.messages.append(dataclasses.replace(last, message_id=last.message_id + 1, text=None, caption=None))
+    chat.archived_us.append(chat.archived_us[-1] + 1)
+    newest, exact = (await tg.ok(THREAD, {"chat_ref": ref, "limit": 2}))["messages"]
+    assert (newest["text"], newest["truncated"]) == ("", False)
+    assert (len(exact["text"]), exact["truncated"]) == (4000, False)
+
+    orig = tg.service.search
+
+    async def media(connection: str, query: str, chat_refs: list[str], limit: int) -> Any:
+        page = await orig(connection, query, chat_refs, limit)
+        return dataclasses.replace(page, items=[chat.messages[-1]])
+
+    tg.service.search = media  # type: ignore[method-assign]
+    got = await tg.ok("telegram.messages.search", {"query": "status", "chat_refs": [ref]})
+    assert got["items"] == [
+        {"id": f"{ref}:{last.message_id + 1}", "excerpt": "", "source_ref": f"telegram:tg-main/chat/{ref}"}
+    ]
+
+
+async def test_items_of_another_granted_chat_are_dropped_when_chats_are_named(tg: Tg) -> None:
+    """GR-16: a granted chat the caller did not name must not come back either."""
+    orig = tg.service.search
+
+    async def wider(connection: str, query: str, chat_refs: list[str], limit: int) -> Any:
+        mine = await orig(connection, query, chat_refs, limit)
+        other = await orig(connection, query, [REF["a-partners"]], limit)
+        return dataclasses.replace(mine, items=other.items[:5] + mine.items)
+
+    tg.service.search = wider  # type: ignore[method-assign]
+    got = await tg.ok("telegram.messages.search", {"query": "status", "chat_refs": [REF["a-sales"]], "limit": 50})
+    assert got["items"] and {i["id"].split(":")[0] for i in got["items"]} == {REF["a-sales"]}
+
+
+async def test_more_than_128_scope_chats_is_truncated(tg: Tg) -> None:
+    beta = tg.service.chats["svc-beta"]
+    template = beta[REF["b-ops"]]
+    for i in range(130):
+        ref = f"tgc1_{i:032d}"
+        beta[ref] = dataclasses.replace(template, chat_ref=ref, messages=[], archived_us=[])
+    seen: list[int] = []
+    orig = tg.service.search
+
+    async def spy(connection: str, query: str, chat_refs: list[str], limit: int) -> Any:
+        seen.append(len(chat_refs))
+        return await orig(connection, query, chat_refs, limit)
+
+    tg.service.search = spy  # type: ignore[method-assign]
+    got = await tg.ok("telegram.messages.search", {"query": "status"}, principal=BETA_READER)
+    assert seen == [128] and got["partial_reasons"] == ["truncated"] and got["complete"] is False
+    for _ in range(4):  # 128 exactly is not truncated
+        beta.pop(next(r for r in beta if r.startswith("tgc1_0")))
+    assert len(beta) == 128
+    assert (await tg.ok("telegram.messages.search", {"query": "status"}, principal=BETA_READER))[
+        "partial_reasons"
+    ] == []
+
+
+async def test_cursor_offset_cannot_be_changed(tg: Tg) -> None:
+    first = await tg.ok("telegram.messages.search", {"query": "status", "limit": 5})
+    offset, mac = first["next_cursor"].split(".")
+    err = await tg.error("telegram.messages.search", {"query": "status", "limit": 5, "cursor": f"40.{mac}"})
+    assert err == {
+        "code": "invalid_input",
+        "message": "cursor is not valid for this caller and query",
+        "retryable": False,
+    }
+    assert offset == "5"
+
+
+async def test_collect_with_a_broken_port_answer_is_internal_error(tg: Tg) -> None:
+    orig = tg.service.collect
+
+    async def broken(*a: Any) -> Any:
+        got = await orig(*a)
+        return dataclasses.replace(got, positions=got.positions[:-1])
+
+    tg.service.collect = broken  # type: ignore[method-assign,assignment]
+    err = await tg.error("telegram.messages.collect", {"chat_ref": REF["a-partners"]})
+    assert err["code"] == "internal_error"
+
+
+async def test_no_bundle_refuses_even_a_tenant_without_a_connection(env: Env) -> None:
+    shutil.rmtree(env.settings.bundle_dir)
+    app, connector = server.build(env.settings, FakeTelegramService())
+    async with AsyncExitStack() as stack:
+        http, session = await connect(stack, app)
+        t = Tg(connector, http, session, env.issuer)
+        err = await t.error("telegram.messages.search", {"query": "x"}, principal="agent:t-gamma:reader")
+        assert err["code"] == "temporarily_unavailable"
+
+
+def test_keys_split_at_the_first_equals_sign() -> None:
+    key = public_key(Ed25519PrivateKey.generate().public_key())
+    assert list(server.parse_keys(f"a={key}", "X")) == ["a"]
+    with pytest.raises(server.ConfigError):
+        server.parse_keys(f"a=b={key}", "X")
+
+
+async def test_test_controls_config_serves_the_fake(env: Env) -> None:
+    settings = dataclasses.replace(env.settings, test_controls=True)
+    app, connector = server.build(settings)
+    ctl = server.configs(settings, app, connector)[1].app
+    transport = httpx2.ASGITransport(app=ctl)  # type: ignore[arg-type]
+    async with httpx2.AsyncClient(transport=transport, base_url="http://t") as c:
+        assert (await c.get("/_test/service/stats")).json()["open_sessions"] == 2
+
+
+def test_main_quiets_the_sdk_loggers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "serve", lambda _: None)
+    names = ("mcp", "fastmcp", "httpx", "httpx2")  # uvicorn: its own log_level="warning" (configs)
+    for name in names:
+        logging.getLogger(name).setLevel(logging.NOTSET)
+    assert server.main(clean_env(tmp_path) | BASE) == 0
+    assert {n: logging.getLogger(n).level for n in names} == dict.fromkeys(names, logging.WARNING)
+
+
+async def test_last_page_before_the_service_limit_is_not_truncated(tg: Tg) -> None:
+    """offset + 2 * limit > 100 makes a page the last one; it is `truncated` only if the service had more."""
+    total = len(search_ids(await tg.ok("telegram.messages.search", {"query": "budget", "limit": 50})))
+    assert 34 < total < 68  # fixtures: page 2 at limit 34 is the last one and holds the rest
+    first = await tg.ok("telegram.messages.search", {"query": "budget", "limit": 34})
+    second = await tg.ok("telegram.messages.search", {"query": "budget", "limit": 34, "cursor": first["next_cursor"]})
+    assert len(first["items"]) + len(second["items"]) == total
+    assert (second["next_cursor"], "truncated" in second["partial_reasons"]) == (None, False)

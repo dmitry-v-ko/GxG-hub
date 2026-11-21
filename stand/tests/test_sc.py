@@ -52,9 +52,11 @@ def test_sc01_each_agent_lists_only_its_team_tools(stand: Stand) -> None:
     for agent in (ALPHA_READER, ALPHA_NOBODY, BETA_READER, BETA_NOBODY):
         tenant = stand.state["agents"][agent]["team"]
         own = {stand.tool(tenant, t) for t in ("demo.boards.list", "demo.notes.search", "demo.note.get")}
+        telegram = {t["name"] for t in stand.state["teams"][tenant]["tg_tools"].values()}  # M11: its own gateway
         paths = stand.paths(agent)
         for path in ("/rpc", paths["sse"]):
-            assert {t["name"] for t in stand.tools(agent, path)} == own | ({execute} if tenant == "t-alpha" else set())
+            want = own | telegram | ({execute} if tenant == "t-alpha" else set())
+            assert {t["name"] for t in stand.tools(agent, path)} == want
         for path in (paths["virtual_server"], paths["virtual_server_sse"]):
             assert {t["name"] for t in stand.tools(agent, path)} == own, (agent, path)
 

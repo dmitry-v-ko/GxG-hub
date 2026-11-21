@@ -334,7 +334,7 @@ def test_mc02_search_schema_pagination_cursor_and_limits(stand: Stand) -> None:
     bad_args: list[tuple[str, dict[str, Any]]] = [
         (SEARCH, {"query": "status", "limit": 51}),
         (SEARCH, {"query": ""}),
-        (THREAD, {"chat_ref": "-1001000000101"}),
+        (THREAD, {"chat_ref": "not-a-chat-ref"}),
         (COLLECT, {"chat_ref": REF["a-partners"], "limit": 101}),
         (COLLECT, {"chat_ref": REF["a-partners"], "cursor": "x"}),
     ]

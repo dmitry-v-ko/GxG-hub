@@ -214,7 +214,12 @@ def main(env: Mapping[str, str] = os.environ) -> int:
     for h in (out, err):
         h.setFormatter(logging.Formatter())  # the message only
     logging.basicConfig(level=logging.INFO, handlers=[out, err])
-    for noisy in ("mcp", "fastmcp", "uvicorn", "httpx", "httpx2"):  # backlog M3: no SDK text lines next to the audit
+    for noisy in (
+        "mcp",
+        "fastmcp",
+        "httpx",
+        "httpx2",
+    ):  # backlog M3: no SDK text lines next to the audit (uvicorn: configs)
         logging.getLogger(noisy).setLevel(logging.WARNING)
     try:
         settings = Settings.from_env(env)

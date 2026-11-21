@@ -53,7 +53,6 @@ Handler = Callable[[VerifiedIdentity, dict[str, Any]], Awaitable[Result]]
 
 CHAT_REF = re.compile(r"tgc1_[A-Za-z0-9_-]{32}")
 _CURSOR = re.compile(r"([0-9]{1,9})\.[0-9a-f]{64}")
-_POSITION = re.compile(r"tgk1\.([0-9]{1,18})\.([0-9]{1,15})")
 NOT_FOUND = "not found"  # one message for "no grant", "not in scope" and "does not exist" (GR-17, SC-05)
 _KEEP = frozenset("\n\t")
 
@@ -143,8 +142,13 @@ class TelegramTool(Tool):
             audit.info(json.dumps(redact(entry)))
 
 
+def _text(m: Message) -> str:
+    """The message text, or the caption of a media message; never instructions (SEC-11)."""
+    return escape(m.text or m.caption or "")
+
+
 def _message(m: Message) -> dict[str, Any]:
-    text = escape(m.text or m.caption or "")
+    text = _text(m)
     return {
         "id": f"{m.chat_ref}:{m.message_id}",
         "message_id": m.message_id,
@@ -233,16 +237,16 @@ class Connector:
                 items.append(
                     {
                         "id": f"{m.chat_ref}:{m.message_id}",
-                        "excerpt": escape(m.text or m.caption or "")[:EXCERPT_MAX],
+                        "excerpt": _text(m)[:EXCERPT_MAX],
                         "source_ref": rid(conn[0], m.chat_ref),
                     }
                 )
-        partial = other(page.partial_reasons) + (["truncated"] if len(chats) > CHAT_REFS_MAX else [])
-        next_offset, next_cursor = offset + limit, None
-        if page.more and next_offset + limit <= SEARCH_LIMIT_MAX:
-            next_cursor = self._cursor(binding, next_offset)
-        elif page.more and "truncated" not in partial:
-            partial.append("truncated")  # the service returns at most 100 ranked results (archive-repository.ts)
+        # the service takes at most 128 chats and returns at most 100 ranked results (archive-repository.ts)
+        last = offset + 2 * limit > SEARCH_LIMIT_MAX
+        next_cursor = self._cursor(binding, offset + limit) if page.more and not last else None
+        partial = other(page.partial_reasons) + (
+            ["truncated"] if len(chats) > CHAT_REFS_MAX or (page.more and last) else []
+        )
         content = {
             "items": items,
             "next_cursor": next_cursor,
@@ -272,13 +276,8 @@ class Connector:
 
     async def collect(self, ident: VerifiedIdentity, args: dict[str, Any]) -> Result:
         conn, source, grant = self._chat(ident, args["chat_ref"], "collect")
-        cursor: str | None = args.get("cursor")
-        after = None
-        if cursor is not None:
-            m = _POSITION.fullmatch(cursor)
-            if m is None:
-                raise GxgError("invalid_input", "cursor is not valid")
-            after = (int(m[1]), int(m[2]))
+        cursor: str | None = args.get("cursor")  # `tgk1.<archived_us>.<message_id>`: the input schema checked it
+        after = None if cursor is None else (int(cursor.split(".")[1]), int(cursor.split(".")[2]))
         limit: int = args.get("limit", 50)
         got = await self.service.collect(conn, args["chat_ref"], after, limit)
         rows = [(p, x) for p, x in zip(got.positions, got.items, strict=True) if x.chat_ref == args["chat_ref"]][:limit]

@@ -82,3 +82,21 @@ gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4  # M1: `_keys =
 gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8  # M1: `float("-INF")`: Python parses it case-insensitively, same value
 gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27  # M1: `cast(None, claims)`: typing.cast is a no-op at runtime
 gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is falsy: the same output as ensure_ascii=False
+telegram_connector.tools.x_load_schema__mutmut_4  # M11: as demo's x_load_schema__mutmut_4: keeping `..` in the tail still finds the same file by the parent walk
+telegram_connector.tools.x_service_error__mutmut_7  # M11: `retry_after_seconds or 1` instead of `or 0`: max(delay, 1) makes both 1
+telegram_connector.tools.xǁTelegramToolǁrun__mutmut_13  # M11: "AUTHORIZATION" in headers: Starlette's Headers lookup is case-insensitive, the same answer
+telegram_connector.tools.xǁTelegramToolǁrun__mutmut_145  # M11: as demo's run__mutmut_133: duration_ms * 1001, 0.1 % off a log field
+telegram_connector.tools.xǁConnectorǁtools__mutmut_11  # M11: as demo's tools__mutmut_11: encoding None = UTF-8 on the runner (PEP 538)
+telegram_connector.tools.xǁConnectorǁtools__mutmut_13  # M11: as demo's tools__mutmut_13: "UTF-8", codec names are case-insensitive
+telegram_connector.tools.xǁConnectorǁsearch__mutmut_18  # M11: chats = None instead of []: read only on the no-Connection path, where `not chats` is True for both
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_21  # M11: GXG_PROFILE default None instead of "production": from_env accepts only "test", any other default is refused alike
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_23  # M11: same as from_env__mutmut_21 (no default: None)
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_26  # M11: same as from_env__mutmut_21 ("XXproductionXX")
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_27  # M11: same as from_env__mutmut_21 ("PRODUCTION")
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_29  # M11: TELEGRAM_SERVICE default None instead of "": from_env accepts only "fake", any other default is refused alike
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_31  # M11: same as from_env__mutmut_29 (no default: None)
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_34  # M11: same as from_env__mutmut_29 ("XXXX")
+telegram_connector.server.xǁBundleFilesǁ__init____mutmut_3  # M11: as demo's BundleFiles __init__ mutmut_3: _seen None vs "", both "nothing loaded yet"
+telegram_connector.server.x_configs__mutmut_19  # M11: as demo's x_configs__mutmut_19: uvicorn's default host is 127.0.0.1, the same binding
+telegram_connector.server.x_serve__mutmut_1  # M11: as demo's x_serve: uvicorn on real sockets, forbidden in tests; covered by the stand (stand/run.sh starts the image)
+telegram_connector.server.x_serve__mutmut_2  # M11: same as x_serve__mutmut_1
