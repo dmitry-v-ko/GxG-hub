@@ -100,3 +100,4 @@
 | M4.1 | 3 | критик | claude/m4.1-gateway-comparison | 185162e | **9.0** | ≥ 9 — **веха закрыта**; 7 minor → backlog; ADR-0002 Proposed → решение владельца | 2026-11-21 |
 | M4.1 | — | решение владельца | — | — | — | ADR-0002 → Accepted: ContextForge v1.1.1 + вариант C; ToolHive — запасной при провале условия 4 в M5; Docker MCP Gateway отклонён | 2026-11-21 |
 | M3 | 2 | исполнитель | claude/m3-demo-read | f54b9f1 (+fc8d17d) | — | GR-12 отказ без bundle, GR-16 пустой набор без backend, internal_error; mutmut 749/710 (+39 экв.); критик запущен | 2026-11-21 |
+| M3 | 2 | критик | claude/m3-demo-read | f54b9f1 | **6.0** | < 9: DoD-4 (basicConfig мутанты ложно эквивалентны, аудит в stdout не проверен) new_regression → цикл 3 | 2026-11-21 |
