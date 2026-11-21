@@ -71,3 +71,4 @@
 | M0.1 | 2 | критик | claude/m0.1-standard-tools | 7e2a984 | **8.0** | < 9: major (merge-коммит с пустым .env не покрыт тестом), grep fail-open → цикл 3 | 2026-11-21 |
 | M2 | 3 | критик | claude/m2-policy-tooling | e1dae73 | **8.0** | < 9: major (gate исполняется из PR; manifest не в diff) → цикл 4 (последний по лимиту); остаточный риск ci.yml → решение владельца | 2026-11-21 |
 | M2 | 4 | решение владельца | — | — | — | Остаточный риск: PR, правящий .github/workflows/, может отключить gate — риск принят, владелец смотрит такие PR сам (CODEOWNERS) | 2026-11-21 |
+| M4 | 3 | критик | claude/m4-contextforge-spike | 27c676a | **9.5** | ≥ 9 — **веха закрыта**: GO ContextForge v1.1.1 + вариант C (PyJWT); minor → backlog | 2026-11-21 |
