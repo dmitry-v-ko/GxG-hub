@@ -22,3 +22,6 @@ f5cf832eda2c190089c02dfb0de3be154ac7ade8:tests/ci/test_check_secrets.py:generic-
 # claude/integration merge commits that brought in M1/M4 before M0.1 deleted the file.
 98287f6b1bf77a16d9fc6c2ffa09b7e69ee4df41:tests/ci/test_check_secrets.py:generic-api-key:23
 e7d245f8e2ef7d2a6bf52828e13b970a91cad980:tests/ci/test_check_secrets.py:generic-api-key:23
+# The first push of reports/integration/2026-11-21.md quoted that annotation verbatim (reworded since).
+4756ad3a0b3dd255bca36cdc1bcec5a346c78e69:reports/integration/2026-11-21.md:generic-api-key:27
+4756ad3a0b3dd255bca36cdc1bcec5a346c78e69:reports/integration/2026-11-21.md:generic-api-key:29
