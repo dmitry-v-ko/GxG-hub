@@ -14,3 +14,7 @@
 | M1 | reports/critic/M1-cycle-3.json | Файл состояния GR-13a переименовывается без fsync; после сбоя питания пустой файл блокирует старт | fsync файла и каталога; явная процедура восстановления |
 | M1 | reports/critic/M1-cycle-3.json | OSError при записи состояния выходит из load() не как BundleError | Оборачивать в BundleError с причиной |
 | M4 | reports/critic/M4-cycle-3.json | `check_verdicts.py` оценивает только вызовы, дошедшие до echo; вызов через ContextForge с иной ошибкой (Unknown tool, 5xx) не считается FAIL | В M5/MC-05: каждый ожидаемо принятый вызов обязан дойти до коннектора |
+| M0.1 | reports/critic/M0.1-cycle-4.json | Opt-out сети через `request.getfixturevalue('socket_enabled')` в теле теста или фикстуре не ловится | Проверять также runtime-запрос фикстуры (хук на fixture setup) |
+| M0.1 | reports/critic/M0.1-cycle-4.json | pytest-socket не блокирует сеть при импорте модуля и в дочерних процессах; CI запускает тесты с полной сетью | Сетевой sandbox CI-job (например, `--network none` в контейнере) |
+| M0.1 | reports/critic/M0.1-cycle-4.json | Устаревшие base/notes в отчёте и mutmut-заметке | Поправить при следующем касании |
+| M2 | reports/critic/M2-cycle-5.json | Устаревшая ссылка на `dd0beb1` в отчёте conformance | Поправить при следующем касании |

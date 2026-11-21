@@ -72,3 +72,15 @@
 | M2 | 3 | критик | claude/m2-policy-tooling | e1dae73 | **8.0** | < 9: major (gate исполняется из PR; manifest не в diff) → цикл 4 (последний по лимиту); остаточный риск ci.yml → решение владельца | 2026-11-21 |
 | M2 | 4 | решение владельца | — | — | — | Остаточный риск: PR, правящий .github/workflows/, может отключить gate — риск принят, владелец смотрит такие PR сам (CODEOWNERS) | 2026-11-21 |
 | M4 | 3 | критик | claude/m4-contextforge-spike | 27c676a | **9.5** | ≥ 9 — **веха закрыта**: GO ContextForge v1.1.1 + вариант C (PyJWT); minor → backlog | 2026-11-21 |
+| — | — | интеграция | claude/integration | 98287f6 | — | влиты закрытые M1 и M4 + спеки оркестратора; check-all зелёный; база для M3/M5/M7 | 2026-11-21 |
+| M0.1 | 3 | исполнитель | claude/m0.1-standard-tools | 91e6e09 (+9dd74c1) | — | merge-коммит, grep fail closed, без opt-out сети; CI 44887393111 | 2026-11-21 |
+| M2 | 4 | исполнитель | claude/m2-policy-tooling | dd0beb1 (+40c6595, 8f6754e) | — | gate из main, manifest = widening, duplicate-tool lint, mutmut | 2026-11-21 |
+| M0.1, M2 | — | критики | — | — | — | запущены (M0.1 ц3, M2 ц4) | 2026-11-21 |
+| M0.1 | 3 | критик | claude/m0.1-standard-tools | 91e6e09 | **8.0** | < 9 (без роста 1 цикл): major — сетевой opt-out через фикстуру, политика не под тестом → цикл 4 | 2026-11-21 |
+| M2 | 4 | критик | claude/m2-policy-tooling | dd0beb1 | **8.0** | < 9 (без роста 1 цикл): дубли tool внутри manifest; повышение effect_class при матче по классу → цикл 5 (последний) | 2026-11-21 |
+| M0.1 | 4 | исполнитель | claude/m0.1-standard-tools | e52a20d (+3b7648e) | — | opt-out сети → красный прогон, хук удалён; критик запущен (с метками origin) | 2026-11-21 |
+| — | — | решение владельца | — | — | — | 4 правила против холостых циклов: origin находок, исчерпывающий критик + модель угроз, правила не меняются в идущем цикле, предел для вех с противником | 2026-11-21 |
+| M0.1 | 4 | критик | claude/m0.1-standard-tools | e52a20d | **9.0** | ≥ 9 — **веха закрыта**; 3 minor (2 missed_earlier, 1 new_regression) → backlog | 2026-11-21 |
+| M2 | 5 | исполнитель | claude/m2-policy-tooling | 6ffcadd (+e169154) | — | дубли внутри manifest, любое изменение effect_class = widening; критик ц5 запущен (threat_model) | 2026-11-21 |
+| M2 | 5 | критик | claude/m2-policy-tooling | 6ffcadd | **9.5** | ≥ 9 — **веха закрыта**; threat_model: открытых путей нет; AC-M2-04 ждёт ручной проверки владельца | 2026-11-21 |
+| — | — | интеграция | claude/integration | — | — | тред слияния M0.1 + M2 запущен (конфликты CI/pyproject/uv.lock); после него — M3 и M7 | 2026-11-21 |
