@@ -1,0 +1,216 @@
+{
+  "milestone": "M7",
+  "cycle": 1,
+  "branch": "claude/m7-approval-core",
+  "base": "origin/claude/integration@6a75c62 + specs/plan from claude/admiring-planck-vzys0x (dd82753)",
+  "commit": "7c68ff8ea3019e8bb880b833b9872cc1b058ebd6",
+  "commit_note": "Tested code commit; this report is added by the next commit (reports/ only).",
+  "run_at": "2026-11-21T14:30:00Z",
+  "author": "Claude Code (executor, M7 cycle 1)",
+  "plan": "reports/plans/M7-cycle-1.md",
+  "environment": {
+    "local": {
+      "os": "linux x86_64",
+      "python": "3.13 venv (CI: 3.12)",
+      "postgres": "postgres:16.6-alpine (Docker, network none, Unix socket)",
+      "command": "uv run pytest -> 739+ passed; uv run pytest approval/tests approval/tests_db -> 364 passed, 0 skipped"
+    },
+    "ci": {
+      "workflow": ".github/workflows/ci.yml",
+      "run_id": 44913263210,
+      "commit": "7c68ff8",
+      "jobs": {
+        "lint": "success",
+        "types": "success",
+        "tests": "success",
+        "approval-db": "success",
+        "schema-guard": "success",
+        "secrets": "success",
+        "policy": "success",
+        "grants-widening": "failure (by design)",
+        "mutmut": "in_progress (~1 h)",
+        "ci-ok": "pending"
+      },
+      "grants_widening": "red by design: 'widening change(s) outside a pull request' on push (M2 gate, policies differ from main); not a milestone failure",
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44913263210",
+      "status": "in_progress",
+      "note": "Pushing this report commit cancels run 44913263210 (cancel-in-progress on claude/**); the run of the report commit tests the same code (reports/ only differ). Final status follows in a separate commit."
+    }
+  },
+  "contextforge_image_digest": null,
+  "sdk_versions": {
+    "fastmcp": "2.14.7",
+    "mcp": "1.30.0",
+    "fastapi": "0.165.0"
+  },
+  "tool_versions": {
+    "psycopg": "3.3.9",
+    "psycopg-pool": "3.3.3",
+    "alembic": "1.20.1",
+    "sqlalchemy": "2.1.9",
+    "pynacl": "1.6.2",
+    "cryptography": "46.0.7",
+    "PyJWT": "2.15.1",
+    "jsonschema": "4.26.0",
+    "httpx": "0.28.1",
+    "docker": "7.2.0",
+    "prometheus-client": "0.26.0",
+    "uvicorn": "0.54.0",
+    "mutmut": "3.8.1",
+    "pytest": "9.2.0",
+    "ruff": "0.17.6",
+    "mypy": "2.4.1"
+  },
+  "policy_version": "test bundles built per test ('b'*40)",
+  "bundle_version": "test bundles only; no production bundle used",
+  "fixture_identity": "synthetic agent:t-alpha:*, agent:t-beta:*, oidc:https://idp.example.invalid:N; all keys generated at test time",
+  "acceptance": [
+    {
+      "id": "AC-M7-01",
+      "status": "passed",
+      "expected": "FastAPI OpenAPI has every path, method, request body and response code of schemas/approval-service.openapi.yaml",
+      "actual": "5/5 operations: operationId, parameters, request-body schemas (equal), response codes and schema refs present",
+      "tests": [
+        "approval/tests/test_openapi.py::test_operation[*] (5)",
+        "approval/tests/test_openapi.py::test_contract_has_the_five_operations"
+      ]
+    },
+    {
+      "id": "AC-M7-02",
+      "status": "passed",
+      "expected": "every (status, event) of T1-T18 + T12a: only table moves allowed, others conflict without change",
+      "actual": "12 states (executing split by execution state) x 18 events = 216 pairs through each owning role's SECURITY DEFINER function; disallowed -> conflict (not_found for an execution-scoped event on an intent that never had an execution), status/version/attempts/executions/audit/decisions unchanged; allowed -> version+1 and one audit row. Plus branch tests T2/T3, T12/T12a, T18, T1 targets, guards, T1 insert guard",
+      "tests": [
+        "approval/tests_db/test_state_machine.py::test_every_status_event_pair[*] (216)",
+        "approval/tests_db/test_state_machine.py (27 more)"
+      ]
+    },
+    {
+      "id": "AC-M7-03",
+      "status": "passed",
+      "expected": "hash mismatch -> 400 invalid_input",
+      "actual": "400 with exact body, no row",
+      "tests": [
+        "approval/tests_db/test_propose.py::test_hash_mismatch_is_invalid_input"
+      ]
+    },
+    {
+      "id": "AC-M7-04",
+      "status": "passed",
+      "expected": "repeat same key+hash -> 200 same intent; other hash -> 409; 50 parallel -> one row",
+      "actual": "200 identical body / 409; 50 concurrent requests via ASGI -> 49x200 + 1x201, 1 row",
+      "tests": [
+        "approval/tests_db/test_propose.py::test_idempotent_repeat",
+        "approval/tests_db/test_propose.py::test_50_parallel_identical_requests_make_one_row"
+      ]
+    },
+    {
+      "id": "AC-M7-05",
+      "status": "passed",
+      "expected": "12 AP-01 reference scenarios",
+      "actual": "12 parametrized scenarios + full Outcome equality, matching, merging, limits",
+      "tests": [
+        "approval/tests/test_policy.py (39)"
+      ]
+    },
+    {
+      "id": "AC-M7-06",
+      "status": "passed",
+      "expected": "auto max_per_hour 10, 30 parallel -> 10 auto, 20 pending",
+      "actual": "exactly (approved, auto, 10), (pending_approval, human, 20); 10 policy decisions",
+      "tests": [
+        "approval/tests_db/test_propose.py::test_30_parallel_proposes_with_auto_limit_10",
+        "approval/tests_db/test_propose.py::test_auto_limits_use_sliding_hour_and_day"
+      ]
+    },
+    {
+      "id": "AC-M7-07",
+      "status": "passed",
+      "expected": "31st propose in an hour -> 429 retry_after_s > 0, no row, empty outbox",
+      "actual": "429, Retry-After header, 30 rows, outbox empty, audit + metric gxg_quota_rejections_total",
+      "tests": [
+        "approval/tests_db/test_propose.py::test_31st_propose_within_an_hour_is_rate_limited",
+        "approval/tests_db/test_propose.py::test_pending_caps",
+        "approval/tests_db/test_propose.py::test_quota_window_is_one_hour",
+        "approval/tests/test_quotas.py"
+      ]
+    },
+    {
+      "id": "AC-M7-08",
+      "status": "passed",
+      "expected": "connector not registered for the tenant or JWT with a foreign key -> 401/403, no row",
+      "actual": "rogue connector 403, foreign key 401, no/other-kind/other-aud tokens 401, 0 rows",
+      "tests": [
+        "approval/tests_db/test_propose.py::test_unknown_connector_or_foreign_key",
+        "approval/tests_db/test_propose.py::test_requester_tool_and_connection_must_come_from_the_bundle"
+      ]
+    },
+    {
+      "id": "AC-M7-09",
+      "status": "passed",
+      "expected": "effects.status on a foreign intent -> not_found byte-identical to a missing one",
+      "actual": "MCP client (FastMCP in memory) -> api -> PostgreSQL: other requester, other tenant, missing: identical text and structuredContent for status and cancel; same at the API incl. malformed id",
+      "tests": [
+        "approval/tests_db/test_mcp.py::test_foreign_intent_is_not_found_byte_for_byte",
+        "approval/tests_db/test_api_read.py::test_foreign_and_missing_intents_are_the_same_404"
+      ]
+    },
+    {
+      "id": "AC-M7-10",
+      "status": "passed",
+      "expected": "no plaintext of args in ciphertext columns over 100 intents",
+      "actual": "0 matches over 100 intents; args key opens args, preview key opens preview only",
+      "tests": [
+        "approval/tests_db/test_propose.py::test_payload_is_encrypted",
+        "approval/tests/test_crypto.py"
+      ]
+    },
+    {
+      "id": "AC-M7-11",
+      "status": "passed",
+      "expected": "UPDATE/DELETE audit_events, DELETE intents -> permission error",
+      "actual": "insufficient_privilege for every process role",
+      "tests": [
+        "approval/tests_db/test_roles.py::test_statements_as_each_role[*] (7)"
+      ]
+    },
+    {
+      "id": "AC-M7-12",
+      "status": "passed",
+      "expected": "sweeper: expired intent -> expired within 60 s",
+      "actual": "running sweeper process moves it in < 1 s (interval 0.2 s; default 5 s, max 30 s)",
+      "tests": [
+        "approval/tests_db/test_sweeper.py::test_expired_intent_leaves_pending_within_60_s",
+        "approval/tests_db/test_sweeper.py (4 more)"
+      ]
+    },
+    {
+      "id": "AC-M7-13",
+      "status": "passed",
+      "expected": "per-role allowed/denied actions of AS-27; process config only AS-28 secrets",
+      "actual": "catalogue check over all tables x columns x privileges x roles and all functions; real statements per role (ui cannot write executions or read args, executor cannot insert decisions, notifier cannot read intents); compose: each process exactly its secret files, no secret env values, internal network",
+      "tests": [
+        "approval/tests_db/test_roles.py (10)",
+        "approval/tests/test_deploy.py (6)"
+      ]
+    }
+  ],
+  "dod": {
+    "DoD-1": "push to claude/m7-approval-core; PR into main is the owner's step",
+    "DoD-2": "all 13 AC automated",
+    "DoD-3": "this file",
+    "DoD-4": "mutmut on policy/transitions/quotas/intents: 1393/1393 killed (reports/mutmut/M7.txt); kit 978/988, same 10 M1 equivalents; scripts/ci/mutmut.sh includes approval",
+    "DoD-5": "0 skipped/xfailed (root conftest policy applies to approval/tests_db)",
+    "DoD-6": "reports/plans/M7-cycle-1.md table"
+  },
+  "spec_interpretations": "reports/plans/M7-cycle-1.md, decisions 1-15 (AS-27 UPDATE cells as SECURITY DEFINER EXECUTE; EFF-03 auto decision via definer function; T9 in api via gxg_dispatch; gxg_mcp via api HTTP; execution_window_s column; T17 version+1; AC-M7-02 propose on existing row; dispatch/JWKS routes; T2 bundle role check left to ui; quota retry hints; AS-08 connector_attested; GR-02 at T1; terminal = no outgoing rule; AP-07 alert as Prometheus rule; tool without executes_via refused)",
+  "known_limitations": [
+    "mcp process refuses to start outside tests: no production IdentityVerifier until M5 (ADR-0001 variant C); its tools are tested with the kit's StubVerifier",
+    "requester.assertion is not verified (no adapter key in configuration yet): identity_mode=connector_attested in audit (AS-08)",
+    "payload private keys from per-process secret files, no KMS wrapping (shortcut in crypto.py)",
+    "T2 'approver role by bundle' and approver-initiated T6 are ui-side (M9); the DB function checks everything else",
+    "pending-cap retry_after_s is a fixed 60 s",
+    "ui, executor, notifier, admin processes and AS-29 separate images are M8-M10; their DB roles, grants and transition functions exist now",
+    "mutmut job now runs ~1 h on a 4-core runner (timeout 120 min)"
+  ]
+}

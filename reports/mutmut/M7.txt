@@ -1,0 +1,16 @@
+M7 cycle 1 — mutmut 3.8.1 (DoD-4). Command: scripts/ci/mutmut.sh (PostgreSQL 16 container without network,
+Unix socket). Config: approval/pyproject.toml [tool.mutmut] — policy.py, transitions.py, quotas.py, intents.py.
+
+approval, full run on 2123f57 (src identical to 7c68ff8; later commits change tests and the mutmut timeout only):
+  1393 mutants: 1388 killed, 3 survived, 2 timeout
+  survived: intents.x__validate__mutmut_13, intents.x__insert__mutmut_82, intents.x__insert__mutmut_84
+  timeout:  intents.x_propose__mutmut_208, intents.x_propose__mutmut_209 (host loaded by a parallel run)
+  re-run of these 5 with the tests of 7c68ff8: 5 killed
+  => 1393/1393 killed, no equivalent mutant listed for approval
+
+gxg-connector-kit (M1, changed by M7: TenantGrants.groups/roles, Service.tools), `cd packages/gxg-connector-kit && uv run mutmut run`:
+  988 mutants: 978 killed, 10 survived — the same 10 equivalents recorded in reports/conformance/M1.json
+
+scripts/ci/mutmut.sh full run on 932645a (tools/gxg-policy and root unchanged by M7):
+  tools/gxg-policy: 2590 = 2555 killed + 35 survived, all listed in scripts/ci/mutmut-equivalent.txt
+  root (.):          1235 = 1211 killed + 24 survived, all listed in scripts/ci/mutmut-equivalent.txt
