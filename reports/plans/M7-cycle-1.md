@@ -21,7 +21,7 @@ Base: `origin/claude/integration` (M0, M0.1, M1, M2, M4) + fresh specs/plan from
 | Sweeper scheduler | **stdlib loop** (`while: sweep(); stop.wait(interval)`) + `FOR UPDATE SKIP LOCKED` | APScheduler; `pg_cron` | one fixed-interval job; APScheduler adds a dependency for one `sleep`; `pg_cron` needs a server extension and superuser |
 | Concurrency of T1 (AP-03, AP-05) | **`pg_advisory_xact_lock(tenant)`** | per-rule counter table + `SELECT … FOR UPDATE` | spec allows «или эквивалент»; one lock covers idempotency, quotas and auto limits |
 | Metrics (AP-07) | **prometheus_client** Counter | own counter | standard; already in the lock |
-| Real PostgreSQL in tests | **testcontainers** `PostgresContainer`, PostgreSQL over a **Unix socket** (bind-mounted dir) | mocks; local `initdb` | real server as required; the Unix socket keeps the repo-wide «no TCP in tests» rule (AC-M0-01) intact |
+| Real PostgreSQL in tests | **Docker SDK** (`docker` 7.x): `postgres:16.6-alpine` with `network_mode=none`, PostgreSQL over a **Unix socket** (bind-mounted dir) | testcontainers (tried first: its start-up resolves and probes TCP, which pytest-socket blocks repo-wide, AC-M0-01); mocks; local `initdb` | real server as required; no TCP anywhere in the tests |
 | Mutation testing | **mutmut** 3.8 (`approval/pyproject.toml [tool.mutmut]`) | — | DoD-4 |
 
 ## Scope (every place the change reaches)
@@ -60,7 +60,9 @@ Base: `origin/claude/integration` (M0, M0.1, M1, M2, M4) + fresh specs/plan from
 5. **Execution window.** AP-04 freezes the policy result at T1, T2 needs `now + window`, the DDL has no column for
    the window → extra column `execution_window_s integer NOT NULL` (all spec names and types kept).
    `dispatch_timeout_s` is read from the bundle at dispatch (AS-26), not stored.
-6. **T17** changes nothing in `intents` (no `version` bump): audit row + next `reconcile` in the outbox.
+6. **T17** goes through the same checked move as every transition (status stays `outcome_unknown`, `version` +1,
+   audit row) and queues the next `reconcile` with the executor's backoff (`NULL` = stop, manual review).
+   *(Amended during the cycle: the first draft had no version bump; one rule for all moves is simpler.)*
 7. **AC-M7-02, T1 × status.** `propose` on an existing row (same tenant + key): same hash → 200, row unchanged;
    other hash → 409, row unchanged. Every other (status, event) pair outside the table → `conflict`, no change.
 8. **AC-M7-01 lists `dispatch` and JWKS** (M8 «Делаем»). Implemented as thin routes: JWKS from the configured
@@ -76,6 +78,12 @@ Base: `origin/claude/integration` (M0, M0.1, M1, M2, M4) + fresh specs/plan from
     key to check `requester.assertion` exists in config → `identity_mode = connector_attested` in the audit.
 12. **GR-02 at T1.** `connection_id` must be a connection of the tenant and equal the RID's connection
     (`invalid_input` otherwise): cheap defence in depth against a multi-tenant connector mixing tenants.
+
+13. **Terminal statuses** are not a second list: a status with no outgoing row in the transition table is terminal.
+14. **AP-07 alert** is the Prometheus rule `increase(gxg_quota_rejections_total[1h]) > 3` on the spec's metric
+    (approval README), not code that reads the audit log (`gxg_api` has no SELECT on `audit_events`).
+15. **An effect tool without `executes_via` in the bundle** is refused at T1 (`permission_denied`): nothing could
+    execute it.
 
 ## Not done, on purpose
 

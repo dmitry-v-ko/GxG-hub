@@ -178,7 +178,12 @@ def propose(conn: psycopg.Connection[Any], bundle: Bundle, caller: Service, body
     if not caller.serves(tenant) or grants is None or requester not in grants.principals:  # AS-25, AS-08
         raise GxgError("permission_denied", "connector or requester is not registered for this tenant")
     tool = caller.tools.get((req["tool_key"], req["tool_version"]))  # AS-26: only from the bundle
-    if tool is None or tool["action"] != "propose" or tool["effect_class"] not in EFFECT_CLASSES:
+    if (
+        tool is None
+        or tool["action"] != "propose"
+        or tool["effect_class"] not in EFFECT_CLASSES
+        or not tool.get("executes_via")  # nothing could execute it: refuse now, not at execution time
+    ):
         raise GxgError("permission_denied", "tool is not a registered effect tool of this connector")
     connection = req["connection_id"]
     if connection not in grants.connections or req["resource_id"].split(":", 1)[1].split("/", 1)[0] != connection:
@@ -273,7 +278,7 @@ def _insert(
             "tool": req["tool_key"],
             "version": req["tool_version"],
             "connector": caller.id,
-            "execute": tool.get("executes_via", ""),
+            "execute": tool["executes_via"],
             "connection": req["connection_id"],
             "resource": req["resource_id"],
             "class": tool["effect_class"],
@@ -354,13 +359,18 @@ def cancel(conn: psycopg.Connection[Any], intent_id: str, tenant: str, principal
     return get(conn, intent_id, tenant, principal)
 
 
+def dispatch_timeout_s(tool: Mapping[str, Any]) -> int:
+    """AS-13, AS-26: from the bundle only; 60 s when the manifest sets none."""
+    return int(tool.get("dispatch_timeout_s", 60))
+
+
 def dispatch(conn: psycopg.Connection[Any], execution_id: uuid.UUID, intent_id: uuid.UUID, connector: Service) -> str:
     """T9 for a verified execution token; returns the dispatch deadline (RFC 3339)."""
     found = conn.execute(_SQL_TOOL, (intent_id,)).fetchone()
     tool = connector.tools.get((found[0], found[1])) if found else None
     if tool is None:
         raise GxgError("not_found", "execution not found")
-    timeout_s = int(tool.get("dispatch_timeout_s", 60))  # AS-13, AS-26: from the bundle only
+    timeout_s = dispatch_timeout_s(tool)
     with conn.transaction(), mapped_errors():
         row = _one(conn, _SQL_DISPATCH, (execution_id, intent_id, connector.id, timeout_s))
     return str(_iso(row[0]))

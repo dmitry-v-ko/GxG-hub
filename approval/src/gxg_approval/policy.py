@@ -68,7 +68,7 @@ def _matches(rule: Mapping[str, Any], req: Request, groups: Mapping[str, frozens
 
 
 def _exhausted(rule: Mapping[str, Any], used: tuple[int, int]) -> bool:
-    limits = rule.get("limits", {})
+    limits = rule["limits"]  # required for auto_approve by approval-policy.schema.json
     hour, day = used
     return ("max_per_hour" in limits and hour >= limits["max_per_hour"]) or (
         "max_per_day" in limits and day >= limits["max_per_day"]
@@ -115,13 +115,13 @@ def evaluate(  # noqa: PLR0911 (one return per AP-01 step)
         window = min([window] + [duration_s(r["execution_window"]) for r in rules if "execution_window" in r])
         return human(
             max([1] + [r.get("approvals", 1) for r in rules]),
-            high_risk or any(r.get("step_up", False) for r in rules),
+            high_risk or any(r.get("step_up") for r in rules),
             None if allowed is None else tuple(sorted(allowed)),
         )
     if by["auto_approve"] and req.effect_class == "external_effect":
         if any(_exhausted(r, auto_used(r["id"])) for r in by["auto_approve"]):
             return human(1, False)  # AP-01.6: exhausted limit → a human, not a refusal
-        return Outcome("auto", 0, False, None, ttl, window, rule_ids, None, alerts)
+        return Outcome("auto", 0, False, None, ttl, window, rule_ids)  # external_effect: no AP-02 alert here
     if req.effect_class == "write_reversible":
-        return Outcome("not_required", 0, False, None, ttl, window, rule_ids, None, alerts)
+        return Outcome("not_required", 0, False, None, ttl, window, rule_ids)
     return human(1, high_risk)

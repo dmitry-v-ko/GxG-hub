@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -90,11 +91,23 @@ SCENARIOS: list[tuple[str, list[dict[str, Any]], Request, Any, tuple[Any, ...]]]
 ]
 
 
-@pytest.mark.parametrize(("name", "rules", "request_", "used", "expected"), SCENARIOS, ids=[s[0] for s in SCENARIOS])
+@pytest.mark.parametrize(
+    ("name", "rules", "request_", "used", "expected"),
+    SCENARIOS,
+    ids=[re.sub(r"[^a-z0-9]+", "_", s[0].lower()).strip("_") for s in SCENARIOS],  # ASCII ids (mutmut passes them)
+)
 def test_reference_scenarios(
     name: str, rules: list[dict[str, Any]], request_: Request, used: Any, expected: tuple[Any, ...]
 ) -> None:
     assert summary(run(rules, request_, used)) == expected
+
+
+def test_full_outcomes() -> None:
+    day, hour = 24 * 3600, 3600
+    assert run(SCENARIOS[0][1]) == Outcome(None, 0, False, None, day, hour, ("auto", "no"), "no")
+    assert run([AUTO]) == Outcome("auto", 0, False, None, day, hour, ("auto",))
+    assert run([], req(NOTE, "write_reversible")) == Outcome("not_required", 0, False, None, day, hour, ())
+    assert run([]) == Outcome("human", 1, False, None, day, hour, ())
 
 
 def test_scenario_details() -> None:

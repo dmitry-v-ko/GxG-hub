@@ -6,6 +6,7 @@ import dataclasses
 import time
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 import psycopg
@@ -28,6 +29,19 @@ def test_get_own_intent(propose: Callable[..., Any], client: TestClient, world: 
     created = propose(business_task_id="ac-42").json()
     r = client.get(f"/v1/intents/{created['intent_id']}", params=q(), headers=world.auth("approval-mcp"))
     assert r.status_code == 200 and r.json() == created and created["business_task_id"] == "ac-42"
+
+
+def test_status_counts_human_votes(
+    propose: Callable[..., Any], client: TestClient, world: Any, pg: Any, owner: psycopg.Connection[Any]
+) -> None:
+    created = propose().json()
+    owner.execute("UPDATE intents SET required_approvals = 2")
+    row = owner.execute("SELECT canonical_args_hash FROM intents").fetchone()
+    with pg.connect("gxg_ui") as ui:
+        ui.execute("SELECT gxg_decide(%s, %s, 'approve', 1, %s, false, null)", (created["intent_id"], HUMAN, row[0]))
+    doc = client.get(f"/v1/intents/{created['intent_id']}", params=q(), headers=world.auth("approval-mcp")).json()
+    assert doc["approval"]["received_approvals"] == 1 and doc["status"] == "pending_approval"
+    assert doc["approval"]["required_approvals"] == 2 and doc["version"] == 2
 
 
 def test_foreign_and_missing_intents_are_the_same_404(
@@ -160,7 +174,10 @@ def test_dispatch(
             assert client.post(url, json={"execution_token": tok}, headers=headers).status_code == code
         r = client.post(url, json={"execution_token": token()}, headers=world.auth())
         assert r.status_code == 200, r.text
-        assert set(r.json()) == {"execution_id", "dispatch_deadline"}
+        assert r.json()["execution_id"] == execution
+        deadline = datetime.fromisoformat(r.json()["dispatch_deadline"])
+        assert r.json()["dispatch_deadline"].endswith("Z")
+        assert 55 < (deadline - datetime.now(UTC)).total_seconds() <= 60  # now + dispatch_timeout_s
         lease = owner.execute(
             "SELECT round(extract(epoch FROM dispatch_lease_until - dispatched_at)) FROM executions"
         ).fetchone()
@@ -205,3 +222,10 @@ def test_dispatch_of_a_tool_no_longer_in_the_bundle(world: Any, api_pool: Connec
         with pytest.raises(GxgError) as err:
             intents.dispatch(conn, uuid.uuid4(), uuid.uuid4(), connector)
     assert (err.value.code, err.value.message) == ("not_found", "execution not found")
+
+
+def test_dispatch_timeout_comes_from_the_bundle() -> None:
+    from gxg_approval.intents import dispatch_timeout_s
+
+    assert dispatch_timeout_s({"dispatch_timeout_s": 30}) == 30
+    assert dispatch_timeout_s({}) == 60

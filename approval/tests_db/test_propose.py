@@ -32,6 +32,9 @@ def test_human_approval_by_default_for_external_effect(
     doc = r.json()
     assert _schema.validator("intent-status").is_valid(doc)
     assert doc["status"] == "pending_approval" and doc["version"] == 1
+    assert doc["created_at"].endswith("Z") and doc["expires_at"].endswith("Z") and doc["execution_deadline"] is None
+    stored = owner.execute("SELECT connector_id, execute_tool, effect_class, policy_version FROM intents").fetchone()
+    assert stored == ("demo", "demo.message.execute", "external_effect", "b" * 40)  # AS-26: from the bundle
     assert doc["approval"] == {"mode": "human", "required_approvals": 1, "received_approvals": 0, "rule_ids": []}
     row = owner.execute("SELECT topic, payload FROM outbox").fetchall()
     assert row == [
@@ -197,6 +200,7 @@ def test_requester_tool_and_connection_must_come_from_the_bundle(
         (world.body(tool="demo.board.search"), 403, not_a_tool),  # read tool: not an effect
         (world.body(tool="demo.unknown.propose"), 403, not_a_tool),
         ({**world.body(), "tool_version": "9.9.9"}, 403, not_a_tool),
+        (world.body(tool="demo.orphan.propose"), 403, not_a_tool),  # no executes_via in the bundle
         (world.body(connection="demo-b", resource="demo:demo-b/board/b2"), 400, bad_connection),  # t-beta's
         (world.body(resource="demo:demo-other/board/b1"), 400, bad_connection),
     ]
