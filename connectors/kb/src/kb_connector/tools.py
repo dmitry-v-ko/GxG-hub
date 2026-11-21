@@ -43,6 +43,7 @@ ROOT = Path(__file__).resolve().parents[2]  # connectors/kb
 MANIFEST = ROOT / "gxg-manifest.yaml"  # the one source of tool names, schemas and timeouts
 DOMAIN, RTYPE = "kb", "collection"
 EXCERPT_MAX = 500
+TITLE_MAX, CONTENT_MAX = 300, 20000  # the output schemas' maxLength: KB data is cut to them (MCC-04)
 audit = logging.getLogger("kb_connector.audit")
 errors = logging.getLogger("kb_connector.errors")  # stack frames of internal errors; main() sends them to stderr
 
@@ -72,7 +73,7 @@ class KbTool(Tool):
 
     handler: Annotated[SkipJsonSchema[Handler], Field(exclude=True)]
     verify: Annotated[SkipJsonSchema[Callable[..., VerifiedIdentity]], Field(exclude=True)]  # IdentityVerifier.verify
-    refresh: Annotated[SkipJsonSchema[Callable[[], None]], Field(exclude=True)]
+    ready: Annotated[SkipJsonSchema[Callable[[], str]], Field(exclude=True)]  # the loaded bundle_version
     # KB calls so far (Backend.calls); the audit line records how many this call made (MCC-08, zero on refusals).
     # shortcut: a process-wide counter, exact for sequential calls only; per request with the real KB client.
     kb_calls: Annotated[SkipJsonSchema[Callable[[], int]], Field(exclude=True)]
@@ -87,7 +88,7 @@ class KbTool(Tool):
             if error is not None:
                 where = "/" + "/".join(map(str, error.absolute_path))
                 raise GxgError("invalid_input", "arguments do not match the input schema", details={"path": where})
-            self.refresh()  # also refuses with temporarily_unavailable without a valid bundle (GR-12)
+            entry["bundle_version"] = self.ready()  # GR-12: no valid bundle -> temporarily_unavailable; GR-14
             try:
                 content, fields = await asyncio.wait_for(self.handler(ident, arguments), self.timeout)
             except TimeoutError:
@@ -123,9 +124,9 @@ class Connector:
             "kb.context.get": self.context_get,
         }
 
-        def ready() -> None:
+        def ready() -> str:
             refresh()
-            _ = self.grants.version  # GR-12: no valid bundle -> temporarily_unavailable before any handler
+            return self.grants.version  # GR-12: no valid bundle -> temporarily_unavailable before any handler
 
         manifest = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
         return [
@@ -137,13 +138,13 @@ class Connector:
                 timeout=float(t["limits"]["timeout_s"]),
                 handler=handlers[t["name"]],
                 verify=verifier.verify,
-                refresh=ready,
+                ready=ready,
                 kb_calls=self.backend.calls.total,
             )
             for t in manifest["tools"]
         ]
 
-    def _readable(self, ident: VerifiedIdentity, requested: list[str] | None) -> tuple[str, set[str]]:
+    async def _readable(self, ident: VerifiedIdentity, requested: list[str] | None) -> tuple[str, set[str]]:
         """(connection, collections) to search. A named collection without a grant -> not_found before any
         KB call (GR-17); nothing granted -> empty and no KB call (GR-16)."""
         tenant, principal = ident.tenant_id, ident.principal
@@ -159,23 +160,30 @@ class Connector:
             prefix = rid(connection, "")
             names = {r.removeprefix(prefix) for r in allowed.rids if r.startswith(prefix)}
             if allowed.all_of_type:
-                names = set(self.backend.list_collections(tenant))
+                names = set(await self.backend.list_collections(tenant))
         readable = {n for n in names if self.grants.check(tenant, principal, "read", rid(connection, n)).allowed}
         if requested is not None and readable != names:
             raise GxgError("not_found", NOT_FOUND)
         return connection, readable
 
-    def _search(self, ident: VerifiedIdentity, args: dict[str, Any]) -> tuple[str, list[Document], set[str]]:
-        connection, readable = self._readable(ident, args.get("collections"))
-        hits = self.backend.search(ident.tenant_id, sorted(readable), args["query"]) if readable else []
-        # GR-16: every item is checked again, whatever the KB returned.
+    async def _search(
+        self, ident: VerifiedIdentity, args: dict[str, Any], offset: int, limit: int
+    ) -> tuple[str, list[Document], bool, set[str]]:
+        """(connection, visible page, more after it, grant ids). The KB returns one page of the allowed collections
+        only (GR-16); every item is checked again, whatever the KB returned."""
+        connection, readable = await self._readable(ident, args.get("collections"))
+        hits, more = (
+            await self.backend.search(ident.tenant_id, sorted(readable), args["query"], offset=offset, limit=limit)
+            if readable
+            else ([], False)
+        )
         visible, grant_ids = [], set()
         for d in hits:
             decision = self.grants.check(ident.tenant_id, ident.principal, "read", rid(connection, d.collection))
             if d.collection in readable and decision.allowed:
                 visible.append(d)
                 grant_ids.add(str(decision.grant_id))
-        return connection, visible, grant_ids
+        return connection, visible, more, grant_ids
 
     async def documents_search(self, ident: VerifiedIdentity, args: dict[str, Any]) -> Result:
         limit: int = args.get("limit", 20)
@@ -184,16 +192,20 @@ class Connector:
         ).encode()
         cursor = args.get("cursor")
         offset = 0 if cursor is None else self._offset(binding, cursor)
-        connection, visible, grant_ids = self._search(ident, args)
-        page = visible[offset : offset + limit]
+        connection, page, more, grant_ids = await self._search(ident, args, offset, limit)
         ref = rid(connection, "")
         items = [
-            {"id": d.id, "title": d.title, "excerpt": d.content[:EXCERPT_MAX], "source_ref": ref + d.collection}
+            {
+                "id": d.id,
+                "title": d.title[:TITLE_MAX],
+                "excerpt": d.content[:EXCERPT_MAX],
+                "source_ref": ref + d.collection,
+            }
             for d in page
         ]
         content = {
             "items": items,
-            "next_cursor": self._cursor(binding, offset + limit) if offset + limit < len(visible) else None,
+            "next_cursor": self._cursor(binding, offset + limit) if more else None,
             "complete": True,
             "partial_reasons": [],
             "source_refs": sorted({i["source_ref"] for i in items}),
@@ -207,7 +219,7 @@ class Connector:
         allowed = self.grants.allowed(ident.tenant_id, ident.principal, "read", connection, RTYPE)
         if not (allowed.all_of_type or allowed.rids):  # no collection granted at all: no KB call
             raise GxgError("not_found", NOT_FOUND)
-        doc = self.backend.get_document(ident.tenant_id, args["document_id"])  # collection from the KB (GR-01)
+        doc = await self.backend.get_document(ident.tenant_id, args["document_id"])  # collection from the KB (GR-01)
         if doc is None:
             raise GxgError("not_found", NOT_FOUND)
         decision = self.grants.check(ident.tenant_id, ident.principal, "read", rid(connection, doc.collection))
@@ -216,8 +228,9 @@ class Connector:
         content = {
             "id": doc.id,
             "collection": doc.collection,
-            "title": doc.title,
-            "content": doc.content,
+            "title": doc.title[:TITLE_MAX],
+            "content": doc.content[:CONTENT_MAX],
+            "truncated": len(doc.content) > CONTENT_MAX,
             "updated_at": doc.updated_at,
             "source_ref": rid(connection, doc.collection),
         }
@@ -227,21 +240,22 @@ class Connector:
         """The search above, then excerpts joined up to max_chars (a cut document marks the result truncated)."""
         max_docs: int = args.get("max_documents", 5)
         max_chars: int = args.get("max_chars", 4000)
-        connection, visible, grant_ids = self._search(ident, args)
+        connection, visible, truncated, grant_ids = await self._search(ident, args, 0, max_docs)
         text, used = "", []
-        truncated = len(visible) > max_docs
-        for d in visible[:max_docs]:
+        for d in visible:
             sep = "\n\n" if text else ""
             room = max_chars - len(text) - len(sep)
             if room <= 0:
                 truncated = True
                 break
-            part = f"## {d.title}\n{d.content}"
+            part = f"## {d.title[:TITLE_MAX]}\n{d.content}"
             if len(part) > room:
                 part, truncated = part[:room], True
             text += sep + part
             used.append(d)
-        documents = [{"id": d.id, "title": d.title, "source_ref": rid(connection, d.collection)} for d in used]
+        documents = [
+            {"id": d.id, "title": d.title[:TITLE_MAX], "source_ref": rid(connection, d.collection)} for d in used
+        ]
         content = {
             "context": text,
             "documents": documents,
@@ -251,6 +265,8 @@ class Connector:
         }
         return content, {"grant_id": sorted(grant_ids)}
 
+    # shortcut: the cursor key lives in this process (as in demo): after a restart or on another replica a cursor
+    # is invalid_input and the caller starts over; a shared key with the KB client when there are replicas.
     # Cursor: offset + HMAC-SHA256 over (tenant, principal, query, collections, limit) with a key of this process.
     def _cursor(self, binding: bytes, offset: int) -> str:
         return f"{offset}.{hmac.new(self._cursor_key, binding + str(offset).encode(), hashlib.sha256).hexdigest()}"

@@ -193,8 +193,9 @@ jobs:
     # AC-M5-01, AC-M5-04: the dev stand (compose.yaml) end to end: ContextForge (pinned digest) + PostgreSQL +
     # demo, SC-01…SC-10 and MC-01…MC-04 through ContextForge, then again after restarting and after recreating
     # every container with no setup in between. The report goes to the job's artifacts.
+    # M6: the same stand also runs the KB wrapper (connectors/kb) and stand/tests/test_kb.py; M6.json is uploaded too.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45  # three runs of ~7.5 min plus two image builds and three compose ups (M6 critic, F7)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -206,7 +207,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: m5-conformance
-          path: reports/conformance/M5.json
+          path: |
+            reports/conformance/M5.json
+            reports/conformance/M6.json
 
   grants-widening:
     # AC-M2-04 / GR-10: red while the policy diff has widening and no code owner added the

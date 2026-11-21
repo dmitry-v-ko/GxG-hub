@@ -56,10 +56,14 @@ def merged_grants(tenant_files: list[Path]) -> dict[str, Any]:
         for kind in ("agents", "humans")
     }
     groups = {k: v for d in docs for k, v in d.get("groups", {}).items()}
+    connections = [c for d in docs for c in d["connections"]]
+    names = [g for d in docs for g in d.get("groups", {})] + [c["id"] for c in connections]
+    if len(names) != len(set(names)):  # a group or connection of one connector must not shadow another's
+        raise SystemExit(f"{tenant_files[0].name}: the same group or connection id in two connectors' fixtures")
     return (
         docs[0]
         | {
-            "connections": [c for d in docs for c in d["connections"]],
+            "connections": connections,
             "principals": {k: v for k, v in principals.items() if v},
             "grants": [g for d in docs for g in d["grants"]],
         }

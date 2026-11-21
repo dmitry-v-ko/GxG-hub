@@ -2,19 +2,19 @@
 
 Тонкий MCP-коннектор на FastMCP и `gxg-connector-kit` между ContextForge и KB. Спека: [Интеграция сервисов, KB](../../docs/specs/service-integration-v1.md#knowledge-base). Аудит KB: [kb-gap-audit](../../docs/audits/kb-gap-audit.md) — **не выполнен**, нет доступа к `gxg_agents_v2` ([эскалация](../../reports/M6-ESCALATION.md)).
 
-**Сейчас KB — синтетический fake-KB** в процессе коннектора (`src/kb_connector/backend.py`, данные `fixtures/kb.json`). После аудита меняется только `backend.py`; tools и проверки прав остаются.
+**Сейчас KB — синтетический fake-KB** в процессе коннектора (`src/kb_connector/backend.py`, данные `fixtures/kb.json`). Порт `Backend` уже такой, каким должен быть сетевой клиент KB: async (таймаут tool'а из manifest прерывает зависший вызов) и постраничный (`search(..., offset, limit)` → страница и признак «есть ещё»). После аудита пишется клиент KB с этим интерфейсом; tools и проверки прав остаются.
 
 ## Tools (read)
 
 | Tool | Что делает | Права (GR) |
 | --- | --- | --- |
 | `kb.documents.search` | Поиск по коллекциям, `search-result.schema.json`, cursor | `read` на `kb:<connection>/collection/<id>`; запрос в KB только по разрешённым коллекциям (GR-16), каждый результат проверяется снова; названная коллекция без права → `not_found` до обращения к KB (GR-17) |
-| `kb.documents.get` | Документ по ID | Коллекцию называет KB, не аргумент (GR-01, GR-03). Нет права или чужой tenant → `not_found`, побайтно как отсутствующий (SC-05) |
+| `kb.documents.get` | Документ по ID; `content` до 20 000 символов, `truncated: true`, если документ длиннее | Коллекцию называет KB, не аргумент (GR-01, GR-03). Нет права или чужой tenant → `not_found`, побайтно как отсутствующий (SC-05). Нет права ни на одну коллекцию → `not_found` без обращения к KB |
 | `kb.context.get` | Контекст под вопрос: отрывки лучших документов в пределах `max_chars` | Как поиск. Обрезанный результат — `complete: false`, `truncated` |
 
 `kb.documents.create/update` (`write_reversible`, роль curator) — не в M6.
 
-Порядок проверок каждого вызова: identity (`X-GxG-Identity` от ContextForge, ADR-0001 C) → JSON Schema входа → валидный bundle (GR-12) → grants → KB. Одна строка аудита на вызов: `tenant`, `principal`, `grant_id`, `outcome`, `kb_calls`, без запроса и текста документов (SEC-18).
+Порядок проверок каждого вызова: identity (`X-GxG-Identity` от ContextForge, ADR-0001 C) → JSON Schema входа → валидный bundle (GR-12) → grants → KB. Одна строка аудита на вызов: `tenant`, `principal`, `bundle_version` (GR-14), `grant_id`, `outcome`, `kb_calls`, без запроса и текста документов (SEC-18). Заголовки и тексты KB обрезаются до лимитов схем выхода (MCC-04).
 
 ## Конфигурация
 
@@ -34,7 +34,7 @@ docker build -f connectors/kb/Dockerfile -t gxg-kb .   # образ
 stand/run.sh                                           # стенд M5 + kb: stand/tests/test_kb.py через ContextForge
 ```
 
-`/healthz` — жив; `/readyz` — загружен валидный bundle (fake-KB всегда доступен).
+`/healthz` — жив; `/readyz` — загружен валидный bundle и KB доступна (`Backend.ready()`; fake-KB всегда доступен, клиент KB будет проверять соединение).
 
 ## Runbook
 
@@ -50,3 +50,4 @@ stand/run.sh                                           # стенд M5 + kb: sta
 - Клиент настоящей KB: протокол неизвестен до аудита (`shortcut` в `backend.py`).
 - Runner tool'а и загрузка bundle скопированы из `demo` (`shortcut` в `tools.py`, `server.py`): вынести в kit вместе с шаблоном toolkit.
 - `kb_calls` в аудите — общий счётчик процесса: точен для последовательных вызовов (`shortcut`).
+- Ключ курсора живёт в процессе: после рестарта или на другой реплике курсор → `invalid_input` (`shortcut`, одна реплика).

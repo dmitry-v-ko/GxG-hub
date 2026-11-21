@@ -121,6 +121,7 @@ class BundleFiles:
 def create_app(
     connector: Connector, verifier: IdentityVerifier, refresh: Callable[[], None], store: BundleStore
 ) -> Starlette:
+    """The MCP app: the three tools on /mcp, /healthz, /readyz (MCC-09)."""
     mcp = FastMCP("kb")
     for tool in connector.tools(verifier, refresh):
         mcp.add_tool(tool)
@@ -131,14 +132,12 @@ def create_app(
 
     @mcp.custom_route("/readyz", methods=["GET"])
     async def readyz(_: Request) -> JSONResponse:
-        # Read-only connector: KB (in-process fake-KB) + valid bundle; no Approval Service (MCC-09).
+        # Read-only connector: the KB + a valid bundle; no Approval Service (MCC-09). Reasons stay in the log.
         refresh()
-        ready = store.readiness()
-        if not ready.ready:
-            log.warning(json.dumps({"event": "not_ready", "reasons": list(ready.reasons)}))
-        return JSONResponse(
-            {"status": "ready" if ready.ready else "not_ready"}, status_code=200 if ready.ready else 503
-        )
+        reasons = list(store.readiness().reasons) + ([] if connector.backend.ready() else ["kb_unreachable"])
+        if reasons:
+            log.warning(json.dumps({"event": "not_ready", "reasons": reasons}))
+        return JSONResponse({"status": "not_ready" if reasons else "ready"}, status_code=503 if reasons else 200)
 
     return mcp.http_app(stateless_http=True, json_response=True)
 
@@ -146,26 +145,30 @@ def create_app(
 def build(settings: Settings, backend: Backend | None = None) -> tuple[Starlette, Connector]:
     backend = backend or Backend()
     settings.state_file.parent.mkdir(parents=True, exist_ok=True)
-    store = BundleStore(parse_keys(settings.bundle_keys, "KB_BUNDLE_KEYS"), state_file=settings.state_file)
-    files = BundleFiles(store, settings.bundle_dir)
+    files = BundleFiles(
+        BundleStore(parse_keys(settings.bundle_keys, "KB_BUNDLE_KEYS"), state_file=settings.state_file),
+        settings.bundle_dir,
+    )
     files.refresh()
     verifier: IdentityVerifier = NoVerifier()
     if settings.test_issuer_key is not None:
         verifier = StubVerifier(CONNECTOR_ID, parse_public_key(settings.test_issuer_key))
     elif settings.identity_keys:
         verifier = ContextForgeVerifier(CONNECTOR_ID, parse_keys(settings.identity_keys, "KB_IDENTITY_KEYS"))
-    connector = Connector(backend, store)
-    return create_app(connector, verifier, files.refresh, store), connector
+    connector = Connector(backend, files.store)
+    return create_app(connector, verifier, files.refresh, files.store), connector
+
+
+def log_handlers() -> list[logging.Handler]:
+    """JSON log lines (audit, events) to stdout; stack frames of internal errors to stderr only (SEC-18)."""
+    out, err = logging.StreamHandler(sys.stdout), logging.StreamHandler()  # stderr; the default format: message only
+    out.addFilter(lambda r: r.name != errors.name)
+    err.addFilter(lambda r: r.name == errors.name)
+    return [out, err]
 
 
 def main(env: Mapping[str, str] = os.environ) -> int:
-    # JSON log lines (audit, events) to stdout; stack frames of internal errors to stderr only.
-    out, err = logging.StreamHandler(sys.stdout), logging.StreamHandler()  # stderr
-    out.addFilter(lambda r: r.name != errors.name)
-    err.addFilter(lambda r: r.name == errors.name)
-    for h in (out, err):
-        h.setFormatter(logging.Formatter())  # the message only
-    logging.basicConfig(level=logging.INFO, handlers=[out, err])
+    logging.basicConfig(level=logging.INFO, handlers=log_handlers())
     try:
         app, _ = build(Settings.from_env(env))
     except (ConfigError, RuntimeError, ValueError, OSError) as exc:

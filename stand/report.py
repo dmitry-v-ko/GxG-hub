@@ -2,11 +2,12 @@
 «Фиксация результатов»). Keys written here are replaced; everything else in the file (acceptance, self_check,
 known limits) is kept, so the hand-written evidence survives a rerun.
 
-  uv run python stand/report.py [--milestone M6] <label>=<junit.xml> ...   (default M5)
+  uv run python stand/report.py [--milestone M6] [--exclude <test module>] <label>=<junit.xml> ...   (default M5)
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import subprocess
@@ -32,11 +33,13 @@ def locked(package: str) -> str:
     return str(next(p["version"] for p in lock["package"] if p["name"] == package))
 
 
-def run_of(path: Path) -> dict[str, Any]:
+def run_of(path: Path, exclude: tuple[str, ...] = ()) -> dict[str, Any]:
     suite = ET.parse(path).getroot()  # noqa: S314
     tests: list[dict[str, object]] = []
     by_id: dict[str, str] = {}
     for case in suite.iter("testcase"):
+        if case.get("classname", "").startswith(exclude):
+            continue
         failed = case.find("failure") is not None or case.find("error") is not None
         skipped = case.find("skipped") is not None
         status = "failed" if failed or skipped else "passed"  # a skip is a failure (DoD-5)
@@ -60,17 +63,22 @@ def run_of(path: Path) -> dict[str, Any]:
 
 
 def main() -> None:
-    args = sys.argv[1:]
-    milestone = args[1] if args[:1] == ["--milestone"] else "M5"
-    args = args[2:] if args[:1] == ["--milestone"] else args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--milestone", default="M5")
+    parser.add_argument("--exclude", action="append", default=[], help="classname prefix of tests to leave out")
+    parser.add_argument("runs", nargs="+", metavar="label=junit.xml")
+    a = parser.parse_args()
+    milestone = a.milestone
     out = REPO / "reports" / "conformance" / f"{milestone}.json"
     report = json.loads(out.read_text()) if out.exists() else {}
     compose = (REPO / "compose.yaml").read_text()
     image = re.search(r"(ghcr\.io/ibm/mcp-context-forge:\S+@sha256:[0-9a-f]{64})", compose)
     runs = {}
-    for arg in args:
-        label, _, path = arg.partition("=")
-        runs[label] = run_of(Path(path))
+    for arg in a.runs:
+        label, sep, path = arg.partition("=")
+        if not sep or not label or not path:
+            parser.error(f"expected label=junit.xml, got {arg!r}")
+        runs[label] = run_of(Path(path), tuple(a.exclude))
     report |= {
         "milestone": milestone,
         "commit": git("rev-parse", "HEAD"),

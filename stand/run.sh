@@ -30,5 +30,7 @@ docker compose up -d --wait
 suite after-recreate
 [ "${KEEP:-}" = 1 ] || docker compose down
 runs=(fresh="$out/fresh.xml" after-restart="$out/after-restart.xml" after-recreate="$out/after-recreate.xml")
-uv run python stand/report.py --milestone M6 "${runs[@]}" || true  # M6: the same runs, KB tests included
-uv run python stand/report.py "${runs[@]}"
+rc=0  # both reports are written; any red run fails the script
+uv run python stand/report.py --exclude stand.tests.test_kb "${runs[@]}" || rc=1  # M5: its own tests only
+uv run python stand/report.py --milestone M6 "${runs[@]}" || rc=1  # M6: the M5 suite (regression) + the KB tests
+exit "$rc"

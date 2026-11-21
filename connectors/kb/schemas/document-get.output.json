@@ -3,12 +3,13 @@
   "title": "kb.documents.get output",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "collection", "title", "content", "updated_at", "source_ref"],
+  "required": ["id", "collection", "title", "content", "truncated", "updated_at", "source_ref"],
   "properties": {
     "id": {"type": "string", "minLength": 1, "maxLength": 64},
     "collection": {"type": "string", "minLength": 1, "maxLength": 64},
     "title": {"type": "string", "maxLength": 300},
     "content": {"type": "string", "maxLength": 20000},
+    "truncated": {"type": "boolean", "description": "true if the KB document is longer than content holds"},
     "updated_at": {"type": "string", "format": "date-time"},
     "source_ref": {"type": "string", "maxLength": 512}
   }

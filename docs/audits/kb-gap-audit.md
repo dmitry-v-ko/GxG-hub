@@ -39,7 +39,7 @@
 
 ## Что уже сделано на fake-KB
 
-[`connectors/kb`](../../connectors/kb): `kb.documents.search`, `kb.documents.get`, `kb.context.get`; KB за портом `Backend` (`backend.py`). Проверено через ContextForge на стенде M5 ([`stand/tests/test_kb.py`](../../stand/tests/test_kb.py)): только `sales` для агента с grant'ом на `sales`, документ другой коллекции или tenant'а → `not_found` побайтно как отсутствующий, ноль вызовов KB при отказе. Это AC-M6-02 **на fake-KB**, а не на KB.
+[`connectors/kb`](../../connectors/kb): `kb.documents.search`, `kb.documents.get`, `kb.context.get`; KB за async постраничным портом `Backend` (`backend.py`), данные KB обрезаются до схем выхода. Проверено через ContextForge на стенде M5 ([`stand/tests/test_kb.py`](../../stand/tests/test_kb.py)): только `sales` для агента с grant'ом на `sales`, документ другой коллекции или tenant'а → `not_found` побайтно как отсутствующий, ноль вызовов KB при отказе. Это AC-M6-02 **на fake-KB**, а не на KB.
 
 ## План AC-M6-04 (после доступа)
 

@@ -33,13 +33,12 @@ addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
 xfail_strict = true
 
 # DoD-4: modules with the M6 key conditions: collection grants, not_found, the check order of every call,
-# context budget (tools.py), the fake-KB filter (backend.py). server.py (configuration and app plumbing, a copy of
-# demo_connector.server, whose mutants demo's suite kills) is covered by tests, not mutated: shortcut until both
-# move into gxg-connector-kit.
+# context budget (tools.py), the fake-KB filter (backend.py), verifier selection, profile guard, bundle loading,
+# readiness (server.py).
 # Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh does it in CI).
 [tool.mutmut]
 source_paths = ["src/kb_connector/"]
-only_mutate = ["*/tools.py", "*/backend.py"]
+only_mutate = ["*/tools.py", "*/backend.py", "*/server.py"]
 also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml"]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
