@@ -11,7 +11,7 @@ import logging
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 import psycopg
 from prometheus_client import Counter
@@ -81,7 +81,7 @@ _SQL_DISPATCH = "SELECT gxg_dispatch(%s, %s, %s, %s)"
 @dataclass(frozen=True)
 class Created:
     status: dict[str, Any]
-    new: bool  # 201 vs 200 (idempotent repeat)
+    http_status: int  # 201 new, 200 idempotent repeat
 
 
 def _iso(value: Any) -> str | None:
@@ -90,7 +90,7 @@ def _iso(value: Any) -> str | None:
 
 def status_doc(conn: psycopg.Connection[Any], row: Mapping[str, Any]) -> dict[str, Any]:
     """intent-status.schema.json: no args, preview or tokens."""
-    received = conn.execute(_SQL_RECEIVED, (row["intent_id"],)).fetchone()
+    received = _one(conn, _SQL_RECEIVED, (row["intent_id"],))[0]
     doc: dict[str, Any] = {
         "intent_id": str(row["intent_id"]),
         "tenant_id": row["tenant_id"],
@@ -100,7 +100,7 @@ def status_doc(conn: psycopg.Connection[Any], row: Mapping[str, Any]) -> dict[st
         "approval": {
             "mode": row["approval_mode"],
             "required_approvals": row["required_approvals"],
-            "received_approvals": received[0] if received else 0,
+            "received_approvals": received,
             "rule_ids": list(row["rule_ids"]),
         },
         "created_at": _iso(row["created_at"]),
@@ -113,10 +113,7 @@ def status_doc(conn: psycopg.Connection[Any], row: Mapping[str, Any]) -> dict[st
 
 
 def _one(conn: psycopg.Connection[Any], sql: str, params: Any) -> tuple[Any, ...]:
-    row = conn.execute(sql, params).fetchone()
-    if row is None:  # an aggregate or a function call always returns a row
-        raise GxgError("internal_error", "query returned no row")
-    return tuple(row)
+    return tuple(conn.execute(sql, params).fetchone() or ())  # aggregates and function calls always return a row
 
 
 def _audit(
@@ -167,7 +164,8 @@ def _validate(body: Any) -> dict[str, Any]:
     if error is not None:
         where = "/".join(map(str, error.absolute_path)) or "body"
         raise GxgError("invalid_input", f"intent-create: invalid at {where}")
-    return cast(dict[str, Any], body)  # the schema requires an object
+    valid: dict[str, Any] = body  # the schema requires an object
+    return valid
 
 
 def propose(conn: psycopg.Connection[Any], bundle: Bundle, caller: Service, body: Any, encryptor: Encryptor) -> Created:
@@ -186,7 +184,7 @@ def propose(conn: psycopg.Connection[Any], bundle: Bundle, caller: Service, body
     ):
         raise GxgError("permission_denied", "tool is not a registered effect tool of this connector")
     connection = req["connection_id"]
-    if connection not in grants.connections or req["resource_id"].split(":", 1)[1].split("/", 1)[0] != connection:
+    if connection not in grants.connections or req["resource_id"].partition(":")[2].partition("/")[0] != connection:
         raise GxgError("invalid_input", "connection_id is not a connection of the tenant or of the resource")
     args = canonical.normalize(req["canonical_args"])
     args_hash = canonical.hash(
@@ -216,7 +214,7 @@ def propose(conn: psycopg.Connection[Any], bundle: Bundle, caller: Service, body
         if existing is not None:  # EFF-08
             if existing["canonical_args_hash"] != args_hash:
                 raise GxgError("conflict", "idempotency_key is already used with other parameters")
-            return Created(status_doc(conn, existing), new=False)
+            return Created(status_doc(conn, existing), http_status=200)
         if _blocked(conn, tenant, req["tool_key"]):  # AS-05: inside the transaction
             raise GxgError("effect_disabled", "effects are disabled for this tenant or tool")
         hit = quotas.exceeded(policy_doc and policy_doc.get("quotas"), _counts(conn, tenant, requester))
@@ -248,7 +246,7 @@ def propose(conn: psycopg.Connection[Any], bundle: Bundle, caller: Service, body
                     conn, cur, req, tool=tool, caller=caller, decision=decision, bundle_version=bundle.version,
                     args_hash=args_hash, args_ct=args_ct, preview_ct=preview_ct,
                 )  # fmt: skip
-                return Created(row, new=True)
+                return Created(row, http_status=201)
     raise refusal  # after commit: the audit row of the refusal stays
 
 
@@ -268,38 +266,39 @@ def _insert(
     tenant, requester = req["requester"]["tenant_id"], req["requester"]["principal"]
     approved = decision.mode != "human"
     intent_id = uuid.uuid4()
-    row = cur.execute(
-        _SQL_INSERT,
-        {
-            "id": intent_id,
-            "tenant": tenant,
-            "requester": requester,
-            "task": req.get("business_task_id"),
-            "tool": req["tool_key"],
-            "version": req["tool_version"],
-            "connector": caller.id,
-            "execute": tool["executes_via"],
-            "connection": req["connection_id"],
-            "resource": req["resource_id"],
-            "class": tool["effect_class"],
-            "hash": args_hash,
-            "args": args_ct,
-            "preview": preview_ct,
-            "key": req["idempotency_key"],
-            "policy": bundle_version,
-            "rules": list(decision.rule_ids),
-            "mode": decision.mode,
-            "approvals": decision.required_approvals,
-            "step_up": decision.step_up,
-            "approvers": None if decision.approvers is None else list(decision.approvers),
-            "status": "approved" if approved else "pending_approval",
-            "ttl": decision.approval_ttl_s,
-            "approved": approved,
-            "window": decision.execution_window_s,
-        },
-    ).fetchone()
-    if row is None:
-        raise GxgError("internal_error", "insert returned no row")
+    row = (
+        cur.execute(
+            _SQL_INSERT,
+            {
+                "id": intent_id,
+                "tenant": tenant,
+                "requester": requester,
+                "task": req.get("business_task_id"),
+                "tool": req["tool_key"],
+                "version": req["tool_version"],
+                "connector": caller.id,
+                "execute": tool["executes_via"],
+                "connection": req["connection_id"],
+                "resource": req["resource_id"],
+                "class": tool["effect_class"],
+                "hash": args_hash,
+                "args": args_ct,
+                "preview": preview_ct,
+                "key": req["idempotency_key"],
+                "policy": bundle_version,
+                "rules": list(decision.rule_ids),
+                "mode": decision.mode,
+                "approvals": decision.required_approvals,
+                "step_up": decision.step_up,
+                "approvers": None if decision.approvers is None else list(decision.approvers),
+                "status": "approved" if approved else "pending_approval",
+                "ttl": decision.approval_ttl_s,
+                "approved": approved,
+                "window": decision.execution_window_s,
+            },
+        ).fetchone()
+        or {}
+    )  # INSERT … RETURNING always returns the row
     if decision.mode == "auto":
         conn.execute(_SQL_AUTO_DECISION, (intent_id,))  # EFF-03
     conn.execute(

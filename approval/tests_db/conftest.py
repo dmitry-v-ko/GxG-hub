@@ -65,6 +65,13 @@ TOOLS = [
         "executes_via": "demo.wire.execute",
     },
     {"name": "demo.board.search", "version": "1.0.0", "effect_class": "read", "action": "read"},
+    {
+        "name": "demo.memo.write",
+        "version": "1.0.0",
+        "effect_class": "write_reversible",
+        "action": "write",
+        "executes_via": "demo.memo.execute",
+    },
     {"name": "demo.orphan.propose", "version": "1.0.0", "effect_class": "external_effect", "action": "propose"},
 ]
 

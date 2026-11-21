@@ -160,7 +160,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (route table)
                 return intents.propose(conn, deps.store.current, connector, doc, deps.encryptor)
 
         created = await run_in_threadpool(run)
-        return JSONResponse(created.status, status_code=201 if created.new else 200)
+        return JSONResponse(created.status, status_code=created.http_status)
 
     @app.get("/v1/intents/{intent_id}", operation_id="getIntent", responses=_responses(200, 401, 404))
     def get_intent(

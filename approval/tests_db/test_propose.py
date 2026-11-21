@@ -9,13 +9,21 @@ from typing import Any
 
 import httpx
 import psycopg
+import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
+from prometheus_client import REGISTRY
 from psycopg_pool import ConnectionPool
 
 from gxg_approval.api import create_app
 from gxg_approval.crypto import Decryptor
 from gxg_connector_kit import _schema
+
+
+def stored_hash(owner: psycopg.Connection[Any]) -> str:
+    row = owner.execute("SELECT canonical_args_hash FROM intents").fetchone()
+    assert row is not None
+    return str(row[0])
 
 
 def count(owner: psycopg.Connection[Any], table: str = "intents") -> int:
@@ -40,8 +48,12 @@ def test_human_approval_by_default_for_external_effect(
     assert row == [
         ("notify", {"intent_id": doc["intent_id"], "tenant_id": "t-alpha", "status": "pending_approval", "version": 1})
     ]
-    audit = owner.execute("SELECT actor, action, to_status, details->>'identity_mode' FROM audit_events").fetchall()
-    assert audit == [("demo", "propose", "pending_approval", "connector_attested")]
+    audit = owner.execute("SELECT actor, action, tenant_id, intent_id::text, to_status, details FROM audit_events")
+    assert audit.fetchall() == [
+        ("demo", "propose", "t-alpha", doc["intent_id"], "pending_approval",
+         {"requester": "agent:t-alpha:bot", "identity_mode": "connector_attested", "rule_ids": [], "mode": "human",
+          "args_hash": stored_hash(owner)}),
+    ]  # fmt: skip
 
 
 def test_write_reversible_is_approved_without_human(
@@ -71,10 +83,15 @@ def test_hash_mismatch_is_invalid_input(client: TestClient, world: Any, owner: p
 def test_body_outside_the_schema_is_invalid_input(
     client: TestClient, world: Any, owner: psycopg.Connection[Any]
 ) -> None:
-    bodies: list[Any] = [{**world.body(), "extra": 1}, {**world.body(), "idempotency_key": "short"}, [], "x"]
-    for body in bodies:
+    bodies: list[tuple[Any, str]] = [
+        ({**world.body(), "extra": 1}, "body"),
+        ({**world.body(), "idempotency_key": "short"}, "idempotency_key"),
+        ([], "body"),
+        ("x", "body"),
+    ]
+    for body, where in bodies:
         r = client.post("/v1/intents", json=body, headers=world.auth())
-        assert r.status_code == 400 and r.json()["code"] == "invalid_input", body
+        assert r.status_code == 400 and r.json()["message"] == f"intent-create: invalid at {where}", body
     r = client.post("/v1/intents", content=b"{not json", headers=world.auth())
     assert r.status_code == 400
     assert count(owner) == 0
@@ -138,6 +155,8 @@ def test_31st_propose_within_an_hour_is_rate_limited(
 ) -> None:
     """AC-M7-07 (EX-17): 31st propose → 429 with retry_after_s > 0, no row, nothing in the outbox."""
     world.set_policy("t-alpha", [], quotas={"pending_per_requester_max": 100})
+    metric = {"tenant": "t-alpha", "requester": "agent:t-alpha:bot"}
+    metric_before = REGISTRY.get_sample_value("gxg_quota_rejections_total", metric) or 0
     for _ in range(30):
         assert propose().status_code == 201
     owner.execute("DELETE FROM outbox")
@@ -148,9 +167,12 @@ def test_31st_propose_within_an_hour_is_rate_limited(
     assert err["message"] == "quota propose_per_requester_per_hour exceeded"
     assert r.headers["retry-after"] == str(err["retry_after_s"])
     assert count(owner) == 30 and count(owner, "outbox") == 0
-    assert owner.execute("SELECT details->>'quota' FROM audit_events WHERE action = 'quota_rejected'").fetchall() == [
-        ("propose_per_requester_per_hour",)
+    audit = owner.execute("SELECT actor, tenant_id, details FROM audit_events WHERE action = 'quota_rejected'")
+    assert audit.fetchall() == [
+        ("demo", "t-alpha", {"requester": "agent:t-alpha:bot", "quota": "propose_per_requester_per_hour"})
     ]
+    sample = {"tenant": "t-alpha", "requester": "agent:t-alpha:bot"}
+    assert REGISTRY.get_sample_value("gxg_quota_rejections_total", sample) == metric_before + 1  # AP-07
     # another agent of the tenant is not limited by this agent's quota
     assert propose(requester="agent:t-alpha:other").status_code == 201
 
@@ -200,7 +222,12 @@ def test_requester_tool_and_connection_must_come_from_the_bundle(
         (world.body(tool="demo.board.search"), 403, not_a_tool),  # read tool: not an effect
         (world.body(tool="demo.unknown.propose"), 403, not_a_tool),
         ({**world.body(), "tool_version": "9.9.9"}, 403, not_a_tool),
-        (world.body(tool="demo.orphan.propose"), 403, not_a_tool),  # no executes_via in the bundle
+        (world.body(tool="demo.orphan.propose"), 403, not_a_tool),
+        (
+            world.body(tool="demo.memo.write"),
+            403,
+            not_a_tool,
+        ),  # a direct write tool, not propose  # no executes_via in the bundle
         (world.body(connection="demo-b", resource="demo:demo-b/board/b2"), 400, bad_connection),  # t-beta's
         (world.body(resource="demo:demo-other/board/b1"), 400, bad_connection),
     ]
@@ -230,9 +257,10 @@ def test_policy_deny_stores_nothing(propose: Callable[..., Any], world: Any, own
     r = propose()
     assert r.status_code == 403 and r.json()["message"] == "denied by the approval policy"
     assert count(owner) == 0 and count(owner, "outbox") == 0
-    assert owner.execute("SELECT action, details->>'reason' FROM audit_events").fetchall() == [
-        ("propose_denied", "no-msg")
-    ]
+    assert owner.execute("SELECT actor, action, tenant_id, details FROM audit_events").fetchall() == [
+        ("demo", "propose_denied", "t-alpha",
+         {"requester": "agent:t-alpha:bot", "tool": "demo.message.propose", "reason": "no-msg"})
+    ]  # fmt: skip
 
 
 def test_auto_approval_writes_policy_decision(
@@ -331,3 +359,32 @@ def test_payload_is_encrypted(propose: Callable[..., Any], world: Any, owner: ps
     assert {o for o in opened if secrets[0].encode() in o}
     preview = Decryptor("preview", {"t-alpha": world.payload_private["t-alpha"]["preview"]})
     assert b"Send a message" in preview.open("t-alpha", bytes(rows[0][2]))
+
+
+def test_rid_with_colon_in_the_id(propose: Callable[..., Any]) -> None:
+    """GR-02 check takes the connection between the first ':' and the next '/'."""
+    assert propose(resource="demo:demo-main/board/a:b:c").status_code == 201
+
+
+def test_policy_sees_requester_groups_and_resource_masks(propose: Callable[..., Any], world: Any) -> None:
+    world.set_policy("t-alpha", [
+        {"id": "bots-two", "match": {"requesters": ["group:bots"], "resources": ["demo:demo-main/board/*"]},
+         "decision": "require_approval", "approvals": 2},
+        {"id": "b9-step", "match": {"resources": ["demo:demo-main/board/b9"]}, "decision": "require_approval",
+         "step_up": True},
+    ])  # fmt: skip
+    bot = propose().json()["approval"]
+    assert (bot["required_approvals"], bot["rule_ids"]) == (2, ["bots-two"])
+    signals = propose(requester="agent:t-alpha:signals").json()["approval"]
+    assert (signals["required_approvals"], signals["rule_ids"]) == (1, [])
+    b9 = propose(requester="agent:t-alpha:signals", resource="demo:demo-main/board/b9").json()["approval"]
+    assert b9["rule_ids"] == ["b9-step"]
+
+
+def test_ap02_alert_is_logged(propose: Callable[..., Any], world: Any, caplog: pytest.LogCaptureFixture) -> None:
+    world.set_policy("t-alpha", [{"id": "auto-w", "match": {"tools": ["demo.wire.propose"]},
+                                  "decision": "auto_approve", "limits": {"max_per_hour": 5}}])  # fmt: skip
+    doc = propose(tool="demo.wire.propose").json()
+    assert doc["approval"]["mode"] == "human"
+    assert ("gxg_approval", 30, "ALERT policy tenant=t-alpha: auto_approve ignored for high_risk tool "
+            "demo.wire.propose: ['auto-w']") in caplog.record_tuples  # fmt: skip
