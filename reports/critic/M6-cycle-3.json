@@ -1,0 +1,481 @@
+{
+  "milestone": "M6",
+  "branch": "claude/m6-kb",
+  "commit": "93a049f",
+  "cycle": 3,
+  "threshold": 9,
+  "score": 5.0,
+  "caps_applied": [
+    "ac_not_met",
+    "major"
+  ],
+  "dimensions": {
+    "spec": 2.0,
+    "tests": 1.5,
+    "security": 1.5,
+    "code": 1.0,
+    "ops": 0.5,
+    "evidence": 0.5
+  },
+  "dimensions_note": "Raw sum 7.0; capped at 5 because AC-M6-04 is not met (blocked_by_access) and AC-M6-03 is met only for gxg_agents_v2, not for the KB server kb_access. Independently of access, two major new_regression findings in the new adapter cap at 8. Spec 2.0: the adapter follows the audited contract except kb_get tool error -> not_found (M2) and G12/G16. Tests 1.5: good adapter tests over the fake, but none for a hung readiness probe and one test enshrines the M2 deviation. Security 1.5: conditional SC-05 oracle (M2), draft-count bit (m1). Code 1.0: 1958 unused vendored lines, demo copies (F9). Ops 0.5: /readyz can hang or 500.",
+  "acceptance": [
+    {
+      "id": "AC-M6-01",
+      "status": "passed",
+      "evidence": "docs/audits/kb-gap-audit.md: every KB tool of the four catalogues (document, skill, contracts.ts, Meeting Voice) with in/out schemas, errors -> MCC-05, limits, auth, tenant/agent/collection isolation and a verdict (none 'as is'; kb_search, kb_get -> wrapper; the rest not published). Server-side fields are marked 'нет в коде' because kb_access is not in gxg_agents_v2 (G1); the live tools/list was not read (stated). Facts about gxg_agents_v2@f1c4d6d are the M11 thread's; this session has no access to recheck them. Accepted within the code that exists."
+    },
+    {
+      "id": "AC-M6-02",
+      "status": "passed_on_fake_kb",
+      "blocked_by_access": true,
+      "evidence": "Critic rerun of stand/run.sh inside check-all at 93a049f: M5 3 x 29 and M6 3 x 36 passed (fresh, after-restart, after-recreate), 0 failed, stand.tests.test_kb incl. test_the_kb_itself_is_reachable_only_from_the_wrapper. Through ContextForge, the wrapper's real KB adapter -> fake-kb service with a per-tenant read key: t-alpha reader with a grant on sales gets only published sales (101, 102, 103); hr (expired), public (no grant), draft 106, another tenant's 201 and missing 999 -> identical not_found; fake-kb reachable only from the wrapper. Unit: connectors/kb 74 passed. Not against the real KB: kb_access and the kb schema are not available (G1, G2)."
+    },
+    {
+      "id": "AC-M6-03",
+      "status": "partial",
+      "blocked_by_access": true,
+      "evidence": "gxg_agents_v2: the audit records an empty `git status` of the read-only clone at f1c4d6d, and nothing in this branch writes to it (vendored migrations are copies, not applied). The KB server repository kb_access and the live KB schema cannot be checked from here; the audit itself says 'kb_access — после доступа'. The executor's 'passed' is too strong."
+    },
+    {
+      "id": "AC-M6-04",
+      "status": "failed",
+      "blocked_by_access": true,
+      "evidence": "Blocked as declared: no kb_access, no kb DDL, no real read/write keys. Only the shape on fake-KB (test_the_fake_refuses_writes_with_a_read_key; /readyz refuses a key that lists a write tool) - this is the fake refusing, not the KB."
+    }
+  ],
+  "reruns": {
+    "check_all": "EXIT 0, 'check-all: OK' (14:23-15:03 UTC, ~40 min)",
+    "probes": "throwaway tests in the scratchpad using the fixtures of connectors/kb/tests/test_kb.py (deleted, not committed): P1 KB delayed 30 s during backend.ready(), KB then recovers -> next search of that tenant waits for the lock and returns temporarily_unavailable after 15.0 s, ready() still pending; P2 kb_get answered with a tool error for id 999 -> internal_error, doc 104 of another collection -> not_found; P3 60 matching drafts added to sales -> same visible items, complete flips true -> false with partial_reasons ['truncated']; P4 KB answers HTTP 404 -> ready() raises ExceptionGroup(MCPError) (unhandled in /readyz); P5 two tenants on one KB URL -> 2 concurrent requests (per-connection lock as the contract says); P6 one kb.documents.get = 8 POSTs cold, 4 warm, new AsyncClient each; P7 KB entity type key 'a/../*' with an all_of_type grant -> ignored, no error (fails closed)."
+  },
+  "checklist": [
+    {
+      "item": "1. [blocked_by_access] gap audit (AC-M6-01), verify the 6 assumptions, settle kb.context.get (F15)",
+      "status": "done",
+      "evidence": "Audit done by the M11 thread on gxg_agents_v2@f1c4d6d: tool table with all AC columns, assumptions table (1 confirmed, 2 not determinable -> Q2 default, 3 partial, 4 yes for entity types, 5 kb_get_context exists but crosses collections, 6 ids are integers), kb.context.get built from kb_search (G7). Server-side unknowns are marked, not invented."
+    },
+    {
+      "item": "2. [blocked_by_access] KB client behind the async paged port, per-tenant credentials (MCC-03), real /readyz probe, transport errors -> temporarily_unavailable (B2), bound ids (B1); AC-M6-02 on the real KB",
+      "status": "partly_done",
+      "evidence": "Done against the audited contract and a fake of it: backend.py MCP client, KB_CONNECTIONS_FILE with a read key per tenant from a key file, async ready() via tools/list, httpx2.TransportError and 5xx -> temporarily_unavailable (B2 closed, test_transport_errors_are_temporarily_unavailable), ids ^[1-9][0-9]{0,17}$ (B1 closed for document ids; collection keys from the KB unvalidated but fail closed, P7). Not done: real KB (blocked_by_access). New problems in this code: M1, M2."
+    },
+    {
+      "item": "3. [blocked_by_access] AC-M6-03 automated check of the KB checkout",
+      "status": "partly_done",
+      "evidence": "Recorded for gxg_agents_v2 by the M11 thread (manual, not an automated check in M6.json); kb_access unchecked (blocked_by_access)."
+    },
+    {
+      "item": "4. [blocked_by_access] AC-M6-04 write attempt with the read key refused by the KB",
+      "status": "not_done_blocked_by_access",
+      "evidence": "M6.json blocked; procedure (curl + SQL) is in the audit."
+    },
+    {
+      "item": "5. N1 per-call bundle snapshot (minor, does not block 9)",
+      "status": "not_done",
+      "evidence": "tools.py:91 unchanged; executor moved it to backlog: BundleStore.check reads current(), a snapshot needs a kit API. Reason holds; backlog row exists (M6 cycle 2)."
+    },
+    {
+      "item": "5. N2 async Backend.ready()",
+      "status": "done",
+      "evidence": "backend.py:147, server.py:140 await connector.backend.ready(); but see M1 (no bound) and m4 (500)."
+    },
+    {
+      "item": "5. N3 test for the merged_grants duplicate check",
+      "status": "done",
+      "evidence": "tests/ci/test_stand_init.py::test_merged_grants_refuses_a_shadowed_group_or_connection (groups and connections)."
+    },
+    {
+      "item": "5. N4 artifact rename, timing assertion removed",
+      "status": "done",
+      "evidence": ".github/workflows/ci.yml:209 name stand-conformance; test_backend_is_fast_by_default is gone with the old fake."
+    }
+  ],
+  "contract_conformance": [
+    {
+      "point": "URL from configuration, no redirects",
+      "status": "follows",
+      "where": "backend.py:74-90"
+    },
+    {
+      "point": "MCP over HTTP, at most one call per connection",
+      "status": "follows",
+      "where": "backend.py:110,120 (Semaphore(1) per tenant = per connection under Q2)"
+    },
+    {
+      "point": "read key only, Authorization: Bearer, per (tenant, connection) from a secret file",
+      "status": "follows",
+      "where": "backend.py:74-90; compose.yaml kb volumes; stand/init.py kb_secrets"
+    },
+    {
+      "point": "async ready(): tools/list has the three tools and no write/admin tool",
+      "status": "follows, unbounded",
+      "where": "backend.py:147-162; see M1, m4"
+    },
+    {
+      "point": "list_collections from kb_list_entity_types, active keys, TTL cache",
+      "status": "follows",
+      "where": "backend.py:164-179"
+    },
+    {
+      "point": "get_document: id pattern, workspace check, archived/status, mapping, null -> None",
+      "status": "follows",
+      "where": "backend.py:181-209"
+    },
+    {
+      "point": "kb_get tool error 'not found' -> not_found",
+      "status": "deviates, not justified",
+      "where": "backend.py:137-139; see M2"
+    },
+    {
+      "point": "search: empty collections -> no call; limit min(offset+limit+1, 50)",
+      "status": "deviates, justified",
+      "where": "backend.py:218-225: always 50 so dropped drafts do not shorten pages (recorded in the audit)"
+    },
+    {
+      "point": "only known fields",
+      "status": "follows",
+      "where": "backend.py:193-199"
+    },
+    {
+      "point": "connect timeout <= 5 s; tool timeout from the manifest",
+      "status": "follows for tools, not for /readyz",
+      "where": "backend.py:89; see M1"
+    },
+    {
+      "point": "errors: network/502-504 -> temporarily_unavailable, 429 -> rate_limited + Retry-After else 5, 401/403 -> internal_error + not ready, drift -> internal_error, KB text never passed on",
+      "status": "follows (500/501 also -> temporarily_unavailable: harmless for read)",
+      "where": "backend.py:237-258"
+    },
+    {
+      "point": "G12 limit the HTTP response body",
+      "status": "not done; the audit's claim of an SDK 1 MB limit is wrong for JSON responses",
+      "where": "see m2"
+    },
+    {
+      "point": "G16 query without a word of >= 3 characters -> empty",
+      "status": "not done",
+      "where": "see m6"
+    }
+  ],
+  "findings": [
+    {
+      "id": "M1",
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "MCC-09; audit contract «ready()», «Таймаут»; ponytail Must fix 1",
+      "where": "connectors/kb/src/kb_connector/backend.py:86-90, 114-128, 147-162; server.py:137-143",
+      "problem": "The readiness probe has no time bound (httpx Timeout(None, connect=5); only tool calls are under asyncio.wait_for) and holds the tenant's Semaphore(1). A KB that accepts the connection but does not answer makes /readyz hang forever and blocks every tool call of that tenant even after the KB recovers. Probe P1: after the KB recovered, a search waited 15.0 s and returned temporarily_unavailable; ready() still pending. Each further probe adds a waiter (its client times out, the handler is not cancelled).",
+      "required_improvement": "Bound the per-connection probe (asyncio.wait_for around _session in ready(), or a read timeout in http_client) and return False on timeout; test: fake.delay_s = 60 -> /readyz 503 within the bound, then delay 0 -> a search succeeds."
+    },
+    {
+      "id": "M2",
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "SC-05, GR-17; audit contract «kb_get → null / tool error «not found» → not_found»; ponytail Must fix 2",
+      "where": "connectors/kb/src/kb_connector/backend.py:137-139, 201-209; tests/test_kb.py:1098-1105",
+      "problem": "Every kb_get tool error becomes internal_error, while the contract maps a not-found tool error to not_found, and the KB server's not-found form is unknown ('нет в коде'). Probe P2: a KB answering a missing id with a tool error -> internal_error; a document of another collection or workspace -> not_found. Against such a KB the wrapper reveals which ids exist in other collections and tenants. The deviation is not listed in the audit; a test fixes the wrong mapping.",
+      "required_improvement": "kb_get tool error -> None (not_found), or recognise the not-found error inside the adapter and keep others internal_error; test: tool error for a missing id gives the same bytes as doc 104; record it in the audit's cycle 3 section."
+    },
+    {
+      "id": "m1",
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "GR-16",
+      "where": "connectors/kb/src/kb_connector/backend.py:221-225",
+      "problem": "complete=false is derived from a full 50-row window that includes hidden drafts and other-workspace rows (dropped after the KB, because kb_search has no status filter). Probe P3: 60 matching drafts flip complete from true to false with the same visible items: one bit about hidden matches.",
+      "required_improvement": "Record as a known limit of the Q3 default (README, audit deviations) and ask the owner for a status filter in kb_search; no code now."
+    },
+    {
+      "id": "m2",
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "G12, MCC-08; evidence accuracy",
+      "where": "docs/audits/kb-gap-audit.md «Цикл 3 M6» ('max_sse_event_size SDK (1 МБ)'); backend.py:122-124",
+      "problem": "The SDK's max_sse_event_size applies to SSE only; JSON responses are read whole (mcp/client/streamable_http.py _handle_json_response: response.aread()). The fake and the stand use json_response=True, so no limit applies.",
+      "required_improvement": "Correct the claim; refuse a response with Content-Length above e.g. 2 MB in the existing response hook, or put G12 in the backlog."
+    },
+    {
+      "id": "m3",
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "scale (ponytail Should fix 6)",
+      "where": "connectors/kb/src/kb_connector/backend.py:114-128",
+      "problem": "A new AsyncClient and MCP session per KB call: probe P6, 4 POSTs per call warm, 8 cold, a new TCP+TLS connection each, all serialized per tenant. About 2 calls/s per tenant at 100 ms RTT; bursts queue into the manifest timeouts.",
+      "required_improvement": "One AsyncClient per connection for the process lifetime (backlog acceptable for the pilot)."
+    },
+    {
+      "id": "m4",
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "MCC-09, README runbook 'kb_not_ready'",
+      "where": "connectors/kb/src/kb_connector/backend.py:155-159, 250-258",
+      "problem": "ready() catches only GxgError and RuntimeError; _classify returns unmatched exceptions as they are. Probe P4: HTTP 404 from the KB -> ExceptionGroup(MCPError) escapes, /readyz 500 with a traceback instead of 503 + 'kb_not_ready'.",
+      "required_improvement": "except Exception: return False in ready(); one test with fake.http_status = 404."
+    },
+    {
+      "id": "m5",
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "ponytail lean; Q6",
+      "where": "connectors/kb/vendor/kb-migrations/*.sql (1958 lines)",
+      "problem": "Not used by any test, script or image (SOURCE.md says so; no reference in the repo). Unlicensed copies of a private repository carried by every clone, for no current use.",
+      "required_improvement": "Delete the .sql files, keep SOURCE.md (commit + sha256); copy them back when G2 lifts."
+    },
+    {
+      "id": "m6",
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "audit G16",
+      "where": "connectors/kb/src/kb_connector/backend.py:221",
+      "problem": "A query without a word of >= 3 characters goes to kb_search, which per the audit then returns arbitrary rows (within the granted collections: relevance, not access).",
+      "required_improvement": "Return ([], False, True) without a call for such a query, or backlog with G16."
+    },
+    {
+      "id": "m7",
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "dependency hygiene",
+      "where": "connectors/kb/src/kb_connector/backend.py:24; connectors/kb/pyproject.toml:6-10",
+      "problem": "httpx2 is imported directly but comes only through mcp/fastmcp; pyyaml was declared for the same reason.",
+      "required_improvement": "Declare httpx2 in dependencies with a comment."
+    }
+  ],
+  "backlog_candidates": [
+    {
+      "id": "B4",
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "GR-14 (cycle 2 N1)",
+      "where": "connectors/kb/src/kb_connector/tools.py:91",
+      "problem": "N1 unchanged: the audit line's bundle_version can differ from the bundle used by the checks under a concurrent reload.",
+      "required_improvement": "With a kit snapshot API (BundleStore.current() + check on the snapshot)."
+    },
+    {
+      "id": "B5",
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "B1 residual, MCC-04",
+      "where": "connectors/kb/src/kb_connector/backend.py:170",
+      "problem": "Entity type keys from the KB are not checked against the RID segment pattern; probe P7 shows an odd key fails closed (ignored), so only a silent miss.",
+      "required_improvement": "Skip keys that do not match the kit's RID segment pattern, with a log line."
+    },
+    {
+      "id": "B6",
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "DoD-1 evidence",
+      "where": "reports/conformance/M6.json ci_local",
+      "problem": "ci_local is for 3d9a6bf, not the checked 93a049f (the difference is only reports/, so the result carries over).",
+      "required_improvement": "Record ci_local on the commit handed to the critic."
+    }
+  ],
+  "required_improvements": [
+    "1. [blocked_by_access] AC-M6-04: read access to the KB Access Layer server repository (kb_access; its location is Q7) and the DDL of schema kb without data (pg_dump --schema-only --schema=kb plus public.kb_*), or a test kb_access instance with auth on and synthetic read and write keys. Then run the audit's procedure as a test: the wrapper's read key cannot see write tools and a kb_create with it is refused; a select shows no row; the same call with the write key creates one (non-empty test).",
+    "2. [blocked_by_access] With the same access: run connectors/kb tests' adapter cases and stand/tests/test_kb.py against a local kb_access built from the KB's migrations (AC-M6-02 on the real KB), and check the audit's 'нет в коде' points (not-found form of kb_get, workspace scope of keys Q2, drafts Q3, tools/list per role Q4).",
+    "3. [blocked_by_access] AC-M6-03 for kb_access: commit before/after, empty git status/diff, no migrations applied; output into M6.json.",
+    "4. M1 (major, can be done now): bound the readiness probe per connection; test with a hung fake-KB that /readyz answers 503 in time and a later call succeeds.",
+    "5. M2 (major, can be done now): kb_get tool error -> not_found as in the contract; test that a missing id answered with a tool error equals the bytes of a no-grant document; note it in the audit.",
+    "6. Minors m1-m7 (do not block 9; backlog allowed): document the draft-count bit (m1); correct the G12 claim or bound the body (m2); one HTTP client per connection (m3); ready() catches all exceptions + test (m4); delete the unused vendored SQL (m5); G16 (m6); declare httpx2 (m7)."
+  ],
+  "ponytail_review": "reports/critic/M6-cycle-3.review.md",
+  "existing_solutions": [
+    {
+      "component": "KB MCP client (backend.py)",
+      "alternative": "official mcp SDK ClientSession + streamable_http_client (used); fastmcp.Client (same dependency, similar)",
+      "verdict": "use_existing",
+      "note": "the custom part is the contract mapping (workspace, status, types, errors), which no library has"
+    },
+    {
+      "component": "HTTP status capture for error mapping (response event hook)",
+      "alternative": "the SDK turns every non-2xx into a JSON-RPC error without the status; httpx event hooks are the documented way",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "exception tree walk in _classify",
+      "alternative": "except* (Python 3.11+) could match TransportError in the group, but the hook statuses and cause chains still need a walk; 8 lines",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "sequential calls per connection",
+      "alternative": "asyncio.Semaphore(1) (stdlib, used)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "entity type cache with TTL",
+      "alternative": "cachetools.TTLCache (not a dependency) vs a tuple with time.monotonic in 6 lines",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "fake-KB server (fake_kb.py)",
+      "alternative": "FastMCP (used) with its Middleware for role-based tool hiding; a recorded-response fake would not test auth/roles",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "fake-KB key guard (ASGI wrapper)",
+      "alternative": "FastMCP auth providers (BearerAuthProvider/JWT) expect JWTs, the KB key is opaque; a 10-line ASGI check is the cheapest",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "readiness probe timeout (missing, M1)",
+      "alternative": "asyncio.wait_for (stdlib) or httpx Timeout(read=...)",
+      "verdict": "use_existing",
+      "note": "not used yet"
+    },
+    {
+      "component": "response size limit (missing, m2)",
+      "alternative": "SDK max_sse_event_size covers SSE only; Content-Length check in the existing hook",
+      "verdict": "use_existing",
+      "note": "not done"
+    },
+    {
+      "component": "vendored migrations",
+      "alternative": "none needed now: unused (m5)",
+      "verdict": "delete"
+    }
+  ],
+  "threat_model": [
+    {
+      "path": "Tenant/agent spoofing via tool arguments",
+      "status": "closed",
+      "evidence": "test_identity_in_arguments_changes_nothing passes (74 passed); tenant comes from the signed identity, connection from it"
+    },
+    {
+      "path": "Forged, expired, replayed, foreign-issuer or wrong-audience identity",
+      "status": "closed",
+      "evidence": "unchanged; test_contextforge_identity_keys_select_the_kit_verifier and stand sc06 pass"
+    },
+    {
+      "path": "Direct call to kb bypassing ContextForge",
+      "status": "closed",
+      "evidence": "stand test_sc06 in the critic rerun"
+    },
+    {
+      "path": "Calling the other team's kb tools, or kb tools without a PDP allow",
+      "status": "closed",
+      "evidence": "stand test_sc01 in the critic rerun"
+    },
+    {
+      "path": "Agent registers its own gateway pointing at kb",
+      "status": "closed",
+      "evidence": "unchanged; residual is M5 backlog (3)"
+    },
+    {
+      "path": "Cross-tenant data through a mis-scoped gateway",
+      "status": "closed",
+      "evidence": "now also a per-tenant read key and a workspace check on every row; stand test_sc05"
+    },
+    {
+      "path": "Document of another collection or tenant by id (existence oracle)",
+      "status": "open",
+      "evidence": "closed on fake-KB (null for missing; other workspace/draft/archived -> not_found, stand and unit). Open against a KB that signals a missing id as a tool error: internal_error vs not_found (M2, probe P2)"
+    },
+    {
+      "path": "Named collection without a grant / expired grant / mixed list",
+      "status": "closed",
+      "evidence": "_readable before any KB call; stand test_sc10 kb_calls 0"
+    },
+    {
+      "path": "Collection-name injection ('*', '../', whitespace)",
+      "status": "closed",
+      "evidence": "kit RID pattern on input; audit assumption 6: KB type keys are like 'insight'; an odd KB key fails closed (P7), backlog B5"
+    },
+    {
+      "path": "Hidden-match count or cost leak in search/context (GR-16)",
+      "status": "open",
+      "evidence": "KB query narrowed by entity_types; but drafts/other-workspace rows are filtered after the KB and complete=false reveals a full window of hidden matches (m1, minor, probe P3)"
+    },
+    {
+      "path": "Cursor forgery or reuse",
+      "status": "closed",
+      "evidence": "HMAC binding unchanged; offset now applied to the wrapper's own window"
+    },
+    {
+      "path": "Old or tampered bundle to bring back a revoked grant",
+      "status": "closed",
+      "evidence": "unchanged kit BundleStore; tests pass"
+    },
+    {
+      "path": "Leak of query, text, tokens or exception text in logs/errors",
+      "status": "closed",
+      "evidence": "KB text never leaves the adapter (ContractError without message, tests with 'kb-secret-text'); the KB key only in a file and the Authorization header, never logged"
+    },
+    {
+      "path": "Oversized KB data breaks the response",
+      "status": "closed",
+      "evidence": "content/title cut; ids now ^[1-9][0-9]{0,17}$ (B1 closed for ids). Residual: the HTTP body is read whole before the cut (m2, minor)"
+    },
+    {
+      "path": "Slow or hung KB blocks the wrapper",
+      "status": "open",
+      "evidence": "tool calls: closed (wait_for, test_a_slow_kb_times_out_by_the_manifest). /readyz: no bound, holds the tenant lock, blocks later calls (M1, probe P1)"
+    },
+    {
+      "path": "Wrapper's service key can write to the KB / shared credentials between tenants",
+      "status": "open",
+      "evidence": "per-tenant read key by connection (MCC-03) and /readyz refusing a key that lists write tools: closed on fake-KB. The KB's own refusal (AC-M6-04): blocked_by_access"
+    },
+    {
+      "path": "The real KB does not isolate tenants/collections in the query",
+      "status": "open",
+      "evidence": "the wrapper now defends against both cases (entity_types narrowing, workspace check on every search and get row; tested with a fake that ignores the workspace). Real-KB behaviour unverified: blocked_by_access (Q2)"
+    },
+    {
+      "path": "Prompt injection in KB document text (SC-08)",
+      "status": "out_of_scope",
+      "evidence": "read-only tools, no effect path (G17 stored XSS: text returned as data)"
+    },
+    {
+      "path": "Concurrent calls corrupt the audit (kb_calls) or cursors across replicas",
+      "status": "out_of_scope",
+      "evidence": "shortcut for one replica (F10 backlog); N1 (B4) in the same group"
+    },
+    {
+      "path": "[new_scope] Reader sees drafts or archived rows (Q3)",
+      "status": "closed",
+      "evidence": "published only, archived_at null; unit and stand (draft 106 -> not_found)"
+    },
+    {
+      "path": "[new_scope] The KB itself reachable by agents or ContextForge (key and unfiltered KB exposed)",
+      "status": "closed",
+      "evidence": "fake-kb on internal network kb-backend with the wrapper only; stand test_the_kb_itself_is_reachable_only_from_the_wrapper"
+    },
+    {
+      "path": "[new_scope] Wrapper given a write/admin key (G4)",
+      "status": "closed",
+      "evidence": "/readyz fails if tools/list shows a write tool (test_readyz_needs_the_three_tools_and_no_write_tool); depends on Q4 for the real KB"
+    },
+    {
+      "path": "[new_scope] Fake-KB shipped in production",
+      "status": "closed",
+      "evidence": "Dockerfile removes fake_kb.py and fixtures/kb.json unless KEEP_FAKE_KB=1; vendor excluded by .dockerignore"
+    }
+  ],
+  "ci_local_critic": {
+    "commit": "93a049f (clean tree, HEAD = 93a049ffd191111014b4ff0f3cccd28a38df580b)",
+    "command": "export DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt'; scripts/ci/check-all.sh",
+    "result": "EXIT 0, 'check-all: OK' (14:23-15:03 UTC, ~40 min)",
+    "details": "lock checks, ruff, ruff format, mypy (all invocations) clean; root pytest 875 passed; kit 360 passed + coverage gate; connectors/demo 64 passed; connectors/kb 74 passed; schema guard proof; gitleaks tree HEAD + full range clean, tests/secrets 21 passed; gxg-policy validate/lint 0 errors; bundle_smoke and docker_smoke OK; stand/run.sh M5 3 x 29 and M6 3 x 36 passed, 0 failed; mutmut.sh exit 0: connectors/kb 1183 mutants, 1173 killed, 10 survived, all 10 in scripts/ci/mutmut-equivalent.txt (6 from cycle 2 + 4 new: Authorization/RETRY-AFTER header case, '' vs 'XXXX' non-digit default; I checked each, equivalent). reports/conformance and reports/mutmut restored with git checkout 93a049f afterwards."
+  },
+  "blocked_by": {
+    "only_ac_m6_04_limits": false,
+    "summary": "The cap 5 comes from AC-M6-04 (and the kb_access part of AC-M6-03, AC-M6-02 on the real KB), all blocked by the same access. But even with access, M1 and M2 (majors in the new adapter, fixable now without access) cap the score at 8.",
+    "access_needed": [
+      "read access to the KB Access Layer server repository kb_access (not in dmitry-v-ko/gxg_agents_v2; the owner must name it, Q7)",
+      "DDL of schema kb and public.kb_* without data (pg_dump --schema-only), or the migrations of kb_access (G2)",
+      "which upstream serves kb.agents.gxg-labs.com/mcp (Q5), for the production connection",
+      "alternatively: a test kb_access instance with auth enabled and synthetic read and write keys"
+    ]
+  },
+  "scaffold_assessment": {
+    "summary": "The adapter is close to what the real KB needs and mostly follows the audited contract; after the two majors are fixed, the access-dependent work is a run against kb_access and the AC-M6-04 test, with possible small adjustments where the audit says 'нет в коде'.",
+    "rework_needed_now": [
+      "M1 bounded readiness probe",
+      "M2 kb_get tool error -> not_found"
+    ],
+    "scaffold_score_if_access_were_not_required": 8.0
+  },
+  "lean_lines": 1958,
+  "process_notes": [
+    "Score 5.0 for the third cycle in a row; the cap comes from blocked_by_access AC. Under «Лимиты и эскалация» the milestone is already escalated (reports/M6-ESCALATION.md); the M1/M2 fixes are worth doing now so that, after access, only the access-dependent items remain.",
+    "AC-M6-03: the executor marks it passed; I mark it partial: the AC says 'diff in the KB repository is empty', and the KB server repository is kb_access, which nobody has checked."
+  ]
+}
