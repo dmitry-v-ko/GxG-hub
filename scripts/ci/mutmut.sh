@@ -16,7 +16,7 @@
 # (DoD-1); without `approval` there is no PostgreSQL and no M7 SQL step. M1.1 adds tools/gxg-connector-check.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-report="${1:-/dev/stdout}"
+report="${1:-${MUTMUT_REPORT:-/dev/stdout}}"  # MUTMUT_REPORT: the same, from check-all.sh
 all="${2:-/dev/null}"
 equivalent=scripts/ci/mutmut-equivalent.txt
 tmp=$(mktemp -d)
