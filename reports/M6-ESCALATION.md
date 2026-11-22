@@ -4,7 +4,7 @@
 
 ## Что нужно от владельца
 
-Дать сессии вехи **read-доступ** к `dmitry-v-ko/gxg_agents_v2`. Запрос `add_repo` (owner `dmitry-v-ko`, repo `gxg_agents_v2`, access `read`) 2026-11-21 отклонён политикой разрешений сессии (auto mode: «Unauthorized Access»). Обходить отказ не стали.
+Дать сессии вехи **read-доступ** к `dmitry-v-ko/gxg_agents_v2`. Запрос `add_repo` (owner `dmitry-v-ko`, repo `gxg_agents_v2`, access `read`) отклонён дважды: 2026-11-21 и повторно 2026-11-22 после сообщения оркестратора, что доступ открыт. Отказ даёт не GitHub, а классификатор разрешений этой сессии (auto mode: «Unauthorized Access»): GitHub-доступ у соседнего треда не переносится на эту сессию. Обходить отказ не стали. Снять может только пользователь: разрешить `mcp__claude-code-remote__add_repo` для этой сессии или выполнить пункты 1–4 в сессии, где доступ уже работает (тред M11).
 
 Без кода KB не выполнить:
 
@@ -47,4 +47,5 @@
 - `connectors/kb`: wrapper на FastMCP + `gxg-connector-kit`, tools `kb.documents.search`, `kb.documents.get`, `kb.context.get`; права по коллекциям через grants (GR-16, GR-17), `not_found` для чужой коллекции и tenant'а побайтно как для отсутствующего (SC-05, SC-10); async постраничный порт KB; данные KB в пределах схем выхода; `bundle_version` в аудите. 55 юнит-тестов, mutmut без неэквивалентных выживших.
 - Стенд M5 + `kb`: gateway и virtual server на team, правила `unified_pdp`, общий bundle; `stand/tests/test_kb.py` через ContextForge. Итог: M6 3 × 35, M5 3 × 29 passed (`reports/conformance/M6.json`).
 - `docs/audits/kb-gap-audit.md` — шаблон аудита и план AC-M6-04 (аудит не выполнен).
+- `ci_local` (DoD-1, решение владельца): `scripts/ci/check-all.sh` на `f3f84b0` — exit 0, «check-all: OK» (`reports/conformance/M6.json`).
 - CI на GitHub не зелёный не из-за кода: все jobs всех веток отклоняются до старта из-за биллинга аккаунта («recent account payments have failed»). Всё проверено локально (`scripts/ci/check-all.sh`, стенд, mutmut). Перед PR — перезапустить CI после исправления биллинга.
