@@ -5,12 +5,21 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from kit_testing import REPO, T0, Clock, hs256, jws
 
 from gxg_connector_kit import _jwt
-from gxg_connector_kit.exec_token import JWKS_RETRY_S, REQUIRED_CLAIMS, ExecTokenVerifier, ExecutorJwks, parse_jwks
+from gxg_connector_kit.exec_token import (
+    JWKS_RETRY_S,
+    REQUIRED_CLAIMS,
+    ExecTokenVerifier,
+    ExecutorJwks,
+    parse_jwks,
+    public_jwk,
+    sign,
+)
 from gxg_connector_kit.readiness import Readiness
 
 CONNECTOR = "demo"
@@ -349,3 +358,37 @@ def test_jti_cache_forgets_expired_entries() -> None:
     assert cache.add("a", 100, 50)
     assert not cache.add("a", 100, 99)
     assert cache.add("a", 200, 101)
+
+
+# --- signing in the executor (M8) ---------------------------------------------------------
+
+
+def test_signed_token_round_trips_through_the_verifier_and_its_jwk(clock: Clock) -> None:
+    key = Ed25519PrivateKey.generate()
+    entry = public_jwk(key.public_key())
+    assert entry == {**jwk(_jwt.thumbprint(key.public_key()), key), "use": "sig", "alg": "EdDSA"}
+    v = ExecTokenVerifier(CONNECTOR, ExecutorJwks(lambda: json.dumps({"keys": [entry]}).encode(), now=clock), now=clock)
+    body = {k: v for k, v in claims().items() if k not in ("iss", "iat", "exp")}
+    token = sign(key, body, ttl_s=30, now=clock)
+    out = v.verify(token)
+    assert out == {**body, "iss": "gxg-executor", "iat": T0, "exp": T0 + 30}
+    assert jwt.get_unverified_header(token) == {"alg": "EdDSA", "typ": "gxg-exec+jwt", "kid": entry["kid"]}
+
+
+@pytest.mark.parametrize("ttl", [0, 61])
+def test_sign_refuses_a_lifetime_outside_60s(ttl: int) -> None:
+    body = {k: v for k, v in claims().items() if k not in ("iss", "iat", "exp")}
+    with pytest.raises(ValueError, match=r"^ttl_s must be in \(0, 60\]$"):
+        sign(Ed25519PrivateKey.generate(), body, ttl_s=ttl)
+
+
+def test_sign_accepts_one_second(clock: Clock) -> None:
+    body = {k: v for k, v in claims().items() if k not in ("iss", "iat", "exp")}
+    token = sign(Ed25519PrivateKey.generate(), body, ttl_s=1, now=clock)
+    assert jwt.decode(token, options={"verify_signature": False})["exp"] == T0 + 1
+
+
+def test_sign_refuses_claims_outside_the_schema() -> None:
+    body = {k: v for k, v in claims(ahs="nothex").items() if k not in ("iss", "iat", "exp")}
+    with pytest.raises(ValueError, match=r"^execution token claims do not match execution-token\.schema\.json$"):
+        sign(Ed25519PrivateKey.generate(), body)
