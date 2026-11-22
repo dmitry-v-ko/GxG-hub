@@ -1,0 +1,367 @@
+{
+  "milestone": "M1.1",
+  "role": "critic, cycle 2 (independent subagent)",
+  "branch": "claude/m1.1-toolkit",
+  "commit": "5cca255f7a35934000e679c8e54ca8eb4d4f5b59",
+  "report_commit": "7ce253c (reports/ only on top of 5cca255)",
+  "base": "15213ee",
+  "cycle_diff": "2ee4a9d..5cca255",
+  "reviewed_at": "2026-11-22",
+  "threshold": 9,
+  "score": 9.0,
+  "caps_applied": [],
+  "cap_note": "No cap: all AC passed on rerun, check-all.sh green as written on 5cca255 (on a branch checkout), mutmut of the milestone packages green, all 10 checklist items done, no critical. Majors found are missed_earlier (backlog, plan 2nd edition p.3); new_regression findings are minor.",
+  "dimensions": {
+    "spec": 3.0,
+    "tests": 1.75,
+    "security": 2.0,
+    "code": 1.25,
+    "ops": 0.75,
+    "evidence": 0.5
+  },
+  "score_note": "sum 9.25, step 0.5 -> 9.0. tests -0.25: copier-update e2e red on a detached checkout (finding 5); code -0.25: test_mutmut_sh wipes the real mutants/ (finding 4); ops -0.25: README update procedure leaves the kit pin stale (finding 6). missed_earlier findings do not lower the score (fixed bar).",
+  "reproduction": {
+    "ci_local": {
+      "commit": "5cca255 (git worktree, local branch; main checkout 7ce253c = 5cca255 + reports for stand)",
+      "command": "MUTMUT_DIRS=\"packages/gxg-connector-kit tools/gxg-connector-check connectors/demo\" DOCKER_BUILD_FLAGS=\"--secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt\" scripts/ci/check-all.sh",
+      "result": "uv lock --check x2, uv sync, ruff check 'All checks passed!', ruff format, 5 mypy runs, root pytest 1002 passed, approval/tests_db 307 passed, schema_lock, kit coverage 455 passed + gate, demo 65 passed + check-connectors 11 passed/9 deselected, prove_schema_guard, gitleaks tree/range, tests/secrets 21 passed, gxg-policy validate/lint (0 errors), bundle_smoke ok, docker_smoke OK, stand/run.sh 29/29 fresh/after-restart/after-recreate (run from the main checkout: in the worktree ContextForge stayed unhealthy at startup twice, hung after the db probe; M1.1 touches only stand/tests/test_mc.py, not attributed), scripts/ci/mutmut.sh exit 0",
+      "first_attempt": "on a detached worktree of 5cca255 root pytest had 1 failed: test_copier_update_brings_template_changes_and_keeps_the_domain ('git worktree add ... invalid reference'): finding 5; green after `git switch -c` in the worktree"
+    },
+    "mutmut": "kit 2625 killed / 24 survived of 2649, gxg-connector-check 152/1 of 153, demo 397/2 of 399; not killed 27, listed as equivalent 27; 'mutmut: OK', exit 0. Renumbered ids spot-checked with `mutmut show`: _checked__mutmut_83 = rpartition, execute__mutmut_47 = exp-5, _endpoint__mutmut_136 = *1001: reasons hold",
+    "toolkit_tests": "tests/toolkit/test_template.py 15 passed (generated sample/read-only in its own repo pass their check-all, 5 broken sample copies + intact, copier update e2e, dockerignore render x2); tools/gxg-connector-check/tests: test_broken 21 passed (demo passes, intact copy passes, 18 broken copies with exact failed sets), test_units 6 passed",
+    "copier_update_manual": "new-connector --name sample --with-effects --dest <scratch> --kit-url file://<hub clone> --kit-rev 5cca255; answers: _src_path git+file://..., _commit 5cca255, kit_rev; hub commit B changes server.py.jinja; `uvx copier update --defaults --vcs-ref B --data kit_rev=B` exit 0: server.py and answers updated, tools.py untouched, pyproject.toml rev stays 5cca255 (finding 6)",
+    "dockerignore_real_build": "docker build of a context with .env, src/a/.env.local, src/a/x.pem: git-mode .dockerignore -> only .dockerignore, Dockerfile, src/a/code.py in the context; path-mode connectors/demo/Dockerfile.dockerignore with root .env and connectors/demo/.env -> neither in the context",
+    "cycle1_breakages": "all 8 own breakages of the cycle 1 critic repeated through check-connectors: all caught now (see checklist 4-7)",
+    "new_breakages": "n1 cursor bound to tenant not principal: green; n2 cursor not bound to query: green; n3d query logged in an `except GxgError` around notes_search: green (n3c, same path logging the provider token: SC-09 red, so the path runs and is captured); n4 hidden board dropped when named together with a readable one: green; n5 serves() without the connection check: green but no case (the RID carries the connection), not a finding; n6 propose text logged only on an exception: green, no failure mode reaches it, folded into finding 1"
+  },
+  "acceptance": [
+    {
+      "id": "AC-M1.1-01",
+      "status": "passed",
+      "evidence": "e2e test_new_service_in_its_own_repository_passes_its_gate[with-effects|read-only] green in root pytest; manual generation of sample --with-effects from a git URL at 5cca255 into scratch: exit 0, answers with _commit"
+    },
+    {
+      "id": "AC-M1.1-02",
+      "status": "passed",
+      "evidence": "test_broken.py: demo passes, 18 demo copies fail with exact sets (first 10 each on its own check); 5 sample copies incl. ex03-unverified-token ('execute без токена') on EX-03; all 8 cycle-1 own breakages caught on rerun"
+    },
+    {
+      "id": "AC-M1.1-03",
+      "status": "passed",
+      "evidence": "generated pyproject: both git deps with rev = 40-hex; scripts/check-all.sh ends with check-connectors; e2e gate test in its own git repo green"
+    },
+    {
+      "id": "AC-M1.1-04",
+      "status": "passed",
+      "evidence": "test_demo_is_on_the_template byte-compares server.py, __main__.py, Dockerfile, Dockerfile.dockerignore with a render of demo's answers (_src_path ../..); demo 65 passed; stand 29/29 x3; M8 tests not on integration (owner's arrangement)"
+    }
+  ],
+  "dod": {
+    "DoD-1": "ok: check-all.sh green as written on 5cca255 (branch checkout), mutmut of the milestone packages exit 0; note finding 5 (red on a detached checkout)",
+    "DoD-2": "ok: all AC by automated tests",
+    "DoD-3": "ok: reports/conformance/M1.1.json present; ci_local honestly says the full run was on 828ae21 and only mutmut on 5cca255; this critic's full run on 5cca255 confirms it",
+    "DoD-4": "ok: no non-equivalent survivors; suite strength rests on 23 broken copies, new gaps in findings 1-3 (backlog)",
+    "DoD-5": "ok: no skip/xfail",
+    "DoD-6": "ok: copier update works (e2e + manual); finding 6 is a docs gap of the procedure"
+  },
+  "checklist": [
+    {
+      "item": "1. check-all.sh green as written: RUF100 removed, mutmut.sh reads ran.txt from $tmp/all.txt + tests/ci test without the 2nd argument; real ci_local",
+      "status": "done",
+      "evidence": "ruff check 'All checks passed!'; mutmut.sh:56 reads $tmp/all.txt; tests/ci/test_mutmut_sh.py 2 passed; whole check-all.sh green on 5cca255 in this review (ci_local above). Side effect: finding 4"
+    },
+    {
+      "item": "2. .dockerignore of both variants excludes .env/**/.env*, mutants, caches, with a render test",
+      "status": "done",
+      "evidence": "both variants list **/.env*, **/*.pem, **/*.key, **/mutants, caches; test_dockerignore_keeps_local_secrets_out[path|git]; real docker build: .env, nested .env.local and *.pem absent from the context in both variants"
+    },
+    {
+      "item": "3. copier update works (copier.yml at root with _subdirectory, render from git URL at kit_rev, e2e update test)",
+      "status": "done",
+      "evidence": "copier.yml at the root, _subdirectory templates/python-fastmcp/template; answers carry _src_path git+file://… and _commit; e2e test green on a branch; manual update moves server.py, keeps tools.py. Gaps: findings 5 and 6 (minor)"
+    },
+    {
+      "item": "4. SC-10 asserts calls() > 0; MC-03 requires rate_limited and temporarily_unavailable; copies 'counter always 0' and 'no failure modes'",
+      "status": "done",
+      "evidence": "checks.py SC-10 `running.calls() > before`, REQUIRED_FAILURES; copies 11, 12; cycle-1 combos 04+11 -> SC-10 red, 08+12 -> MC-03 red"
+    },
+    {
+      "item": "5. EX: replay refused without a second dispatch; EX-03 token for an unserved resource/tenant with consistent ahs -> 403; copies 'no local jti cache', 'serves() always True'",
+      "status": "done",
+      "evidence": "FakeApproval.dispatch_requests, EX-04 asserts one request; retarget() recomputes ahs via effects.args_hash; copies ex04-no-jti-cache (EX-04 red), ex03-serves-everything (EX-03 red: 'a resource it does not serve: 200')"
+    },
+    {
+      "item": "6. SC-10/MC-02: list call naming a hidden resource -> not_found like missing; empty -> success; limit=1 pagination and a foreign cursor -> invalid_input; copies",
+      "status": "done",
+      "evidence": "SC-05 covers list tools with *_ids; MC-02 Call.empty and pages(); copies 13-16 each red on its check. Gaps not in the cycle-1 list: cursor of a same-tenant principal / other query (finding 2), hidden mixed with readable (finding 3)"
+    },
+    {
+      "item": "7. SC-09: propose and reads with a marker, marker absent from all logs; copy 'message text in audit'",
+      "status": "done",
+      "evidence": "SC-09 marker over free-text properties of reads and propose at INFO; copy 17; cycle-1 breakage (sample propose with {msg: text} in audit) -> SC-09 red. Gap: marker only on the success path (finding 1)"
+    },
+    {
+      "item": "8. MCC-09: backend readiness in the template and a suite check that a backend failure gives /readyz 503",
+      "status": "done",
+      "evidence": "Backend.readiness() in template and demo, readiness_of in server.py; MCC-09 check running.fail('temporarily_unavailable') -> 503; copy 18; demo test_readyz_follows_the_backend"
+    },
+    {
+      "item": "9. AC-M1.1-02: a sample copy accepting an unverified execution token, caught by EX-03",
+      "status": "done",
+      "evidence": "broken/sample/ex03-unverified-token.patch (jwt.decode without signature) -> failed {EX-03, EX-04}, in SAMPLE_BROKEN"
+    },
+    {
+      "item": "10. every new broken copy: exact failed set, own check first",
+      "status": "done",
+      "evidence": "CASES/SAMPLE_BROKEN carry (own, exact set); test_broken 21 passed, sample 6 passed"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "origin": "missed_earlier",
+      "ref": "SC-09, SEC-18",
+      "where": "tools/gxg-connector-check/src/gxg_connector_check/checks.py:331-336",
+      "problem": "the marker text is sent only with running.fail(None); the failure-mode loop uses call.args, which are never looked for. demo with `except GxgError: logs.audit.warning('search failed for query %s', query)` around notes_search -> check-connectors all green; the same path logging the provider token -> SC-09 red, so the path runs and is captured",
+      "required_improvement": "backlog: send the marker in the failure-mode loop as well; a broken copy 'query logged on a provider error'"
+    },
+    {
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "demo-connector-v1 cursor, MCC-04",
+      "where": "checks.py:150-161 (pages)",
+      "problem": "only harness.stranger (another tenant) replays the cursor: demo with the cursor bound to [tenant, query, boards, limit] or to [tenant, principal, boards, limit] -> all green; spec: bound to principal and query. Results are filtered again per caller, so no data case today",
+      "required_improvement": "backlog: replay the cursor as harness.nobody and with another query -> invalid_input"
+    },
+    {
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "GR-17",
+      "where": "checks.py:296-310 (SC-05)",
+      "problem": "a hidden resource is named alone only: demo that drops unreadable board_ids when at least one is readable -> all green; board_ids [a-public, a-secret] returns a-public notes as if a-secret were empty",
+      "required_improvement": "backlog: SC-05 also names hidden + one readable resource and expects the same not_found"
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "lean/safety of the dev loop",
+      "where": "tests/ci/test_mutmut_sh.py:36-40 with scripts/ci/mutmut.sh:37-38",
+      "problem": "the test runs the real mutmut.sh, which cds into the repository's tools/gxg-connector-check and runs `rm -rf mutants`; the stub writes mutants/ there. Every `uv run pytest` wipes earlier mutmut results of that package and breaks a mutmut.sh running in another terminal; check-all's order hides it",
+      "required_improvement": "run a copy of mutmut.sh + mutmut-equivalent.txt from tmp_path with tmp_path/tools/gxg-connector-check"
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "DoD-1 (test depends on the checkout)",
+      "where": "tests/toolkit/test_template.py:152-180",
+      "problem": "on a detached checkout of the repository (git worktree add --detach <sha>, a CI checkout of a commit) the clone is detached, the 'template change' commit is on no branch, copier's own clone does not fetch it: 'git worktree add ... invalid reference', root pytest red. Seen on a worktree of 5cca255",
+      "required_improvement": "`git switch -c template-change` in the hub clone before the commit"
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "DoD-6 / template README",
+      "where": "templates/python-fastmcp/README.md:3; copier.yml:13 (_skip_if_exists: pyproject.toml)",
+      "problem": "the documented `copier update --vcs-ref <c> --data kit_rev=<c>` then `uv lock` never changes pyproject.toml (skip_if_exists): manual run moved server.py and answers' kit_rev to B, both git deps stayed at rev 5cca255; the service runs new template code on the old kit and suite while its answers claim the new one",
+      "required_improvement": "README: bump `rev` of both git dependencies in pyproject.toml as a step (or assert it in the e2e test)"
+    },
+    {
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "AS-06 (cycle-1 minor 12)",
+      "where": "packages/gxg-connector-kit/src/gxg_connector_kit/effects.py:319-329",
+      "problem": "execute now checks the executor's tenants, reconcile does not: an executor registered for t-beta gets executed + provider operation id for a t-alpha intent; v1 has one executor with '*'",
+      "required_improvement": "backlog: tenant check in reconcile (needs the intent's tenant)"
+    }
+  ],
+  "required_improvements": [],
+  "required_improvements_note": "score >= 9: none required. Cheap fixes for the backlog: findings 4, 5, 6 (one-liners or a README line); 1-3 and 7 go to docs/backlog.md with M1.1",
+  "backlog": [
+    "SC-09: marker in the failure-mode loop + broken copy 'query logged on a provider error' (major, missed_earlier)",
+    "MC-02 pages(): cursor replay by a same-tenant principal and with another query",
+    "SC-05: hidden resource named together with a readable one",
+    "tests/ci/test_mutmut_sh.py: run a copy of mutmut.sh in tmp_path",
+    "test_copier_update…: branch in the hub clone before committing",
+    "template README: bump the pinned rev in pyproject.toml when following the template",
+    "kit reconcile: executor tenant check (AS-06)",
+    "carried from cycle 1: bundle.py -> gxg-policy packaged schemas; per-process cursor key; template re-exports"
+  ],
+  "existing_solutions": [
+    {
+      "component": "copier update path (copier.yml at the root, run_copy from git URL with vcs_ref)",
+      "alternative": "copier's own update (used); cruft for cookiecutter",
+      "verdict": "use_existing",
+      "note": "standard copier features; own code is 4 lines in new_connector.py"
+    },
+    {
+      "component": "tests/ci/test_mutmut_sh.py (stub uv in PATH)",
+      "alternative": "bats-core; running real mutmut (~40 min)",
+      "verdict": "justified_custom",
+      "note": "pytest + a 10-line shell stub is the cheapest; must run a copy (finding 4)"
+    },
+    {
+      "component": "suite additions: pages(), marker, REQUIRED_FAILURES, retarget(), dispatch_requests",
+      "alternative": "pytest caplog/capfd (used), effects.args_hash (reused, no copy), httpx MockTransport fake (extended by one list)",
+      "verdict": "use_existing",
+      "note": "no new dependency; ~90 lines of checks"
+    },
+    {
+      "component": "provider call deadline (MCC-08)",
+      "alternative": "anyio.fail_after (used)",
+      "verdict": "use_existing",
+      "note": "one context manager"
+    },
+    {
+      "component": "backend readiness",
+      "alternative": "kit Readiness/readiness_of (reused)",
+      "verdict": "use_existing",
+      "note": "no new readiness code in the kit"
+    },
+    {
+      "component": "schema validators built once",
+      "alternative": "jsonschema Draft202012Validator objects (used); FastMCP's own input validation is bypassed by GxgTool.run by design",
+      "verdict": "use_existing",
+      "note": "fields on GxgTool"
+    },
+    {
+      "component": "make_patches.py (demo + sample patch generator, 414 lines)",
+      "alternative": "hand-kept patches; mutmut-style AST edits",
+      "verdict": "justified_custom",
+      "note": "test data generator with exact replacements; regenerates all 23 patches after demo/template changes"
+    }
+  ],
+  "threat_model": [
+    {
+      "path": "call without identity / NoVerifier misconfig",
+      "status": "closed",
+      "evidence": "SC-02, copy 01"
+    },
+    {
+      "path": "forged, expired, wrong-audience identity",
+      "status": "closed",
+      "evidence": "SC-02, SC-04"
+    },
+    {
+      "path": "identity replay",
+      "status": "closed",
+      "evidence": "SC-04 replay case"
+    },
+    {
+      "path": "tenant/principal from arguments, headers, _meta",
+      "status": "closed",
+      "evidence": "SC-03, copy 02"
+    },
+    {
+      "path": "assertion for tool A or other args used for tool B",
+      "status": "closed",
+      "evidence": "kit test_verifier_gets_the_tool_and_its_arguments (unchanged)"
+    },
+    {
+      "path": "test issuer or test controls in production",
+      "status": "closed",
+      "evidence": "docker_smoke exit 2 cases green in this run"
+    },
+    {
+      "path": "named single resource without grant / hidden vs missing",
+      "status": "closed",
+      "evidence": "SC-05, copy 05"
+    },
+    {
+      "path": "named resource inside a list tool (board_ids/chat_ids) without grant",
+      "status": "closed",
+      "evidence": "was open; SC-05 for list tools with *_ids, copy 13, cycle-1 breakage caught; residual: hidden named together with a readable one not checked (finding 3, backlog)"
+    },
+    {
+      "path": "provider/backend call before grants (GR-16)",
+      "status": "closed",
+      "evidence": "was open; SC-10 positive control, copy 11; cycle-1 breakage 04+calls=0 -> SC-10 red"
+    },
+    {
+      "path": "cross-tenant data in search results",
+      "status": "closed",
+      "evidence": "SC-03, SC-10"
+    },
+    {
+      "path": "cursor of another principal or query",
+      "status": "closed",
+      "evidence": "HMAC binding in demo/template; suite now checks another tenant's principal (copy 16); same-tenant principal and other query not checked (finding 2, backlog)"
+    },
+    {
+      "path": "execute without executor service JWT",
+      "status": "closed",
+      "evidence": "EX-03, sample ex03-any-caller"
+    },
+    {
+      "path": "execute without/with bad execution token (aud, kid, exp)",
+      "status": "closed",
+      "evidence": "EX-03, sample ex03-unverified-token"
+    },
+    {
+      "path": "execution token replay (same jti)",
+      "status": "closed",
+      "evidence": "EX-04 counts dispatch requests, sample ex04-no-jti-cache"
+    },
+    {
+      "path": "token for a tenant/connection/resource this service does not serve",
+      "status": "closed",
+      "evidence": "was open; EX-03 retarget() cases, sample ex03-serves-everything"
+    },
+    {
+      "path": "args substitution after approval",
+      "status": "closed",
+      "evidence": "EX-05"
+    },
+    {
+      "path": "requester lost propose right before execute",
+      "status": "closed",
+      "evidence": "EX-14"
+    },
+    {
+      "path": "provider called before or without successful dispatch",
+      "status": "closed",
+      "evidence": "EX-16"
+    },
+    {
+      "path": "lost answer retried automatically",
+      "status": "closed",
+      "evidence": "EX-11, sample ex11; provider call now bounded by dispatch_timeout_s -> outcome_unknown (kit test)"
+    },
+    {
+      "path": "execute/reconcile through MCP",
+      "status": "closed",
+      "evidence": "EX-01"
+    },
+    {
+      "path": "provider credential in responses/logs",
+      "status": "closed",
+      "evidence": "SC-09, copy 09"
+    },
+    {
+      "path": "message texts / payload in logs",
+      "status": "open",
+      "evidence": "was open; success path now closed (SC-09 marker, copy 17, cycle-1 propose breakage caught); error path unchecked: n3d green (finding 1, major missed_earlier -> backlog). demo and template themselves log no text"
+    },
+    {
+      "path": "provider credential baked into the service image",
+      "status": "closed",
+      "evidence": "was open; both .dockerignore variants exclude **/.env*, keys; real docker build confirms"
+    },
+    {
+      "path": "executor of another tenant calls execute",
+      "status": "closed",
+      "evidence": "was open; kit AS-06 tenant check + 2 tests; reconcile still unchecked (finding 7, minor, no v1 case)"
+    },
+    {
+      "path": "direct network access to the internal port",
+      "status": "out_of_scope",
+      "evidence": "SEC-14"
+    },
+    {
+      "path": "harness/connector code monkeypatching the suite in-process",
+      "status": "out_of_scope",
+      "evidence": "plan rule 4"
+    }
+  ],
+  "ponytail_review": "reports/critic/M1.1-cycle-2.review.md",
+  "lean_lines": 0
+}
