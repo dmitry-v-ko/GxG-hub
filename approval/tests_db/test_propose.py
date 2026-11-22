@@ -162,7 +162,7 @@ def test_same_key_in_another_tenant_is_another_intent(
 
 
 def test_same_principal_and_key_in_two_tenants_is_two_intents(propose: Callable[..., Any]) -> None:
-    """EFF-08: the key is per (tenant, requester, key); one principal ID registered in both tenants is two requesters."""
+    """EFF-08: the key is per (tenant, requester, key); one principal ID in both tenants is two requesters."""
     beta = {"tenant": "t-beta", "connection": "demo-b", "resource": "demo:demo-b/board/b2"}
     a = propose(key="idem-shared-2", requester="agent:shared")
     b = propose(key="idem-shared-2", requester="agent:shared", **beta)

@@ -30,3 +30,7 @@ e7d245f8e2ef7d2a6bf52828e13b970a91cad980:tests/ci/test_check_secrets.py:generic-
 43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:185
 43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:244
 43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:252
+# The same fake key body constant (line 23) in the trees of base commits that only pulled docs from
+# claude/admiring-planck-vzys0x; reported when the scan sees them as added (critic M8 cycle 2, finding 8).
+c10fd9bac6d4c56e3350c7b3b7dfd161dba097e5:tests/ci/test_check_secrets.py:generic-api-key:23
+8128deef0fc4e65a594fbd2c9dc8236ffda29711:tests/ci/test_check_secrets.py:generic-api-key:23
