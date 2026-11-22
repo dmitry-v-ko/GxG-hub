@@ -20,6 +20,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from gxg_connector_check import bundle
 from gxg_connector_check.fakes import FakeApproval
 from gxg_connector_kit import effects, exec_token, mcp, svc_jwt
+from gxg_connector_kit._jwt import b64url_encode
 from gxg_connector_kit.effects import Dropped, Sent
 from gxg_connector_kit.errors import GxgError
 from gxg_connector_kit.exec_token import ExecutionClaims, ExecutorJwks
@@ -475,7 +476,7 @@ async def test_unexpected_error_before_dispatch(rig: Rig, caplog: pytest.LogCapt
 
 def test_connect_reads_the_key_and_the_jwks(tmp_path: Path) -> None:
     key = Ed25519PrivateKey.generate()
-    (tmp_path / "k").write_text(bundle.b64url(key.private_bytes_raw()) + "\n", encoding="ascii")
+    (tmp_path / "k").write_text(b64url_encode(key.private_bytes_raw()) + "\n", encoding="ascii")
 
     class S(mcp.Settings):
         PREFIX = "KIT"
@@ -498,7 +499,7 @@ def test_connect_reads_the_key_and_the_jwks(tmp_path: Path) -> None:
     assert (
         token.count(".") == 2 and approval._key.public_key().public_bytes_raw() == key.public_key().public_bytes_raw()
     )
-    for content in ("", "not base64 !", bundle.b64url(b"short")):
+    for content in ("", "not base64 !", b64url_encode(b"short")):
         (tmp_path / "k").write_text(content, encoding="ascii")
         with pytest.raises(mcp.ConfigError, match=r"^KIT_SVC_KEY_FILE: (ValueError|Error)$"):
             effects.connect(settings, "kit")
@@ -559,7 +560,7 @@ async def test_internal_audit_lines(rig: Rig, caplog: pytest.LogCaptureFixture) 
 
 async def test_connect_wires_the_approval_transport(tmp_path: Path) -> None:
     key = Ed25519PrivateKey.generate()
-    (tmp_path / "k").write_text(bundle.b64url(key.private_bytes_raw()), encoding="ascii")
+    (tmp_path / "k").write_text(b64url_encode(key.private_bytes_raw()), encoding="ascii")
 
     class S(mcp.Settings):
         PREFIX = "KIT"

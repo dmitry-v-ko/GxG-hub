@@ -22,6 +22,7 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from gxg_connector_kit import svc_jwt
+from gxg_connector_kit._jwt import b64url_encode
 from gxg_connector_kit.effects import Wiring
 from gxg_connector_kit.identity import StubIssuer
 from gxg_connector_kit.svc_jwt import parse_registry
@@ -99,7 +100,7 @@ class Env:
             lambda: parse_registry(self.platform), bundle.jwks(self.executor.public_key()), self.connector_id
         )
         self.write_bundle(self.grants, datetime.now(UTC) - timedelta(minutes=5))
-        (self.tmp / "svc.key").write_text(bundle.b64url(self.svc.private_bytes_raw()), encoding="ascii")
+        (self.tmp / "svc.key").write_text(b64url_encode(self.svc.private_bytes_raw()), encoding="ascii")
 
     def write_bundle(self, grants: list[dict[str, Any]], built_at: datetime) -> None:
         bundle.write(self.tmp / "bundle", grants, self.platform, self.bundle_key, built_at=built_at)

@@ -30,9 +30,7 @@ def public(key: Ed25519PublicKey) -> str:
 
 
 def grants(root: Path) -> list[dict[str, Any]]:
-    docs = [
-        yaml.safe_load(f.read_bytes()) for f in sorted((root / "fixtures" / "grants").glob("*.yaml"))
-    ]
+    docs = [yaml.safe_load(f.read_bytes()) for f in sorted((root / "fixtures" / "grants").glob("*.yaml"))]
     if not docs:
         raise ValueError(f"no grants in {root}/fixtures/grants/")
     for d in docs:
