@@ -74,12 +74,18 @@
 - **SEC-13.** В интернет не открыто ничего (решение владельца 2026-11-21, [ADR-0003](../adr/0003-network-tailscale.md)). Точки входа доступны только из tailnet Tailscale. Агенты ходят в ContextForge (MCP, HTTPS), люди — в Approval Web UI (HTTPS), оператор — в админку ContextForge и `admin` Approval Service. Коннекторы, Approval Service API, `mcp`, Executor и базы в tailnet не входят. Они работают только во внутренней сети хоста или кластера, и узлы tailnet их не видят.
 - **SEC-25.** Tailscale — дополнительный сетевой слой, а не identity. Доступ через tailnet не даёт полномочий: на каждом входе по-прежнему проверяются токен агента ContextForge (SEC-02), OIDC approver'а (SEC-06) и service JWT (SEC-24). Заголовки Tailscale (`Tailscale-User-Login` и подобные от `tailscale serve`) и IP в tailnet identity не являются (SEC-01).
 - **SEC-26.** Доступ в tailnet задаёт ACL-политика Tailscale (`policies/network/tailscale-acl.hujson`, вводится в M14). Она хранится в Git, проходит review, её изменения логируются (SEC-09). Запрещено всё, что не разрешено явно, правила пишутся по тегам:
-  - `tag:agent` → `tag:gateway:443` (ContextForge MCP);
+  - `tag:agent` → `tag:gateway:443` (ContextForge MCP; путь `/admin` и admin API на этом порту закрыты на прокси перед ContextForge, отвечают 404);
   - `group:approvers` → `tag:approval-ui:443`;
-  - `group:operators` → `tag:gateway:443`, `tag:approval-ui:443`, `tag:approval-admin:443`, SSH к узлам Hub (Tailscale SSH с проверкой `check`);
+  - `group:operators` → `tag:gateway:443`, `tag:gateway:8443` (админка ContextForge — отдельный `tailscale serve` на своём порту, решение владельца 2026-11-22), `tag:approval-ui:443`, `tag:approval-admin:443`;
   - узлы Hub (`tag:gateway`, `tag:approval-ui`, `tag:approval-admin`) не инициируют соединения к устройствам людей и агентов.
-  Проверки ACL (`tests` в политике) покрывают каждое разрешение и минимум один запрет на каждый тег. Политика применяется через GitOps (`tailscale/gitops-acl-action`) после зелёного CI.
+  Проверки ACL (`tests` в политике) покрывают каждое разрешение и минимум один запрет на каждый тег. Политика применяется скриптом через Tailscale API после зелёного локального гейта мержа (DoD-1: GitHub Actions не используются); GitOps-action — если Actions появятся.
 - **SEC-27.** Узлы Hub входят в tailnet по тегированным pre-authorized ключам с ограниченным сроком из secret store (SEC-16). У тегированных узлов нет срока действия ключа, поэтому их отзывают из админки Tailscale (runbook). Устройства людей подтверждаются администратором tailnet (device approval), Tailnet Lock — SHOULD. HTTPS — сертификаты Tailscale для имён `*.ts.net` (`tailscale serve`/`tailscale cert`): cookie `__Host-` и `Secure` (AC-M9-06) требуют HTTPS и внутри tailnet. **Funnel запрещён** на всех узлах (`nodeAttrs` без `funnel`). Exit node и subnet router на узлах Hub не включаются. Egress к провайдерам, IdP и Telegram Bot API идёт обычным интернетом по allowlist (SEC-15), не через tailnet.
+- **SEC-28.** Хостинг — Railway (решение владельца 2026-11-22). Каждый процесс — отдельный сервис Railway в одном проекте на окружение. Правила:
+  - **публичные домены Railway (`*.up.railway.app`, custom domains) не создаются ни у одного сервиса Hub**, а Railway TCP Proxy не включается;
+  - внутренние вызовы идут по Railway private networking (`*.railway.internal`);
+  - точки входа (`tag:gateway`, `tag:approval-ui`, `tag:approval-admin`) поднимают `tailscaled` в режиме userspace-networking внутри своего контейнера и отдают HTTPS через `tailscale serve`;
+  - секреты — переменные Railway на уровне сервиса, у каждого процесса только свои (AS-28), shared variables для секретов не используются;
+  - PostgreSQL Hub — сервисы Railway без публичного TCP-proxy, бэкапы — по M14.
 - **SEC-14.** Endpoint'ы `execute` коннекторов достижимы сетью только из Executor'а. Даже при сетевом доступе без валидного токена исполнения нет.
 - **SEC-15.** Egress ограничен allowlist'ом. Для любых URL, задаваемых конфигурацией или пользователем, запрещены localhost, link-local и metadata-адреса, RFC1918 и редиректы на них (защита от SSRF). Регистрация произвольных MCP-серверов доступна только оператору.
 

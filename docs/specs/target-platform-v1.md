@@ -117,7 +117,7 @@ Self-service, биллинг и клиентские админки в v1 не �
 - В интернет не публикуется ничего. ContextForge (MCP для агентов), Approval Web UI (для людей) и админ-интерфейсы доступны только из tailnet Tailscale по HTTPS. Коннекторы, Approval Service API и базы в tailnet не входят (SEC-13, SEC-25…27, [ADR-0003](../adr/0003-network-tailscale.md)).
 - `compose.yaml` в репозитории — только локальный dev-стенд.
 
-Конкретный хостинг пока не выбран. Сетевой доступ снаружи — Tailscale при любом хостинге. Хостинг влияет на реализацию внутренней изоляции, но не на требования к ней ([Security](security-v1.md#сеть)).
+Хостинг — **Railway** (решение владельца 2026-11-22, SEC-28): каждый процесс — отдельный сервис Railway, внутренняя сеть — Railway private networking, публичных доменов Railway нет, вход — только через Tailscale (`tailscaled` userspace + `tailscale serve` в контейнерах точек входа). Требования к изоляции ([Security](security-v1.md#сеть)).
 
 ## Структура репозитория (целевая)
 

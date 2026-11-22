@@ -621,7 +621,7 @@ flowchart TD
 
 ### M14 — hardening и эксплуатационная готовность
 
-**Делаем:** production-конфигурация (Tailscale по ADR-0003: теги узлов, ACL в Git с тестами и GitOps, `tailscale serve` HTTPS, Funnel выключен; secret store, PostgreSQL с PITR, сетевые политики, egress allowlist), бэкапы, runbook'и (kill switch, ротация ключей, компрометация агента, `outcome_unknown`, восстановление), политика хранения аудита, процедура изменений.
+**Делаем:** production-конфигурация на Railway (SEC-28; Tailscale по ADR-0003, админка ContextForge — отдельный порт 8443: теги узлов, ACL в Git с тестами и GitOps, `tailscale serve` HTTPS, Funnel выключен; secret store, PostgreSQL с PITR, сетевые политики, egress allowlist), бэкапы, runbook'и (kill switch, ротация ключей, компрометация агента, `outcome_unknown`, восстановление), политика хранения аудита, процедура изменений.
 
 | ID | Критерий |
 | --- | --- |
@@ -631,6 +631,8 @@ flowchart TD
 | AC-M14-04 | Внешний порт-скан production-адресов из интернета: открытых портов нет (ADR-0003, SEC-13); `tailscale funnel status` пуст на всех узлах Hub |
 | AC-M14-08 | OPS-06: с адреса вне tailnet и между неразрешёнными тегами (`tag:agent` → Web UI, admin, коннектор; approver → админка ContextForge) соединения нет; ACL `tests` в `policies/network/tailscale-acl.hujson` зелёные в CI и покрывают каждое разрешение и минимум один запрет на тег (SEC-26) |
 | AC-M14-09 | OPS-07: запрос из tailnet без токена агента / OIDC-сессии и с поддельным `Tailscale-User-Login` → 401/403, как вне tailnet (SEC-25) |
+| AC-M14-10 | С узла `tag:agent`: `GET /admin` и admin API на `tag:gateway:443` → 404, соединение с `tag:gateway:8443` не устанавливается; с устройства из `group:operators` админка на `:8443` открывается (SEC-26, ADR-0003) |
+| AC-M14-11 | Railway: ни у одного сервиса проекта Hub нет публичного домена Railway, custom domain или TCP Proxy (проверка через Railway API или CLI по всем сервисам и окружениям); внутренние вызовы идут на `*.railway.internal`; переменные-секреты каждого сервиса совпадают с таблицей AS-28 (SEC-28) |
 | AC-M14-05 | Учебная тревога по каждому runbook'у выполнена по шагам дежурным, не автором runbook'а, время до блокировки эффектов ≤ 5 мин **[ручная проверка, протокол в `reports/drills/`]** |
 | AC-M14-06 | Полный прогон Conformance Matrix (все SC, EX, MC, SI, OPS) — `passed`, отчёт `reports/conformance/stage-F.json` |
 | AC-M14-07 | Решение go/no-go на подключение первого внешнего клиента принято оператором и записано в Roadmap |
