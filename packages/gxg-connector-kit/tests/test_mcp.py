@@ -124,6 +124,9 @@ class Boxes:
         return {"kit.boxes.list": self.listing, "kit.box.get": self.get, "kit.box.propose": self.get}
 
     async def listing(self, access: Access, args: dict[str, Any]) -> Result:
+        self.calls.append(("listing", access, args))
+        if access.connection is None:  # nothing to list, no grant lookup
+            return {"boxes": [], "nothing": access.nothing}, {}
         boxes = [b for b in ("b1", "b2") if access.check(f"kit:kit-main/box/{b}").allowed]
         return {"boxes": boxes, "nothing": access.nothing}, {"seen": len(boxes)}
 
@@ -317,6 +320,9 @@ async def test_list_without_grants_is_empty_and_unknown_tenant(world: World) -> 
         other = await call(world, s, http, "kit.boxes.list", {}, principal="agent:t-beta:reader")
         single = await call(world, s, http, "kit.box.get", {"box_id": "b1"}, principal="agent:t-beta:reader")
     assert r["structuredContent"] == other["structuredContent"] == {"boxes": [], "nothing": True}
+    unknown = [a for what, a, _ in world.domain.calls if what == "listing" and a.connection is None]
+    assert len(unknown) == 1 and unknown[0].ident.principal == "agent:t-beta:reader" and unknown[0].action == "read"
+    assert unknown[0].check("kit:kit-main/box/b1").allowed is False  # the caller's check, denying for t-beta
     assert single["structuredContent"]["code"] == "not_found" and world.domain.resolved == []
 
 
@@ -795,6 +801,9 @@ def test_bundle_rejected_event_has_the_reason(world: World, caplog: pytest.LogCa
 def test_cursor_offsets_differ() -> None:
     c = mcp.Cursor()
     assert c.make(b"q", 20) != c.make(b"q", 40) and c.offset(b"q", c.make(b"q", 40)) == 40
+    forged = "40." + c.make(b"q", 20).split(".")[1]  # the MAC covers the offset too
+    with pytest.raises(GxgError):
+        c.offset(b"q", forged)
 
 
 def test_schema_tail_is_found_where_dot_dot_does_not_reach(tmp_path: Path) -> None:

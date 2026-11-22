@@ -65,9 +65,14 @@ class Provider:
             raise Dropped
         if self.mode == "crash":
             raise RuntimeError("boom")
+        if self.mode == "slow":
+            import asyncio  # noqa: PLC0415
+
+            await asyncio.sleep(0.3)
         if self.mode == "ok_without_receipt":
             return Sent("ok", None)
-        return Sent(self.mode, "op-1" if self.mode in ("ok", "duplicate") else None)  # type: ignore[arg-type]
+        mode = "ok" if self.mode == "slow" else self.mode
+        return Sent(mode, "op-1" if mode in ("ok", "duplicate") else None)  # type: ignore[arg-type]
 
     def lookup(self, intent_id: str) -> tuple[bool, str | None]:
         return (True, "op-1") if any(i == intent_id for i, _ in self.sent) else (False, None)
@@ -242,11 +247,11 @@ def test_args_hash_covers_every_part() -> None:
 
 
 async def test_propose_refusals(rig: Rig) -> None:
-    with pytest.raises(RuntimeError, match="scope: single"):
+    with pytest.raises(RuntimeError, match=r"^propose needs `resource\.scope: single`$"):
         await effects.propose(
             rig.approval, SPEC, rig.access(rid=None), {}, target_label="", kinds={}, idempotency_key=None
         )
-    with pytest.raises(RuntimeError, match="scope: single"):
+    with pytest.raises(RuntimeError, match=r"^propose needs `resource\.scope: single`$"):
         await effects.propose(
             rig.approval, SPEC, rig.access(connection=None), {}, target_label="", kinds={}, idempotency_key=None
         )
@@ -578,3 +583,16 @@ async def test_connect_wires_the_approval_transport(tmp_path: Path) -> None:
     assert r.status_code == 201 and approval.audience == "approval-api"
     jwks.readiness()
     assert hosts == ["approval.test/v1/intents", f"approval.test{effects.JWKS_PATH}"]
+
+
+async def test_internal_duration_and_spaced_token(rig: Rig, caplog: pytest.LogCaptureFixture) -> None:
+    import logging  # noqa: PLC0415
+
+    caplog.set_level(logging.INFO)
+    await rig.propose()
+    await rig.post(EXECUTE, b"x", auth="Bearer a b")  # the token is everything after the first space
+    rig.provider.mode = "slow"
+    assert (await rig.execute())[0].status_code == 200
+    spaced, slow = [json.loads(m.getMessage()) for m in caplog.records if m.name == "kit_fx.audit"]
+    assert spaced["outcome"] == "unauthenticated" and spaced["reason"] != "missing"
+    assert 250 <= slow["duration_ms"] <= 2000
