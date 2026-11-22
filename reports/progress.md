@@ -191,3 +191,5 @@
 | — | — | решение владельца | — | — | — | ADR-0005 Accepted: gxg-telegram-service сам MCP-сервер по MCC за ContextForge; ADR-0004 Superseded; Mastra ходит в Telegram только через Hub | 2026-11-22 |
 | M1.1 | — | решение владельца | — | — | — | новая веха MCP Toolkit: шаблон new-connector из demo, check-connectors, подключение кита из отдельного репозитория | 2026-11-22 |
 | M6 | — | решение владельца | dmitry-v-ko/gxg-kb-service | — | — | ADR-0006: KB-сервис — отдельный MCP-сервер по MCC на Supabase, с нуля на шаблоне M1.1; роль только на SELECT | 2026-11-22 |
+| M1.1 | 1 | владелец вехи | claude/m1.1-toolkit | — | — | запущен от integration | 2026-11-22 |
+| M6 | — | оркестратор | claude/m6-kb | — | — | тред M6 остановлен: код переходит в gxg-kb-service (ADR-0006), запуск после M1.1 | 2026-11-22 |
