@@ -84,7 +84,7 @@ Known and already in the backlog (not repeated as findings): passkey registratio
 AS-30, M10), unmarked invisible characters in Telegram text (F10), single-host OIDC relay (F11), no notifier health
 signal (F12), cycle-2 N1–N4.
 
-Verdict: Ship. Findings 1–4 are minor and go to the backlog; 4 is a reports-only fix the owner of the milestone
+Verdict: Ship. The critic's own `scripts/ci/check-all.sh` on `40bc8a5` (after `git fetch --unshallow`) ended `check-all: OK`, EXIT=0, `mutmut.sh` included. Findings 1–4 are minor and go to the backlog; 4 is a reports-only fix the owner of the milestone
 should make before the PR.
 Lean: -0 lines possible (nothing to delete; 1 and 3 are additions of one line each).
 Not checked: real Telegram and a real IdP through the `egress` profile (needs internet; the AC uses the `test`

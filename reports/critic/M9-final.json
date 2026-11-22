@@ -6,11 +6,11 @@
  "commit_note": "Task named 244000b; the branch then got 40bc8a5, which changes code (2 tests in approval/tests_db/test_propose.py killing mutmut.sh survivors in intents.py), so 40bc8a5 is the reviewed commit.",
  "base": "3c2f0b0",
  "reviewed_at": "2026-11-22",
- "report_status": "partial",
+ "report_status": "final",
  "threshold": 9,
  "score": 9.0,
  "caps_applied": [],
- "score_condition": "Holds only if scripts/ci/mutmut.sh inside the critic's check-all on 40bc8a5 exits 0 (DoD-4). If it reports survivors, the DoD cap applies (max 6) and the survivors become required_improvements.",
+ "score_condition": "Met: scripts/ci/mutmut.sh inside the critic's check-all on 40bc8a5 passed (no survivors, untested or timed-out mutants), check-all EXIT=0, so the DoD cap does not apply.",
  "dimensions": {
   "spec": 3.0,
   "tests": 2.0,
@@ -23,7 +23,7 @@
  "ci_local": {
   "commit": "40bc8a5",
   "command": "DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt --build-arg HTTPS_PROXY=... --build-arg HTTP_PROXY=...' scripts/ci/check-all.sh (after git fetch --unshallow)",
-  "result": "running: every stage before mutmut.sh green (see reproduction); scripts/ci/mutmut.sh still running at push time - final result in a follow-up reports-only commit"
+  "result": "check-all: OK, EXIT=0 (real 129m38s). root 931 passed; approval/tests_db 310 passed; approval/ui + approval/notifier tests_db 109 passed (incl. Playwright E2E); deploy 6; kit 368; demo 64; gitleaks x4 no leaks; tests/secrets 21; stand 29 passed x3 (fresh, after-restart, after-recreate); scripts/ci/mutmut.sh passed (no survivors)."
  },
  "acceptance": [
   {
