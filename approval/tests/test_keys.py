@@ -133,3 +133,14 @@ def test_not_before_is_utc_whatever_the_local_zone(tmp_path: Path, monkeypatch: 
         monkeypatch.delenv("TZ")
         time.tzset()
     assert json.loads((tmp_path / "k.json").read_text())[0]["not_before"] == "2027-01-15T08:00:00Z"
+
+
+def test_the_seed_file_is_created_0600(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """SEC-10: the temp file is private from its creation, not only after a chmod (no readable window)."""
+    old = os.umask(0o022)
+    monkeypatch.setattr(os, "chmod", lambda *_a, **_k: None)  # only the creation mode remains
+    try:
+        keys.rotate(tmp_path / "k.json", tmp_path / "j.json", now=T0)
+    finally:
+        os.umask(old)
+    assert oct((tmp_path / "k.json").stat().st_mode & 0o777) == "0o600"
