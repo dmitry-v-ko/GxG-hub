@@ -22,6 +22,8 @@
 | M5-1 MC-04, M5-2 коды CF, M5-4 таймаут read | вариант по умолчанию принят; MCC-05: `temporarily_unavailable` и для таймаута read после отправки | MCC-05 |
 | M7: компрометация `ui` через `gxg_decide` | закрывается AS-30 | AS-30 |
 | Сеть через Tailscale | принято | ADR-0003, AC-M14-04/08/09 |
+| M6-Q5/Q7: где код сервера KB (`kb_access`) и DDL схемы `kb` — в gxg_agents_v2 их нет | ждёт владельца: нужен репозиторий kb_access (read) | AC-M6-04 |
+| M6-Q1–Q4, Q6 | по умолчанию из аудита: коллекция = entity_type.key; одна connection на tenant; читателям только published; write-tools скрыты от read-ключа; миграции только для тестов | ничего |
 | M11-4: ключ дедупликации Telegram для Signals (`chat_ref:message_id` вместо `peer_id:message_id`) | решается в задании M12: сопоставление ключей один раз или переход на новый ключ | M12 |
 | M11-5: роль `gxg_telegram_reader` в production (нужен `BYPASSRLS`, выдаёт суперпользователь Supabase) | принято: оператор базы выполняет `connectors/telegram/archive/reader_role.sql`, пароль из secret store; миграций в gxg_agents_v2 нет | ручное действие при развёртывании |
 
@@ -175,3 +177,4 @@
 | M8 | 3 | критик (отдельная сессия) | claude/m8-executor | ddf8c9f | **6.0** | critical ц2 закрыт (ключ провайдера = intent_id), AC-M8-01…14 passed; DoD: устаревший id эквивалентного мутанта (mutmut.sh красный), доказательства ц3 не закоммичены → цикл 4 (формальный) | 2026-11-22 |
 | M11 | 3 | критик (отдельная сессия) | claude/m11-telegram-read | 4ebe3ec | **8.0** | 2 major: проверка дрейфа схемы ложно «чисто» под pipefail (уже исправлено da3e25f), тест flood-wait зависит от времени; + перегенерировать M11.json по полному check-all → цикл 4 в треде после аудита KB | 2026-11-22 |
 | M11 | 4 | независимый критик (отдельная сессия) | claude/m11-telegram-read | a484ec2 | **9.0** | ≥ 9 — **веха закрыта** (5.0 → 8.0 → 8.0 → 9.0); minor → backlog | 2026-11-22 |
+| M6 | — | аудит KB (тред M11) | claude/m11-telegram-read | — | — | gap-аудит готов: кода kb_access и схемы kb.* в gxg_agents_v2 нет (G1/G2 blocker); ключи общие на роль (G3/G4 critical); M6 → цикл 3 по реальному контракту, AC-M6-04 ждёт репозиторий kb_access | 2026-11-22 |
