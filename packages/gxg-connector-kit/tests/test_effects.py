@@ -596,3 +596,28 @@ async def test_internal_duration_and_spaced_token(rig: Rig, caplog: pytest.LogCa
     spaced, slow = [json.loads(m.getMessage()) for m in caplog.records if m.name == "kit_fx.audit"]
     assert spaced["outcome"] == "unauthenticated" and spaced["reason"] != "missing"
     assert 250 <= slow["duration_ms"] <= 2000
+
+
+async def test_executor_of_another_tenant_is_refused(rig: Rig) -> None:
+    """AS-06: the calling executor must serve the token's tenant (its registry entry's `tenants`)."""
+    other = Ed25519PrivateKey.generate()
+    rig.platform["services"].append({"id": "executor-beta", "kind": "executor", "tenants": ["t-beta"],
+                                     "public_keys": [bundle.public(other.public_key())]})  # fmt: skip
+    rig.write([GRANTS], datetime.now(UTC) - timedelta(minutes=1))
+    rig.files.refresh()
+    await rig.propose()
+    auth = f"Bearer {svc_jwt.sign(other, iss='executor-beta', aud='kit')}"
+    r = (await rig.execute(auth=auth))[0]
+    assert (r.status_code, r.json()["message"]) == (403, "this executor does not serve the tenant")
+    assert not rig.provider.sent and not rig.fake.dispatched
+
+
+async def test_provider_call_is_bounded_by_dispatch_timeout(rig: Rig) -> None:
+    """MCC-08: no provider answer within dispatch_timeout_s after dispatch -> outcome_unknown, no retry."""
+    rig.internal.proposes["kit.msg.execute"] = {**SPEC, "dispatch_timeout_s": 0.1}
+    rig.provider.mode = "slow"
+    await rig.propose()
+    r, execution, _ = await rig.execute()
+    assert r.status_code == 200 and r.json()["status"] == "outcome_unknown" and r.json()["operation_id"] == execution
+    assert len(rig.provider.sent) == 1
+    assert effects.DISPATCH_TIMEOUT_S == 60

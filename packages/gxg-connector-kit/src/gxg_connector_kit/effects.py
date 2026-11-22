@@ -40,7 +40,9 @@ from .exec_token import ExecTokenVerifier, ExecutionClaims, ExecutorJwks
 from .grants import BundleStore
 from .mcp import Access, ConfigError, Logs, Result, Settings
 from .redact import redact
+from .svc_jwt import Service
 
+DISPATCH_TIMEOUT_S = 60  # a `propose` tool without dispatch_timeout_s in its manifest entry
 NOT_APPROVED = "args do not match the approved hash"
 JWKS_PATH = "/.well-known/gxg-exec-jwks.json"  # executor JWKS, served by the Approval Service `api` (AS-09)
 HTTP = {
@@ -214,7 +216,7 @@ class Internal:
         return Starlette(routes=routes)
 
     def _endpoint(
-        self, execute: str, handler: Callable[[str, dict[str, Any], dict[str, Any]], Awaitable[dict[str, Any]]]
+        self, execute: str, handler: Callable[[str, dict[str, Any], dict[str, Any], Service], Awaitable[dict[str, Any]]]
     ) -> Callable[[Request], Awaitable[JSONResponse]]:
         async def run(request: Request) -> JSONResponse:
             started = time.monotonic()
@@ -224,14 +226,14 @@ class Internal:
                 if scheme.lower() != "bearer" or not token:
                     raise TokenError("missing")
                 executors = [s.id for s in self.grants.registry().values() if s.kind == "executor"]
-                self.callers.verify(token, allowed_issuers=executors)  # AS-06: only an executor
+                caller = self.callers.verify(token, allowed_issuers=executors)  # AS-06: only an executor
                 try:
                     body = json.loads(await request.body())
                 except ValueError:
                     raise GxgError("invalid_input", "body is not JSON") from None
                 if not isinstance(body, dict):
                     raise GxgError("invalid_input", "body is not an object")
-                out = await handler(execute, body, entry)
+                out = await handler(execute, body, entry, caller)
                 entry["outcome"] = out.get("status") or out.get("finding")
                 return JSONResponse(out)
             except GxgError as exc:
@@ -251,8 +253,11 @@ class Internal:
 
         return run
 
-    async def execute(self, execute: str, body: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
-        claims, args = await self._checked(execute, body, entry)  # args: the canonical form whose hash was approved
+    async def execute(
+        self, execute: str, body: dict[str, Any], entry: dict[str, Any], caller: Service
+    ) -> dict[str, Any]:
+        # args: the canonical form whose hash was approved
+        claims, args = await self._checked(execute, body, entry, caller)
         resp = await self.approval.post(
             f"/v1/executions/{claims['jti']}/dispatch", {"execution_token": body["execution_token"]}
         )
@@ -264,8 +269,9 @@ class Internal:
         self._dispatched = {j: t for j, t in self._dispatched.items() if t > now}
         self._dispatched[claims["jti"]] = claims["exp"] + 5
         # Dispatched (EFF-18 п.4): from here on the only answers are effect results (AS-12).
-        try:
-            sent = await self.provider.send(claims, args)
+        try:  # MCC-08: a finite wait; no answer in time is an unknown outcome, never a retry
+            with anyio.fail_after(self.proposes[execute].get("dispatch_timeout_s", DISPATCH_TIMEOUT_S)):
+                sent = await self.provider.send(claims, args)
         except Dropped:
             return _result(claims["jti"], "outcome_unknown", None)
         except Exception as exc:  # unknown whether the provider got it
@@ -276,7 +282,7 @@ class Internal:
         return _result(claims["jti"], "failed_before_effect", None)  # reject, rate_limited, timeout_before_start
 
     async def _checked(
-        self, execute: str, body: dict[str, Any], entry: dict[str, Any]
+        self, execute: str, body: dict[str, Any], entry: dict[str, Any], caller: Service
     ) -> tuple[ExecutionClaims, dict[str, Any]]:
         """EFF-18 п.1-3, all before `dispatch`: token, args hash, target, grant."""
         if not _schema.validator("execute-request").is_valid(body):
@@ -291,6 +297,8 @@ class Internal:
         if (claims["sub"], claims["jti"]) != (body["intent_id"], body["execution_id"]):
             raise TokenError("binding")
         tenant, principal, resource, connection = claims["ten"], claims["req"], claims["res"], claims["con"]
+        if not caller.serves(tenant):  # AS-06: the executor's registry entry lists the tenants it may execute for
+            raise GxgError("permission_denied", "this executor does not serve the tenant")
         entry |= {"tenant": tenant, "principal": principal, "intent_id": claims["sub"], "execution_id": claims["jti"]}
         tool_key, _, version = claims["tool"].partition("@")  # tool names have no `@` (execution-token schema)
         try:
@@ -308,7 +316,7 @@ class Internal:
             raise GxgError("permission_denied", "the requester no longer may propose on this resource")
         return claims, args
 
-    async def reconcile(self, execute: str, body: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
+    async def reconcile(self, execute: str, body: dict[str, Any], entry: dict[str, Any], _: Service) -> dict[str, Any]:
         if not RECONCILE_BODY.is_valid(body):
             raise GxgError("invalid_input", "body does not match the reconcile request")
         entry |= {"intent_id": body["intent_id"], "execution_id": body["execution_id"]}

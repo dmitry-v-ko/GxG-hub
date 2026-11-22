@@ -341,6 +341,8 @@ class GxgTool(Tool):
     refresh: Annotated[SkipJsonSchema[Callable[[], None]], Field(exclude=True)]
     logs: Annotated[SkipJsonSchema[Any], Field(exclude=True)]  # Logs (pydantic cannot model a Logger)
     max_bytes: Annotated[SkipJsonSchema[int], Field(exclude=True)] = MAX_RESULT_BYTES
+    # jsonschema validators of `parameters` and `output_schema`, built once in tools()
+    checks: Annotated[SkipJsonSchema[Any], Field(exclude=True)] = None
 
     async def _authorized(self, ident: VerifiedIdentity, arguments: dict[str, Any]) -> tuple[Access, Result]:
         access = await self.hook(ident, arguments)
@@ -354,7 +356,7 @@ class GxgTool(Tool):
             # (SEC-03 `tool`, `ahs`), _meta never reaches the verifier (MCC-02).
             ident = self.verify(get_http_request().headers, tool=self.name, arguments=arguments)
             entry |= {"request_id": ident.request_id, "tenant": ident.tenant_id, "principal": ident.principal}
-            error = next(jsonschema.Draft202012Validator(self.parameters).iter_errors(arguments), None)
+            error = next(self.checks[0].iter_errors(arguments), None)
             if error is not None:
                 where = "/" + "/".join(map(str, error.absolute_path))
                 raise GxgError("invalid_input", "arguments do not match the input schema", details={"path": where})
@@ -385,7 +387,7 @@ class GxgTool(Tool):
     def _bounded(self, content: dict[str, Any]) -> None:
         """MCC-04: the result matches the output schema and fits `max_bytes`; otherwise it is not sent.
         The class name of the error is what the audit line shows."""
-        if self.output_schema is not None and not jsonschema.Draft202012Validator(self.output_schema).is_valid(content):
+        if not self.checks[1].is_valid(content):
             raise OutputSchemaError
         if len(json.dumps(content, ensure_ascii=False).encode()) > self.max_bytes:
             raise OutputTooLarge
@@ -415,13 +417,13 @@ def tools(  # noqa: PLR0917 - the parts a connector wires together, named at the
 
     out = []
     for t in specs:
-        schema = load_schema(root, t["input_schema"])
+        schema, output = load_schema(root, t["input_schema"]), load_schema(root, t["output_schema"])
         out.append(
             GxgTool(
                 name=t["name"],
                 description=schema["description"],
                 parameters=schema,
-                output_schema=load_schema(root, t["output_schema"]),
+                output_schema=output,
                 timeout=float(t["limits"]["timeout_s"]),
                 handler=handlers[t["name"]],
                 hook=access_hook(domain, grants, t),
@@ -429,6 +431,7 @@ def tools(  # noqa: PLR0917 - the parts a connector wires together, named at the
                 refresh=ready,
                 logs=logs,
                 max_bytes=int(t["limits"].get("max_bytes", MAX_RESULT_BYTES)),
+                checks=(jsonschema.Draft202012Validator(schema), jsonschema.Draft202012Validator(output)),
             )
         )
     return out
