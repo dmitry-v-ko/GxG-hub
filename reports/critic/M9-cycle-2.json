@@ -1,0 +1,445 @@
+{
+ "milestone": "M9",
+ "cycle": 2,
+ "branch": "claude/m9-ui-bot",
+ "commit": "aaa770cd3e88f341d7927f3f6f934763741f92f0",
+ "report_commit": "4f33c0e (reports/conformance/M9.json only)",
+ "base": "3c2f0b0 (origin/claude/integration); cycle diff 2c9557c..aaa770c",
+ "reviewed_at": "2026-11-22",
+ "threshold": 9,
+ "score": 9.0,
+ "score_before_caps": 9.0,
+ "caps_applied": [],
+ "cap_note": "Checklist F1-F9, F14 done and verified; F13 not done at the critic's hand-over: the owner's scripts/ci/check-all.sh on aaa770c passed every stage through stand/run.sh (log seen by the critic), its last step mutmut.sh was still running (approval package). The critic reran all M9 mutation parts itself (ui, notifier, kit loader, F14 SQL) - green. The score holds on condition that mutmut.sh exits 0 and the owner records it in ci_local; if it fails, the DoD cap (6) applies. No critical/major; 4 minor new_regression findings -> backlog.",
+ "dimensions": {
+  "spec": 3.0,
+  "tests": 2.0,
+  "security": 2.0,
+  "code": 1.0,
+  "ops": 0.75,
+  "evidence": 0.25
+ },
+ "checklist": [
+  {
+   "id": "F1",
+   "status": "done",
+   "evidence": "approval/notifier/src/gxg_approval_notifier/bot.py:27-30 httpx/httpcore -> WARNING at import (ui app.py:79-80 also httpx2); tests test_bot_token_is_in_no_log_record (control: without the setting the token is logged) and test_bot_module_sets_the_httpx_level; built image: 5244 Bot API calls, 0 token lines; notifier README runbook row 'rotate the token'"
+  },
+  {
+   "id": "F2",
+   "status": "done",
+   "evidence": "removesuffix('/') in app.py:158 and bot.py:138; both entries removed from scripts/ci/mutmut-equivalent.txt; critic mutmut: notifier 253/253 killed, ui no unlisted survivor"
+  },
+  {
+   "id": "F3",
+   "status": "done",
+   "evidence": "approval/ui/tests/test_cli.py 13 cases (TLS on non-loopback, default 0.0.0.0, loopback x3 without TLS, key without cert, http URL/issuer, every required variable, logging); cli.py in only_mutate; mutmut.sh comment corrected (ui app, stepup, render, config, cli; notifier bot); critic mutmut ui: 689 mutants, 687 killed, 2 survivors = the 2 listed equivalents"
+  },
+  {
+   "id": "F4",
+   "status": "done",
+   "evidence": "app.py summary() catches Refused -> 'превью недоступно'; test_edges.py::test_one_unreadable_preview_does_not_hide_the_list (bad ciphertext row among good: list 200, good row listed, card 503). Test uses an unopenable ciphertext in one tenant rather than two tenants; the missing-key branch raises the same Refused, so the except covers both"
+  },
+  {
+   "id": "F5",
+   "status": "done",
+   "evidence": "stepup.py docstring and approval/ui/README.md corrected; test_edges.py::test_step_up_replay_with_a_zero_counter: SoftAuthenticator(zero_counter=True), replay from the old cookie -> exactly 409, decisions count 1 (added as a new test; test_step_up_is_used_once kept)"
+  },
+  {
+   "id": "F6",
+   "status": "done",
+   "evidence": "gxg_connector_kit.grants.bundle_store_from_env used by approval/config.py and ui cli.py; old loaders deleted, all callers moved; kit tests test_bundle_store_from_env_*; critic kit mutmut 'gxg_connector_kit.grants.x_bundle_store_from_env*': 44/44 killed. Side effect: N1 (minor)"
+  },
+  {
+   "id": "F7",
+   "status": "done",
+   "evidence": "'shortcut:' comments at SessionMiddleware (app.py:168-169) and /logout (app.py:316)"
+  },
+  {
+   "id": "F9",
+   "status": "done",
+   "evidence": "app.py _version(): int() errors and values outside 0 < v < 2**31 -> 400 NO_VERSION in decision and resolve; test_edges.py::test_version_out_of_range (2**31, -1, 0 -> 400; 2**31-1 -> 409; resolve 2**31 -> 400; 0 decisions)"
+  },
+  {
+   "id": "F14",
+   "status": "done",
+   "evidence": "approval/notifier/tests_db/test_bot.py::test_link_for_two_tenants (two approver_links rows, notifications of both tenants reach the chat); mutation added to scripts/ci/mutate_m7_sql.py; critic rerun in a worktree: 'killed 0002_ui_notifier.py: a code links only the first tenant', 103 listed, 0 not as expected"
+  },
+  {
+   "id": "F13",
+   "status": "not_done",
+   "evidence": "reports/conformance/M9.json ci_local.result = 'running ... mutmut.sh still running' at aaa770c/4f33c0e; owner's log: lint, mypy, root pytest 931, approval/tests_db 308, ui+notifier tests_db 109, deploy 6, kit coverage, demo 64, schema guard, gitleaks (no leaks), tests/secrets 21, policy, stand 29/0 x3 all passed; mutmut.sh was in the approval package (1573/1696) when the critic finished. Owner adds the result in a reports-only commit"
+  }
+ ],
+ "acceptance": [
+  {
+   "id": "AC-M9-01",
+   "status": "passed",
+   "evidence": "critic rerun: uv run pytest approval/ui/tests_db/test_e2e.py -v -> 2 passed (8 s, preinstalled Playwright 1.63 Chromium, oidc-provider-mock); test_oidc.py in the 655-test run green"
+  },
+  {
+   "id": "AC-M9-02",
+   "status": "passed",
+   "evidence": "test_decisions.py::test_csrf_missing_or_foreign, ::test_stale_version_or_changed_hash (version=0 now 400, +1 and other hash 409, 0 decisions) green in the critic's 655-passed run"
+  },
+  {
+   "id": "AC-M9-03",
+   "status": "passed",
+   "evidence": "test_machine_credentials_cannot_decide, test_requester_cannot_approve_own_intent, e2e test_requester_is_refused_in_the_browser, test_approver_of_another_tenant green"
+  },
+  {
+   "id": "AC-M9-04",
+   "status": "passed",
+   "evidence": "test_high_risk_needs_step_up, 300/301 s boundaries, test_step_up_for_another_intent, test_quorum_of_two_needs_two_people, new test_step_up_replay_with_a_zero_counter (409, 1 decision) green"
+  },
+  {
+   "id": "AC-M9-05",
+   "status": "passed",
+   "evidence": "e2e DOM check + test_render green"
+  },
+  {
+   "id": "AC-M9-06",
+   "status": "passed",
+   "evidence": "test_edges.py::test_headers_exact, test_screens.py::test_security_headers_and_cookie, e2e cookie jar green"
+  },
+  {
+   "id": "AC-M9-07",
+   "status": "passed",
+   "evidence": "test_bot.py::test_message_has_no_payload_and_links_the_card green"
+  },
+  {
+   "id": "AC-M9-08",
+   "status": "passed",
+   "evidence": "test_no_callback_buttons_and_commands_do_not_decide, test_long_polling_asks_only_for_messages green"
+  },
+  {
+   "id": "AC-M9-09",
+   "status": "passed",
+   "evidence": "test_digest_after_five, test_window_boundary, test_windows_are_per_chat green"
+  },
+  {
+   "id": "AC-M9-10",
+   "status": "passed",
+   "evidence": "test_link_code_once_and_ten_minutes, test_code_valid_just_before_ten_minutes, test_guessing_codes_is_limited, new test_link_for_two_tenants green"
+  },
+  {
+   "id": "AC-M9-11",
+   "status": "passed",
+   "evidence": "test_screens.py::test_manual_reconcile (+ resolve with version 2**31 -> 400 in test_version_out_of_range) green"
+  },
+  {
+   "id": "AC-M9-12",
+   "status": "passed",
+   "evidence": "critic rerun: DOCKER_BUILD_FLAGS=... uv run pytest approval/deploy/tests -v -> 6 passed (17.7 s)"
+  }
+ ],
+ "dod": {
+  "DoD-1": "pending at hand-over (F13): owner's check-all on aaa770c green through stand/run.sh, mutmut.sh running; the critic did not start a second check-all (fixed stand container names) and reran the M9 stages separately",
+  "DoD-2": "met",
+  "DoD-3": "met except ci_local result (F13)",
+  "DoD-4": "met for M9 modules on the critic's rerun: ui 687/689 killed + 2 equivalent (token_bytes(None) = DEFAULT_ENTROPY 32 = CHALLENGE_BYTES; ensure_ascii=None falsy - both confirmed again), notifier 253/253, kit bundle_store_from_env 44/44, SQL F14 killed (103 listed, 0 not as expected). The two non-equivalent rstrip entries are gone. approval package and the rest of the SQL list: owner's mutmut.sh (code unchanged since cycle 1 except config.py, now a kit call)",
+  "DoD-5": "met (no skip/xfail in the diff)",
+  "DoD-6": "met (plan table; existing_solutions below)"
+ },
+ "reproduction": [
+  "uv run pytest approval/tests approval/ui/tests approval/tests_db approval/ui/tests_db approval/notifier/tests_db packages/gxg-connector-kit/tests/test_grants.py -q -p no:randomly -m 'not e2e' -> 655 passed, 2 deselected (102.6 s)",
+  "uv run pytest approval/ui/tests_db/test_e2e.py -v -p no:randomly -> 2 passed (8.0 s)",
+  "DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt --build-arg HTTPS_PROXY=...' uv run pytest approval/deploy/tests -v -> 6 passed (17.7 s)",
+  "docker run --network host gxg-approval-notifier:m9-test, token 999:CRITIC-DEMO-SECRET, GXG_TELEGRAM_API_URL=http://127.0.0.1:18097 (stdlib fake server, 6 s) -> server saw 5244 POST /bot999:CRITIC-DEMO-SECRET/getUpdates; container output: only 'outbox: database error OperationalError' lines, 0 with the token",
+  "git worktree at aaa770c + own postgres:16.6-alpine (--network none, Unix socket); (cd approval/notifier && GXG_TEST_PG_SOCKET_DIR=<dir> uv run --project ../.. mutmut run) -> 253/253 killed",
+  "(cd approval/ui && ... mutmut run) -> 689: 687 killed, survived stepup.x_registration_options__mutmut_2, render.x_card__mutmut_6 (both listed equivalent)",
+  "(cd packages/gxg-connector-kit && uv run mutmut run 'gxg_connector_kit.grants.x_bundle_store_from_env*') -> 44/44 killed",
+  "uv run python scripts/ci/mutate_m7_sql.py 'first tenant' (worktree) -> killed; 103 mutations listed: 0 not as expected",
+  "uv run python -c 'bundle_store_from_env({})' -> KeyError: GXG_BUNDLE_KEYS (N1)"
+ ],
+ "findings": [
+  {
+   "id": "N1",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "rubric 'понятные ошибки'; F6 refactor",
+   "where": "packages/gxg-connector-kit/src/gxg_connector_kit/grants.py:328-330 via approval/ui/src/gxg_approval_ui/cli.py:49",
+   "problem": "Before cycle 2 the ui stopped with 'missing configuration: GXG_BUNDLE_KEYS' (cli.env); the shared loader reads environ[...] directly, so an unset bundle variable now gives a KeyError traceback and an empty one a JSONDecodeError. test_cli.REQUIRED omits the three bundle variables. The process still does not start (fail closed).",
+   "required_improvement": "Read the three names with env() in cli.main before bundle_store_from_env (or SystemExit in the kit helper) and add them to REQUIRED."
+  },
+  {
+   "id": "N2",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "tests: no dependence on order/time",
+   "where": "packages/gxg-connector-kit/tests/test_grants.py:505-520; approval/ui/tests/test_cli.py:120-127",
+   "problem": "The reload test leaves a daemon thread re-reading the bundle every 50 ms until pytest exits; three test_every_setting_is_required cases leave an open psycopg pool (opened before the missing variable is read) retrying in the background. No wrong result found.",
+   "required_improvement": "Stop event / returned thread for the loader in tests; patch ConnectionPool in the cli fixture or close it in every case."
+  },
+  {
+   "id": "N3",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "SEC-17 (symmetry part of F1)",
+   "where": "approval/ui/src/gxg_approval_ui/app.py:79-80",
+   "problem": "The ui's httpx/httpx2/httpcore WARNING loop runs at import (mutmut cannot reach it) and no test reads the levels. Today the ui's IdP URLs carry no secret, so removing it leaks nothing.",
+   "required_improvement": "One assertion as in test_bot_module_sets_the_httpx_level, or drop the loop."
+  },
+  {
+   "id": "N4",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "ponytail lean (delete)",
+   "where": "approval/src/gxg_approval/config.py:48-49",
+   "problem": "config.bundle_store() is now a one-line wrapper around the kit function.",
+   "required_improvement": "Call bundle_store_from_env from approval/cli.py and the test; delete the wrapper."
+  }
+ ],
+ "required_improvements": [],
+ "backlog": [
+  "N1 ui: clear SystemExit for missing GXG_BUNDLE_* (kit loader KeyError)",
+  "N2 tests: stop the bundle reload thread / pools started by test_grants and test_cli",
+  "N3 ui httpx level loop untested (or drop it)",
+  "N4 approval/config.bundle_store one-line wrapper",
+  "F13 if not yet recorded: ci_local result of check-all on aaa770c (mutmut.sh exit) - a condition of this score, not a backlog item",
+  "already in docs/backlog.md (verified): F8, F10, F11, F12, notifier outbox topic restriction"
+ ],
+ "missed_earlier": [],
+ "existing_solutions": [
+  {
+   "component": "Token out of logs (F1)",
+   "alternative": "stdlib logging levels; httpx event hooks / logging.Filter that redacts URLs",
+   "verdict": "use_existing",
+   "note": "logger level is the smallest stdlib form"
+  },
+  {
+   "component": "Trailing-slash handling (F2)",
+   "alternative": "str.removesuffix (stdlib)",
+   "verdict": "use_existing",
+   "note": "taken"
+  },
+  {
+   "component": "cli.main tests (F3)",
+   "alternative": "pytest monkeypatch of uvicorn.run/create_app",
+   "verdict": "use_existing",
+   "note": "taken; no extra dependency"
+  },
+  {
+   "component": "Per-row 'preview unavailable' (F4)",
+   "alternative": "none needed (an except on the existing Refused)",
+   "verdict": "use_existing",
+   "note": "3 lines"
+  },
+  {
+   "component": "Zero-counter soft authenticator (F5)",
+   "alternative": "soft-webauthn, fido2 test helpers; Chromium virtual authenticator (e2e)",
+   "verdict": "justified_custom",
+   "note": "one flag on the existing SoftAuthenticator (cycle-1 verdict stands)"
+  },
+  {
+   "component": "Shared bundle loader + 60 s reload thread (F6)",
+   "alternative": "gxg_connector_kit.grants (repo, taken); watchdog/inotify for file events",
+   "verdict": "use_existing",
+   "note": "moved into the kit as cycle 1 asked; polling every 60 s on stdlib is enough for GR-13 (5 min), watchdog would add a dependency for no gain"
+  },
+  {
+   "component": "version bound (F9)",
+   "alternative": "FastAPI Annotated[int, Form(gt=0, lt=2**31)] / pydantic conint",
+   "verdict": "justified_custom",
+   "note": "handlers read request.form() themselves to check CSRF first; a FastAPI 422 would bypass the screen's 400 message; 6 lines"
+  },
+  {
+   "component": "SQL mutation for F14",
+   "alternative": "no maintained PL/pgSQL mutation tool",
+   "verdict": "justified_custom",
+   "note": "one entry in the existing list"
+  }
+ ],
+ "threat_model": [
+  {
+   "path": "CSRF on decision / T18 / logout / passkey / telegram code",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: synchronizer token in the signed session, hmac.compare_digest on every POST (passkey via X-CSRF-Token header); SameSite=Strict; test_csrf_missing_or_foreign, test_session_without_csrf_token, test_logout"
+  },
+  {
+   "path": "XSS in preview (HTML, markdown, javascript: links)",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: Jinja2 autoescape=True, no |safe/Markup; CSP default-src 'self' without unsafe-inline; one static script; e2e DOM check (only template tags, window.__alerted false)"
+  },
+  {
+   "path": "Invisible/bidi characters hide or reorder preview text (UI)",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: render.visible: Cc/Cf/Zl/Zp -> ⟦U+XXXX⟧ + warning, nothing cut; test_render 39 cases; e2e U+202E/U+200B"
+  },
+  {
+   "path": "Invisible/bidi characters in Telegram notification text",
+   "cycle_1_status": "open",
+   "status": "open",
+   "evidence": "unchanged; accepted as backlog M9-F10 (docs/backlog.md), minor: hint only, decision in the UI with markers"
+  },
+  {
+   "path": "Substitution of args_hash or version in the form (stale screen)",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged; plus version outside PostgreSQL integer -> 400 instead of 500 (_version, test_version_out_of_range)"
+  },
+  {
+   "path": "Preview contradicts canonical args (connector error, EFF-33)",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: canonical args shown under the preview (details block); mismatch with stored hash -> warning, no approve button, server 409"
+  },
+  {
+   "path": "Self-approval (requester == approver, same OIDC subject)",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: gxg_decide: p_approver = requester_principal -> GX403; test_requester_cannot_approve_own_intent, e2e test_requester_is_refused_in_the_browser; SQL mutation 'requester approves own intent' killed"
+  },
+  {
+   "path": "Machine credentials (agent/service JWT) call the decision endpoint",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: ui authenticates only by session cookie; gxg_decide requires oidc: principal and membership in allowed_approvers; test_machine_credentials_cannot_decide, test_database_refuses_rows_t1_would_never_build"
+  },
+  {
+   "path": "Approver of another tenant reads or decides",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: card 404 without a role in the intent's tenant; decision 403 by current bundle; DB: allowed_approvers frozen at T1 from the tenant's role approver; test_approver_of_another_tenant, test_lists_only_own_tenants"
+  },
+  {
+   "path": "Approver removed from the bundle after T1",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: ui checks the current bundle before gxg_decide; test_approver_removed_from_bundle_after_t1"
+  },
+  {
+   "path": "Step-up missing, older than 5 min, for another intent/hash, other origin, other human, without UV",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: py_webauthn verify with challenge 'gxg-step-up|intent|hash|nonce', origin/rp_id, require_user_verification; 300/301 s boundary tests; test_step_up_for_another_intent, test_step_up_needs_the_hash_it_was_issued_for, test_step_up_from_another_origin_or_another_human, test_user_verification_is_required; DB refuses approve of step_up_required without p_step_up"
+  },
+  {
+   "path": "Step-up replay (same assertion twice)",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "docstring and README now state the real guard (DB one vote per human, challenge bound to intent+hash); test_step_up_replay_with_a_zero_counter: old cookie + zero-counter passkey -> exactly 409, 1 decision. Server-side single use with decider (AS-30, M10)"
+  },
+  {
+   "path": "Quorum 2 reached by one human (double vote, parallel votes)",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: UNIQUE (intent_id, decided_by) -> 409; count of distinct decisions under FOR UPDATE of the intent; test_quorum_of_two_needs_two_people; SQL mutation 'second vote of one human' in the M7 list"
+  },
+  {
+   "path": "Quorum by one person holding two OIDC identities in the bundle",
+   "cycle_1_status": "out_of_scope",
+   "status": "out_of_scope",
+   "evidence": "unchanged since cycle 1: identity is oidc:<iss>:<sub>; one person with two subjects is an IdP/bundle administration matter (SEC-09)"
+  },
+  {
+   "path": "Commands to the bot ('approve <id>', callback_query, inline buttons)",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: allowed_updates=['message']; only /start and /link <6 digits> in private chats; buttons are {text,url}; notifier role has no rights on intents/decisions; test_no_callback_buttons_and_commands_do_not_decide, test_long_polling_asks_only_for_messages"
+  },
+  {
+   "path": "Leak of preview text/amounts/args into Telegram",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: outbox notify payload built at T1 with title, target_label, requester, expires_at, approvers only; notifier cannot read intents; test_message_has_no_payload_and_links_the_card (0 of 80 values), test_human_approval_by_default_for_external_effect payload equality"
+  },
+  {
+   "path": "Bot token leak through logs",
+   "cycle_1_status": "open",
+   "status": "closed",
+   "evidence": "bot.py sets httpx/httpcore to WARNING at import; test_bot_token_is_in_no_log_record (with a control that fails without the setting) + test_bot_module_sets_the_httpx_level; critic run of the built gxg-approval-notifier:m9-test image: 5244 getUpdates calls to a local fake Bot API with token 999:CRITIC-DEMO-SECRET, 0 log lines with the token (cycle 1: every call). README runbook: rotate the token if older logs were shipped"
+  },
+  {
+   "path": "Telegram link: reuse, expiry, brute force of 6 digits",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged; plus multi-tenant link: test_link_for_two_tenants, SQL mutant 'a code links only the first tenant' killed (critic rerun)"
+  },
+  {
+   "path": "Link a Telegram account to someone else (code theft / relink)",
+   "cycle_1_status": "out_of_scope",
+   "status": "out_of_scope",
+   "evidence": "unchanged since cycle 1: the code is shown only in the human's session; a new claim replaces the link by design (spec: one-time code from UI); no unlink screen (not in spec)"
+  },
+  {
+   "path": "Login CSRF / OIDC state, PKCE, nonce, iss/aud/exp, foreign signing key",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: authlib Starlette client with S256 PKCE and nonce; test_state_is_checked, test_pkce_is_checked, test_id_token_is_checked[5], test_id_token_signed_by_another_key, test_issuer_with_a_trailing_slash"
+  },
+  {
+   "path": "Session fixation",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: /login and /auth/complete clear the session before a new one; test_login_starts_a_new_session"
+  },
+  {
+   "path": "Session theft (copied cookie)",
+   "cycle_1_status": "open",
+   "status": "open",
+   "evidence": "accepted shortcut, now marked in code ('shortcut:' at SessionMiddleware and /logout, F7); passkey registration by a stolen session is backlog M9-F8 until AS-30 (M10)"
+  },
+  {
+   "path": "Open redirect via /auth/callback",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: meta refresh target is always '/auth/complete?' + escaped query (relative); test_callback_escapes_the_query"
+  },
+  {
+   "path": "Clickjacking of the decision page",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: CSP frame-ancestors 'none', X-Frame-Options DENY; test_headers_exact"
+  },
+  {
+   "path": "Plain HTTP exposure of ui",
+   "cycle_1_status": "open",
+   "status": "closed",
+   "evidence": "approval/ui/tests/test_cli.py: non-loopback (explicit and default 0.0.0.0) without cert -> SystemExit, key without cert -> SystemExit, http public URL / issuer -> SystemExit before uvicorn.run, cert -> ssl_certfile/ssl_keyfile passed; cli.py in only_mutate; critic mutmut ui 689: 687 killed, 2 listed equivalent"
+  },
+  {
+   "path": "Compromise of ui (code execution, DSN, session key, preview keys)",
+   "cycle_1_status": "open",
+   "status": "open",
+   "evidence": "unchanged; accepted by the owner until M10 (AS-30, AC-M10-08), reports/M9-ESCALATION.md §1"
+  },
+  {
+   "path": "Compromise of notifier",
+   "cycle_1_status": "out_of_scope",
+   "status": "out_of_scope",
+   "evidence": "unchanged; the outbox-topic restriction is recorded in docs/backlog.md (M9 row, with M8/M10)"
+  },
+  {
+   "path": "Network egress outside policy from ui/notifier; inbound to notifier",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: AC-M9-12 stand rerun by the critic: 6 passed (internal networks, single ingress relay, 0 listening sockets, positive control)"
+  },
+  {
+   "path": "Egress relays against real IdP/Telegram (egress profile); tailnet-only inbound",
+   "cycle_1_status": "out_of_scope",
+   "status": "out_of_scope",
+   "evidence": "unchanged since cycle 1: real services forbidden in this task; Tailscale is M14 (AS-29/SEC-26, AC-M14-09); single-host IdP relay limitation F11"
+  },
+  {
+   "path": "Availability: one tenant's bad preview key blocks all lists",
+   "cycle_1_status": "open",
+   "status": "closed",
+   "evidence": "summary() catches Refused (missing key and CryptoError both raise it) and shows 'превью недоступно'; test_one_unreadable_preview_does_not_hide_the_list (list 200, other row listed, card 503); the except is killed by mutmut"
+  },
+  {
+   "path": "Mass approval",
+   "cycle_1_status": "closed",
+   "status": "closed",
+   "evidence": "unchanged since cycle 1: AP-09 groups only visually; one form per intent, no bulk endpoint"
+  }
+ ],
+ "new_scope": [],
+ "ponytail_review": "reports/critic/M9-cycle-2.review.md",
+ "ponytail_mapping": "review 1 (Should fix, understandable errors) -> N1 minor (ops/code); 2-3 (Nice to have) -> N2, N3 minor; 4 (Lean) -> N4 minor, code -0.5",
+ "lean_lines": 5
+}
