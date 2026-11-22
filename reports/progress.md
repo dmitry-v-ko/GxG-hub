@@ -23,7 +23,7 @@
 | M7: компрометация `ui` через `gxg_decide` | закрывается AS-30 | AS-30 |
 | Сеть через Tailscale | принято | ADR-0003, AC-M14-04/08/09 |
 | CI: GitHub Actions не будет | решено владельцем: локальный гейт мержа `reports/merge-gate/<sha>.md` (DoD-1); AC-M0-02/03, AC-M2-04 — процедурно, без блокировки на стороне GitHub | ничего |
-| M6 `blocked_on_owner`: репозиторий kb_access (read) + DDL схемы kb, или решение, что сервер KB делается в Hub; правило allow для add_repo | ждёт владельца | AC-M6-04, закрытие M6 |
+| M6/ADR-0006: DDL схемы `kb` из Supabase без данных (`pg_dump --schema-only --schema=kb` плюс `public.kb_*`) или доступ сессий к проекту Supabase | ждёт владельца | тесты KB-сервиса, AC-M6-04 |
 | M6-Q5/Q7: где код сервера KB (`kb_access`) и DDL схемы `kb` — в gxg_agents_v2 их нет | ждёт владельца: нужен репозиторий kb_access (read) | AC-M6-04 |
 | M6-Q1–Q4, Q6 | по умолчанию из аудита: коллекция = entity_type.key; одна connection на tenant; читателям только published; write-tools скрыты от read-ключа; миграции только для тестов | ничего |
 | M11-4: ключ дедупликации Telegram для Signals (`chat_ref:message_id` вместо `peer_id:message_id`) | решается в задании M12: сопоставление ключей один раз или переход на новый ключ | M12 |
@@ -189,3 +189,5 @@
 | M11.1 | — | решение владельца | dmitry-v-ko/gxg-telegram-service | — | — | новая веха: отдельный Telegram-сервис (чтение + отправка), перенос кода с обновлением фреймворка, обёртка по контрактам GxG-hub; ADR-0005 (MCP или HTTP) заменяет ADR-0004; ждём название фреймворка от треда M11 | 2026-11-22 |
 | M11.1 | 1 | владелец вехи | gxg-telegram-service: claude/m11.1-telegram-service | — | — | запущен: фреймворк Pyrofork 2.3.69 (Python 3.13); ADR-0005 по умолчанию — сервис сам MCP-коннектор по MCC на ките | 2026-11-22 |
 | — | — | решение владельца | — | — | — | ADR-0005 Accepted: gxg-telegram-service сам MCP-сервер по MCC за ContextForge; ADR-0004 Superseded; Mastra ходит в Telegram только через Hub | 2026-11-22 |
+| M1.1 | — | решение владельца | — | — | — | новая веха MCP Toolkit: шаблон new-connector из demo, check-connectors, подключение кита из отдельного репозитория | 2026-11-22 |
+| M6 | — | решение владельца | dmitry-v-ko/gxg-kb-service | — | — | ADR-0006: KB-сервис — отдельный MCP-сервер по MCC на Supabase, с нуля на шаблоне M1.1; роль только на SELECT | 2026-11-22 |

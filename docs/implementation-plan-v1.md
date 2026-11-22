@@ -345,6 +345,26 @@ flowchart TD
 | AC-M1-08 | `redact` удаляет из лог-записи поля `text`, `body`, `query`, `args`, `token`, `authorization` и значения, совпадающие с шаблонами JWT, на наборе из ≥ 15 примеров |
 | AC-M1-09 | Покрытие ветвей модулей `exec_token`, `svc_jwt`, `grants`, `canonical`, `identity` ≥ 90 % |
 
+### M1.1 — MCP Toolkit (решение владельца 2026-11-22)
+
+**Что:** готовим [mcp-toolkit-v1](specs/mcp-toolkit-v1.md):
+- шаблон `scripts/new-connector --name <domain> --lang python [--with-effects]`, собранный из эталона `demo`;
+- общий conformance-набор `scripts/check-connectors --connector <name>` (MC, SC, EX);
+- подключение `gxg-connector-kit` к сервису из **отдельного репозитория** — git-зависимость с закреплённым commit.
+
+Своего MCP-фреймворка не пишем: основа — FastMCP.
+
+**Зачем:** каждый новый MCP-сервер (KB, Telegram и следующие) создаётся одной командой и сразу соответствует MCC.
+
+**Почему:** без этого каждый сервер заново пишет identity, grants, ошибки, redact и пару propose/execute. В M3, M6 и M11 критики находили одни и те же классы ошибок.
+
+| ID | Критерий |
+| --- | --- |
+| AC-M1.1-01 | `new-connector --name sample --with-effects` во временном каталоге создаёт сервис, который сразу проходит `check-connectors` и `check-all` без ручных правок |
+| AC-M1.1-02 | `check-connectors` на `demo` проходит, а на 10 заранее испорченных копиях падает (нет identity, ресурс до identity, вызов провайдера до проверки, `execute` без токена, ошибка вне envelope, неограниченный вывод и т. д.) — на каждой своя проверка |
+| AC-M1.1-03 | Сервис в отдельном репозитории подключает кит git-зависимостью с закреплённым commit; `check-connectors` запускается в его CI одной командой |
+| AC-M1.1-04 | `demo` переведён на шаблон без потери тестов (все тесты M3/M8 зелёные) |
+
 ### M2 — policy tooling (`gxg-policy`)
 
 **Делаем:** CLI `gxg-policy validate | lint | diff | build | verify` для `policies/` (grants, approval, platform); job в CI с публикацией diff-отчёта в PR; подпись bundle ключом CI из secrets.
@@ -422,6 +442,12 @@ flowchart TD
 | AC-M5-05 | Решение GO/NO-GO записано в Roadmap с датой и ссылкой на отчёт |
 
 ### M6 — Knowledge Base
+
+**Решение владельца 2026-11-22 (ADR-0006):** KB-сервис — отдельный сервис `dmitry-v-ko/gxg-kb-service` по гексагональной архитектуре, как Telegram (ADR-0005). Кода MCP-сервера KB нет, поэтому он пишется с нуля на шаблоне M1.1 и сам является MCP-сервером по MCC за ContextForge.
+- Данные — Supabase: чтение через отдельную роль Postgres только на `SELECT` в схеме `kb`.
+- Обёртка `connectors/kb` из M6 переносится в сервис; контракт и выводы — из `docs/audits/kb-gap-audit.md`.
+- AC-M6-04 проверяется на роли: запись ею отклоняет база.
+- Зависит от M1.1 и от DDL схемы `kb` без данных — его даёт владелец.
 
 **Делаем:** gap-аудит существующего KB MCP (отчёт `docs/audits/kb-gap-audit.md`); по итогам — подключение напрямую или тонкий wrapper-коннектор на `gxg-connector-kit`.
 
