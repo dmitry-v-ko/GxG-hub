@@ -23,7 +23,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 TEMPLATE = REPO / "templates" / "python-fastmcp"
 DEMO = REPO / "connectors" / "demo"
-CONF = yaml.safe_load((TEMPLATE / "copier.yml").read_text(encoding="utf-8"))
+CONF = yaml.safe_load((REPO / "copier.yml").read_text(encoding="utf-8"))
 DEMO_OWNED = {  # what `copier update` keeps in step in demo (everything else is its domain part)
     ".copier-answers.yml",
     "Dockerfile",
@@ -34,7 +34,7 @@ DEMO_OWNED = {  # what `copier update` keeps in step in demo (everything else is
 
 
 def render(dest: Path, **data: object) -> Path:
-    copier.run_copy(str(TEMPLATE), dest, data=data, defaults=True, quiet=True)
+    copier.run_copy(str(REPO), dest, data=data, defaults=True, quiet=True)
     return dest
 
 
@@ -55,11 +55,22 @@ def test_template_owns_exactly_the_plumbing(tmp_path: Path) -> None:
 def test_demo_is_on_the_template(tmp_path: Path) -> None:
     """AC-M1.1-04: demo's template-owned files are the render of its own .copier-answers.yml."""
     answers = yaml.safe_load((DEMO / ".copier-answers.yml").read_text(encoding="utf-8"))
-    assert answers["_src_path"] == "../../templates/python-fastmcp"
+    assert answers["_src_path"] == "../.."  # the repository: copier.yml at its root
     data = {k: v for k, v in answers.items() if not k.startswith("_")}
     out = render(tmp_path / "demo", **data)
     for rel in sorted(DEMO_OWNED - {".copier-answers.yml"}):
         assert (DEMO / rel).read_bytes() == (out / rel).read_bytes(), f"connectors/demo/{rel} drifted from the template"
+
+
+@pytest.mark.parametrize("source", ["path", "git"])
+def test_dockerignore_keeps_local_secrets_out(source: str, tmp_path: Path) -> None:
+    """SEC-17: a provider token in a local .env never reaches the build context."""
+    data: dict[str, object] = {"name": "sample", "with_effects": True, "kit_source": source}
+    data |= {"repo": "../.."} if source == "path" else {"kit_rev": "0" * 40}
+    out = render(tmp_path / "s", **data)
+    ignore = (out / ("Dockerfile.dockerignore" if source == "path" else ".dockerignore")).read_text(encoding="utf-8")
+    for pattern in ("**/.env*", "**/*.pem", "**/*.key", "**/mutants", "**/.pytest_cache"):
+        assert pattern in ignore.splitlines(), pattern
 
 
 def test_template_search_result_schema_is_the_repository_one() -> None:
@@ -132,3 +143,31 @@ def test_broken_sample_fails_on_its_effect_check(name: str | None, tmp_path: Pat
     else:
         assert proc.returncode == 1 and failed == SAMPLE_BROKEN[name][1], (failed, proc.stdout[-3000:])
     shutil.rmtree(root)
+
+
+@pytest.mark.e2e
+def test_copier_update_brings_template_changes_and_keeps_the_domain(tmp_path: Path) -> None:
+    """The reason for copier (plan «Лестница», DoD-6): a service follows the template by `copier update`."""
+    hub = tmp_path / "hub"
+    subprocess.run(["git", "clone", "--quiet", str(REPO), str(hub)], check=True, timeout=300)
+    git = ["git", "-c", "user.email=ci@example.invalid", "-c", "user.name=ci"]
+    old = subprocess.run(["git", "rev-parse", "HEAD"], cwd=hub, capture_output=True, text=True, check=True).stdout.strip()
+    svc = tmp_path / "svc"
+    cmd = [str(REPO / "scripts" / "new-connector"), "--name", "sample", "--dest", str(svc), "--kit-url",
+           f"file://{hub}", "--kit-rev", old]  # fmt: skip
+    subprocess.run(cmd, check=True, timeout=600)
+    answers = yaml.safe_load((svc / ".copier-answers.yml").read_text(encoding="utf-8"))
+    assert answers["_src_path"] == f"file://{hub}" and answers["kit_rev"] == old and answers["_commit"]
+    for step in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "generated"]):
+        subprocess.run([*git, *step], cwd=svc, check=True, timeout=60)
+    src = hub / "templates" / "python-fastmcp" / "template" / "src" / "{{ name }}_connector"
+    for name in ("server.py.jinja", "tools.py.jinja"):
+        with (src / name).open("a", encoding="utf-8") as f:
+            f.write("# template change\n")
+    subprocess.run([*git, "commit", "-qam", "template change"], cwd=hub, check=True, timeout=60)
+    new = subprocess.run(["git", "rev-parse", "HEAD"], cwd=hub, capture_output=True, text=True, check=True).stdout.strip()
+    copier.run_update(str(svc), vcs_ref=new, defaults=True, overwrite=True, quiet=True)
+    pkg = svc / "src" / "sample_connector"
+    assert (pkg / "server.py").read_text(encoding="utf-8").endswith("# template change\n")  # owned by the template
+    assert "# template change" not in (pkg / "tools.py").read_text(encoding="utf-8")  # owned by the service
+    assert yaml.safe_load((svc / ".copier-answers.yml").read_text(encoding="utf-8"))["_commit"] != answers["_commit"]

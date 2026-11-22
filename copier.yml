@@ -1,7 +1,9 @@
-# Template of a GxG MCP connector (docs/specs/mcp-toolkit-v1.md), made from the reference connector `demo`.
+# Template of a GxG MCP connector (docs/specs/mcp-toolkit-v1.md, templates/python-fastmcp/), made from `demo`.
+# copier takes a template from the root of a git repository only, so this file is here: the template is this
+# repository at a commit, and a service made from it runs `copier update --vcs-ref <commit>` to follow it.
 # Use scripts/new-connector, not copier directly: it checks the name, picks the kit source and locks the result.
 _min_copier_version: "9.0"
-_subdirectory: template
+_subdirectory: templates/python-fastmcp/template
 _templates_suffix: .jinja
 _answers_file: .copier-answers.yml
 # The domain part belongs to the service after the first generation: `copier update` never overwrites it.

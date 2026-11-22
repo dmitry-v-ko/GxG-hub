@@ -4,15 +4,28 @@
 !packages/gxg-connector-kit
 !schemas
 !connectors/{{ name }}
+**/.env*
+**/*.pem
+**/*.key
 **/.venv
 **/__pycache__
 **/mutants
 **/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
 connectors/{{ name }}/tests
 {%- else -%}
+# Never in the image: local secrets (a provider token in .env), caches, tests.
+**/.env*
+**/*.pem
+**/*.key
+.git
+.github
 .venv
 **/__pycache__
+**/mutants
 **/.pytest_cache
-.git
+**/.mypy_cache
+**/.ruff_cache
 tests
 {%- endif %}
