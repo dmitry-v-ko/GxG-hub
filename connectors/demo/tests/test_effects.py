@@ -803,6 +803,7 @@ def test_settings_defaults_and_messages(tmp_path: Path) -> None:
                                        "DEMO_APPROVAL_AUDIENCE": "aud-x", "DEMO_PROVIDER_DB": "/x.db"})  # fmt: skip
     assert (custom.approval_audience, custom.provider_db) == ("aud-x", Path("/x.db"))
     assert server.Settings.from_env({}).approval_url is None
+    assert server.Settings.from_env({"DEMO_BUNDLE_KEYS": "k=ed25519:x"}).bundle_keys == "k=ed25519:x"
     with pytest.raises(server.ConfigError) as err:
         server.Settings.from_env({"DEMO_APPROVAL_URL": "https://a"})
     assert str(err.value) == "DEMO_APPROVAL_URL needs DEMO_SVC_KEY_FILE (service JWT key, AS-06)"
