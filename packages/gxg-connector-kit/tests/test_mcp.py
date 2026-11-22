@@ -837,3 +837,12 @@ def test_tools_read_schemas_from_root_and_descriptions(world: World, tmp_path_fa
         mcp.tools(world.domain, other / "gxg-manifest.yaml", store, mcp.NoVerifier(), files.refresh, mcp.Logs.of("x"))
     with pytest.raises(ConfigError, match="schema not found"):
         mcp.load_manifest(other / "gxg-manifest.yaml")
+
+
+async def test_published_schemas_are_the_files(world: World) -> None:
+    async with client(world.app()) as (_http, s):
+        listed = {t.name: t for t in (await s.list_tools()).tools}
+    for t in TOOLS:
+        name, inp, out = str(t["name"]), str(t["input_schema"]), str(t["output_schema"])
+        assert listed[name].input_schema == SCHEMAS[inp.split("/")[-1]], name
+        assert listed[name].output_schema == SCHEMAS[out.split("/")[-1]], name

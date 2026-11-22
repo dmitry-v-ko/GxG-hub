@@ -1111,3 +1111,13 @@ async def test_backend_failure_modes_through_the_test_controls(demo: Demo) -> No
         demo.backend.calls.clear()
         await demo.ok("demo.boards.list")
         assert (await ctl.get("/_test/backend/calls")).json() == {"boards": 1}
+
+
+async def test_readyz_follows_the_backend(demo: Demo) -> None:
+    """MCC-09: backend + valid bundle; a backend that is down makes the connector not ready."""
+    assert (await demo.http.get("/readyz")).status_code == 200
+    demo.backend.failure = "temporarily_unavailable"
+    r = await demo.http.get("/readyz")
+    assert (r.status_code, r.json()) == (503, {"status": "not_ready"})
+    demo.backend.failure = "rate_limited"  # limited, not down
+    assert (await demo.http.get("/readyz")).status_code == 200

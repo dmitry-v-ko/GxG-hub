@@ -621,3 +621,30 @@ async def test_provider_call_is_bounded_by_dispatch_timeout(rig: Rig) -> None:
     assert r.status_code == 200 and r.json()["status"] == "outcome_unknown" and r.json()["operation_id"] == execution
     assert len(rig.provider.sent) == 1
     assert effects.DISPATCH_TIMEOUT_S == 60
+
+
+async def test_executor_listing_the_tenant_is_accepted(rig: Rig) -> None:
+    exact = Ed25519PrivateKey.generate()
+    rig.platform["services"].append(
+        {
+            "id": "executor-alpha",
+            "kind": "executor",
+            "tenants": ["t-alpha"],
+            "public_keys": [bundle.public(exact.public_key())],
+        }
+    )
+    rig.write([GRANTS], datetime.now(UTC) - timedelta(minutes=1))
+    rig.files.refresh()
+    await rig.propose()
+    r = (await rig.execute(auth=f"Bearer {svc_jwt.sign(exact, iss='executor-alpha', aud='kit')}"))[0]
+    assert r.status_code == 200 and r.json()["status"] == "succeeded"
+
+
+async def test_default_dispatch_timeout_applies(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A propose tool without dispatch_timeout_s gets DISPATCH_TIMEOUT_S (read at call time)."""
+    monkeypatch.setattr(effects, "DISPATCH_TIMEOUT_S", 0.1)
+    assert "dispatch_timeout_s" not in SPEC
+    rig.provider.mode = "slow"
+    await rig.propose()
+    r = (await rig.execute())[0]
+    assert r.json()["status"] == "outcome_unknown"

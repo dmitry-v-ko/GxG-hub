@@ -1,7 +1,7 @@
-== packages/gxg-connector-kit: {"killed":2601,"survived":24,"total":2625,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== packages/gxg-connector-kit: {"killed":2620,"survived":29,"total":2649,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
 == tools/gxg-connector-check: {"killed":152,"survived":1,"total":153,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
-== connectors/demo: {"killed":378,"survived":2,"total":380,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
-not killed: 27, listed as equivalent: 27
+== connectors/demo: {"killed":385,"survived":14,"total":399,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+not killed: 44, listed as equivalent: 22
 demo_connector.backend.xǁBackendǁ_scan__mutmut_7  # M3: `>=` -> `>` on time.monotonic() vs a float deadline; equal only at the same nanosecond, no test can tell
 demo_connector.server.x_configs__mutmut_19  # M3: no host= on the test-controls Config: uvicorn's default host is "127.0.0.1", the same binding (test_servers_listen_where_the_spec_says)
 gxg_connector_kit._jwt.x_verify__mutmut_41  # M1: `not isinstance(kid, str) or not kid` → `and`: PyJWT already rejects a non-string kid as malformed; an empty kid then reaches key_for, matches no JWKS kid / no thumbprint → the same 'kid' rejection
@@ -18,18 +18,41 @@ gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is 
 gxg_connector_check.bundle.x_write__mutmut_13  # M1.1: astimezone(None) converts to local time; the runners and the image run in UTC (and the tests pass UTC datetimes), so the stamp is the same
 gxg_connector_kit.effects.xǁApprovalǁpost__mutmut_15  # M1.1: HTTP header names are case-insensitive (httpx sends the same header)
 gxg_connector_kit.effects.xǁApprovalǁpost__mutmut_16  # M1.1: same as _15 (upper case)
-gxg_connector_kit.effects.xǁInternalǁ_checked__mutmut_73  # M1.1: rpartition("@") = partition("@"): execution-token.schema.json allows exactly one `@` in `tool`
 gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_18  # M1.1: Starlette request headers are case-insensitive
 gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_19  # M1.1: default "XXXX" instead of "": no space, so scheme "XXXX", token "" -> the same `missing` refusal
-gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_133  # M1.1: duration * 1001 instead of * 1000: within a millisecond per second; the audit only needs the order of magnitude
 gxg_connector_kit.effects.xǁInternalǁapp__mutmut_26  # M1.1: Starlette upper-cases Route methods ("post" == "POST")
 gxg_connector_kit.effects.xǁInternalǁapp__mutmut_38  # M1.1: same as app__mutmut_26 (reconcile route)
-gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_41  # M1.1: `>=` instead of `>` when dropping dispatched jti: equal only at the same float instant
-gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_45  # M1.1: keeping a dispatched jti until exp-5 instead of exp+5: the kit's JtiCache refuses any replay until exp anyway; only the 401/409 label differs in the last 10 s of a token
-gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_48  # M1.1: same as _45 (exp+6)
 gxg_connector_kit.mcp.xǁBundleFilesǁ__init____mutmut_4  # M1.1: _seen = "" instead of None: neither equals a (mtime, mtime) tuple, so the first refresh loads either way
 gxg_connector_kit.mcp.xǁGxgToolǁrun__mutmut_140  # M1.1: same as effects _endpoint__mutmut_133 (duration * 1001)
+listed but killed now (remove from the list):
+gxg_connector_kit.effects.xǁInternalǁ_checked__mutmut_73
+gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_133
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_41
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_45
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_48
 == M7 SQL mutations (scripts/ci/mutate_m7_sql.py)
 skipped: approval is not in MUTMUT_DIRS
-mutmut: OK, no surviving non-equivalent mutants
+SURVIVED, not equivalent:
+demo_connector.backend.xǁBackendǁreadiness__mutmut_10
+demo_connector.backend.xǁBackendǁreadiness__mutmut_11
+demo_connector.backend.xǁBackendǁreadiness__mutmut_12
+demo_connector.backend.xǁBackendǁreadiness__mutmut_2
+demo_connector.backend.xǁBackendǁreadiness__mutmut_3
+demo_connector.backend.xǁBackendǁreadiness__mutmut_4
+demo_connector.backend.xǁBackendǁreadiness__mutmut_5
+demo_connector.backend.xǁBackendǁreadiness__mutmut_6
+demo_connector.backend.xǁBackendǁreadiness__mutmut_7
+demo_connector.backend.xǁBackendǁreadiness__mutmut_8
+demo_connector.backend.xǁBackendǁreadiness__mutmut_9
+demo_connector.server.x_build__mutmut_25
+gxg_connector_kit.effects.xǁInternalǁ_checked__mutmut_58
+gxg_connector_kit.effects.xǁInternalǁ_checked__mutmut_83
+gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_136
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_43
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_47
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_50
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_53
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_55
+gxg_connector_kit.mcp.x_tools__mutmut_42
+gxg_connector_kit.mcp.x_tools__mutmut_54
 SQL mutations: OK
