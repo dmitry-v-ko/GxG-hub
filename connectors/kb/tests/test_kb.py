@@ -1331,3 +1331,13 @@ def test_response_size_bound(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(backend_module, "MAX_RESPONSE_BYTES", 0)
     assert not backend_module.too_big(httpx2.Headers({}))  # no Content-Length: not bounded (chunked, shortcut)
     assert backend_module.too_big(httpx2.Headers({"content-length": "1"}))
+
+
+async def test_an_oversized_document_is_not_found_like_a_missing_one(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Critic cycle 4 N1: a no-grant document whose kb_get answer is too big must not differ from a missing id."""
+    kb.fake.entities.append(entity(907, "Big HR", "y" * 5000, type_id=2))  # hr: no grant
+    await kb.backend.list_collections("t-alpha")  # the small entity types answer is cached first
+    monkeypatch.setattr(backend_module, "MAX_RESPONSE_BYTES", 3000)
+    big = await kb.call(GET, {"document_id": "907"})
+    missing = await kb.call(GET, {"document_id": "999"})
+    assert big == missing and big["structuredContent"] == NOT_FOUND

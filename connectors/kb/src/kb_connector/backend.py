@@ -102,6 +102,10 @@ class ToolFailed(ContractError):
     """The KB answered a tools/call with isError. Its text is unknown and never passed on."""
 
 
+class TooBig(ContractError):
+    """The KB's answer is above MAX_RESPONSE_BYTES (G12)."""
+
+
 class KeyRefused(RuntimeError):
     """The KB refused the wrapper's own key (HTTP 401/403): internal_error, not the caller's unauthenticated."""
 
@@ -124,7 +128,7 @@ class Backend:
         async def seen(response: httpx2.Response) -> None:
             statuses.append(response)
             if too_big(response.headers):
-                raise ContractError
+                raise TooBig
 
         async with self._locks[tenant]:
             try:
@@ -214,9 +218,9 @@ class Backend:
         keys = await self._type_keys(tenant)
         try:
             row = await self._call(tenant, "kb_get", {"id": int(document_id)})
-        except (
-            ToolFailed
-        ):  # the KB's "not found" form is unknown (audit G1): every tool error looks like a miss (SC-05)
+        except (ToolFailed, TooBig):
+            # The KB's "not found" form is unknown (G1), and the collection is learnt only from this answer: a tool
+            # error or an answer too big to read must look like a missing document, never differ (SC-05).
             return None
         if isinstance(row, dict) and "item" in row:
             row = row["item"]
