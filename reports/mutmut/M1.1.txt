@@ -1,7 +1,7 @@
 == packages/gxg-connector-kit: {"killed":2625,"survived":24,"total":2649,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
 == tools/gxg-connector-check: {"killed":152,"survived":1,"total":153,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
-== connectors/demo: {"killed":391,"survived":8,"total":399,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
-not killed: 33, listed as equivalent: 27
+== connectors/demo: {"killed":397,"survived":2,"total":399,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+not killed: 27, listed as equivalent: 27
 demo_connector.backend.xǁBackendǁ_scan__mutmut_7  # M3: `>=` -> `>` on time.monotonic() vs a float deadline; equal only at the same nanosecond, no test can tell
 demo_connector.server.x_configs__mutmut_19  # M3: no host= on the test-controls Config: uvicorn's default host is "127.0.0.1", the same binding (test_servers_listen_where_the_spec_says)
 gxg_connector_kit._jwt.x_verify__mutmut_41  # M1: `not isinstance(kid, str) or not kid` → `and`: PyJWT already rejects a non-string kid as malformed; an empty kid then reaches key_for, matches no JWKS kid / no thumbprint → the same 'kid' rejection
@@ -31,11 +31,5 @@ gxg_connector_kit.mcp.xǁBundleFilesǁ__init____mutmut_4  # M1.1: _seen = "" ins
 gxg_connector_kit.mcp.xǁGxgToolǁrun__mutmut_140  # M1.1: same as effects _endpoint__mutmut_136 (duration * 1001)
 == M7 SQL mutations (scripts/ci/mutate_m7_sql.py)
 skipped: approval is not in MUTMUT_DIRS
-SURVIVED, not equivalent:
-demo_connector.backend.xǁBackendǁreadiness__mutmut_11
-demo_connector.backend.xǁBackendǁreadiness__mutmut_12
-demo_connector.backend.xǁBackendǁreadiness__mutmut_4
-demo_connector.backend.xǁBackendǁreadiness__mutmut_5
-demo_connector.backend.xǁBackendǁreadiness__mutmut_6
-demo_connector.backend.xǁBackendǁreadiness__mutmut_9
+mutmut: OK, no surviving non-equivalent mutants
 SQL mutations: OK

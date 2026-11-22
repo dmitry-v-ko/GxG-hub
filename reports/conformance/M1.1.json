@@ -1,39 +1,31 @@
 {
   "milestone": "M1.1",
-  "cycle": 1,
+  "cycle": 2,
   "branch": "claude/m1.1-toolkit",
   "base": "origin/claude/integration@15213ee + docs/ and reports/GOAL.md from claude/admiring-planck-vzys0x (3-way: integration's backlog rows kept)",
-  "commit": "58518ce24a5e1c60d5bf0080fe0c51993717a547",
-  "commit_note": "Tested code commit (1b21413 + root `timeout = 600`; the full root pytest reran on it: 980 passed). This report and reports/conformance/M1.1-stand.json are committed on top of it and change only reports/.",
-  "run_at": "2026-11-22T20:45:00Z",
-  "author": "Claude Code (owner of M1.1, cycle 1)",
+  "commit": "5cca255f7a35934000e679c8e54ca8eb4d4f5b59",
+  "commit_note": "Tested code commit. scripts/ci/check-all.sh ran as written on 828ae21 (every step green except the last, mutmut: 6 survivors in demo Backend.readiness); 5cca255 adds only the demo test that kills them and drops one list line; demo tests 65 passed and the milestone mutmut rerun on 5cca255 is green. This report changes only reports/.",
+  "run_at": "2026-11-22T23:59:00Z",
+  "author": "Claude Code (owner of M1.1, cycle 2)",
   "environment": {
     "ci_local": {
-      "commit": "1b214132a0d77bbab1b2326f85a787dbea770876",
-      "command": "scripts/ci/check-all.sh, step by step (no GitHub Actions, DoD-1); mutmut with MUTMUT_DIRS=\"packages/gxg-connector-kit tools/gxg-connector-check connectors/demo\"",
-      "result": "every step exit 0 — see steps",
-      "steps": {
-        "uv lock --check (root, connectors/demo)": "ok",
-        "ruff check / ruff format --check": "ok",
-        "mypy (strict: kit, approval, scripts, tests/secrets, gxg-connector-check, tests/toolkit; conftest+tests/ci; approval/tests_db; non-strict: gxg-policy, demo, contract; stand+gateway)": "ok",
-        "uv run pytest (root)": "979 tests passed (before the patch regeneration: 3 broken-copy patches no longer applied to demo on the template; regenerated, then tests/gxg-connector-check 13/13, kit 450/450)",
-        "uv run pytest approval/tests_db": "ok",
-        "schema_lock": "up to date",
-        "kit coverage gate (AC-M1-09)": "100 % branches in exec_token, svc_jwt, grants, canonical, identity, _jwt",
-        "connectors/demo: uv sync --locked, pytest, check-connectors": "64 passed; 11 checks passed, 8 not_applicable",
-        "prove_schema_guard": "66/66",
-        "gitleaks tree HEAD + range 0..HEAD": "no leaks (6 false positives renamed; historical fingerprints in .gitleaksignore)",
-        "tests/secrets": "21 passed",
-        "gxg-policy validate/lint, bundle_smoke": "ok",
-        "connectors/demo/docker_smoke.sh (DOCKER_BUILD_FLAGS=--secret id=ca-bundle)": "docker_smoke: OK (image from the template Dockerfile)",
-        "stand/run.sh (ContextForge v1.1.1, demo on the kit pipeline)": "29/29 fresh, 29/29 after restart, 29/29 after recreate — reports/conformance/M1.1-stand.json (M5.json left as it was)",
-        "scripts/ci/mutmut.sh (milestone packages)": "reports/mutmut/M1.1.txt: kit 2601 killed / 24 equivalent of 2625; gxg-connector-check 152/1 of 153; demo 378/2 of 380; 0 unexplained"
-      }
+      "commit": "828ae21c0fa24406036961075d89fe28fdc093ae, then 5cca255 (mutmut)",
+      "command": "MUTMUT_DIRS=\"packages/gxg-connector-kit tools/gxg-connector-check connectors/demo\" MUTMUT_REPORT=reports/mutmut/M1.1.txt DOCKER_BUILD_FLAGS=\"--secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt\" scripts/ci/check-all.sh",
+      "result": "828ae21: all steps up to and including stand/run.sh exit 0 (stand 29/29 x3); mutmut exit 1 (demo readiness, 6). 5cca255: scripts/ci/mutmut.sh reports/mutmut/M1.1.txt reports/mutmut/M1.1-all.txt exit 0 — kit 2625 killed/24 listed of 2649, check 152/1 of 153, demo 397/2 of 399; 0 unexplained",
+      "note": "stand/run.sh rewrites reports/conformance/M5.json; restored to the committed version"
     },
     "python": "3.13.18 (uv-managed venv; requires-python >= 3.12)",
     "docker": "29.10.0"
   },
-  "sdk_versions": {"fastmcp": "4.1.8", "mcp": "2.3.0", "copier": "9.19.1", "pytest": "9.2.0", "pytest-timeout": "2.4.0", "mutmut": "3.8.1", "uv": "0.11.32"},
+  "sdk_versions": {
+    "fastmcp": "4.1.8",
+    "mcp": "2.3.0",
+    "copier": "9.19.1",
+    "pytest": "9.2.0",
+    "pytest-timeout": "2.4.0",
+    "mutmut": "3.8.1",
+    "uv": "0.11.32"
+  },
   "contextforge_image_digest": "see reports/conformance/M1.1-stand.json (pinned ContextForge v1.1.1 of M5)",
   "bundle_version": "suite: 0000000000000000000000000000000000000000 (test bundle, signed per run); stand: the commit",
   "fixture_identity": "kit test issuer (GXG_PROFILE=test), keys generated per run; no secrets in fixtures",
@@ -42,13 +34,13 @@
       "id": "AC-M1.1-01",
       "status": "passed",
       "expected": "new-connector --name sample --with-effects in a temporary directory makes a service that passes check-connectors and check-all without edits",
-      "actual": "tests/toolkit/test_template.py::test_new_service_in_its_own_repository_passes_its_gate[with-effects] and [read-only]: scripts/new-connector --name sample --lang python [--with-effects] --dest <tmp> (outside the repository), git init + commit, then the service's own scripts/check-all.sh (uv lock --check, uv sync --locked, ruff, ruff format, mypy --strict, pytest with pytest-timeout, check-connectors): exit 0, 'check-all: OK'; with effects all 19 checks passed (EX-01…EX-16 included), read-only 11 passed + 8 not_applicable; git status clean afterwards"
+      "actual": "tests/toolkit/test_template.py::test_new_service_in_its_own_repository_passes_its_gate[with-effects] and [read-only]: scripts/new-connector --name sample --lang python [--with-effects] --dest <tmp> (outside the repository), git init + commit, then the service's own scripts/check-all.sh (uv lock --check, uv sync --locked, ruff, ruff format, mypy --strict, pytest with pytest-timeout, check-connectors): exit 0, 'check-all: OK'; with effects all 19 checks passed (EX-01…EX-16 included), read-only 11 passed + 8 not_applicable; git status clean afterwards; cycle 2: the service's .dockerignore keeps .env*/keys/caches out (test_dockerignore_keeps_local_secrets_out) and `copier update --vcs-ref <commit>` brings template changes and keeps domain files (test_copier_update_brings_template_changes_and_keeps_the_domain)"
     },
     {
       "id": "AC-M1.1-02",
       "status": "passed",
       "expected": "check-connectors passes on demo and fails on 10 broken copies, each on its own check",
-      "actual": "tools/gxg-connector-check/tests/test_broken.py: demo passes (11 passed, 8 not_applicable); an intact copy in the same tree passes; 10 patches of demo (tests/broken/demo, regenerated by make_patches.py) fail with an exact failed set each, own check first: 01 no identity→SC-02 (+SC-04, MCC-05), 02 tenant from header→SC-03, 03 resource before identity→SC-04 (+SC-10), 04 provider before grants→SC-10, 05 hidden≠missing→SC-05, 06 error outside envelope→MCC-05 (+8 that read error codes), 07 unbounded output→MC-02, 08 429 not retryable→MC-03, 09 credential in audit→SC-09, 10 always ready→MCC-09. EX on the generated sample (tests/toolkit/test_template.py): ex03 any caller→EX-03, ex11 lost answer retried→EX-11"
+      "actual": "tools/gxg-connector-check/tests/test_broken.py: demo passes; an intact copy passes; 18 demo patches (make_patches.py), each with its exact failed set: the first 10 each red on its own check (SC-02, SC-03, SC-04, SC-10, SC-05, MCC-05, MC-02, MC-03, SC-09, MCC-09), 11-18 positive controls (harness counter always 0 -> SC-10; failures only crash -> MC-03; hidden board dropped -> SC-05; empty is not_found, no cursor, unbound cursor -> MC-02; query in audit -> SC-09; backend always ready -> MCC-09). Sample --with-effects (tests/toolkit/test_template.py): any caller -> EX-03; unverified token («execute без токена») -> EX-03+EX-04; serves everything -> EX-03; no jti cache -> EX-04; lost answer retried -> EX-11"
     },
     {
       "id": "AC-M1.1-03",
@@ -83,6 +75,15 @@
     "TypeScript template: not made (spec: with the first TS connector with effects); --lang ts is refused",
     "Checks needing ContextForge (SC-01, SC-06, SC-07, MC-01 through ContextForge, MC-04, MC-05) stay in stand/ (M5), not in check-connectors",
     "gxg_connector_check/bundle.py repeats gxg-policy build for grants without groups (shortcut, byte-compared in tests)",
-    "mcp-toolkit-v1 status line still says «план»: specs are not edited silently; the owner may update it"
+    "mcp-toolkit-v1 status line still says «план»: specs are not edited silently; the owner may update it",
+    "Critic cycle-1 minors not done: 14 (demo re-exports in server.py, read by M3 tests), 15 (bundle.py shortcut), 17 (per-process cursor key: one replica)"
+  ],
+  "cycle_2_changes": [
+    "critic cycle 1 checklist 1-10: see reports/plans/M1.1-cycle-2.md",
+    "gate: RUF100 fixed; mutmut.sh reads run mutants from its temp file (tests/ci/test_mutmut_sh.py runs it without the 2nd argument); MUTMUT_REPORT",
+    "copier.yml at the repository root (_subdirectory); standalone generation from git at kit_rev (answers: _src_path, _commit)",
+    "suite: SC-10 positive control, MC-03 required failure modes, SC-05 for list tools with *_ids, MC-02 empty + pagination + cursor binding, SC-09 marker text at INFO, MCC-09 backend readiness, EX-04 dispatch request count, EX-03 unserved resource/tenant (with a grant so only serves() can refuse)",
+    "kit: executor must serve the token's tenant (AS-06); provider call bounded by dispatch_timeout_s (MCC-08); validators once per tool",
+    "template/demo: Backend.readiness in /readyz; items.search collection_ids; demo re-rendered (server.py, Dockerfile.dockerignore)"
   ]
 }
