@@ -422,14 +422,14 @@ flowchart TD
 
 | ID | Критерий |
 | --- | --- |
-| AC-M8-01 | Сквозной сценарий с авто-одобрением: `propose` → через ≤ 10 с `effects.status` = `succeeded`, журнал fake provider содержит ровно 1 запись с тем же `idempotency_key` и `text_hash` |
-| AC-M8-02 | **Гонка:** 50 одобренных intents, 10 экземпляров executor'а, режим `no_dedupe`, задержка провайдера 200 мс → в журнале провайдера ровно 50 записей, по одной на `idempotency_key` (EX-10) |
+| AC-M8-01 | Сквозной сценарий с авто-одобрением: `propose` → через ≤ 10 с `effects.status` = `succeeded`, журнал fake provider содержит ровно 1 запись с ключом провайдера `intent_id` (EFF-18 п.5) и тем же `text_hash` |
+| AC-M8-02 | **Гонка:** 50 одобренных intents, 10 экземпляров executor'а, режим `no_dedupe`, задержка провайдера 200 мс → в журнале провайдера ровно 50 записей, по одной на ключ провайдера `intent_id` (EX-10) |
 | AC-M8-03 | 9 случаев невалидного токена из AC-M1-03 на `execute` → коннектор отвечает 401, счётчик провайдера = 0, `dispatch` не вызывался (EX-03) |
 | AC-M8-04 | Повтор `execute` с тем же токеном после успеха → 409, счётчик провайдера не изменился (EX-04) |
 | AC-M8-05 | `execute` с args, где изменён один символ текста или получатель, → 422, счётчик = 0 (EX-05) |
 | AC-M8-06 | Режим `commit_then_drop`: статус → `outcome_unknown`, затем reconcile → `reconciled_succeeded`; счётчик провайдера = 1 (EX-11) |
 | AC-M8-07 | Kill процесса коннектора после `dispatch`, до ответа: через `dispatch_timeout_s + 30 с` статус `outcome_unknown`; новых вызовов провайдера нет (T14) |
-| AC-M8-08 | Режим `timeout_before_start` ×2, затем `ok`: итог `succeeded`, `attempts` = 3, записи журнала с одним `idempotency_key`; при `max_attempts` = 2 итог `failed` (EX-12, EX-23) |
+| AC-M8-08 | Режим `timeout_before_start` ×2, затем `ok`: итог `succeeded`, `attempts` = 3, записи журнала с одним ключом провайдера `intent_id`; при `max_attempts` = 2 итог `failed` (EX-12, EX-23) |
 | AC-M8-09 | Executor, падающий между reserve и dispatch: через 60 с execution `released`, intent снова `approved`, затем исполнен; `attempts` учитывает только dispatch (T10) |
 | AC-M8-10 | Kill switch (`tenant:t-alpha`), включённый после reserve, но до dispatch → `dispatch` 423, провайдер не вызван; intents `t-beta` исполняются (EX-13) |
 | AC-M8-11 | Отзыв grant'а `propose` у requester'а (новый bundle) между approve и execute → отказ коннектора, провайдер не вызван (EX-14) |
@@ -469,11 +469,11 @@ flowchart TD
 | AC-M10-05 | Все метрики из таблицы approval-service-v1 доступны на `/metrics`; правила alert'ов загружаются в Prometheus без ошибок; искусственный `outcome_unknown` старше 1 ч поднимает alert |
 | AC-M10-06 | MC-05: повтор SC- и EX-тестов на следующей минорной версии ContextForge и FastMCP проходит (или зафиксированы регрессии и pin не меняется) |
 | AC-M10-07 | **Выход этапа C:** отчёт `reports/conformance/stage-C.json` — EX-01…EX-24 и MC-05 в статусе `passed` |
+| AC-M10-08 | AS-30: решение без валидного WebAuthn-assertion, с assertion для другого `intent_id`/`args_hash`/`version`/`decision`, повтор assertion, assertion ключа, зарегистрированного не через `decider` → отказ, строка в `decisions` не создана; роль `gxg_ui` не может вызвать `gxg_decide` (ошибка прав) |
 
 ---
 
 ## Этап D — реальные чтения и Signals
-| AC-M10-08 | AS-30: решение без валидного WebAuthn-assertion, с assertion для другого `intent_id`/`args_hash`/`version`/`decision`, повтор assertion, assertion ключа, зарегистрированного не через `decider` → отказ, строка в `decisions` не создана; роль `gxg_ui` не может вызвать `gxg_decide` (ошибка прав) |
 
 ### M11 — Telegram read-only
 
