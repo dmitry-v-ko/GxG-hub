@@ -252,6 +252,7 @@ async def test_bundle_is_reloaded_when_its_files_change(env: Env, caplog: pytest
         assert (await http.get("/readyz")).status_code == 200
     events = [json.loads(r.getMessage()) for r in caplog.records if r.name == "demo_connector"]
     assert {"event": "bundle_loaded", "bundle_version": "0" * 40} in events
+    assert any(e["event"] == "not_ready" for e in events)  # /readyz logs why, under the connector's logger (MCC-09)
     rejected = [e for e in events if e["event"] == "bundle_rejected"]
     assert len(rejected) == 1 and sorted(rejected[0]) == ["event", "reason"] and "signature" in rejected[0]["reason"]
 

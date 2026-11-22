@@ -106,10 +106,12 @@ def test_fake_approval(tmp_path: Path) -> None:
     assert (again.status_code, again.json()["intent_id"]) == (200, first.json()["intent_id"])
     assert post(f, "/v1/intents", {**body, "canonical_args_hash": "h2"}, tok).status_code == 409
     assert list(f.intents) == [first.json()["intent_id"]] and f.intents[first.json()["intent_id"]] == body
-    assert post(f, "/v1/executions/e1/dispatch", {}, tok).status_code == 200
-    assert post(f, "/v1/executions/e1/dispatch", {}, tok).status_code == 409 and f.dispatched == ["e1"]
+    token = {"execution_token": "t"}
+    assert post(f, "/v1/executions/e1/dispatch", {}, tok).status_code == 400 and f.dispatched == []
+    assert post(f, "/v1/executions/e1/dispatch", token, tok).status_code == 200
+    assert post(f, "/v1/executions/e1/dispatch", token, tok).status_code == 409 and f.dispatched == ["e1"]
     f.dispatch_status = 423
-    assert post(f, "/v1/executions/e2/dispatch", {}, tok).status_code == 423 and f.dispatched == ["e1"]
+    assert post(f, "/v1/executions/e2/dispatch", token, tok).status_code == 423 and f.dispatched == ["e1"]
     assert post(f, "/v1/other", {}, tok).status_code == 404
     with httpx2.Client(transport=f.transport(), base_url="http://a") as h:
         assert h.get(JWKS_PATH).content == b'{"keys": []}'

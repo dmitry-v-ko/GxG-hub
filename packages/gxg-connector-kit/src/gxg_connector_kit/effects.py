@@ -15,7 +15,6 @@ Before `dispatch` any refusal is an HTTP error and the provider is not called; a
 
 from __future__ import annotations
 
-import base64
 import json
 import time
 import traceback
@@ -34,7 +33,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from . import _schema, canonical, svc_jwt
+from . import _jwt, _schema, canonical, svc_jwt
 from ._jwt import TokenError
 from .errors import GxgError
 from .exec_token import ExecTokenVerifier, ExecutionClaims, ExecutorJwks
@@ -42,6 +41,7 @@ from .grants import BundleStore
 from .mcp import Access, ConfigError, Logs, Result, Settings
 from .redact import redact
 
+NOT_APPROVED = "args do not match the approved hash"
 JWKS_PATH = "/.well-known/gxg-exec-jwks.json"  # executor JWKS, served by the Approval Service `api` (AS-09)
 HTTP = {
     "invalid_input": 422,  # AS-12: args (hash or shape) do not match
@@ -103,8 +103,7 @@ class Wiring:
 def connect(settings: Settings, connector_id: str, wiring: Wiring = Wiring()) -> tuple[Approval, ExecutorJwks]:
     """Approval Service client (service JWT key from a mounted secret file) and the executor JWKS from `api`."""
     try:
-        seed = Path(settings.svc_key_file).read_text(encoding="ascii").strip()
-        key = Ed25519PrivateKey.from_private_bytes(base64.urlsafe_b64decode(seed + "=" * (-len(seed) % 4)))
+        key = Ed25519PrivateKey.from_private_bytes(_jwt.b64url_decode(Path(settings.svc_key_file).read_text().strip()))
     except (OSError, ValueError) as exc:
         raise ConfigError(f"{settings.PREFIX}_SVC_KEY_FILE: {type(exc).__name__}") from None  # never the key text
     url = settings.approval_url
@@ -239,7 +238,7 @@ class Internal:
                 entry["outcome"] = exc.code
                 if isinstance(exc, TokenError):
                     entry["reason"] = exc.reason  # why (kid, exp, replay…); never the token
-                return JSONResponse(exc.to_dict(), status_code=HTTP.get(exc.code, 500))
+                return JSONResponse(exc.to_dict(), status_code=HTTP[exc.code])  # every code raised here is mapped
             except Exception as exc:  # before dispatch (after it, execute catches everything): no provider call
                 entry |= {"outcome": "internal_error", "error": type(exc).__name__}
                 tb = traceback.extract_tb(exc.__traceback__)
@@ -296,11 +295,10 @@ class Internal:
         tool_key, _, version = claims["tool"].partition("@")  # tool names have no `@` (execution-token schema)
         try:
             args = canonical.normalize(body["args"])
-            same = args_hash(tool_key, version, tenant, connection, resource, args)
         except GxgError:  # a float or a lone surrogate: not what was approved
-            same = None
-        if same != claims["ahs"]:  # EFF-18 п.2: one changed character of an argument
-            raise GxgError("invalid_input", "args do not match the approved hash")
+            raise GxgError("invalid_input", NOT_APPROVED) from None
+        if args_hash(tool_key, version, tenant, connection, resource, args) != claims["ahs"]:
+            raise GxgError("invalid_input", NOT_APPROVED)  # EFF-18 п.2: one changed character of an argument
         spec = self.proposes[execute]
         if (tool_key, version) != (spec["name"], spec["version"]) or not self.serves(tenant, connection, resource):
             # EFF-18 п.3: the token's tool, tenant, connection and resource are this endpoint's

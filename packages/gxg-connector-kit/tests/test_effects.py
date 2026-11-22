@@ -64,6 +64,8 @@ class Provider:
             raise Dropped
         if self.mode == "crash":
             raise RuntimeError("boom")
+        if self.mode == "ok_without_receipt":
+            return Sent("ok", None)
         return Sent(self.mode, "op-1" if self.mode in ("ok", "duplicate") else None)  # type: ignore[arg-type]
 
     def lookup(self, intent_id: str) -> tuple[bool, str | None]:
@@ -105,7 +107,7 @@ class Rig:
             approval=self.approval,
             jwks=self.jwks,
             provider=self.provider,
-            serves=lambda t, c, r: self.served and r == RES,
+            serves=lambda t, c, r: self.served and (t, c, r) == ("t-alpha", "kit-main", RES),
             refresh=self.files.refresh,
             logs=mcp.Logs.of("kit_fx"),
         )
@@ -221,6 +223,14 @@ async def test_propose_builds_the_intent(rig: Rig) -> None:
     assert keys[0] != keys[1] and all(k.startswith("kit:") and len(k) == 40 for k in keys)
 
 
+def test_args_hash_is_the_eff05_document() -> None:
+    from gxg_connector_kit import canonical
+
+    doc = {"tool_key": "t", "tool_version": "1", "tenant_id": "ten", "connection_id": "c", "resource_id": "r",
+           "args": {"a": 1}}  # fmt: skip
+    assert effects.args_hash("t", "1", "ten", "c", "r", {"a": 1}) == canonical.hash(doc)
+
+
 def test_args_hash_covers_every_part() -> None:
     base = ("t", "1.0.0", "ten", "con", "res", {"a": 1})
     h = effects.args_hash(*base)
@@ -253,7 +263,7 @@ async def test_propose_refusals(rig: Rig) -> None:
 @pytest.mark.parametrize(
     ("status", "doc", "expected"),
     [
-        (409, {"code": "conflict", "message": "m"}, ("conflict", "m", None)),
+        (409, {"code": "conflict", "message": "m", "retry_after_s": 5}, ("conflict", "m", None)),
         (429, {"code": "rate_limited", "message": "m", "retry_after_s": 7}, ("rate_limited", "m", 7)),
         (
             429,
@@ -495,3 +505,75 @@ def test_connect_reads_the_key_and_the_jwks(tmp_path: Path) -> None:
     (tmp_path / "k").unlink()
     with pytest.raises(mcp.ConfigError, match=r"^KIT_SVC_KEY_FILE: FileNotFoundError$"):
         effects.connect(settings, "kit")
+
+
+async def test_two_executions_in_a_row_and_receipt_fallback(rig: Rig) -> None:
+    await rig.propose()
+    first, e1, _ = await rig.execute()
+    rig.provider.mode = "ok_without_receipt"
+    second, e2, _ = await rig.execute()
+    assert first.status_code == second.status_code == 200
+    assert second.json()["operation_id"] == e2 and rig.fake.dispatched == [e1, e2]
+
+
+async def test_internal_audit_lines(rig: Rig, caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+    import re
+
+    caplog.set_level(logging.INFO)
+    await rig.propose()
+    [(intent, body)] = rig.fake.intents.items()
+    await rig.post(EXECUTE, b"x", auth="Basic abc")
+    await rig.post(EXECUTE, b"x", auth=None)
+    await rig.execute(token=rig.token(str(uuid.uuid4()), body))  # bound to another intent
+    _, execution, _ = await rig.execute()
+    await rig.post(RECONCILE, {"intent_id": intent, "execution_id": execution, "idempotency_key": "k" * 8})
+    rig.provider.mode = "crash"
+    await rig.execute()
+
+    def boom(*_: Any) -> bool:
+        raise RuntimeError("x")
+
+    rig.internal.serves = boom
+    await rig.execute()
+    lines = [json.loads(m.getMessage()) for m in caplog.records if m.name == "kit_fx.audit"]
+    for line in lines:
+        assert len(line.pop("request_id")) == 36 and 0 <= line.pop("duration_ms") < 5000
+        assert line.pop("tool") == "kit.msg.execute"
+    basic, none, binding, done, rec, crash, boomed = lines
+    assert basic == none == {"op": "execute", "outcome": "unauthenticated", "reason": "missing"}
+    assert binding == {"op": "execute", "outcome": "unauthenticated", "reason": "binding"}
+    ids = {"tenant": "t-alpha", "principal": ACTOR, "intent_id": intent}
+    assert done == {"op": "execute", "outcome": "succeeded", **ids, "execution_id": execution}
+    assert rec == {"op": "reconcile", "outcome": "executed", "intent_id": intent, "execution_id": execution}
+    assert crash.pop("execution_id") and crash == {"op": "execute", "outcome": "outcome_unknown", **ids,
+                                                   "error": "RuntimeError"}  # fmt: skip
+    assert boomed.pop("execution_id") and boomed == {"op": "execute", "outcome": "internal_error", **ids,
+                                                     "error": "RuntimeError"}  # fmt: skip
+    [frames] = [m.getMessage() for m in caplog.records if m.name == "kit_fx.errors"]
+    head, *stack = frames.split("\n")
+    assert head == "internal_error " + [json.loads(m.getMessage()) for m in caplog.records
+                                        if m.name == "kit_fx.audit"][-1]["request_id"] + " RuntimeError"  # fmt: skip
+    assert stack and all(re.fullmatch(r"/\S+\.py:\d+ in \S+", f) for f in stack), stack
+
+
+async def test_connect_wires_the_approval_transport(tmp_path: Path) -> None:
+    key = Ed25519PrivateKey.generate()
+    (tmp_path / "k").write_text(bundle.b64url(key.private_bytes_raw()), encoding="ascii")
+
+    class S(mcp.Settings):
+        PREFIX = "KIT"
+
+    settings = S.from_env({"KIT_APPROVAL_URL": "http://approval.test", "KIT_SVC_KEY_FILE": str(tmp_path / "k")})
+    hosts: list[str] = []
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        hosts.append(f"{request.url.host}{request.url.path}")
+        return httpx2.Response(201, json={"intent_id": "i", "status": "pending_approval"})
+
+    transport = httpx2.MockTransport(answer)
+    approval, jwks = effects.connect(settings, "kit", effects.Wiring(approval=transport, jwks=transport))
+    r = await approval.post("/v1/intents", {})
+    assert r.status_code == 201 and approval.audience == "approval-api"
+    jwks.readiness()
+    assert hosts == ["approval.test/v1/intents", f"approval.test{effects.JWKS_PATH}"]

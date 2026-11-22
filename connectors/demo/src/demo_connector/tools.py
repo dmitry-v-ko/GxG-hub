@@ -32,11 +32,6 @@ SEARCH_BUDGET_S = 15.0  # scan stops here with `source_timeout`, before the tool
 logs = mcp.Logs.of("demo_connector")  # main() sends .errors (stack frames) to stderr, the rest to stdout
 
 
-def load_schema(rel: str) -> dict[str, Any]:
-    """A schema file referenced by gxg-manifest.yaml, relative to connectors/demo."""
-    return mcp.load_schema(ROOT, rel)
-
-
 def rid(connection: str, board: str) -> str:
     return f"{DOMAIN}:{connection}/{RTYPE}/{board}"
 

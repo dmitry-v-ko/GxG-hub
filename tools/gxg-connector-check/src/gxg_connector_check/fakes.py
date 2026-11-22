@@ -53,6 +53,8 @@ class FakeApproval:
         if path == "/v1/intents":
             return self._create(body)
         if path.startswith("/v1/executions/") and path.endswith("/dispatch"):
+            if not isinstance(body.get("execution_token"), str):  # the token being dispatched (AS-05)
+                return httpx2.Response(400, json={"code": "invalid_input", "message": "no execution_token"})
             return self._dispatch(path.split("/")[3])
         return httpx2.Response(404, json={"code": "not_found", "message": "not found"})
 

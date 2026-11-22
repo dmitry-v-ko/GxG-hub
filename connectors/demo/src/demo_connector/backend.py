@@ -48,7 +48,7 @@ class Backend:
     def get_note(self, tenant: str, note_id: str) -> Note | None:
         """The note with its real board (GR-03), or None. Only this tenant's data (GR-02)."""
         self._enter("get")
-        for board in self.boards.get(tenant, {}).values():
+        for board in self.boards[tenant].values():  # a tenant without a connection never gets here (kit hook)
             for note in board.notes:
                 if note.id == note_id:
                     return note

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field, replace
@@ -54,7 +55,10 @@ SCHEMAS: dict[str, Any] = {
         "description": "Get a box",
         "type": "object",
         "required": ["box_id"],
-        "properties": {"box_id": {"type": "string", "maxLength": 10}},
+        "properties": {
+            "box_id": {"type": "string", "maxLength": 10},
+            "meta": {"type": "object", "properties": {"note": {"type": "string"}}},
+        },
     },
     "get.out.json": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}},
 }
@@ -99,6 +103,7 @@ class Boxes:
     connector_id: str = "kit"
     rtype: str = "box"
     resolved: list[str] = field(default_factory=list)
+    calls: list[tuple[str, Access, dict[str, Any]]] = field(default_factory=list)  # (resolve tool | handler, …)
     reply: Any = None  # what the handlers return instead of the default
     fail: BaseException | None = None
     delay_s: float = 0.0
@@ -108,6 +113,7 @@ class Boxes:
 
     async def resolve(self, tool: str, access: Access, args: dict[str, Any]) -> tuple[str, Any] | None:
         self.resolved.append(args["box_id"])
+        self.calls.append((tool, access, args))
         return (
             (f"kit:kit-main/box/{args['box_id']}", f"target-{args['box_id']}")
             if args["box_id"] in ("b1", "b2")
@@ -122,6 +128,7 @@ class Boxes:
         return {"boxes": boxes, "nothing": access.nothing}, {"seen": len(boxes)}
 
     async def get(self, access: Access, args: dict[str, Any]) -> Result:
+        self.calls.append(("handler", access, args))
         if self.delay_s:
             import asyncio
 
@@ -362,7 +369,11 @@ async def test_output_schema_size_timeout_and_unexpected_errors(world: World, ca
     }
     assert "secret-xyz" not in caplog.text
     lines = audit(caplog)
-    assert [line["error"] for line in lines if line["outcome"] == "internal_error"] == ["RuntimeError"] * 3
+    assert [line["error"] for line in lines if line["outcome"] == "internal_error"] == [
+        "OutputSchemaError",
+        "OutputTooLarge",
+        "RuntimeError",
+    ]
     [frames] = [
         r.getMessage()
         for r in caplog.records
@@ -511,6 +522,8 @@ def test_settings_refused(env: dict[str, str], error: str) -> None:
 def test_parse_keys() -> None:
     key = bundle.public(Ed25519PrivateKey.generate().public_key())
     assert list(mcp.parse_keys(f" a={key} , ,b={key}", "N")) == ["a", "b"] and mcp.parse_keys("", "N") == {}
+    with pytest.raises(ConfigError, match=r"^N: \S"):
+        mcp.parse_keys(f"a=b={key}", "N")  # the first `=` separates the kid
     for bad in ("nokey", f"={key}"):
         with pytest.raises(ConfigError, match=r"^N: expected kid=ed25519:<base64url>$"):
             mcp.parse_keys(bad, "N")
@@ -591,6 +604,7 @@ def test_setup_logging_routes_frames_to_stderr(capfd: pytest.CaptureFixture[str]
     root = logging.getLogger()
     saved = root.handlers[:], root.level
     root.handlers = []
+    root.setLevel(logging.WARNING)
     try:
         logs = mcp.Logs.of("kit_route")
         mcp.setup_logging(logs)
@@ -610,3 +624,203 @@ def test_access_defaults() -> None:
     now = datetime.now(UTC)
     a = Access(VerifiedIdentity("t", "agent:t:a", now, now, "r", None, "signed_assertion"), "read", None)
     assert a.nothing and not a.check("kit:c/box/b").allowed and a.rid is None and a.target is None
+
+
+async def test_resolve_and_handler_get_the_whole_access(world: World) -> None:
+    async with client(world.app()) as (http, s):
+        await call(world, s, http, "kit.box.get", {"box_id": "b1", "meta": {"note": "n"}})
+    (tool, before, rargs), (what, after, hargs) = world.domain.calls
+    assert (tool, what) == ("kit.box.get", "handler") and rargs == hargs == {"box_id": "b1", "meta": {"note": "n"}}
+    for a in (before, after):
+        assert (a.ident.principal, a.ident.tenant_id, a.action, a.connection) == (READER, "t-alpha", "read", "kit-main")
+        assert a.allowed.rids == frozenset({"kit:kit-main/box/b1"}) and not a.allowed.all_of_type
+        assert a.check("kit:kit-main/box/b1").allowed and not a.check("kit:kit-main/box/b2").allowed
+    assert (before.rid, before.grant_id, before.target) == (None, None, None)
+    assert (after.rid, after.grant_id, after.target) == ("kit:kit-main/box/b1", "g-read", "target-b1")
+
+
+async def test_verifier_gets_the_tool_and_its_arguments(world: World) -> None:
+    seen: list[tuple[Any, ...]] = []
+    real = mcp.verifier(world.settings, "kit")
+
+    class Recording:
+        def verify(self, headers: Mapping[str, str], *, tool: str | None = None,
+                   arguments: Mapping[str, Any] | None = None) -> Any:  # fmt: skip
+            seen.append((tool, arguments, "x-gxg-test-identity" in headers))
+            return real.verify(headers, tool=tool, arguments=arguments)
+
+    store, files = mcp.bundle_store(world.settings)
+    tools = mcp.tools(world.domain, world.tmp / "gxg-manifest.yaml", store, Recording(), files.refresh,
+                      mcp.Logs.of("kit_test"))  # fmt: skip
+    async with client(mcp.create_app("kit", tools, files.refresh, store.readiness)) as (http, s):
+        await call(world, s, http, "kit.box.get", {"box_id": "b1"})
+    assert seen == [("kit.box.get", {"box_id": "b1"}, True)]
+
+
+async def test_audit_lines_exactly(world: World, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    world.domain.delay_s = 0.3
+    async with client(world.app()) as (http, s):
+        headers = world.headers(READER)
+        http.headers.update(headers)
+        await s.call_tool("kit.box.get", {"box_id": "b1"})
+        for k in headers:
+            del http.headers[k]
+        await call(world, s, http, "kit.box.get", {"box_id": "b1", "meta": {"note": 1}})
+        await call(world, s, http, "kit.box.get", {"box_id": "b1"}, principal=None)
+    ok_line, bad, anon = audit(caplog)
+    jti = json.loads(__import__("base64").urlsafe_b64decode(headers["x-gxg-test-identity"].split(".")[1] + "=="))["jti"]
+    assert 250 <= ok_line.pop("duration_ms") <= 1500
+    assert ok_line == {"request_id": jti, "tool": "kit.box.get", "tenant": "t-alpha", "principal": READER,
+                       "grant_id": ["g-read"], "rid": "kit:kit-main/box/b1", "outcome": "ok"}  # fmt: skip
+    assert bad["outcome"] == "invalid_input" and set(bad) == {"request_id", "tool", "tenant", "principal", "outcome",
+                                                               "duration_ms"}  # fmt: skip
+    assert len(anon.pop("request_id")) == 36 and anon.pop("duration_ms") < 250
+    assert anon == {"tool": "kit.box.get", "outcome": "unauthenticated", "reason": "missing"}
+
+
+async def test_invalid_input_names_the_nested_path(world: World) -> None:
+    async with client(world.app()) as (http, s):
+        r = await call(world, s, http, "kit.box.get", {"box_id": "b1", "meta": {"note": 1}})
+    assert r["structuredContent"]["details"] == {"path": "/meta/note"}
+
+
+async def test_output_errors_are_named_in_the_audit(world: World, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    async with client(world.app()) as (http, s):
+        world.domain.reply = {"no_id": 1}
+        await call(world, s, http, "kit.box.get", {"box_id": "b1"})
+        world.domain.reply = {"id": "x" * 191}
+        await call(world, s, http, "kit.box.get", {"box_id": "b1"})
+        world.domain.reply, world.domain.fail = None, RuntimeError("x")
+        await call(world, s, http, "kit.box.get", {"box_id": "b1"})
+    assert [a["error"] for a in audit(caplog)] == ["OutputSchemaError", "OutputTooLarge", "RuntimeError"]
+    frames = [r.getMessage() for r in caplog.records if r.name == "kit_test.errors"][-1].split("\n")
+    assert len(frames) >= 3 and all(re.fullmatch(r"/\S+\.py:\d+ in \S+", f) for f in frames[1:]), frames
+
+
+async def test_unknown_tenant_without_bundle_is_unavailable_too(world: World) -> None:
+    settings = replace(world.settings, bundle_dir=world.tmp / "none")
+    async with client(world.app(settings)) as (http, s):
+        r = await call(world, s, http, "kit.boxes.list", {}, principal="agent:t-beta:reader")
+    assert r["structuredContent"]["code"] == "temporarily_unavailable"
+
+
+async def test_stateless_json_endpoint_and_server_name(world: World, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    events = logging.getLogger("kit_events")
+    store, files = mcp.bundle_store(replace(world.settings, bundle_dir=world.tmp / "none"))
+    tools = mcp.tools(world.domain, world.tmp / "gxg-manifest.yaml", store, mcp.verifier(world.settings, "kit"),
+                      files.refresh, mcp.Logs.of("kit_test"))  # fmt: skip
+    app = mcp.create_app("kit-name", tools, files.refresh, store.readiness, events)
+    headers = {"accept": "application/json, text/event-stream", "content-type": "application/json"}
+    init = {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(app.router.lifespan_context(app))
+        h = await stack.enter_async_context(
+            httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://k")
+        )
+        r = await h.post(
+            "/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": init}
+        )
+        assert r.headers["content-type"].startswith("application/json") and "mcp-session-id" not in r.headers
+        assert r.json()["result"]["serverInfo"]["name"] == "kit-name"
+        call_body = {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                     "params": {"name": "kit.boxes.list", "arguments": {}}}  # fmt: skip
+        r = await h.post("/mcp", headers={**headers, **world.headers(READER)}, json=call_body)  # no session
+        assert r.status_code == 200 and r.json()["result"]["structuredContent"]["code"] == "temporarily_unavailable"
+        assert (await h.get("/readyz")).status_code == 503
+    [event] = [json.loads(m.getMessage()) for m in caplog.records if m.name == "kit_events"]
+    assert event["event"] == "not_ready" and event["reasons"]
+
+
+def test_serve_runs_every_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    served: list[Any] = []
+
+    class Server:
+        def __init__(self, config: Any) -> None:
+            self.config = config
+
+        async def serve(self) -> None:
+            served.append(self.config)
+
+    monkeypatch.setattr(uvicorn, "Server", Server)
+    configs = [uvicorn.Config(lambda *_: None, port=1), uvicorn.Config(lambda *_: None, port=2)]
+    mcp.serve(configs)
+    assert served == configs
+
+
+def test_run_main_sets_up_logging(capfd: pytest.CaptureFixture[str]) -> None:
+    root = logging.getLogger()
+    saved = root.handlers[:], root.level
+    root.handlers = []
+    root.setLevel(logging.WARNING)
+    try:
+        logs = mcp.Logs.of("kit_rm")
+        assert mcp.run_main(lambda: [], lambda _c: None, logs) == 0
+        logs.audit.info("rm-audit")
+        out, _ = capfd.readouterr()
+    finally:
+        root.handlers, root.level = saved[0], saved[1]
+    assert "rm-audit" in out
+
+
+def test_verifier_and_store_name_their_settings(world: World, tmp_path: Path) -> None:
+    cf = replace(world.settings, test_issuer_key=None, identity_keys="bad")
+    with pytest.raises(ConfigError, match=r"^GXG_IDENTITY_KEYS: "):
+        mcp.verifier(cf, "kit")
+    key = bundle.public(Ed25519PrivateKey.generate().public_key())
+    v = mcp.verifier(replace(cf, identity_keys=f"a={key}"), "kit-aud")
+    assert getattr(v, "_connector_id", getattr(v, "_audience", None)) in ("kit-aud", "gxg-connector:kit-aud")
+    with pytest.raises(ConfigError, match=r"^GXG_BUNDLE_KEYS: "):
+        mcp.bundle_store(replace(world.settings, bundle_keys="bad"))
+    deep = replace(world.settings, state_file=tmp_path / "a" / "b" / "state.json")
+    mcp.bundle_store(deep)
+    mcp.bundle_store(deep)  # the directory exists now: fine
+    assert (tmp_path / "a" / "b").is_dir()
+
+
+def test_bundle_rejected_event_has_the_reason(world: World, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    (world.tmp / "bundle" / mcp.SIG_FILE).write_bytes(b"{}")
+    mcp.bundle_store(world.settings, logging.getLogger("kit_rej"))
+    [event] = [json.loads(r.getMessage()) for r in caplog.records if r.name == "kit_rej"]
+    assert event == {"event": "bundle_rejected", "reason": "signature: alg must be EdDSA"}
+
+
+def test_cursor_offsets_differ() -> None:
+    c = mcp.Cursor()
+    assert c.make(b"q", 20) != c.make(b"q", 40) and c.offset(b"q", c.make(b"q", 40)) == 40
+
+
+def test_schema_tail_is_found_where_dot_dot_does_not_reach(tmp_path: Path) -> None:
+    (tmp_path / "schemas").mkdir()
+    (tmp_path / "schemas" / "x.json").write_text('{"b": 2}', encoding="utf-8")
+    (tmp_path / "c").mkdir()
+    assert mcp.load_schema(tmp_path / "c", "../../schemas/x.json") == {"b": 2}
+
+
+def test_manifest_needs_a_timeout_and_bounded_limit(tmp_path: Path) -> None:
+    write_manifest(tmp_path, [{**TOOLS[1], "limits": {"max_bytes": 10}}])
+    with pytest.raises(ConfigError, match=r"limits.timeout_s is required \(MCC-08\)$"):
+        mcp.load_manifest(tmp_path / "gxg-manifest.yaml")
+    write_manifest(tmp_path, [{k: v for k, v in TOOLS[1].items() if k != "limits"}])
+    with pytest.raises(ConfigError, match=r"limits\.timeout_s is required"):
+        mcp.load_manifest(tmp_path / "gxg-manifest.yaml")
+    noprops = {**SCHEMAS, "list.in.json": {"description": "d", "type": "object"}}
+    write_manifest(tmp_path, [TOOLS[0]], noprops)
+    with pytest.raises(ConfigError, match="maximum"):
+        mcp.load_manifest(tmp_path / "gxg-manifest.yaml")
+
+
+def test_tools_read_schemas_from_root_and_descriptions(world: World, tmp_path_factory: pytest.TempPathFactory) -> None:
+    other = tmp_path_factory.mktemp("elsewhere")  # not under world.tmp: its parents have no schemas/
+    (other / "gxg-manifest.yaml").write_bytes((world.tmp / "gxg-manifest.yaml").read_bytes())
+    store, files = mcp.bundle_store(world.settings)
+    tools = mcp.tools(world.domain, other / "gxg-manifest.yaml", store, mcp.NoVerifier(), files.refresh,
+                      mcp.Logs.of("x"), world.tmp)  # fmt: skip
+    assert [t.description for t in tools] == ["List boxes", "Get a box", "Get a box"]
+    with pytest.raises(ConfigError, match="schema not found"):
+        mcp.tools(world.domain, other / "gxg-manifest.yaml", store, mcp.NoVerifier(), files.refresh, mcp.Logs.of("x"))
+    with pytest.raises(ConfigError, match="schema not found"):
+        mcp.load_manifest(other / "gxg-manifest.yaml")

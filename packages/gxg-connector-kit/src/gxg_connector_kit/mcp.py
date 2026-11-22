@@ -206,7 +206,7 @@ def load_manifest(path: Path, root: Path | None = None) -> list[dict[str, Any]]:
     """The manifest's tools, valid by gxg-manifest.schema.json and bounded (MCC-01, MCC-04), or ConfigError.
     Schema paths are relative to `root` (default: the manifest's directory)."""
     root = root or path.parent
-    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    doc = yaml.safe_load(path.read_bytes())
     error = next(_schema.validator("gxg-manifest").iter_errors(doc), None)
     if error is not None:
         raise ConfigError(f"gxg-manifest.yaml: {error.message}")
@@ -216,7 +216,9 @@ def load_manifest(path: Path, root: Path | None = None) -> list[dict[str, Any]]:
             raise ConfigError(f"{t['name']}: a public tool is <connector>.<object>.<verb>, never execute/reconcile")
         if "output_schema" not in t:
             raise ConfigError(f"{t['name']}: output_schema is required (MCC-04)")
-        max_results = t.get("limits", {}).get("max_results")
+        if not isinstance(t.get("limits", {}).get("timeout_s"), int | float):
+            raise ConfigError(f"{t['name']}: limits.timeout_s is required (MCC-08)")
+        max_results = t["limits"].get("max_results")
         if max_results is not None:
             limit = load_schema(root, t["input_schema"]).get("properties", {}).get("limit", {})
             if not isinstance(limit.get("maximum"), int) or limit["maximum"] > max_results:
@@ -281,24 +283,26 @@ class Logs:
 def access_hook(domain: Domain, grants: GrantResolver, spec: Mapping[str, Any]) -> Callable[..., Awaitable[Access]]:
     """MCC-03 for one manifest tool; raises `not_found`/`resource_forbidden` before the handler."""
     action: Action = spec["action"]
-    scope = spec["resource"].get("scope", "single")
+    listing = spec["resource"].get("scope") == "list"  # default: single
     rtype: str = spec["resource"]["type"]
 
     async def hook(ident: VerifiedIdentity, args: dict[str, Any]) -> Access:
         tenant, principal = ident.tenant_id, ident.principal
-        connection = domain.connection(tenant)
 
         def check(rid: str) -> Decision:
             return grants.check(tenant, principal, action, rid)
 
-        def allowed(act: Action) -> AllowedSet:
-            return grants.allowed(tenant, principal, act, connection, rtype) if connection is not None else NOTHING
-
-        access = Access(ident, action, connection, allowed=allowed(action), check=check)
-        if scope == "list":
+        connection = domain.connection(tenant)
+        if connection is None:  # a tenant this connector does not serve: nothing to list, nothing to name
+            if listing:
+                return Access(ident, action, None, check=check)
+            raise GxgError("not_found", NOT_FOUND)
+        access = Access(ident, action, connection, allowed=grants.allowed(tenant, principal, action, connection, rtype),
+                        check=check)  # fmt: skip
+        if listing:
             return access
-        # No grant of the type at all (for `propose`: not even `read`): `not_found` without a backend call (GR-16).
-        if access.nothing and (action == "read" or _nothing(allowed("read"))):
+        # No grant of the type at all, not even `read`: `not_found` without a backend call (GR-16).
+        if access.nothing and _nothing(grants.allowed(tenant, principal, "read", connection, rtype)):
             raise GxgError("not_found", NOT_FOUND)
         found = await domain.resolve(spec["name"], access, args)
         if found is None:
@@ -307,7 +311,8 @@ def access_hook(domain: Domain, grants: GrantResolver, spec: Mapping[str, Any]) 
         decision = check(rid)
         if not decision.allowed:
             # GR-17: no right on the named resource is `not_found`; a readable one without this action is forbidden
-            if action != "read" and grants.check(tenant, principal, "read", rid).allowed:
+            # (for `read` the second check is the first one again: always denied here)
+            if grants.check(tenant, principal, "read", rid).allowed:
                 raise GxgError("resource_forbidden", f"no {action} right on this resource")
             raise GxgError("not_found", NOT_FOUND)
         return Access(ident, action, connection, rid, decision.grant_id, target, access.allowed, check)
@@ -317,6 +322,14 @@ def access_hook(domain: Domain, grants: GrantResolver, spec: Mapping[str, Any]) 
 
 def _nothing(allowed: AllowedSet) -> bool:
     return not allowed.all_of_type and not allowed.rids
+
+
+class OutputSchemaError(RuntimeError):
+    """The handler's result does not match the tool's output schema."""
+
+
+class OutputTooLarge(RuntimeError):
+    """The handler's result is larger than `limits.max_bytes`."""
 
 
 class GxgTool(Tool):
@@ -370,11 +383,12 @@ class GxgTool(Tool):
             self.logs.audit.info(json.dumps(redact(entry)))
 
     def _bounded(self, content: dict[str, Any]) -> None:
-        """MCC-04: the result matches the output schema and fits `max_bytes`; otherwise it is not sent."""
+        """MCC-04: the result matches the output schema and fits `max_bytes`; otherwise it is not sent.
+        The class name of the error is what the audit line shows."""
         if self.output_schema is not None and not jsonschema.Draft202012Validator(self.output_schema).is_valid(content):
-            raise RuntimeError("result does not match the output schema")
+            raise OutputSchemaError
         if len(json.dumps(content, ensure_ascii=False).encode()) > self.max_bytes:
-            raise RuntimeError("result exceeds limits.max_bytes")
+            raise OutputTooLarge
 
 
 def tools(  # noqa: PLR0917 - the parts a connector wires together, named at the call site
