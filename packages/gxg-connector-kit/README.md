@@ -12,6 +12,8 @@
 | `identity` | `IdentityVerifier` (Protocol), `VerifiedIdentity`; `StubIssuer`/`StubVerifier` — **только** при `GXG_PROFILE=test` | ADR-0001, SEC-03 |
 | `redact` | `redact(record)`: удаляет `text`, `body`, `query`, `args`, `token`, `authorization` на любой глубине, маскирует JWT в строках | SEC-18 |
 | `readiness` | `Readiness`, `all_ready()` для `/readyz` | GR-12, GR-13 |
+| `mcp` (extra `[mcp]`, M1.1) | Обвязка FastMCP для любого коннектора: `Settings` с префиксом переменных, ключи, `BundleFiles`, `verifier()`, `load_manifest` (схема + lint: имена, `output_schema`, `limit ≤ max_results`), `GxgTool` — конвейер вызова: identity → входная схема → bundle → **hook ресурса** (`allowed()` до любого вызова backend'а, `check()` RID, `not_found`/`resource_forbidden` по GR-17) → handler с `Access` → выходная схема и `max_bytes` → envelope и строка аудита; `create_app` с `/healthz`, `/readyz`; `Cursor`; `run_main` | MCC-01…05, MCC-08, MCC-09, GR-16, GR-17 |
+| `effects` (extra `[mcp]`, M1.1) | `propose()` → intent в Approval Service (service JWT, канонизация, preview из manifest); `Internal` — `/internal/v1/{execute,reconcile}/<executes_via>` в порядке EFF-18 (service JWT executor'а → схема → execution token → хеш args → цель → grant → `dispatch` → один вызов провайдера); `connect()` — клиент и JWKS. Обобщено из `demo/effects.py` ветки M8 | EFF-04…08, EFF-18, EFF-25, AS-06, AS-12…14 |
 
 ## Конфигурация сервиса
 

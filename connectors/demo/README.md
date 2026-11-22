@@ -8,7 +8,9 @@
 | `demo.notes.search` | Поиск по разрешённым доскам: `index`, при его отказе до запуска — `scan` (2 с); cursor подписан и привязан к вызывающему и запросу |
 | `demo.note.get` | Заметка; доска определяется по backend'у. Чужая или скрытая заметка — `not_found`, как несуществующая |
 
-Порядок проверок каждого вызова: identity из заголовка (верификатор кита) → входная схема → grants (`allowed()` до backend'а, `check()` на каждом элементе) → backend. Аргументы и `_meta` полномочий не дают.
+Порядок проверок каждого вызова — конвейер кита `gxg_connector_kit.mcp` (M1.1): identity из заголовка → входная схема → bundle → hook ресурса (`allowed()` до backend'а, `check()` RID) → handler (`check()` на каждом элементе) → выходная схема и размер. Аргументы и `_meta` полномочий не дают.
+
+`demo` сделан на шаблоне `templates/python-fastmcp` (`.copier-answers.yml`): `server.py`, `__main__.py`, `Dockerfile`, `Dockerfile.dockerignore` — файлы шаблона, совпадение проверяет `tests/toolkit/test_template.py`.
 
 ## Запуск
 
@@ -29,4 +31,5 @@ Identity от ContextForge (ADR-0001, вариант C): `DEMO_IDENTITY_KEYS=<ki
 
 - `uv run pytest` здесь или из корня: официальный MCP SDK-клиент через ASGI-транспорт, bundle собирает `gxg-policy build` из `fixtures/grants/` с ключом, созданным в тесте.
 - `connectors/demo/docker_smoke.sh`: сборка и запуск образа (AC-M3-01, AC-M3-11).
+- `uv run check-connectors --connector .`: общий conformance-набор (MC, SC, MCC-05/09), harness — `src/demo_connector/conformance.py`.
 - `uv run mutmut run` здесь (или `scripts/ci/mutmut.sh` для всех вех): `tools.py`, `backend.py`.

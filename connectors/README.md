@@ -4,7 +4,7 @@
 
 | Интеграция | Целевой путь | Этап | Статус |
 | --- | --- | --- | --- |
-| Reference (`demo`) | Синтетический FastMCP-коннектор: read + `propose` на fake provider ([спека](../docs/specs/demo-connector-v1.md)) | B, C | Read-only локально (M3): 3 tools, тестовый issuer, Docker ([README](demo/README.md)); `propose` — M8 |
+| Reference (`demo`) | Синтетический FastMCP-коннектор: read + `propose` на fake provider ([спека](../docs/specs/demo-connector-v1.md)) | B, C | Read-only локально (M3): 3 tools, тестовый issuer, Docker ([README](demo/README.md)); на шаблоне `templates/python-fastmcp` и `gxg_connector_kit.mcp` (M1.1); `propose` — M8 |
 | Knowledge Base | Существующий KB MCP после gap-аудита; при необходимости тонкий wrapper | B | Не подключено |
 | Telegram | Фасад к существующему Telegram-сервису; сначала только чтение | D, E | Не реализован |
 | Signal Intelligence | Существующий Mastra-процесс; Hub на сборе и на `propose` | D | Не интегрирован |
@@ -12,6 +12,8 @@
 | Voice / Oscar | Отдельный realtime-сервис, потребитель tools | D | Не интегрирован |
 | CRM | `read` + `propose_update` | После F | Не выбрана |
 | MCP→A2A | Bridge к агентам-исполнителям | После F | Future |
+
+Новый коннектор — `scripts/new-connector --name <domain> --lang python [--with-effects]` ([шаблон](../templates/python-fastmcp/README.md)); соответствие MCC — `uv run check-connectors --connector .` ([набор](../tools/gxg-connector-check/README.md)).
 
 Каждый коннектор — отдельный каталог со своим `gxg-manifest.yaml`, lockfile, Dockerfile и тестами. Собственный MCP-фреймворк не пишем: Python — FastMCP, TypeScript — официальный SDK.
 
