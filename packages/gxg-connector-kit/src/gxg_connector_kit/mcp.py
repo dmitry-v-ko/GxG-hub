@@ -78,9 +78,10 @@ class Settings:
     <P>_IDENTITY_KEYS            ContextForge identity adapter keys (ADR-0001 C); without them every call is refused
     <P>_TEST_ISSUER_KEY          test profile only: public key of the test identity issuer
     <P>_TEST_CONTROLS=1          test profile only: test controls on 127.0.0.1:8090
-    <P>_APPROVAL_URL             effects only: Approval Service `api`
-    <P>_SERVICE_KEY_FILE         effects only: file with this connector's service JWT key (a mounted secret, AS-06)
-    <P>_EXECUTOR_JWKS_URL        effects only: executor JWKS (execution tokens, AS-09)
+    <P>_APPROVAL_URL             effects: base URL of the Approval Service `api` (intents, dispatch, executor JWKS);
+                                 without it the connector is read-only: no `propose` tool, no internal port
+    <P>_APPROVAL_AUDIENCE        effects: its service ID in the platform registry (default approval-api)
+    <P>_SVC_KEY_FILE             effects: secret file, Ed25519 seed (base64url) of this connector's service JWT key
     """
 
     PREFIX: ClassVar[str] = "GXG"
@@ -92,8 +93,8 @@ class Settings:
     test_controls: bool
     identity_keys: str = ""
     approval_url: str = ""
-    service_key_file: str = ""
-    executor_jwks_url: str = ""
+    approval_audience: str = "approval-api"
+    svc_key_file: str = ""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -107,9 +108,11 @@ class Settings:
             test_controls=env.get(f"{p}_TEST_CONTROLS") == "1",
             identity_keys=env.get(f"{p}_IDENTITY_KEYS", ""),
             approval_url=env.get(f"{p}_APPROVAL_URL", ""),
-            service_key_file=env.get(f"{p}_SERVICE_KEY_FILE", ""),
-            executor_jwks_url=env.get(f"{p}_EXECUTOR_JWKS_URL", ""),
+            approval_audience=env.get(f"{p}_APPROVAL_AUDIENCE", "approval-api"),
+            svc_key_file=env.get(f"{p}_SVC_KEY_FILE", ""),
         )
+        if s.approval_url and not s.svc_key_file:
+            raise ConfigError(f"{p}_APPROVAL_URL needs {p}_SVC_KEY_FILE (service JWT key, AS-06)")
         if s.profile != "test" and (s.test_issuer_key is not None or s.test_controls):
             raise ConfigError("test issuer and test controls are allowed only with GXG_PROFILE=test")
         if s.test_issuer_key is not None and s.identity_keys:

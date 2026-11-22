@@ -1,0 +1,29 @@
+[project]
+name = "gxg-connector-check"
+version = "0.0.0"
+description = "GxG Hub conformance suite for MCP connectors: check-connectors (MC, SC, EX; mcp-toolkit-v1, M1.1)."
+requires-python = ">=3.12"
+dependencies = [
+    "gxg-connector-kit[mcp]",
+    "pytest>=8.3,<10",  # the runner: every check is a pytest test with its matrix ID
+    "pytest-timeout>=2.3,<3",
+    "jsonschema>=4.23,<5",
+    "pyyaml>=6,<7",
+]
+
+[project.scripts]
+check-connectors = "gxg_connector_check.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "gxg_connector_check"
+
+# DoD-4: mutmut on the suite's key conditions. Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh).
+[tool.mutmut]
+source_paths = ["src/gxg_connector_check/"]
+only_mutate = ["*/bundle.py", "*/fakes.py", "*/cli.py"]
+pytest_add_cli_args_test_selection = ["tests"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]

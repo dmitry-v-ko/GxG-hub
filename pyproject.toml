@@ -9,12 +9,14 @@ dependencies = [
     "gxg-approval",
     "gxg-policy",
     "gxg-connector-demo",
+    "gxg-connector-check",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3,<10",
     "pytest-socket==0.8.1",  # AC-M0-01: no internet socket in tests
+    "pytest-timeout==2.4.0",  # DoD-1 (3rd edition): every test has a time limit
     "ruff==0.17.6",
     "mypy==2.4.1",
     "types-PyYAML>=6,<7",
@@ -39,7 +41,7 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["packages/gxg-connector-kit", "approval", "tools/gxg-policy"]
+members = ["packages/gxg-connector-kit", "approval", "tools/gxg-policy", "tools/gxg-connector-check"]
 # Connectors keep their own lockfile (docs/specs/mcp-toolkit-v1.md, demo-connector-v1.md);
 # the root pulls them in by path only to run their unit tests.
 exclude = ["connectors/*"]
@@ -48,6 +50,7 @@ exclude = ["connectors/*"]
 gxg-connector-kit = { workspace = true }
 gxg-approval = { workspace = true }
 gxg-policy = { workspace = true }
+gxg-connector-check = { workspace = true }
 gxg-connector-demo = { path = "connectors/demo", editable = true }
 
 [tool.pytest.ini_options]
@@ -95,6 +98,8 @@ ignore = [
 "**/tests/**" = ["S101", "S603", "S607", "PLC0415"]
 "**/tests_db/**" = ["S101", "S603", "S607", "PLC0415", "S608"]  # S608: SQL built from test constants
 "conftest.py" = ["S101"]
+# the conformance checks are pytest tests shipped as a package (check-connectors)
+"tools/gxg-connector-check/src/gxg_connector_check/checks.py" = ["S101"]
 "scripts/ci/**" = ["S603", "S607"]
 "stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
 "approval/src/gxg_approval/cli.py" = ["PLC0415"]  # each process imports only what it runs

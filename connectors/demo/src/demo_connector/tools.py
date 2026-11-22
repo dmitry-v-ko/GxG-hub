@@ -21,7 +21,8 @@ from gxg_connector_kit.grants import GrantResolver
 from gxg_connector_kit.identity import IdentityVerifier
 from gxg_connector_kit.mcp import NOT_FOUND, Access, Handler, Result
 
-from .backend import Backend, Note
+from .backend import Backend
+from .data import Note
 
 ROOT = Path(__file__).resolve().parents[2]  # connectors/demo
 MANIFEST = ROOT / "gxg-manifest.yaml"  # the one source of tool names, schemas and timeouts
