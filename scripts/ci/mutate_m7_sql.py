@@ -21,8 +21,9 @@ MIG = "approval/src/gxg_approval/migrations/versions/0001_core.py"
 INT = "approval/src/gxg_approval/intents.py"
 MIG2 = "approval/src/gxg_approval/migrations/versions/0002_executor.py"
 MIG3 = "approval/src/gxg_approval/migrations/versions/0003_idempotency_per_requester.py"
+MIG4 = "approval/src/gxg_approval/migrations/versions/0004_ui_notifier.py"  # M9
 EXE = "approval/src/gxg_approval/executor.py"
-TESTS = ["approval/tests_db"]
+TESTS = ["approval/tests_db", "approval/ui/tests_db", "approval/notifier/tests_db", "-m", "not e2e"]
 M8_TESTS = ["approval/tests_db/test_executor.py", "approval/tests_db/test_roles.py"]  # M8 rows: their tests only
 EQUIVALENT = "equivalent: "  # prefix of `what` for a mutant that cannot change behaviour (reason follows)
 
@@ -77,8 +78,10 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG, "OR now() >= r.expires_at THEN", " THEN", "decision after the approval deadline"),
     (MIG, "IF p_approver = r.requester_principal OR", "IF", "requester approves own intent"),
     (MIG, "OR NOT p_approver LIKE 'oidc:%'", "", "a machine principal approves"),
-    (MIG, "     OR (r.allowed_approvers IS NOT NULL AND NOT p_approver = ANY (r.allowed_approvers))\n", "",
+    (MIG, "     OR NOT p_approver = ANY (coalesce(r.allowed_approvers, ARRAY[]::text[]))\n", "",
      "approver outside allowed_approvers"),
+    (MIG, "coalesce(r.allowed_approvers, ARRAY[]::text[])", "coalesce(r.allowed_approvers, ARRAY[p_approver])",
+     "intent without a frozen approver set decided by anyone"),
     (MIG, "\n     OR (p_decision = 'approve' AND r.step_up_required AND NOT p_step_up) THEN", " THEN",
      "approve without required step-up"),
     (MIG, "PERFORM _gxg_fail('GX409', 'this approver has already decided')", "NULL", "second vote of one human"),
@@ -92,6 +95,8 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG, "    PERFORM _gxg_outbox('execute', r);\n    PERFORM _gxg_outbox('webhook', r);\n",
      "    PERFORM _gxg_outbox('webhook', r);\n", "approved intent never queued for execution"),
     # T18 manual resolution
+    (MIG, "IF NOT p_actor LIKE 'oidc:%' THEN PERFORM _gxg_fail('GX403', 'only a human resolves manually'); END IF;",
+     "", "a machine principal resolves manually"),
     (MIG, "OR length(coalesce(p_reason, '')) < 10 THEN", " THEN", "manual outcome without a reason"),
     (MIG, "IF r.version <> p_version THEN PERFORM _gxg_fail('GX409', 'intent version changed'); END IF;\n"
      "  r := _gxg_move(r, 'resolve_manual'", "r := _gxg_move(r, 'resolve_manual'", "manual outcome, stale version"),
@@ -167,6 +172,35 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      "auto hour limit counts the day"),
     (INT, "AND approval_mode = 'auto' AND %s", "AND %s", "auto limit counts human intents of the rule"),
     (INT, "AND %s = ANY(rule_ids)", "AND (%s = ANY(rule_ids) OR true)", "auto limit counts other rules"),
+    # M9: Telegram link codes (0004), narrowing of gxg_ui
+    (MIG4, "IF NOT p_human LIKE 'oidc:%' OR p_code", "IF p_code", "a code for a machine principal"),
+    (MIG4, "OR p_code !~ '^[0-9]{{6}}$' OR", "OR", "a code that is not six digits"),
+    (MIG4, " OR coalesce(cardinality(p_tenants), 0) = 0 THEN", " THEN", "a code for no tenant"),
+    (MIG4, "IF EXISTS (SELECT 1 FROM link_codes WHERE code_hash = _gxg_code_hash(p_code) AND used_at IS NULL",
+     "IF false AND EXISTS (SELECT 1 FROM link_codes WHERE code_hash = _gxg_code_hash(p_code) AND used_at IS NULL",
+     "the same digits live twice"),
+    (MIG4, "  UPDATE link_codes SET expires_at = now() WHERE human_principal = p_human AND used_at IS NULL AND "
+     "expires_at > now();\n", "", "an older code keeps working"),
+    (MIG4, "make_interval(secs => {CODE_TTL_S})", "make_interval(secs => 10 * {CODE_TTL_S})", "code lives too long"),
+    (MIG4, "AND at > now() - interval '10 minutes'", "AND at > now()", "wrong guesses never counted"),
+    (MIG4, ">= {MAX_FAILED_CLAIMS} THEN", ">= {MAX_FAILED_CLAIMS} + 1 THEN", "one more guess allowed"),
+    (MIG4, "AND details->>'telegram_user_id' = p_telegram_user::text", "", "one sender's guesses block everyone"),
+    (MIG4, "AND used_at IS NULL\n                                     AND expires_at > now() FOR UPDATE",
+     "AND expires_at > now() FOR UPDATE", "a used code works again"),
+    (MIG4, "\n                                     AND expires_at > now() FOR UPDATE", " FOR UPDATE",
+     "an expired code works"),
+    (MIG4, "  UPDATE link_codes SET used_at = now(), telegram_user_id = p_telegram_user WHERE id = c.id;\n", "",
+     "a code is never used up"),
+    (MIG4, "DO UPDATE SET telegram_user_id = excluded.telegram_user_id,", "DO UPDATE SET telegram_user_id = "
+     "approver_links.telegram_user_id,", "a new link does not replace the old Telegram account"),
+    (MIG4, "FOREACH t IN ARRAY c.tenant_ids LOOP", "FOREACH t IN ARRAY c.tenant_ids[1:1] LOOP",
+     "a code links only the first tenant"),
+    (MIG4, "REVOKE INSERT ON outbox FROM gxg_ui;", "", "ui writes outbox rows"),
+    (MIG4, "REVOKE INSERT, UPDATE ON approver_links FROM gxg_ui;", "", "ui writes links directly"),
+    (MIG4, "ON FUNCTION gxg_link_claim(text, bigint) TO gxg_notifier;",
+     "ON FUNCTION gxg_link_claim(text, bigint) TO gxg_notifier, gxg_ui;", "ui claims codes"),
+    (MIG4, "GRANT SELECT, INSERT, UPDATE (sign_count) ON webauthn_credentials TO gxg_ui;",
+     "GRANT SELECT, INSERT, UPDATE ON webauthn_credentials TO gxg_ui;", "ui rewrites a passkey's key"),
     # migration 0003 (M8, EFF-08 per requester): pinned by test_propose.py, so it runs with every DB test
     (MIG3, "UNIQUE (tenant_id, requester_principal, idempotency_key)", "UNIQUE (tenant_id, idempotency_key)",
      "idempotency unique per tenant, not per requester (EFF-08)"),

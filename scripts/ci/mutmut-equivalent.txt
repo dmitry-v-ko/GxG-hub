@@ -142,3 +142,5 @@ gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_52  # M8: `doc = ""` after
 gxg_approval.executor.x_release_reserved__mutmut_1  # M8: `cast(None, …)`: typing.cast is a no-op at runtime (as M1)
 gxg_approval.keys.x__write__mutmut_4  # M8: name of the temporary file next to the target; only its atomic replace is observable
 gxg_approval.keys.x__write__mutmut_5  # M8: name of the temporary file next to the target; only its atomic replace is observable
+gxg_approval_ui.stepup.x_registration_options__mutmut_2  # M9: token_bytes(None) draws secrets.DEFAULT_ENTROPY = 32 bytes, the same as CHALLENGE_BYTES
+gxg_approval_ui.render.x_card__mutmut_6  # M9: ensure_ascii=None is falsy, json.dumps treats it exactly like False

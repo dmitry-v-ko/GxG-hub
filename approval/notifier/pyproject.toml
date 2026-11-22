@@ -1,0 +1,32 @@
+[project]
+name = "gxg-approval-notifier"
+version = "0.0.0"
+description = "GxG Hub notify bot (M9): approver notifications over the Telegram Bot API, long polling, /link."
+requires-python = ">=3.12"
+# AS-29: its own image and dependency tree (no web framework, no payload keys).
+dependencies = [
+    "httpx>=0.27,<1",
+    "psycopg[binary]>=3.2,<4",
+]
+
+[project.scripts]
+gxg-approval-notifier = "gxg_approval_notifier.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "gxg_approval_notifier"
+
+# Tests run from the repository root (its pytest config: no TCP, no skips), with the root environment.
+
+# DoD-4: from this directory with the root environment and a PostgreSQL (scripts/ci/mutmut.sh starts one):
+#   GXG_TEST_PG_SOCKET_DIR=<dir> uv run --project ../.. mutmut run
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = ["src/gxg_approval_notifier/bot.py"]
+also_copy = ["tests_db/", "testing/"]
+pytest_add_cli_args_test_selection = ["tests_db"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
+timeout_constant = 60.0

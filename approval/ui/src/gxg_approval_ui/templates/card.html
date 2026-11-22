@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Заявка <code>{{ intent.intent_id }}</code></h1>
+<dl class="meta">
+  <dt>Статус</dt><dd id="status">{{ intent.status }}</dd>
+  <dt>Tenant</dt><dd>{{ intent.tenant_id }}</dd>
+  <dt>Tool</dt><dd>{{ intent.tool_key }} {{ intent.tool_version }} ({{ intent.effect_class }})</dd>
+  <dt>Requester</dt><dd id="requester">{{ requester }}</dd>
+  <dt>business_task_id</dt><dd>{{ task }}</dd>
+  <dt>Правило политики</dt><dd>{{ intent.rule_ids|join(", ") or "по умолчанию для класса" }} (политика {{ intent.policy_version }})</dd>
+  <dt>Решений «approve»</dt><dd>{{ received }} из {{ intent.required_approvals }}</dd>
+  <dt>Срок решения</dt><dd>{{ intent.expires_at.isoformat() }}</dd>
+</dl>
+{% if hidden %}<p class="warning" id="hidden-warning">Внимание: в параметрах есть невидимые или управляющие символы. Они показаны как ⟦U+XXXX⟧.</p>{% endif %}
+{% if not args_match %}<p class="warning" id="hash-warning">Канонические параметры не совпадают с хешем заявки. Одобрить её нельзя — отклоните.</p>{% endif %}
+{% if preview %}
+<section id="preview">
+  <h2 class="pv-title">{{ preview.title }}</h2>
+  <p>Получатель: <span class="pv-text">{{ preview.target.label }}</span> (<code class="pv-text">{{ preview.target.rid }}</code>)</p>
+  <dl>
+  {% for f in preview.fields %}
+    <dt class="pv-text">{{ f.label }}</dt><dd><pre class="pv-text pv-value" data-kind="{{ f.kind }}">{{ f.value }}</pre></dd>
+  {% endfor %}
+  </dl>
+  {% if preview.changes %}
+  <table><tr><th>Поле</th><th>Было</th><th>Станет</th></tr>
+  {% for c in preview.changes %}<tr><td class="pv-text">{{ c.field }}</td><td><pre class="pv-text">{{ c.before if c.before is not none else "—" }}</pre></td><td><pre class="pv-text">{{ c.after if c.after is not none else "—" }}</pre></td></tr>{% endfor %}
+  </table>
+  {% endif %}
+  {% for a in preview.attachments or [] %}<p>Вложение: <span class="pv-text">{{ a.name }}</span> ({{ a.mime }}, {{ a.size_bytes }} байт, sha256 <code>{{ a.sha256 }}</code>)</p>{% endfor %}
+  {% for w in preview.warnings or [] %}<p class="warning pv-text">{{ w }}</p>{% endfor %}
+  <details><summary>Канонические параметры (JSON)</summary><pre id="args" class="pv-text">{{ args_json }}</pre></details>
+</section>
+{% else %}<p>Параметры очищены по сроку хранения.</p>{% endif %}
+
+<h2>История решений</h2>
+<ul id="decisions">{% for d in decisions %}<li>{{ d[4].isoformat() }} {{ d[0] }}: {{ d[1] }}{% if d[2] %} (step-up){% endif %}{% if d[3] %} — {{ d[3] }}{% endif %}</li>{% else %}<li>нет</li>{% endfor %}</ul>
+
+{% if can_decide %}
+<h2>Решение</h2>
+{% if intent.step_up_required and not has_passkey %}<p class="warning" id="no-passkey">Для этой заявки нужен step-up, а у вас нет passkey. <a href="/passkeys">Зарегистрируйте passkey</a>, без него одобрить нельзя.</p>{% endif %}
+<form method="post" action="/intents/{{ intent.intent_id }}/decision" id="decide"{% if intent.step_up_required %} data-step-up="/intents/{{ intent.intent_id }}/step-up"{% endif %}>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="version" value="{{ intent.version }}">
+  <input type="hidden" name="args_hash" value="{{ intent.canonical_args_hash }}">
+  <input type="hidden" name="assertion" value="">
+  <label>Комментарий <input name="comment" maxlength="500"></label>
+  {% if args_match and (has_passkey or not intent.step_up_required) %}<button name="decision" value="approve" id="approve">Одобрить</button>{% endif %}
+  <button name="decision" value="reject" id="reject">Отклонить</button>
+</form>
+{% endif %}
+
+{% if can_resolve %}
+<h2>Ручной разбор неясного исхода</h2>
+<form method="post" action="/intents/{{ intent.intent_id }}/resolve" id="resolve">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="version" value="{{ intent.version }}">
+  <label>Обоснование (не меньше 10 символов) <textarea name="reason" required minlength="10"></textarea></label>
+  <button name="outcome" value="executed">Эффект исполнен</button>
+  <button name="outcome" value="not_executed">Эффекта не было</button>
+</form>
+{% endif %}
+{% endblock %}

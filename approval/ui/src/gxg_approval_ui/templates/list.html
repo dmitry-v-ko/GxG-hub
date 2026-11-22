@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>{{ {"pending": "Ожидают решения", "history": "История", "unknown": "Неясный исход"}[screen] }}</h1>
+{% if not groups %}<p id="empty">Заявок нет</p>{% endif %}
+{% for group in groups %}
+<section class="group">
+  {% if group|length > 1 %}<p class="group-head">{{ group|length }} одинаковых заявки от {{ group[0].requester }} — каждую нужно решить отдельно</p>{% endif %}
+  <ul>
+  {% for item in group %}
+    <li><a class="intent" href="/intents/{{ item.id }}">{{ item.title }}</a> · {{ item.label }} · {{ item.tenant }} · {{ item.requester }} · <span class="status">{{ item.status }}</span> · срок {{ item.expires_at.isoformat() }}</li>
+  {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endblock %}

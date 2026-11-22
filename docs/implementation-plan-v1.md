@@ -474,6 +474,7 @@ flowchart TD
 ---
 
 ## Этап D — реальные чтения и Signals
+| AC-M10-08 | AS-30: решение без валидного WebAuthn-assertion, с assertion для другого `intent_id`/`args_hash`/`version`/`decision`, повтор assertion, assertion ключа, зарегистрированного не через `decider` → отказ, строка в `decisions` не создана; роль `gxg_ui` не может вызвать `gxg_decide` (ошибка прав) |
 
 ### M11 — Telegram read-only
 

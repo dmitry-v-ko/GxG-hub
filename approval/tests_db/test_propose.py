@@ -20,6 +20,7 @@ from gxg_approval.crypto import Decryptor
 from gxg_connector_kit import _schema
 
 BOT, SIGNALS = "agent:t-alpha:bot", "agent:t-alpha:signals"
+HUMAN1, HUMAN2 = "oidc:https://idp.example.invalid:1", "oidc:https://idp.example.invalid:2"
 
 
 def stored_hash(owner: psycopg.Connection[Any]) -> str:
@@ -48,8 +49,10 @@ def test_human_approval_by_default_for_external_effect(
     assert doc["approval"] == {"mode": "human", "required_approvals": 1, "received_approvals": 0, "rule_ids": []}
     row = owner.execute("SELECT topic, payload FROM outbox").fetchall()
     assert row == [
-        ("notify", {"intent_id": doc["intent_id"], "tenant_id": "t-alpha", "status": "pending_approval", "version": 1})
-    ]
+        ("notify", {"intent_id": doc["intent_id"], "tenant_id": "t-alpha", "status": "pending_approval", "version": 1,
+                    "title": "Send a message", "target_label": "Board b1", "requester": "agent:t-alpha:bot",
+                    "expires_at": doc["expires_at"], "approvers": [HUMAN1, HUMAN2]})
+    ]  # fmt: skip  # AS-19: no fields, changes or args
     audit = owner.execute("SELECT actor, action, tenant_id, intent_id::text, to_status, details FROM audit_events")
     assert audit.fetchall() == [
         ("demo", "propose", "t-alpha", doc["intent_id"], "pending_approval",
@@ -472,14 +475,23 @@ def test_ap02_alert_is_logged(propose: Callable[..., Any], world: Any, caplog: p
 
 
 def test_allowed_approvers_are_stored(propose: Callable[..., Any], world: Any, owner: psycopg.Connection[Any]) -> None:
-    """AP-01.4: the narrowed approver set is frozen into the intent (NULL = any approver of the tenant)."""
+    """AP-01.4: the approver set is frozen into the intent: every approver of the tenant by role, narrowed by the
+    policy (M9: gxg_decide checks it, so the database refuses a decision by anyone else)."""
     h1, h2 = "oidc:https://idp.example.invalid:1", "oidc:https://idp.example.invalid:2"
     propose()
     world.set_policy("t-alpha", [{"id": "narrow", "match": {"tools": ["demo.message.propose"]},
                                   "decision": "require_approval", "approvers": [h2, h1]}])  # fmt: skip
     propose()
     rows = owner.execute("SELECT allowed_approvers, rule_ids FROM intents ORDER BY created_at, intent_id").fetchall()
-    assert sorted(rows, key=lambda r: r[1]) == [(None, []), ([h1, h2], ["narrow"])]
+    assert sorted(rows, key=lambda r: r[1]) == [([h1, h2], []), ([h1, h2], ["narrow"])]
+    outsider = "oidc:https://not-an-approver:9"
+    world.set_policy("t-alpha", [{"id": "one", "match": {"tools": ["demo.message.propose"]},
+                                  "decision": "require_approval", "approvers": [h2, outsider]}])  # fmt: skip
+    propose()
+    row = owner.execute("SELECT allowed_approvers FROM intents WHERE rule_ids = '{one}'").fetchone()
+    assert row == ([h2],)  # a policy approver without the role is not an approver
+    propose(tool="demo.note.propose")  # not a human decision: no set
+    assert owner.execute("SELECT allowed_approvers FROM intents WHERE approval_mode <> 'human'").fetchall() == [(None,)]
 
 
 def _scans(plan: dict[str, Any]) -> list[str]:
@@ -520,3 +532,45 @@ def test_t1_counts_use_indexes_on_a_long_history(owner: psycopg.Connection[Any])
         if sql is intents._SQL_AUTO_USED:  # the day window needs its own index, not the tenant part of another
             assert any(s.endswith(":intents_tenant_id_created_at_idx") for s in scans), scans
     owner.execute("TRUNCATE intents CASCADE")
+
+
+def test_no_approver_can_decide_alert(
+    propose: Callable[..., Any], world: Any, owner: psycopg.Connection[Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    """A human intent whose frozen approver set is empty can only expire: the operator is told (M9)."""
+    outsider = "oidc:https://not-an-approver:9"
+    world.set_policy("t-alpha", [{"id": "nobody", "match": {"tools": ["demo.message.propose"]},
+                                  "decision": "require_approval", "approvers": [outsider]}])  # fmt: skip
+    doc = propose().json()
+    assert owner.execute("SELECT allowed_approvers FROM intents").fetchall() == [([],)]
+    assert ("gxg_approval", 30, f"ALERT policy tenant=t-alpha: no approver of the tenant may decide intent "
+            f"{doc['intent_id']}") in caplog.record_tuples  # fmt: skip
+    payload = owner.execute("SELECT payload FROM outbox").fetchone()
+    assert payload is not None and payload[0]["approvers"] == []
+
+
+def test_preview_envelope_carries_preview_and_canonical_args(
+    propose: Callable[..., Any], world: Any, owner: psycopg.Connection[Any]
+) -> None:
+    """EFF-33 (M9): the ui reads only preview_ciphertext, so the canonical args travel in the preview envelope."""
+    import json
+
+    body = world.body(args={"text": "envelope", "n": 3})
+    r = propose(args={"text": "envelope", "n": 3})
+    assert r.status_code == 201, r.text
+    row = owner.execute("SELECT preview_ciphertext FROM intents").fetchone()
+    assert row is not None
+    opened = Decryptor("preview", {"t-alpha": world.payload_private["t-alpha"]["preview"]}).open(
+        "t-alpha", bytes(row[0])
+    )
+    assert json.loads(opened) == {"preview": body["preview"], "canonical_args": {"text": "envelope", "n": 3}}
+
+
+def test_no_alert_when_approvers_exist(
+    propose: Callable[..., Any], world: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    propose()  # human, the tenant has approvers
+    world.set_policy("t-alpha", [{"id": "auto", "match": {"tools": ["demo.message.propose"]},
+                                  "decision": "auto_approve", "limits": {"max_per_hour": 5}}])  # fmt: skip
+    propose()  # auto: no approver set at all
+    assert [m for _, _, m in caplog.record_tuples if "no approver" in m] == []

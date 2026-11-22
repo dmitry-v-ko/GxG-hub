@@ -201,7 +201,8 @@ def propose(conn: psycopg.Connection[Any], bundle: Bundle, caller: Service, body
     if args_hash != req["canonical_args_hash"]:
         raise GxgError("invalid_input", "canonical_args_hash does not match canonical_args")
     args_ct = encryptor.seal(tenant, "args", canonical.dumps(args))
-    preview_ct = encryptor.seal(tenant, "preview", canonical.dumps(req["preview"]))
+    # EFF-33: the ui shows the canonical args under the preview, and reads only preview_ciphertext (AS-27)
+    preview_ct = encryptor.seal(tenant, "preview", canonical.dumps({"preview": req["preview"], "canonical_args": args}))
     policy_doc = bundle.approval_policies.get(tenant)
     refusal: GxgError
 
@@ -246,9 +247,16 @@ def propose(conn: psycopg.Connection[Any], bundle: Bundle, caller: Service, body
                 row = _insert(
                     conn, cur, req, tool=tool, caller=caller, decision=decision, bundle_version=bundle.version,
                     args_hash=args_hash, args_ct=args_ct, preview_ct=preview_ct,
+                    approvers=approver_set(grants.roles, decision.approvers),
                 )  # fmt: skip
                 return Created(row, http_status=201)
     raise refusal  # after commit: the audit row of the refusal stays
+
+
+def approver_set(roles: Mapping[str, frozenset[str]], narrowed: tuple[str, ...] | None) -> list[str]:
+    """T2 «роль approver по bundle; в allowed_approvers», frozen at T1 so that gxg_decide can check it (M9)."""
+    people = {human for human, r in roles.items() if "approver" in r}
+    return sorted(people if narrowed is None else people & set(narrowed))
 
 
 def _insert(
@@ -263,6 +271,7 @@ def _insert(
     args_hash: str,
     args_ct: bytes,
     preview_ct: bytes,
+    approvers: list[str],
 ) -> dict[str, Any]:
     tenant, requester = req["requester"]["tenant_id"], req["requester"]["principal"]
     approved = decision.mode != "human"
@@ -291,7 +300,7 @@ def _insert(
                 "mode": decision.mode,
                 "approvals": decision.required_approvals,
                 "step_up": decision.step_up,
-                "approvers": None if decision.approvers is None else list(decision.approvers),
+                "approvers": approvers if decision.mode == "human" else None,
                 "status": "approved" if approved else "pending_approval",
                 "ttl": decision.approval_ttl_s,
                 "approved": approved,
@@ -300,16 +309,21 @@ def _insert(
         ).fetchone()
         or {}
     )  # INSERT … RETURNING always returns the row
+    if decision.mode == "human" and not approvers:  # it can only expire
+        log.warning("ALERT policy tenant=%s: no approver of the tenant may decide intent %s", tenant, intent_id)
     if decision.mode == "auto":
         conn.execute(_SQL_AUTO_DECISION, (intent_id,))  # EFF-03
-    conn.execute(
-        _SQL_OUTBOX,
-        (
-            "execute" if approved else "notify",
-            intent_id,
-            Jsonb({"intent_id": str(intent_id), "tenant_id": tenant, "status": row["status"], "version": 1}),
-        ),
-    )
+    event: dict[str, Any] = {"intent_id": str(intent_id), "tenant_id": tenant, "status": row["status"], "version": 1}
+    if not approved:  # AS-19: what the bot may say (the notifier cannot read intents); never fields or changes
+        preview = req["preview"]
+        event |= {
+            "title": preview["title"],
+            "target_label": preview["target"]["label"],
+            "requester": requester,
+            "expires_at": _iso(row["expires_at"]),
+            "approvers": approvers,
+        }
+    conn.execute(_SQL_OUTBOX, ("execute" if approved else "notify", intent_id, Jsonb(event)))
     # AS-08: no verifiable assertion mechanism is configured yet (ADR-0001 variant C lands with M5).
     _audit(
         conn,

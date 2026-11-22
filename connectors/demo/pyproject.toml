@@ -40,3 +40,6 @@ only_mutate = ["*/tools.py", "*/backend.py", "*/server.py", "*/effects.py", "*/p
 also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml"]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
+# A mutant that breaks start-up makes test_real_process_* wait for the child's readiness: give it time to fail
+# instead of a load-dependent timeout (same constant as approval/ui).
+timeout_constant = 60.0

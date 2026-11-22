@@ -9,6 +9,8 @@ dependencies = [
     "gxg-approval",
     "gxg-policy",
     "gxg-connector-demo",
+    "gxg-approval-ui",
+    "gxg-approval-notifier",
 ]
 
 [dependency-groups]
@@ -33,6 +35,8 @@ dev = [
     "PyJWT==2.15.1",
     "httpx>=0.27,<1",
     "docker>=7.1,<8",
+    # M9: test OIDC issuer for the ui E2E (tests and the compose test profile only, never production)
+    "oidc-provider-mock==0.4.8",
 ]
 
 [tool.uv]
@@ -42,13 +46,16 @@ package = false
 members = ["packages/gxg-connector-kit", "approval", "tools/gxg-policy"]
 # Connectors keep their own lockfile (docs/specs/mcp-toolkit-v1.md, demo-connector-v1.md);
 # the root pulls them in by path only to run their unit tests.
-exclude = ["connectors/*"]
+# ui and notifier are separate deployables with their own lockfile too (AS-29).
+exclude = ["connectors/*", "approval/ui", "approval/notifier"]
 
 [tool.uv.sources]
 gxg-connector-kit = { workspace = true }
 gxg-approval = { workspace = true }
 gxg-policy = { workspace = true }
 gxg-connector-demo = { path = "connectors/demo", editable = true }
+gxg-approval-ui = { path = "approval/ui", editable = true }
+gxg-approval-notifier = { path = "approval/notifier", editable = true }
 
 [tool.pytest.ini_options]
 minversion = "8.3"
@@ -63,6 +70,7 @@ testpaths = [
     "tests/contract",
     "packages/gxg-connector-kit/tests",
     "approval/tests",
+    "approval/ui/tests",
     "tools/gxg-policy/tests",
     "connectors/demo/tests",
     "spikes/m4-contextforge/tests",
@@ -93,15 +101,18 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Tests and CI scripts run git/pytest subprocesses and use assert by design.
 "**/tests/**" = ["S101", "S603", "S607", "PLC0415"]
-"**/tests_db/**" = ["S101", "S603", "S607", "PLC0415", "S608"]  # S608: SQL built from test constants
+"**/tests_db/**" = ["S101", "S603", "S607", "PLC0415", "S608", "S105", "S106", "PLR0917"]  # S608: SQL built from test constants
 "conftest.py" = ["S101"]
 "scripts/ci/**" = ["S603", "S607"]
 "stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
 "approval/src/gxg_approval/cli.py" = ["PLC0415"]  # each process imports only what it runs
+"approval/ui/src/gxg_approval_ui/cli.py" = ["PLC0415"]
+# the UI and the bot speak Russian to people: Cyrillic letters are not look-alikes there
+"approval/{ui,notifier}/**" = ["RUF001"]
 "approval/src/gxg_approval/migrations/**" = ["S101", "S608", "E501"]  # static DDL from code constants
 
 [tool.ruff.lint.isort]
-known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector"]
+known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_approval_ui", "gxg_approval_notifier", "gxg_policy", "demo_connector"]
 
 [tool.mypy]
 # Baseline for every package; the strict set is enforced separately with
@@ -115,7 +126,12 @@ no_implicit_optional = true
 strict_equality = true
 # scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
 explicit_package_bases = true
-mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "tools/gxg-policy/src", "connectors/demo/src", ".", "approval/tests_db"]
+mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "approval/ui/src", "approval/notifier/src", "tools/gxg-policy/src", "connectors/demo/src", ".", "approval/tests_db"]
+
+[[tool.mypy.overrides]]
+# authlib ships no type information (types-Authlib is a separate, lagging stub package)
+module = ["authlib.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # gateway/contextforge/gxg_identity/plugin.py runs inside the ContextForge image, where cpex is installed

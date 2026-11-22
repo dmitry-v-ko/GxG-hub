@@ -59,6 +59,11 @@ jobs:
         run: uv run mypy --strict conftest.py tests/ci
       - name: mypy --strict (approval DB tests; separate run, own conftest.py)
         run: uv run mypy --strict approval/tests_db
+      - name: mypy --strict (M9 ui and notifier; their DB tests have their own conftest.py each)
+        run: |
+          uv run mypy --strict approval/ui/src approval/ui/tests approval/notifier/src approval/notifier/testing approval/deploy/tests
+          uv run mypy --strict approval/ui/tests_db
+          uv run mypy --strict approval/notifier/tests_db
       - name: mypy (other packages and contract tests)
         run: >-
           uv run mypy
@@ -107,6 +112,24 @@ jobs:
       - run: docker pull postgres:16.6-alpine
       - name: AC-M7-02, 04, 06…13 — approval/tests_db
         run: uv run pytest approval/tests_db
+      - name: AC-M9-01…11 — ui (incl. Playwright E2E with Chromium) and notifier on PostgreSQL
+        run: |
+          npm install -g playwright@1.63.0 && npx playwright install --with-deps chromium
+          NODE_PATH="$(npm root -g)" uv run pytest approval/ui/tests_db approval/notifier/tests_db
+
+  approval-images:
+    # AC-M9-12 (AS-29): ui and notifier images from their own lockfiles; compose networks; connection attempts
+    # from inside each container (allowed ones open, the rest refused; positive control from the edge network).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: (cd approval/ui && uv lock --check) && (cd approval/notifier && uv lock --check)
+      - run: uv run pytest approval/deploy/tests
 
   schema-guard:
     # AC-M0-02: proves that every schema mutation turns the contract tests red.
@@ -261,7 +284,7 @@ jobs:
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
     if: always()
-    needs: [lint, types, tests, approval-db, schema-guard, secrets, mutmut, policy, demo-image, m5-stand, grants-widening]
+    needs: [lint, types, tests, approval-db, approval-images, schema-guard, secrets, mutmut, policy, demo-image, m5-stand, grants-widening]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
