@@ -86,7 +86,7 @@ class Backend:
         if key in self.journal:
             return Sent("duplicate", self.journal[key])
         if self.failure in ("rate_limited", "timeout_before_start", "reject"):
-            return Sent(self.failure, None)  # type: ignore[arg-type]
+            return Sent(self.failure, None)
         if self.failure == "temporarily_unavailable":
             return Sent("timeout_before_start", None)
         self.journal[key] = str(uuid.uuid4())
