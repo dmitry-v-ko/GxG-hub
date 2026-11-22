@@ -10,7 +10,8 @@ from types import ModuleType
 import pytest
 import yaml
 
-REPO = Path(__file__).resolve().parents[2]
+# The checkout, also when mutmut runs this from its copy under mutants/ (which has no stand/).
+REPO = next(p for p in Path(__file__).resolve().parents if (p / "stand" / "init.py").is_file())
 
 
 def load_init() -> ModuleType:
