@@ -78,10 +78,10 @@ class Env:
     tmp: Path
     manifest: dict[str, Any] = field(init=False)
     issuer: StubIssuer = field(default_factory=StubIssuer)
-    bundle_key: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
+    bundle_signer: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
     executor: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
     svc: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
-    approval_key: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
+    approval_signer: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
     secret: str = field(default_factory=lambda: f"provider-secret-{os.urandom(8).hex()}")
 
     def __post_init__(self) -> None:
@@ -94,7 +94,7 @@ class Env:
             [g["tenant"] for g in self.grants],
             executor=self.executor.public_key(),
             svc=self.svc.public_key(),
-            approval=self.approval_key.public_key(),
+            approval=self.approval_signer.public_key(),
         )
         self.approval = FakeApproval(
             lambda: parse_registry(self.platform), bundle.jwks(self.executor.public_key()), self.connector_id
@@ -103,14 +103,14 @@ class Env:
         (self.tmp / "svc.key").write_text(b64url_encode(self.svc.private_bytes_raw()), encoding="ascii")
 
     def write_bundle(self, grants: list[dict[str, Any]], built_at: datetime) -> None:
-        bundle.write(self.tmp / "bundle", grants, self.platform, self.bundle_key, built_at=built_at)
+        bundle.write(self.tmp / "bundle", grants, self.platform, self.bundle_signer, built_at=built_at)
 
     def settings_env(self) -> dict[str, str]:
         p = self.harness.settings.PREFIX
         env = {
             "GXG_PROFILE": "test",
             f"{p}_BUNDLE_DIR": str(self.tmp / "bundle"),
-            f"{p}_BUNDLE_KEYS": bundle.keys_setting(self.bundle_key),
+            f"{p}_BUNDLE_KEYS": bundle.keys_setting(self.bundle_signer),
             f"{p}_STATE_FILE": str(self.tmp / "state" / "bundle-state.json"),
             f"{p}_TEST_ISSUER_KEY": bundle.public(self.issuer.public_key),
         }
@@ -130,8 +130,8 @@ class Env:
             tenant_id=principal.split(":")[1], principal=principal, audience=self.connector_id, **kw
         )
 
-    def executor_jwt(self, *, key: Ed25519PrivateKey | None = None, iss: str = "executor") -> str:
-        return svc_jwt.sign(key or self.executor, iss=iss, aud=self.connector_id)
+    def executor_jwt(self, *, signer: Ed25519PrivateKey | None = None, iss: str = "executor") -> str:
+        return svc_jwt.sign(signer or self.executor, iss=iss, aud=self.connector_id)
 
     @asynccontextmanager
     async def client(self, running: Running) -> AsyncIterator[Client]:

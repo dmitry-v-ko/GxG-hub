@@ -142,7 +142,7 @@ class Boxes:
 class World:
     tmp: Path
     issuer: StubIssuer
-    key: Ed25519PrivateKey
+    signer: Ed25519PrivateKey
     domain: Boxes
 
     @property
@@ -151,7 +151,7 @@ class World:
             {
                 "GXG_PROFILE": "test",
                 "GXG_BUNDLE_DIR": str(self.tmp / "bundle"),
-                "GXG_BUNDLE_KEYS": bundle.keys_setting(self.key),
+                "GXG_BUNDLE_KEYS": bundle.keys_setting(self.signer),
                 "GXG_STATE_FILE": str(self.tmp / "s" / "state.json"),
                 "GXG_TEST_ISSUER_KEY": bundle.public(self.issuer.public_key),
             }
@@ -164,14 +164,14 @@ class World:
                 {
                     "id": "kit",
                     "kind": "connector",
-                    "public_keys": [bundle.public(self.key.public_key())],
+                    "public_keys": [bundle.public(self.signer.public_key())],
                     "tenants": ["t-alpha"],
                     "internal_url": "https://kit.internal",
                 }
             ],
         }
         bundle.write(
-            self.tmp / "bundle", [grants], platform, self.key, built_at=at or datetime.now(UTC) - timedelta(minutes=1)
+            self.tmp / "bundle", [grants], platform, self.signer, built_at=at or datetime.now(UTC) - timedelta(minutes=1)
         )
 
     def app(self, settings: mcp.Settings | None = None, logs: mcp.Logs | None = None) -> Any:

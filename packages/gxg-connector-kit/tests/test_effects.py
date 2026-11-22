@@ -76,7 +76,7 @@ class Provider:
 @dataclass
 class Rig:
     tmp: Path
-    bundle_key: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
+    bundle_signer: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
     executor: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
     svc: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)
     provider: Provider = field(default_factory=Provider)
@@ -93,7 +93,7 @@ class Rig:
         )
         self.write([GRANTS])
         self.store = BundleStore(
-            mcp.parse_keys(bundle.keys_setting(self.bundle_key), "k"), state_file=self.tmp / "s.json"
+            mcp.parse_keys(bundle.keys_setting(self.bundle_signer), "k"), state_file=self.tmp / "s.json"
         )
         self.files = mcp.BundleFiles(self.store, self.tmp / "bundle")
         self.files.refresh()
@@ -118,7 +118,7 @@ class Rig:
             self.tmp / "bundle",
             grants,
             self.platform,
-            self.bundle_key,
+            self.bundle_signer,
             built_at=at or datetime.now(UTC) - timedelta(minutes=2),
         )
 

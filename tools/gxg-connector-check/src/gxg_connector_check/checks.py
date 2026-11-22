@@ -300,7 +300,7 @@ async def test_grants_filter_and_no_provider_call_without_grants(env: Env) -> No
     """A principal without grants gets empty results or `not_found` and the provider is not called; a reader sees
     only granted resources (GR-02, GR-06, GR-16); another tenant sees none of this tenant's."""
     h = env.harness
-    store = BundleStore(mcp.parse_keys(bundle.keys_setting(env.bundle_key), "keys"), state_file=env.tmp / "sc10.json")
+    store = BundleStore(mcp.parse_keys(bundle.keys_setting(env.bundle_signer), "keys"), state_file=env.tmp / "sc10.json")
     store.load(*(Path(env.tmp / "bundle" / f).read_bytes() for f in (mcp.BUNDLE_FILE, mcp.SIG_FILE)))
     tenant = h.reader.split(":")[1]
     running, client = await started(env)
@@ -331,7 +331,7 @@ async def proposed(env: Env, c: Client) -> dict[str, Any]:
 
 def token(env: Env, intent_id: str, body: dict[str, Any], **change: Any) -> tuple[str, str]:
     """(execution token, execution_id) for the intent as created; `change` overrides claims; `key`, `now`."""
-    key: Ed25519PrivateKey = change.pop("key", env.executor)
+    signer: Ed25519PrivateKey = change.pop("key", env.executor)
     now = change.pop("now", time.time)
     execution = str(uuid.uuid4())
     claims = {
@@ -340,7 +340,7 @@ def token(env: Env, intent_id: str, body: dict[str, Any], **change: Any) -> tupl
         "con": body["connection_id"], "res": body["resource_id"], "ahs": body["canonical_args_hash"],
         "idk": body["idempotency_key"], **change,
     }  # fmt: skip
-    return exec_token.sign(key, claims, now=now), execution
+    return exec_token.sign(signer, claims, now=now), execution
 
 
 async def execute(env: Env, running: Running, intent_id: str, body: dict[str, Any], **kw: Any) -> httpx2.Response:
@@ -408,9 +408,9 @@ async def test_execute_without_a_valid_token_is_refused_before_the_provider(env:
     other = Ed25519PrivateKey.generate()
     cases: dict[str, tuple[dict[str, Any], int]] = {
         "no service JWT": ({"svc": ""}, 401),
-        "service JWT of an unknown key": ({"svc": f"Bearer {env.executor_jwt(key=other)}"}, 401),
+        "service JWT of an unknown key": ({"svc": f"Bearer {env.executor_jwt(signer=other)}"}, 401),
         "service JWT of a non-executor": (
-            {"svc": f"Bearer {env.executor_jwt(key=env.svc, iss=env.connector_id)}"},
+            {"svc": f"Bearer {env.executor_jwt(signer=env.svc, iss=env.connector_id)}"},
             401,
         ),
         "no execution token": ({"drop_token": True}, 422),
