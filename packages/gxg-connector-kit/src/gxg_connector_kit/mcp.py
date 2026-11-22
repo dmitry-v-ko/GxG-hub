@@ -295,7 +295,7 @@ def access_hook(domain: Domain, grants: GrantResolver, spec: Mapping[str, Any]) 
         connection = domain.connection(tenant)
         if connection is None:  # a tenant this connector does not serve: nothing to list, nothing to name
             if listing:
-                return Access(ident, action, None, check=check)
+                return Access(ident, action, None)  # the default check() denies every RID
             raise GxgError("not_found", NOT_FOUND)
         access = Access(ident, action, connection, allowed=grants.allowed(tenant, principal, action, connection, rtype),
                         check=check)  # fmt: skip
