@@ -12,9 +12,10 @@
 
 | Точка входа | Тег узла | Кто ходит | Порт |
 | --- | --- | --- | --- |
-| ContextForge MCP | `tag:gateway` | `tag:agent`, `group:operators` | 443 (`tailscale serve`) |
+| ContextForge MCP | `tag:gateway` | `tag:agent`, `group:operators` | 443 (`tailscale serve`; `/admin` и admin API закрыты на прокси) |
+| Админка ContextForge | `tag:gateway` | `group:operators` | 8443 (отдельный `tailscale serve`) |
 | Approval Web UI (`ui`) | `tag:approval-ui` | `group:approvers`, `group:operators` | 443 |
-| Approval `admin`, админка ContextForge | `tag:approval-admin`, `tag:gateway` | `group:operators` | 443 |
+| Approval `admin` | `tag:approval-admin` | `group:operators` | 443 |
 
 Внутренние сервисы (коннекторы, `api`, `mcp`, executor, базы) в tailnet не входят.
 
@@ -41,3 +42,12 @@
 
 - **Только операторский доступ через Tailscale**, MCP и Web UI публично: оставляет публичную поверхность без нужды, потому что все пользователи свои.
 - **Tailnet + Funnel для Web UI:** Funnel снова делает UI публичным.
+
+## Хостинг (решение владельца 2026-11-22)
+
+Хостинг — Railway (SEC-28):
+- у сервисов Hub нет публичных доменов Railway и TCP Proxy;
+- внутренние вызовы идут по private networking;
+- в контейнерах точек входа работает `tailscaled` в режиме userspace-networking, сертификаты `*.ts.net` выдаёт `tailscale serve`.
+
+Админка ContextForge отдаётся на отдельном порту 8443, доступ к нему есть только у `group:operators`. На порту MCP (443) путь `/admin` закрыт. Причина: ACL Tailscale разграничивает порты, а не пути, и агент с доступом к 443 иначе дотянулся бы до админки.
