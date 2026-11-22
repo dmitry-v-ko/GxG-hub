@@ -240,7 +240,7 @@ END $$;
 CREATE FUNCTION _gxg_intent_insert_guard() RETURNS trigger {DEFINER} AS $$
 BEGIN
   PERFORM _gxg_check('', 'propose', NULL, NEW.status);
-  IF NEW.version <> 1 OR NEW.attempts <> 0 OR NEW.terminal_at IS NOT NULL OR NEW.payload_purged_at IS NOT NULL
+  IF NEW.version <> 1 OR NEW.attempts <> 0 OR NEW.payload_purged_at IS NOT NULL
      OR NEW.args_ciphertext IS NULL OR NEW.preview_ciphertext IS NULL
      OR (NEW.status = 'pending_approval') <> (NEW.approval_mode = 'human')
      OR (NEW.approval_mode = 'human') <> (NEW.required_approvals > 0)
