@@ -102,7 +102,7 @@ demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_12  # M8: partition vs rpar
 demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_131  # M8: duration_ms * 1001 instead of * 1000: 0.1 % off a log field (as M3)
 demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_18  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
 demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_19  # M8: missing Authorization header: the default "" or "XXXX" both give no `Bearer <token>` → TokenError(missing)
-demo_connector.effects.xǁEffectsǁexecute__mutmut_100  # M8: operation_id = operation or execution_id; on success the provider always returns an operation id
+demo_connector.effects.xǁEffectsǁexecute__mutmut_96  # M8: operation_id = operation or execution_id; on success the provider always returns an operation id
 demo_connector.effects.xǁEffectsǁexecute__mutmut_40  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
 demo_connector.effects.xǁEffectsǁexecute__mutmut_44  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
 demo_connector.effects.xǁEffectsǁexecute__mutmut_47  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
@@ -117,14 +117,12 @@ demo_connector.provider.xǁProviderǁlookup__mutmut_7  # M8: SQLite keywords and
 demo_connector.provider.xǁProviderǁlookup__mutmut_8  # M8: SQLite keywords and identifiers are case-insensitive
 demo_connector.provider.xǁProviderǁsend__mutmut_13  # M8: SQLite keywords and identifiers are case-insensitive
 demo_connector.provider.xǁProviderǁsend__mutmut_14  # M8: SQLite keywords and identifiers are case-insensitive
-demo_connector.provider.xǁProviderǁsend__mutmut_16  # M8: SQLite keywords and identifiers are case-insensitive
-demo_connector.provider.xǁProviderǁsend__mutmut_17  # M8: SQLite keywords and identifiers are case-insensitive
-demo_connector.provider.xǁProviderǁsend__mutmut_36  # M8: SQLite keywords and identifiers are case-insensitive
-demo_connector.provider.xǁProviderǁsend__mutmut_37  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_33  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_34  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_40  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_41  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_43  # M8: SQLite keywords and identifiers are case-insensitive
 demo_connector.provider.xǁProviderǁsend__mutmut_44  # M8: SQLite keywords and identifiers are case-insensitive
-demo_connector.provider.xǁProviderǁsend__mutmut_45  # M8: SQLite keywords and identifiers are case-insensitive
-demo_connector.provider.xǁProviderǁsend__mutmut_47  # M8: SQLite keywords and identifiers are case-insensitive
-demo_connector.provider.xǁProviderǁsend__mutmut_48  # M8: SQLite keywords and identifiers are case-insensitive
 demo_connector.provider.xǁProviderǁsend__mutmut_2  # M8: None vs "": both falsy, `first` is only tested for truth
 demo_connector.server.x_configs__mutmut_23  # M8: uvicorn log level of the internal port: default/upper case change only log verbosity
 demo_connector.server.x_configs__mutmut_27  # M8: uvicorn log level of the internal port: default/upper case change only log verbosity
