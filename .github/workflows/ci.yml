@@ -98,6 +98,28 @@ jobs:
         working-directory: connectors/telegram
         run: uv sync && uv run pytest
 
+  telegram-upstream:
+    # ADR-0004: notification when gxg_agents_v2 changes the telegram_archive schema after the pinned commit
+    # (connectors/telegram/archive/SOURCE.md). Runs on schedule too, so drift fails a run without a Hub push.
+    # Needs GXG_AGENTS_V2_TOKEN: read-only (contents) token for dmitry-v-ko/gxg_agents_v2; without it the job fails.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: dmitry-v-ko/gxg_agents_v2
+          token: ${{ secrets.GXG_AGENTS_V2_TOKEN }}
+          path: upstream/gxg_agents_v2
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Vendored migrations = pinned commit; no newer archive migrations on the default branch
+        run: |
+          connectors/telegram/archive/check_upstream.sh upstream/gxg_agents_v2
+          connectors/telegram/archive/check_upstream.sh --drift upstream/gxg_agents_v2 "origin/$(git -C upstream/gxg_agents_v2 rev-parse --abbrev-ref HEAD)"
+
   schema-guard:
     # AC-M0-02: proves that every schema mutation turns the contract tests red.
     runs-on: ubuntu-latest

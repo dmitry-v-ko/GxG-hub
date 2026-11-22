@@ -21,7 +21,7 @@ identity (`X-GxG-Identity` от ContextForge, SEC-03) → схема аргум�
 
 ## База архива
 
-- [`archive/`](archive): дословные миграции `telegram_archive` из gxg_agents_v2 на закреплённом commit ([`SOURCE.md`](archive/SOURCE.md), сверка — `archive/check_upstream.sh <клон>`), роль [`reader_role.sql`](archive/reader_role.sql), синтетические fixtures [`seed.py`](archive/seed.py) для тестов и стенда.
+- [`archive/`](archive): дословные миграции `telegram_archive` из gxg_agents_v2 на закреплённом commit ([`SOURCE.md`](archive/SOURCE.md), сверка — `archive/check_upstream.sh <клон>`, новые миграции upstream — `--drift`, оба в check-all и CI), роль [`reader_role.sql`](archive/reader_role.sql), синтетические fixtures [`seed.py`](archive/seed.py) для тестов и стенда.
 - Роль `gxg_telegram_reader`: `SELECT` только нужных колонок `chats`, `messages`, `connection_state` (без `author_id` и `embedding`), транзакции только на чтение, `statement_timeout` 15 с, `BYPASSRLS` (в миграциях RLS принудительный и без политик). Пароль — секрет коннектора (SEC-16), задаётся `ALTER ROLE … PASSWORD` из secret store.
 - Схема архива — контракт: тест колонок и прав (`test_contract_*`) и хешей (`test_vendored_schema_is_the_pinned_upstream`).
 
@@ -46,5 +46,5 @@ cd connectors/telegram && uv run mutmut run    # DoD-4: tools.py, server.py, arc
 | `startup_refused`, `TELEGRAM_ARCHIVE_DSN` | Не задан или не `postgresql://`. Значение в лог не пишется |
 | `/readyz` = 503, `not_ready`: `telegram archive is not available` | База архива недоступна или роль не входит; проверить сеть и пароль роли |
 | Вызовы `collect` → `rate_limited` | Flood-wait у сервиса: повторять не раньше `retry_after_s` |
-| Вызовы → `not_found` для нужного чата | Нет grant'а (`policies/tenants/<tenant>.yaml`, RID с `chat_ref`), grant истёк или чат вне scope Connection (его нет в архиве) |
+| Вызовы → `not_found` для нужного чата | Нет grant'а (`policies/tenants/<tenant>.yaml`, RID с `chat_ref`), grant истёк , чат вне scope Connection или ещё не синхронизирован archive-sync (его нет в архиве) |
 | Обновление gxg_agents_v2 | Поднять commit в `archive/SOURCE.md`, скопировать миграции, обновить хеши, прогнать тесты коннектора |

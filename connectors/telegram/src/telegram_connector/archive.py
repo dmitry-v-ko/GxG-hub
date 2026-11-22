@@ -102,7 +102,7 @@ class ArchiveService:
                     || websearch_to_tsquery('pg_catalog.english'::regconfig, %(q)s) AS query)
                 SELECT {_COLUMNS} FROM q, {_FROM}
                 WHERE m.connection_id = %(c)s AND c.chat_ref = ANY(%(refs)s) AND m.tsv @@ q.query
-                ORDER BY ts_rank(m.tsv, q.query) DESC, m.sent_at DESC, m.message_id DESC
+                ORDER BY ts_rank(m.tsv, q.query) DESC, m.sent_at DESC, m.message_id DESC, c.chat_ref
                 LIMIT %(n)s""",  # noqa: S608 - constant fragments; every value is a bound parameter
                 {"q": query, "c": connection, "refs": chat_refs, "n": limit + 1},
             )

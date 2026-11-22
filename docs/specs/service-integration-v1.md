@@ -33,6 +33,8 @@ Tools Telegram-коннектора:
 - Chat scope проверяется до чтения архива (и до live API, когда он появится): запрос к базе фильтруется списком разрешённых `chat_ref`.
 - Чат в RID — `chat_ref` архива (стабильный внутренний ID чата), а не peer ID Telegram: `telegram:<connection>/chat/<chat_ref>`. Peer ID остаётся внутренним идентификатором провайдера (MCC-04).
 - В логи не попадают сессии, peer ID и тексты сообщений.
+- `telegram.messages.collect` (M11) собирает **один чат** по cursor — позиции архива `(archived_us, message_id)`, старые сверху. Ключ элемента для дедупликации — `<chat_ref>:<message_id>`; существующий сбор Chat folders использует `<peer_id>:<message_id>`, сопоставление ключей при переходе Signals на Hub решается в M12.
+- Пока синхронизация Connection отложена flood-wait'ом Telegram (`connection_state.retry_after`), `collect` отвечает `rate_limited` с `retry_after_s` = оставшейся задержке, даже если в архиве есть ещё не собранные сообщения; `search` и `thread.read` отвечают из архива с `complete: false`, `partial_reasons: ["rate_limited"]`.
 - Полнотекстовая модель `telegram_archive` уже есть, но как capability не опубликована (на 2026-11-13). Это задача адаптера, а не повод переписывать хранилище.
 - Notify-бот Approval Service — **отдельный** бот, не связанный с этой сессией.
 

@@ -695,6 +695,31 @@ async def test_mc02_search_schema_pagination_and_cursor_binding(tg: Tg) -> None:
     ] == "invalid_input"
 
 
+async def test_mc02_search_pages_ties_across_chats_exactly_once(env: Env, db: Db) -> None:
+    """message_id is per chat: equal (rank, sent_at, message_id) in two chats must page without loss or repeats."""
+    db.sql(
+        """INSERT INTO telegram_archive.messages (connection_id, peer_id, message_id, sent_at, text)
+        SELECT 'svc-alpha', p, 1000 + i, timestamptz '2026-01-01 00:00:00+00', 'tiebreak token'
+        FROM unnest(%s::bigint[]) AS p, generate_series(1, 45) AS i""",
+        ([seed.PEER["a-partners"], seed.PEER["a-sales"]],),
+    )
+    async with AsyncExitStack() as stack:
+        tg = await open_tg(stack, env, db)
+        for limit in (1, 3, 7):
+            seen: list[str] = []
+            cursor = None
+            for _ in range(100):
+                page = await tg.ok(
+                    "telegram.messages.search",
+                    {"query": "tiebreak", "limit": limit} | ({"cursor": cursor} if cursor else {}),
+                )
+                seen += search_ids(page)
+                cursor = page["next_cursor"]
+                if cursor is None:
+                    break
+            assert len(seen) == len(set(seen)) == 90, limit
+
+
 async def test_mc02_search_stops_at_the_service_limit_with_truncated(tg: Tg) -> None:
     """The service returns at most 100 ranked results: the last page says so instead of inventing more."""
     cursor, pages = None, 0
@@ -905,6 +930,53 @@ def test_vendored_schema_is_the_pinned_upstream() -> None:
     assert set(pinned) == {"20261105010000_telegram_archive.sql", "20261106010000_telegram_archive_semantic.sql"}
     for name, digest in pinned.items():
         assert hashlib.sha256((TG / "archive" / name).read_bytes()).hexdigest() == digest, name
+
+
+@pytest.mark.parametrize(
+    ("migration", "fails"),
+    [
+        ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;", True),
+        ("ALTER TABLE capability_hub.connections ADD COLUMN x int;", True),
+        ("CREATE TABLE public.unrelated (id int);", False),
+    ],
+)
+def test_upstream_drift_check_fails_on_a_new_archive_migration(tmp_path: Path, migration: str, fails: bool) -> None:
+    """ADR-0004 'уведомление при обновлении': a gxg_agents_v2 migration after the pinned commit that touches the
+    archive contract fails check_upstream.sh --drift (run by scripts/ci/check-all.sh)."""
+    repo = tmp_path / "upstream"
+    (repo / "supabase" / "migrations").mkdir(parents=True)
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    for name in ("20261105010000_telegram_archive.sql", "20261106010000_telegram_archive_semantic.sql"):
+        (repo / "supabase" / "migrations" / name).write_bytes((TG / "archive" / name).read_bytes())
+    git("add", "-A")
+    git("commit", "-qm", "pinned")
+    pin = git("rev-parse", "HEAD")
+    (repo / "supabase" / "migrations" / "20270101000000_next.sql").write_text(migration, encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-qm", "next")
+    script = str(TG / "archive" / "check_upstream.sh")
+    run = subprocess.run(
+        [script, "--drift", str(repo), "HEAD"],
+        env=os.environ | {"TELEGRAM_ARCHIVE_PIN": pin},
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert run.returncode == (1 if fails else 0), run.stderr
+    assert ("20270101000000_next.sql" in run.stderr) is fails
+    same = subprocess.run(
+        [script, str(repo)], env=os.environ | {"TELEGRAM_ARCHIVE_PIN": pin}, capture_output=True, check=False
+    )
+    assert same.returncode == 0
 
 
 def test_contract_the_columns_the_adapter_reads_exist_with_their_types(db: Db) -> None:

@@ -22,6 +22,14 @@ uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-
 uv run python scripts/ci/check_coverage.py coverage-kit.json
 (cd connectors/demo && uv sync --locked && uv run pytest -q)
 (cd connectors/telegram && uv sync --locked && uv run pytest -q)
+# ADR-0004: the telegram_archive schema contract against gxg_agents_v2 (pinned commit and newer migrations).
+# Needs a clone (GXG_AGENTS_V2, default ../gxg_agents_v2); UPSTREAM_DRIFT=skip only where no clone can exist.
+if [ "${UPSTREAM_DRIFT:-}" != skip ]; then
+  upstream="${GXG_AGENTS_V2:-../gxg_agents_v2}"
+  [ -d "$upstream/.git" ] || { echo "check-all: no gxg_agents_v2 clone at $upstream (GXG_AGENTS_V2)" >&2; exit 1; }
+  connectors/telegram/archive/check_upstream.sh "$upstream"
+  connectors/telegram/archive/check_upstream.sh --drift "$upstream"
+fi
 uv run python scripts/ci/prove_schema_guard.py
 scripts/ci/gitleaks.sh tree HEAD
 scripts/ci/gitleaks.sh range "0000000000000000000000000000000000000000..HEAD"
