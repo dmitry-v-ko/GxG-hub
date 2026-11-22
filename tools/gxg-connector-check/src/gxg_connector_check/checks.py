@@ -300,7 +300,9 @@ async def test_grants_filter_and_no_provider_call_without_grants(env: Env) -> No
     """A principal without grants gets empty results or `not_found` and the provider is not called; a reader sees
     only granted resources (GR-02, GR-06, GR-16); another tenant sees none of this tenant's."""
     h = env.harness
-    store = BundleStore(mcp.parse_keys(bundle.keys_setting(env.bundle_signer), "keys"), state_file=env.tmp / "sc10.json")
+    store = BundleStore(
+        mcp.parse_keys(bundle.keys_setting(env.bundle_signer), "keys"), state_file=env.tmp / "sc10.json"
+    )
     store.load(*(Path(env.tmp / "bundle" / f).read_bytes() for f in (mcp.BUNDLE_FILE, mcp.SIG_FILE)))
     tenant = h.reader.split(":")[1]
     running, client = await started(env)

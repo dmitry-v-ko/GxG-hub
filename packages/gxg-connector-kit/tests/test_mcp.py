@@ -171,7 +171,11 @@ class World:
             ],
         }
         bundle.write(
-            self.tmp / "bundle", [grants], platform, self.signer, built_at=at or datetime.now(UTC) - timedelta(minutes=1)
+            self.tmp / "bundle",
+            [grants],
+            platform,
+            self.signer,
+            built_at=at or datetime.now(UTC) - timedelta(minutes=1),
         )
 
     def app(self, settings: mcp.Settings | None = None, logs: mcp.Logs | None = None) -> Any:
