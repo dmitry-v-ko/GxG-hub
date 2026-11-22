@@ -16,7 +16,7 @@ Approval Service ([спека](../docs/specs/approval-service-v1.md)). M7: мо�
 | `sweeper` | `sweeper.py` | `gxg_sweep()` раз в 5 с: T5, T8, T10, T14 (`SKIP LOCKED`) |
 | Шифрование | `crypto.py` | Sealed box (libsodium) на tenant: ключ `args` — только у executor, `preview` — только у ui, у `api` — открытые ключи (AS-28) |
 | `executor` (M8) | `executor.py` | Outbox (`execute`, `reconcile`) `FOR UPDATE SKIP LOCKED` → T7 `gxg_reserve` → execution token (kit `exec_token.sign`) → `POST /internal/v1/execute/<tool>` коннектора с service JWT, таймаут = `dispatch_timeout_s` (AS-13) → `gxg_complete`. Ответ не 200 или обрыв: execution ещё `reserved` → T12a (попытка засчитана), уже `dispatching` → T13. `outcome_unknown` → `reconcile` коннектора; `unknown` → повтор через время, уже прошедшее с dispatch (5 с … 1 ч), после 24 ч — `ALERT` и ручной разбор (T17, T18) |
-| Ключи executor'а (M8) | `keys.py`, `config.JsonFile` | `gxg-approval keys rotate` / `keys remove --kid K [--compromised]` (ниже). `api` перечитывает JWKS-файл при изменении; `dispatch` проверяет токен по текущему файлу |
+| Ключи executor'а (M8) | `keys.py`, `config.JsonFile` | `gxg-approval keys rotate` / `keys remove --kid K` / `keys release` (ниже). `api` перечитывает JWKS-файл при изменении; `dispatch` проверяет токен по текущему файлу |
 | AS-10 | `migrations/versions/0002_executor.py` | `gxg_release_reserved()`: при удалении скомпрометированного ключа все `reserved` исполнения → `released`, intent → `approved` (ход T10 без ожидания lease) |
 
 ## Развёртывание
@@ -36,14 +36,14 @@ Kill switch, включённый после reserve, срабатывает н�
 
 ### Ротация ключа (AS-10, SEC-10: не реже раза в 90 дней)
 
+Файлы (`deploy/compose.yaml`): ключи executor'а — `deploy/exec-keys/signing-keys.json` (каталог 0700, монтируется только в `executor`, AS-28; каталог, а не одиночный secret-файл: атомарную замену файла executor видит без рестарта), JWKS — `deploy/config/exec-jwks.json` (публичный, у `api`). `rotate` и `remove` запускает оператор **на хосте** с `GXG_EXEC_SIGNING_KEYS_FILE=deploy/exec-keys/signing-keys.json GXG_EXEC_JWKS_FILE=deploy/config/exec-jwks.json`; `release` — **в контейнере executor'а** (его роль БД): `docker compose exec executor gxg-approval keys release`.
+
 | Шаг | Команда | Что происходит |
 | --- | --- | --- |
-| 1 | `gxg-approval keys rotate` (`GXG_EXEC_SIGNING_KEYS_FILE`, `GXG_EXEC_JWKS_FILE`) | Новый ключ сразу в JWKS, в файле executor'а — с `not_before = now + 15 мин`. `api` отдаёт его без рестарта, коннекторы видят ≤ 10 мин (кеш AS-09) |
+| 1 | хост: `gxg-approval keys rotate` | Новый ключ сразу в JWKS, в файле executor'а — с `not_before = now + 15 мин`. `api` отдаёт его без рестарта, коннекторы видят ≤ 10 мин (кеш AS-09) |
 | 2 | — | Через 15 мин executor подписывает новым ключом (выбор по `not_before`, файл перечитывается на ходу) |
-| 3 | через 24 ч: `gxg-approval keys remove --kid <старый>` | Старый ключ уходит из JWKS и файла executor'а |
-| Компрометация | `gxg-approval keys remove --kid <kid> --compromised` (`GXG_DB_DSN_FILE` роли executor'а) | Ключ сразу удалён из JWKS (`dispatch` отказывает его токенам немедленно, коннекторы — ≤ 10 мин); все `reserved` исполнения освобождаются. Поэтому держите опубликованный запасной ключ (шаг 1 заранее); без него исполнения ждут `rotate` + 15 мин |
-
-Секретный файл ключей монтируется только в `executor` (AS-28); команду запускает оператор там, где лежат оба файла.
+| 3 | через 24 ч, хост: `gxg-approval keys remove --kid <старый>` | Старый ключ уходит из JWKS и файла executor'а |
+| Компрометация | хост: `gxg-approval keys remove --kid <kid>`, затем `docker compose exec executor gxg-approval keys release` | `dispatch` отказывает токенам ключа сразу, коннекторы — ≤ 10 мин; все `reserved` исполнения освобождаются (T10 без ожидания lease). Если активного ключа не осталось, executor не резервирует: строки outbox ждут с backoff, попытки не тратятся, intents остаются `approved` до появления ключа (`rotate`, +15 мин) или до конца окна исполнения (T8). Поэтому держите опубликованный запасной ключ (шаг 1 заранее) |
 
 ## Алерты
 

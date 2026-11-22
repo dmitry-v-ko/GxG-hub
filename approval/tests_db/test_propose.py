@@ -120,28 +120,30 @@ def test_idempotent_repeat(client: TestClient, world: Any, owner: psycopg.Connec
     assert count(owner) == 1 and count(owner, "outbox") == 1
 
 
-def test_another_requesters_key_is_a_conflict_without_its_intent(
+def test_same_key_of_two_requesters_is_two_intents(
     client: TestClient, world: Any, owner: psycopg.Connection[Any]
 ) -> None:
-    """new_scope M7-final #2: two agents of one tenant. Same key and args → 409, nothing of the other's intent."""
-    mine = client.post("/v1/intents", json=world.body(key="signals:cand-1:v1", requester=SIGNALS), headers=world.auth())
-    assert mine.status_code == 201
-    for args in (None, {"text": "other text"}):  # same args (same hash) and other args
-        theirs = client.post(
-            "/v1/intents", json=world.body(key="signals:cand-1:v1", requester=BOT, args=args), headers=world.auth()
-        )
-        assert theirs.status_code == 409
-        assert theirs.json() == {
-            "code": "conflict",
-            "message": "idempotency_key is already used with other parameters",
-            "retryable": False,
-        }
-        assert mine.json()["intent_id"] not in theirs.text
-    again = client.post(
-        "/v1/intents", json=world.body(key="signals:cand-1:v1", requester=SIGNALS), headers=world.auth()
-    )
-    assert again.status_code == 200 and again.json() == mine.json()  # AC-M7-04 for the owner is unchanged
-    assert count(owner) == 1
+    """EFF-08 (owner 2026-11-21): idempotency per (tenant, requester, key). Two agents of one tenant, one key: each
+    gets its own intent and repeats find only their own; the other's intent is never returned."""
+    key = "signals:cand-1:v1"
+    mine = client.post("/v1/intents", json=world.body(key=key, requester=SIGNALS), headers=world.auth())
+    theirs = client.post("/v1/intents", json=world.body(key=key, requester=BOT), headers=world.auth())
+    assert (mine.status_code, theirs.status_code) == (201, 201)  # same args, same key: still two intents
+    assert mine.json()["intent_id"] != theirs.json()["intent_id"]
+    again = client.post("/v1/intents", json=world.body(key=key, requester=BOT), headers=world.auth())
+    assert again.status_code == 200 and again.json() == theirs.json()
+    other = client.post("/v1/intents", json=world.body(key=key, requester=SIGNALS, args={"text": "x"}),
+                        headers=world.auth())  # fmt: skip
+    assert other.status_code == 409 and mine.json()["intent_id"] not in other.text
+    rows = owner.execute("SELECT requester_principal FROM intents ORDER BY requester_principal").fetchall()
+    assert rows == [(BOT,), (SIGNALS,)]
+
+
+def test_the_database_enforces_one_key_per_requester(owner: psycopg.Connection[Any], world: Any, client: Any) -> None:
+    constraint = owner.execute(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'intents'::regclass AND contype = 'u'"
+    ).fetchall()
+    assert constraint == [("UNIQUE (tenant_id, requester_principal, idempotency_key)",)]
 
 
 def test_same_key_in_another_tenant_is_another_intent(

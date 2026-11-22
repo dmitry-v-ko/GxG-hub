@@ -207,8 +207,8 @@ class Effects:
         return run
 
     async def execute(self, body: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
-        claims = await self._checked(body, entry)
-        token, args = body["execution_token"], body["args"]
+        claims, args = await self._checked(body, entry)  # args: the canonical form whose hash was approved
+        token = body["execution_token"]
         resp = await self.approval.post(f"/v1/executions/{claims['jti']}/dispatch", {"execution_token": token})
         if resp.status_code == 423:
             raise GxgError("effect_disabled", "effects are disabled")
@@ -236,7 +236,7 @@ class Effects:
             return _result(claims["jti"], "succeeded", sent.operation_id)
         return _result(claims["jti"], "failed_before_effect", None)  # reject, rate_limited, timeout_before_start
 
-    async def _checked(self, body: dict[str, Any], entry: dict[str, Any]) -> ExecutionClaims:
+    async def _checked(self, body: dict[str, Any], entry: dict[str, Any]) -> tuple[ExecutionClaims, dict[str, Any]]:
         """EFF-18 п.1-3, all before `dispatch`: token, args hash, target, grant."""
         if not _schema.validator("execute-request").is_valid(body):
             raise GxgError("invalid_input", "body does not match execute-request")
@@ -252,9 +252,9 @@ class Effects:
         tenant, principal, resource = claims["ten"], claims["req"], claims["res"]
         entry |= {"tenant": tenant, "principal": principal, "intent_id": claims["sub"], "execution_id": claims["jti"]}
         tool_key, _, version = claims["tool"].partition("@")  # tool names have no `@` (execution-token schema)
-        args = body["args"]
         try:
-            same = args_hash(tool_key, version, tenant, claims["con"], resource, canonical.normalize(args))
+            args = canonical.normalize(body["args"])
+            same = args_hash(tool_key, version, tenant, claims["con"], resource, args)
         except GxgError:  # a float or a lone surrogate: not what was approved
             same = None
         if same != claims["ahs"]:  # EFF-18 п.2: one changed character of text or recipient
@@ -270,7 +270,7 @@ class Effects:
         self.refresh()
         if not self.grants.check(tenant, principal, "propose", resource).allowed:  # EX-14: revoked since approval
             raise GxgError("permission_denied", "the requester no longer may propose on this board")
-        return claims
+        return claims, args
 
     async def reconcile(self, body: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
         if not RECONCILE_BODY.is_valid(body):

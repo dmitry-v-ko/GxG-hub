@@ -885,3 +885,14 @@ async def test_configured_servers_carry_the_right_apps(settings: server.Settings
     assert f"/internal/v1/execute/{EXECUTE}" in {r.path for r in internal_app.routes}
     async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=ctl_app), base_url="http://c") as c:
         assert (await c.get("/_test/provider/calls")).status_code == 200  # the provider is wired in
+
+
+async def test_the_provider_gets_the_canonical_args(internal: Internal) -> None:
+    """EFF-05, EFF-18 п.2: an NFD text matches the approved (NFC) hash, and the NFC form is what is sent."""
+    nfc = "café"
+    good = {"recipient": "partner_1", "text": nfc}
+    ahs = args_hash("demo.message.propose", "1.0.0", "t-alpha", "demo-main", RES, good)
+    nfd = {"recipient": "partner_1", "text": unicodedata.normalize("NFD", nfc)}
+    r = await internal.execute(exec_token.sign(EXEC, claims(ahs=ahs)), nfd)
+    assert r.json()["status"] == "succeeded"
+    assert internal.provider.calls()[0]["text_hash"] == hashlib.sha256(nfc.encode()).hexdigest()

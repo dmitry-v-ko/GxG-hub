@@ -993,3 +993,101 @@ def test_run_takes_the_next_row_at_once_while_there_is_work(stack: Stack) -> Non
     finally:
         stop.set()
         worker.join()
+
+
+# --- cycle 2 (critic cycle 1: findings 1, 2, 3, 6) ---------------------------------------------------------
+
+
+def test_repeat_propose_after_success_returns_the_intent_as_it_is_now(stack: Stack) -> None:
+    """EFF-08 through the real MCP client: the repeat returns 200 with the same intent, now `succeeded`."""
+    first = stack.propose(idempotency_key="repeat-key-1")
+    stack.drain(stack.executor(), lambda: stack.status(first["intent_id"]) == "succeeded")
+    again = stack.propose(idempotency_key="repeat-key-1")
+    assert again == {"intent_id": first["intent_id"], "status": "succeeded"}
+    assert len(stack.demo.calls()) == 1
+
+
+def test_without_an_active_signing_key_nothing_is_reserved_and_no_attempt_is_spent(stack: Stack) -> None:
+    """AS-10: after removing the only key (or before a new key's not_before) intents wait, they do not fail."""
+    later = {"seed": stack.signing[0]["seed"], "not_before": "2999-01-01T00:00:00Z"}
+    stack.signing = [later]
+    created = stack.propose()
+    ex = stack.executor()
+    assert ex.run_once() is True  # the row is deferred with the backoff
+    assert ex.run_once() is False
+    assert stack.status(created["intent_id"]) == "approved"
+    assert stack.intent(created["intent_id"])["attempts"] == 0 and stack.executions(created["intent_id"]) == []
+    deferred = stack.owner.execute(
+        "SELECT attempts FROM outbox WHERE intent_id = %s AND delivered_at IS NULL", (created["intent_id"],)
+    ).fetchone()
+    assert deferred == (1,)
+    stack.signing = [{**later, "not_before": PAST}]  # a key becomes active
+    stack.owner.execute("UPDATE outbox SET available_at = now() - interval '1 hour'")
+    stack.drain(ex, lambda: stack.status(created["intent_id"]) == "succeeded")
+    assert stack.intent(created["intent_id"])["attempts"] == 1
+
+
+def test_keys_cli_rotate_remove_and_release(stack: Stack, pg: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The documented commands: rotate/remove over the two files, release as the executor role (AS-10)."""
+    from gxg_approval import cli
+
+    keys_file, jwks_file = stack.dir / "exec-keys" / "signing-keys.json", stack.dir / "config" / "exec-jwks.json"
+    keys_file.parent.mkdir()
+    jwks_file.parent.mkdir()
+    monkeypatch.setenv("GXG_EXEC_SIGNING_KEYS_FILE", str(keys_file))
+    monkeypatch.setenv("GXG_EXEC_JWKS_FILE", str(jwks_file))
+    cli.main(["keys", "rotate"])
+    (kid,) = [k["kid"] for k in json.loads(jwks_file.read_text())["keys"]]
+    assert oct(keys_file.stat().st_mode & 0o777) == "0o600"
+    created = stack.propose()
+    assert isinstance(stack.executor().take(), Reserved)
+    cli.main(["keys", "remove", "--kid", kid])
+    assert json.loads(jwks_file.read_text()) == {"keys": []} and json.loads(keys_file.read_text()) == []
+    (stack.dir / "dsn").write_text(pg.dsn("gxg_executor"))
+    monkeypatch.setenv("GXG_DB_DSN_FILE", str(stack.dir / "dsn"))
+    cli.main(["keys", "release"])
+    assert stack.executions(created["intent_id"])[0][1] == "released"
+    assert stack.status(created["intent_id"]) == "approved"
+    actor = stack.owner.execute(
+        "SELECT actor FROM audit_events WHERE intent_id = %s ORDER BY id DESC LIMIT 1", (created["intent_id"],)
+    ).fetchone()
+    assert actor == ("keys release",)
+    with pytest.raises(SystemExit, match="rotate"):
+        cli.main(["keys", "remove"])
+
+
+def test_release_skips_an_execution_dispatched_while_it_waited_for_the_lock(stack: Stack, pg: Any) -> None:
+    """gxg_release_reserved: the loop saw the execution `reserved`; by the time it holds the intent lock it is
+    `dispatching` — it is skipped (CONTINUE WHEN), the call does not abort, the other reservation is released."""
+    first, second = stack.propose(), stack.propose()
+    ex = stack.executor()
+    assert isinstance(ex.take(), Reserved) and isinstance(ex.take(), Reserved)
+    blocker = pg.connect("gxg_owner")
+    blocker.autocommit = False
+    blocker.execute("SELECT 1 FROM intents WHERE intent_id = %s FOR UPDATE", (first["intent_id"],))
+    result: list[Any] = []
+    releaser = threading.Thread(target=lambda: result.append(_release_or_error(pg)))
+    releaser.start()
+    deadline = time.time() + 10
+    while stack.owner.execute("SELECT count(*) FROM pg_locks WHERE NOT granted").fetchone() != (1,):
+        assert time.time() < deadline, "the release did not wait for the intent lock"
+        time.sleep(0.05)
+    blocker.execute("UPDATE executions SET state = 'dispatching', dispatched_at = now(), "
+                    "dispatch_lease_until = now() + interval '90 seconds' WHERE intent_id = %s",
+                    (first["intent_id"],))  # fmt: skip
+    blocker.commit()
+    blocker.close()
+    releaser.join(timeout=10)
+    assert result == [1]
+    assert stack.executions(first["intent_id"])[0][1] == "dispatching"
+    assert stack.executions(second["intent_id"])[0][1] == "released"
+
+
+def _release_or_error(pg: Any) -> Any:
+    from gxg_approval.executor import release_reserved
+
+    try:
+        with pg.connect("gxg_executor") as conn:
+            return release_reserved(conn, "test")
+    except Exception as exc:
+        return exc

@@ -13,9 +13,10 @@ from pathlib import Path
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="gxg-approval")
     parser.add_argument("process", choices=["migrate", "api", "mcp", "sweeper", "executor", "keys"])
-    parser.add_argument("action", nargs="?", choices=["rotate", "remove"], help="keys: rotate | remove")
+    parser.add_argument(
+        "action", nargs="?", choices=["rotate", "remove", "release"], help="keys: rotate|remove|release"
+    )
     parser.add_argument("--kid", help="keys remove: the key to remove")
-    parser.add_argument("--compromised", action="store_true", help="keys remove: also release every reservation")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     from . import config
@@ -73,9 +74,10 @@ def _executor() -> None:
     clients: dict[str, httpx.Client] = {}
 
     def http(service: Service) -> httpx.Client:
-        if service.id not in clients:
-            clients[service.id] = httpx.Client(base_url=str(service.internal_url))  # TLS verified by default (AS-07)
-        return clients[service.id]
+        key = f"{service.id} {service.internal_url}"  # a new internal_url in the bundle gets a new client
+        if key not in clients:
+            clients[key] = httpx.Client(base_url=str(service.internal_url))  # TLS verified by default (AS-07)
+        return clients[key]
 
     executor = Executor(
         psycopg.connect(c.secret("GXG_DB_DSN"), autocommit=True),
@@ -91,19 +93,23 @@ def _executor() -> None:
 
 
 def _keys(args: argparse.Namespace) -> None:
+    """rotate/remove: on the host, over the executor's key directory and api's JWKS (README «Ротация ключа»).
+    release: inside the executor (its DB role), right after removing a compromised key (AS-10)."""
     from . import config as c
     from . import keys
 
+    if args.action == "release":
+        import psycopg
+
+        from .executor import release_reserved
+
+        with psycopg.connect(c.secret("GXG_DB_DSN"), autocommit=True) as conn:
+            print(f"released {release_reserved(conn, 'keys release')} reservations")
+        return
     keys_file, jwks_file = Path(c.env("GXG_EXEC_SIGNING_KEYS_FILE")), Path(c.env("GXG_EXEC_JWKS_FILE"))
     if args.action == "rotate":
         print(keys.rotate(keys_file, jwks_file))
     elif args.action == "remove" and args.kid:
         keys.remove(keys_file, jwks_file, args.kid)
-        if args.compromised:  # AS-10: as the executor role (its own DB secret)
-            import psycopg
-
-            with psycopg.connect(c.secret("GXG_DB_DSN"), autocommit=True) as conn:
-                row = conn.execute("SELECT gxg_release_reserved('keys:remove --compromised')").fetchone()
-            print(f"released {row[0] if row else 0} reservations")
     else:
-        raise SystemExit("keys: rotate | remove --kid <kid> [--compromised]")
+        raise SystemExit("keys: rotate | remove --kid <kid> | release")

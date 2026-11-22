@@ -17,8 +17,8 @@ AS28 = {
     "api": {"db_dsn_api"},  # its role; payload *public* keys and JWKS are configuration
     "mcp": {"svc_key_mcp"},  # its service JWT key; no database role in use
     "sweeper": {"db_dsn_sweeper"},
-    # its role, its service JWT key, the execution-token signing keys, the args (not preview) payload keys
-    "executor": {"db_dsn_executor", "svc_key_executor", "exec_signing_keys", "payload_args_keys"},
+    # its role, its service JWT key, the args (not preview) payload keys; signing keys: a directory (below)
+    "executor": {"db_dsn_executor", "svc_key_executor", "payload_args_keys"},
 }
 SECRETISH = re.compile(r"(?i)(password|passwd|secret|token|private|dsn|seed)")
 
@@ -74,3 +74,16 @@ def test_db_tests_gate_ci_ok() -> None:
     jobs = yaml.safe_load((REPO / ".github/workflows/ci.yml").read_text("utf-8"))["jobs"]
     assert "approval-db" in jobs["ci-ok"]["needs"]
     assert any(s.get("run") == "uv run pytest approval/tests_db" for s in jobs["approval-db"]["steps"])
+
+
+def test_executor_signing_keys_come_from_a_directory_only_it_mounts() -> None:
+    """AS-10 without restart: rotation replaces the file atomically, which a single-file mount would not show."""
+    services = load()["services"]
+    path = services["executor"]["environment"]["GXG_EXEC_SIGNING_KEYS_FILE"]
+    mounts = {m.split(":")[1]: m for m in services["executor"]["volumes"]}
+    directory = str(Path(path).parent)
+    assert mounts[directory] == f"./exec-keys:{directory}:ro"
+    others = [m for name, s in services.items() if name != "executor" for m in s.get("volumes", [])]
+    assert not [m for m in others if m.startswith("./exec-keys")]  # AS-28: nobody else sees the seeds
+    jwks = services["api"]["environment"]["GXG_EXEC_JWKS_FILE"]
+    assert any(m == f"./config:{Path(jwks).parent}:ro" for m in services["api"]["volumes"])  # a directory too

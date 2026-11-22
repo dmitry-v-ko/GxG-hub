@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MIG = "approval/src/gxg_approval/migrations/versions/0001_core.py"
 INT = "approval/src/gxg_approval/intents.py"
 MIG2 = "approval/src/gxg_approval/migrations/versions/0002_executor.py"
+MIG3 = "approval/src/gxg_approval/migrations/versions/0003_idempotency_per_requester.py"
 EXE = "approval/src/gxg_approval/executor.py"
 TESTS = ["approval/tests_db"]
 M8_TESTS = ["approval/tests_db/test_executor.py", "approval/tests_db/test_roles.py"]  # M8 rows: their tests only
@@ -137,8 +138,12 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (INT, "WHERE intent_id = %s AND tenant_id = %s AND", "WHERE intent_id = %s AND (tenant_id = %s OR true) AND",
      "read another tenant's intent (same principal ID)"),
     (INT, "AND requester_principal = %s\"", "AND (requester_principal = %s OR true)\"", "read another requester's"),
-    (INT, "WHERE tenant_id = %s AND idempotency_key = %s", "WHERE (tenant_id = %s OR true) AND idempotency_key = %s",
+    (INT, "WHERE tenant_id = %s AND requester_principal = %s AND idempotency_key",
+     "WHERE (tenant_id = %s OR true) AND requester_principal = %s AND idempotency_key",
      "idempotency key shared across tenants"),
+    (INT, "AND requester_principal = %s AND idempotency_key = %s",
+     "AND (requester_principal = %s OR true) AND idempotency_key = %s",
+     "idempotency key shared across requesters (EFF-08)"),
     (INT, "FROM switches WHERE blocked AND scope", "FROM switches WHERE scope", "a cleared switch blocks T1"),
     (INT, "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", "SELECT %s", "T1 without the tenant lock"),
     (INT, "WHERE tenant_id = %(t)s AND requester_principal = %(r)s AND created_at",
@@ -173,8 +178,9 @@ M8_MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG2, "WHERE state = 'reserved' ORDER BY reserved_at", "WHERE true ORDER BY reserved_at",
      EQUIVALENT + "the CONTINUE WHEN after the row lock skips every execution that is not reserved"),
     (MIG2, "    CONTINUE WHEN (x.e).state <> 'reserved';  -- dispatched or released meanwhile\n", "",
-     EQUIVALENT + "the loop selects only reserved executions; the guard is for one dispatched between that "
-     "SELECT and the lock, a race no deterministic test pins"),
+     "release aborts on an execution dispatched between the loop's SELECT and the lock"),
+    (MIG3, "UNIQUE (tenant_id, requester_principal, idempotency_key)", "UNIQUE (tenant_id, idempotency_key)",
+     "idempotency unique per tenant, not per requester (EFF-08)"),
     (EXE, "WHERE o.delivered_at IS NULL AND o.topic", "WHERE o.topic", "delivered outbox rows handled again"),
     (EXE, "o.topic IN ('execute', 'reconcile')", "o.topic IN ('execute')", "outcome_unknown never reconciled"),
     (EXE, "o.topic IN ('execute', 'reconcile')", "o.topic IN ('execute', 'reconcile', 'notify', 'webhook')",

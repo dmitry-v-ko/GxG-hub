@@ -3,7 +3,7 @@
 Two files: the executor's secret key file (`[{"seed", "not_before"}]`, only the executor mounts it, AS-28) and the
 public JWKS file that `api` serves at `/.well-known/gxg-exec-jwks.json`. `rotate` publishes a new key at least
 15 minutes before its first use; `remove` drops a key from both files (after 24 h unused, or at once when
-compromised: then every `reserved` execution is released as well, see `Executor.release_reserved`).
+compromised: then `keys release` in the executor releases every `reserved` execution, AS-10).
 """
 
 from __future__ import annotations
@@ -24,8 +24,11 @@ PUBLISH_LEAD_S = 15 * 60  # AS-10
 
 def _write(path: Path, doc: Any, mode: int) -> None:
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(json.dumps(doc).encode())
-    tmp.chmod(mode)
+    tmp.unlink(missing_ok=True)  # O_CREAT applies `mode` only to a new file
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)  # the seed is never readable by others
+    with os.fdopen(fd, "wb") as f:
+        f.write(json.dumps(doc).encode())
+    os.chmod(tmp, mode)  # whatever the umask
     os.replace(tmp, path)  # readers (JsonFile) never see a half-written file
 
 

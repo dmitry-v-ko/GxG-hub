@@ -75,6 +75,13 @@ class SigningKeys:
         self._doc = doc
         self._now = now
 
+    def active(self) -> bool:
+        try:
+            self.current()
+        except GxgError:
+            return False
+        return True
+
     def current(self) -> Ed25519PrivateKey:
         t = self._now()
         active = [k for k in self._doc() if datetime.fromisoformat(k["not_before"]).timestamp() <= t]
@@ -127,6 +134,9 @@ class Executor:
             if topic == "reconcile" and status == "outcome_unknown":
                 self._reconcile(intent_id)
             elif topic == "execute" and status == "approved":  # else moved on (cancelled, expired, executing)
+                if not self.keys.active():  # AS-10: no key to sign with yet: wait, do not spend an attempt
+                    self.conn.execute(_SQL_DEFER, (outbox_id,))
+                    return True
                 try:
                     with self.conn.transaction(), mapped_errors():
                         found = cast(
@@ -253,8 +263,13 @@ class Executor:
 
     def release_reserved(self) -> int:
         """AS-10: after a compromised key is removed, every reservation is released (its token is worthless)."""
-        with self.conn.transaction():
-            return cast(tuple[int], self.conn.execute(_SQL_RELEASE, (f"executor:{self.instance}",)).fetchone())[0]
+        return release_reserved(self.conn, f"executor:{self.instance}")
+
+
+def release_reserved(conn: psycopg.Connection[Any], actor: str) -> int:
+    """AS-10 release (gxg_release_reserved) as the executor role; also `gxg-approval keys release`."""
+    with conn.transaction():
+        return cast(tuple[int], conn.execute(_SQL_RELEASE, (actor,)).fetchone())[0]
 
 
 def _json(resp: httpx.Response) -> Any:
