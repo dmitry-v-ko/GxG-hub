@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "item.get output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "collection_id", "title", "text"],
+  "properties": {
+    "id": {"type": "string"},
+    "collection_id": {"type": "string"},
+    "title": {"type": "string", "maxLength": 200},
+    "text": {"type": "string", "maxLength": 10000}
+  }
+}

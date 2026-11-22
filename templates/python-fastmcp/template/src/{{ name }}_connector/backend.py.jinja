@@ -1,0 +1,96 @@
+{%- set P = name | upper -%}
+"""Fake provider of `{{ name }}`: collections of items of two tenants, a call counter and failure modes
+{%- if with_effects %}, a journal of sends, idempotent by `intent_id`{% endif %} (mcp-toolkit-v1).
+
+Replace it with the client of the real provider, keeping `calls` and `failure` for tests and the conformance suite.
+The provider credential `{{ P }}_PROVIDER_TOKEN` is read here and never leaves this module (SC-09).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+{%- if with_effects %}
+import uuid
+{%- endif %}
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal, get_args
+
+from gxg_connector_kit.errors import GxgError
+{%- if with_effects %}
+from gxg_connector_kit.effects import Dropped, Sent
+from gxg_connector_kit.exec_token import ExecutionClaims
+{%- endif %}
+
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "items.json"
+Failure = Literal["rate_limited", "temporarily_unavailable", "timeout_before_start", "commit_then_drop", "reject"]
+FAILURES: tuple[str, ...] = get_args(Failure)
+RETRY_AFTER_S = 5
+
+
+@dataclass(frozen=True)
+class Item:
+    id: str
+    collection: str
+    title: str
+    text: str
+
+
+class Backend:
+    def __init__(self, path: Path = FIXTURES) -> None:
+        doc: dict[str, Any] = json.loads(path.read_bytes())
+        tenants = doc["tenants"]
+        self.connections: dict[str, str] = {t: v["connection"] for t, v in tenants.items()}
+        self.collections: dict[str, dict[str, str]] = {
+            t: {c["id"]: c["title"] for c in v["collections"]} for t, v in tenants.items()
+        }
+        self.items: dict[str, list[Item]] = {t: [Item(**i) for i in v["items"]] for t, v in tenants.items()}
+        self.calls: Counter[str] = Counter()  # provider calls by kind: 0 in every refused case
+        self.failure: Failure | None = None  # test mode, set by testctl.py or the conformance harness
+        self._credential = os.environ.get("{{ P }}_PROVIDER_TOKEN", "")  # sent to the provider only
+{%- if with_effects %}
+        self.journal: dict[str, str] = {}  # provider key (intent_id) -> operation id
+{%- endif %}
+
+    def _enter(self, kind: str) -> None:
+        """Count the call, then apply the test failure mode."""
+        self.calls[kind] += 1
+        if self.failure == "rate_limited":
+            raise GxgError("rate_limited", "provider rate limit", retry_after_s=RETRY_AFTER_S)
+        if self.failure in ("temporarily_unavailable", "timeout_before_start"):
+            raise GxgError(self.failure, "provider is not available")
+
+    def search(self, tenant: str, collections: set[str], query: str) -> list[Item]:
+        """Matches in `collections` of this tenant only; the caller passes only collections it may read (GR-16)."""
+        self._enter("search")
+        q = query.casefold()
+        found = [i for i in self.items.get(tenant, []) if i.collection in collections]
+        return [i for i in found if q in f"{i.title}\n{i.text}".casefold()]
+
+    def get(self, tenant: str, item_id: str) -> Item | None:
+        """The item with its real collection (GR-03), or None. Only this tenant's data (GR-02)."""
+        self._enter("get")
+        return next((i for i in self.items.get(tenant, []) if i.id == item_id), None)
+{%- if with_effects %}
+
+    async def send(self, claims: ExecutionClaims, args: dict[str, Any]) -> Sent:
+        """One send keyed by `intent_id` (EFF-18 п.5): a repeated key returns the first receipt, no second effect."""
+        self.calls["send"] += 1
+        key = claims["sub"]
+        if key in self.journal:
+            return Sent("duplicate", self.journal[key])
+        if self.failure in ("rate_limited", "timeout_before_start", "reject"):
+            return Sent(self.failure, None)  # type: ignore[arg-type]
+        if self.failure == "temporarily_unavailable":
+            return Sent("timeout_before_start", None)
+        self.journal[key] = str(uuid.uuid4())
+        if self.failure == "commit_then_drop":
+            raise Dropped
+        return Sent("ok", self.journal[key])
+
+    def lookup(self, intent_id: str) -> tuple[bool, str | None]:
+        """Reconcile (EFF-25): did the provider execute this intent?"""
+        return intent_id in self.journal, self.journal.get(intent_id)
+{%- endif %}

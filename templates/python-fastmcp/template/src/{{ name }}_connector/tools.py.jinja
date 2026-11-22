@@ -1,0 +1,151 @@
+"""The tools of `{{ name }}`: the domain part on top of the kit's call pipeline (gxg_connector_kit.mcp).
+
+The kit runs, for every call: identity (SEC-03, MCC-02) -> input schema -> valid bundle -> resource hook (allowed()
+before any provider call; a named resource is resolved and check()ed; without a grant it is `not_found`, GR-17)
+-> the handler below with its `Access` -> output schema and size -> envelope and one redacted audit line.
+Handlers narrow the provider query by `Access` and check() every item again (GR-16).
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from typing import Any
+
+{%- if with_effects %}
+from starlette.applications import Starlette
+{%- endif %}
+
+from gxg_connector_kit import {% if with_effects %}effects, {% endif %}mcp
+{%- if with_effects %}
+from gxg_connector_kit.exec_token import ExecutorJwks
+{%- endif %}
+from gxg_connector_kit.grants import GrantResolver{% if with_effects %}, BundleStore{% endif %}
+from gxg_connector_kit.identity import IdentityVerifier
+from gxg_connector_kit.mcp import Access, Handler, Result
+
+from .backend import Backend, Item
+
+ROOT = Path(__file__).resolve().parents[2]
+MANIFEST = ROOT / "gxg-manifest.yaml"  # the one source of tool names, schemas and limits
+DOMAIN, RTYPE = "{{ name }}", "collection"
+EXCERPT_MAX = 500
+logs = mcp.Logs.of("{{ name }}_connector")  # main() sends .errors (stack frames) to stderr, the rest to stdout
+
+
+def rid(connection: str, collection: str) -> str:
+    return f"{DOMAIN}:{connection}/{RTYPE}/{collection}"
+
+
+class Connector:
+    """`gxg_connector_kit.mcp.Domain` of `{{ name }}`."""
+
+    connector_id, rtype = "{{ name }}", RTYPE
+
+    def __init__(self, backend: Backend, grants: GrantResolver) -> None:
+        self.backend = backend
+        self.grants = grants
+        self._cursor = mcp.Cursor()
+{%- if with_effects %}
+        self.approval: effects.Approval | None = None  # set by enable_effects(): without it no propose tool
+        self.internal: Starlette | None = None  # internal execute/reconcile app (port 8081)
+        self._specs = {t["name"]: t for t in mcp.load_manifest(MANIFEST, ROOT)}
+
+    def enable_effects(self, approval: effects.Approval, jwks: ExecutorJwks, refresh: Callable[[], None]) -> None:
+        if not isinstance(self.grants, BundleStore):
+            raise TypeError("effects need the bundle store (platform registry, AS-06)")
+        self.approval = approval
+        self.internal = effects.Internal(
+            connector_id=self.connector_id,
+            tools=list(self._specs.values()),
+            grants=self.grants,
+            approval=approval,
+            jwks=jwks,
+            provider=self.backend,
+            serves=self.serves,
+            refresh=refresh,
+            logs=logs,
+        ).app()
+
+    def serves(self, tenant: str, connection: str, resource: str) -> bool:
+        """EFF-18 п.3: the execution token's tenant, connection and resource are this connector's."""
+        own = self.backend.connections.get(tenant)
+        return own == connection and resource in {rid(own, c) for c in self.backend.collections.get(tenant, {})}
+{%- endif %}
+
+    def tools(self, verifier: IdentityVerifier, refresh: Callable[[], None]) -> list[mcp.GxgTool]:
+        return mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)
+
+    def handlers(self) -> Mapping[str, Handler]:
+        out: dict[str, Handler] = {
+            "{{ name }}.items.search": self.items_search,
+            "{{ name }}.item.get": self.item_get,
+        }
+{%- if with_effects %}
+        if self.approval is not None:
+            out["{{ name }}.message.propose"] = self.message_propose
+{%- endif %}
+        return out
+
+    def connection(self, tenant: str) -> str | None:
+        return self.backend.connections.get(tenant)
+
+    async def resolve(self, tool: str, access: Access, args: dict[str, Any]) -> tuple[str, Any] | None:
+        tenant, connection = access.ident.tenant_id, access.connection
+        if connection is None:
+            return None
+        if tool == "{{ name }}.item.get":  # the collection from the provider, not from an argument (GR-01, GR-03)
+            item = self.backend.get(tenant, args["item_id"])
+            return None if item is None else (rid(connection, item.collection), item)
+        collection: str = args["collection_id"]  # `resolve: arg`
+        return (rid(connection, collection), collection) if collection in self.backend.collections[tenant] else None
+
+    async def items_search(self, access: Access, args: dict[str, Any]) -> Result:
+        tenant, connection = access.ident.tenant_id, access.connection
+        query: str = args["query"]
+        limit: int = args.get("limit", 20)
+        readable: dict[str, str] = {}  # collection -> grant id; nothing granted: no provider call (GR-16)
+        if not access.nothing and connection is not None:
+            for c in self.backend.collections.get(tenant, {}):
+                decision = access.check(rid(connection, c))
+                if decision.allowed:
+                    readable[c] = str(decision.grant_id)
+        binding = json.dumps([tenant, access.ident.principal, query, limit]).encode()
+        offset = self._cursor.offset(binding, args.get("cursor"))
+        found = self.backend.search(tenant, set(readable), query) if readable and connection else []
+        visible: list[Item] = [i for i in found if i.collection in readable]  # GR-16: whatever the provider returned
+        page = visible[offset : offset + limit]
+        items = [
+            {"id": i.id, "title": i.title, "excerpt": i.text[:EXCERPT_MAX], "source_ref": rid(str(connection), i.collection)}
+            for i in page
+        ]
+        content = {
+            "items": items,
+            "next_cursor": self._cursor.make(binding, offset + limit) if offset + limit < len(visible) else None,
+            "complete": True,
+            "partial_reasons": [],
+            "source_refs": sorted({i["source_ref"] for i in items}),
+        }
+        return content, {"grant_id": sorted({readable[i.collection] for i in page})}
+
+    async def item_get(self, access: Access, args: dict[str, Any]) -> Result:
+        item: Item = access.target  # found by resolve(), allowed by the kit's check() of its collection
+        return {"id": item.id, "collection_id": item.collection, "title": item.title, "text": item.text}, {}
+{%- if with_effects %}
+
+    async def message_propose(self, access: Access, args: dict[str, Any]) -> Result:
+        """EFF-04…EFF-08: an intent in the Approval Service; nothing is sent here."""
+        if self.approval is None:
+            raise RuntimeError("effects are not enabled")
+        title = self.backend.collections[access.ident.tenant_id][access.target]
+        return await effects.propose(
+            self.approval,
+            self._specs["{{ name }}.message.propose"],
+            access,
+            {"recipient": args["recipient"], "text": args["text"]},
+            target_label=title,
+            kinds={"recipient": "identifier", "text": "multiline"},
+            idempotency_key=args.get("idempotency_key"),
+        )
+{%- endif %}

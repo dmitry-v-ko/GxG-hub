@@ -1,0 +1,40 @@
+# Manifest of the connector `{{ name }}` (MCC-01, schemas/gxg-manifest.schema.json): the one source of tool names,
+# schemas, resources and limits. Made from templates/python-fastmcp; the tools below are the example domain.
+connector: {{ name }}
+version: 0.1.0
+contract: gxg-mcp-connector/v1
+tools:
+  - name: {{ name }}.items.search
+    version: 1.0.0
+    title: "Search items"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: list }   # searches the collections allowed() for the caller (GR-16)
+    input_schema: schemas/items-search.input.json
+    output_schema: schemas/search-result.schema.json
+    limits: { max_results: 50, timeout_s: 20 }
+  - name: {{ name }}.item.get
+    version: 1.0.0
+    title: "Item"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: single, from_arg: item_id, resolve: backend }
+    input_schema: schemas/item-get.input.json
+    output_schema: schemas/item-get.output.json
+    limits: { timeout_s: 10 }
+{%- if with_effects %}
+  - name: {{ name }}.message.propose
+    version: 1.0.0
+    title: "Send a message"
+    effect_class: external_effect
+    action: propose
+    resource: { type: collection, scope: single, from_arg: collection_id, resolve: arg }
+    executes_via: {{ name }}.message.execute   # internal port 8081 only, never an MCP tool (EFF-02, MCC-07)
+    dispatch_timeout_s: 60
+    input_schema: schemas/message-propose.input.json
+    output_schema: schemas/message-propose.output.json
+    preview:
+      title: "Send a message"
+      fields: { recipient: "Recipient", text: "Text" }
+    limits: { max_text_len: 4096, timeout_s: 15 }
+{%- endif %}

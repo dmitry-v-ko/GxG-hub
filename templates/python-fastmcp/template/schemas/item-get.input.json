@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "item.get input",
+  "description": "One item by id. An item of a collection the caller may not read is not found, like a missing one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item_id"],
+  "properties": {
+    "item_id": {"type": "string", "format": "uuid", "maxLength": 36}
+  }
+}

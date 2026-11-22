@@ -30,6 +30,7 @@ dev = [
     "pytest-cov>=6,<8",
     # DoD-4: mutation testing (root: [tool.mutmut] below; kit: packages/gxg-connector-kit/pyproject.toml)
     "mutmut==3.8.1",
+    "copier==9.19.1",  # M1.1: scripts/new-connector renders templates/python-fastmcp
     "cryptography>=44,<51",
     # spikes/m4-contextforge verifier tests: the PyJWT version in the pinned ContextForge image
     "PyJWT==2.15.1",

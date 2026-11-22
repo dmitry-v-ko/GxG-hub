@@ -386,11 +386,12 @@ def tools(  # noqa: PLR0917 - the parts a connector wires together, named at the
     logs: Logs,
     root: Path | None = None,
 ) -> list[GxgTool]:
-    """One `GxgTool` per manifest tool; a manifest tool without a handler (or the reverse) does not start.
+    """One `GxgTool` per manifest tool; a read tool without a handler (or a handler without a tool) does not start.
+    An effect tool (`executes_via`) without a handler is not published: effects are not configured (read-only).
     `root`: the connector directory that schema paths are relative to (default: the manifest's directory)."""
     handlers = domain.handlers()
     root = root or manifest.parent
-    specs = load_manifest(manifest, root)
+    specs = [t for t in load_manifest(manifest, root) if t["name"] in handlers or "executes_via" not in t]
     if {t["name"] for t in specs} != set(handlers):
         raise ConfigError("manifest tools and handlers differ")
 

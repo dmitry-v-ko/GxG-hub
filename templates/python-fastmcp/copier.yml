@@ -1,0 +1,49 @@
+# Template of a GxG MCP connector (docs/specs/mcp-toolkit-v1.md), made from the reference connector `demo`.
+# Use scripts/new-connector, not copier directly: it checks the name, picks the kit source and locks the result.
+_min_copier_version: "9.0"
+_subdirectory: template
+_templates_suffix: .jinja
+_answers_file: .copier-answers.yml
+# The domain part belongs to the service after the first generation: `copier update` never overwrites it.
+# Everything else (server.py, __main__.py, Dockerfile, .dockerignore, scripts/check-all.sh, CI) follows the template.
+_skip_if_exists:
+  - README.md
+  - pyproject.toml
+  - gxg-manifest.yaml
+  - schemas/*.json
+  - fixtures/**
+  - tests/**
+  - "src/*/__init__.py"
+  - src/*/tools.py
+  - src/*/backend.py
+  - src/*/testctl.py
+  - src/*/conformance.py
+  - config.example.env
+  - contextforge/**
+
+name:
+  type: str
+  help: "Connector domain, ^[a-z][a-z0-9_]{1,30}$: tools are <name>.<object>.<verb>"
+with_effects:
+  type: bool
+  default: false
+  help: "Also `<name>.message.propose` with the internal execute/reconcile (stage C)"
+kit_source:
+  type: str
+  choices: [path, git]
+  default: path
+  help: "path: a connector inside the GxG-hub repository; git: a service in its own repository"
+repo:
+  type: str
+  default: "../.."
+  when: "{{ kit_source == 'path' }}"
+  help: "kit_source=path: the repository root, relative to the connector"
+kit_url:
+  type: str
+  default: "https://github.com/dmitry-v-ko/GxG-hub.git"
+  when: "{{ kit_source == 'git' }}"
+kit_rev:
+  type: str
+  default: ""
+  when: "{{ kit_source == 'git' }}"
+  help: "kit_source=git: the pinned GxG-hub commit (40 hex); updating it is a deliberate bump (ADR-0005)"

@@ -1,0 +1,18 @@
+{%- if kit_source == "path" -%}
+# Build context is the repository root; only what the image needs goes in.
+*
+!packages/gxg-connector-kit
+!schemas
+!connectors/{{ name }}
+**/.venv
+**/__pycache__
+**/mutants
+**/.pytest_cache
+connectors/{{ name }}/tests
+{%- else -%}
+.venv
+**/__pycache__
+**/.pytest_cache
+.git
+tests
+{%- endif %}

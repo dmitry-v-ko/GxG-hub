@@ -1,0 +1,73 @@
+{%- set P = name | upper -%}
+"""Harness of `{{ name }}` for `check-connectors` (gxg_connector_check): how to start it and which calls to make.
+
+Imported only by the conformance suite (a dev dependency); the production image does not contain it.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from gxg_connector_check import Call, Harness, Running
+from gxg_connector_kit.effects import Wiring
+from gxg_connector_kit.mcp import Settings as KitSettings
+
+from . import server
+from .backend import FAILURES, Backend
+from .tools import ROOT, rid
+
+SECRET_ENV = "{{ P }}_PROVIDER_TOKEN"  # noqa: S105 - the name of the variable, not a credential
+CONNECTION = "{{ name }}-main"
+MISSING = "00000000-0000-4000-8000-000000000000"
+
+
+def start(settings: KitSettings, wiring: Wiring) -> Running:
+    app, connector = server.build(settings, Backend(){% if with_effects %}, wiring{% endif %})
+    backend = connector.backend
+    enter = backend._enter
+
+    def crash(kind: str) -> None:  # the provider fails with an exception whose text holds the credential
+        backend.calls[kind] += 1
+        raise RuntimeError(f"provider exploded: {os.environ.get(SECRET_ENV)}")
+
+    def fail(mode: str | None) -> None:
+        backend.failure = mode if mode in FAILURES else None  # type: ignore[assignment]
+        backend._enter = crash if mode == "crash" else enter  # type: ignore[method-assign]
+
+    return Running(app=app, calls=lambda: sum(backend.calls.values()), fail=fail
+{%- if with_effects %}, internal=connector.internal{% endif %})
+
+
+def rids(tool: str, result: dict[str, Any]) -> set[str]:
+    if tool == "{{ name }}.items.search":
+        return {i["source_ref"] for i in result["items"]}
+    return {rid(CONNECTION, result["collection_id"])}
+
+
+def harness() -> Harness:
+    items = {i.collection: i.id for i in reversed(Backend().items["t-alpha"])}  # the first item of each collection
+    return Harness(
+        root=ROOT,
+        settings=server.Settings,
+        start=start,
+        reader="agent:t-alpha:reader",
+        nobody="agent:t-alpha:nobody",
+        stranger="agent:t-beta:reader",
+        calls=[
+            Call("{{ name }}.items.search", {"query": "status"}),
+            Call(
+                "{{ name }}.item.get",
+                {"item_id": items["c-public"]},
+                missing={"item_id": MISSING},
+                hidden={"item_id": items["c-secret"]},  # only an expired grant (GR-06)
+            ),
+        ],
+        secret_env=SECRET_ENV,
+        rids=rids,
+        failures=("rate_limited", "temporarily_unavailable", "timeout_before_start", "crash"),
+{%- if with_effects %}
+        actor="agent:t-alpha:actor",
+        propose=Call("{{ name }}.message.propose", {"collection_id": "c-public", "recipient": "alice_01", "text": "Привет"}),
+{%- endif %}
+    )

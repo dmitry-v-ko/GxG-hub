@@ -1,0 +1,19 @@
+# Example registration of `{{ name }}` in ContextForge (MCC-10, SEC-21). DISABLED: register only after
+# check-connectors and the stand (stand/ in GxG-hub) pass. The gateway gets the identity plugin (ADR-0001 C);
+# effect tools are registered disabled and enabled one by one, after approval (SEC-21).
+enabled: false
+gateway:
+  name: {{ name }}
+  url: http://{{ name }}:8080/mcp
+  transport: STREAMABLEHTTP
+  team: <tenant team>            # one team per tenant; the identity plugin maps it to tenant_id
+tools:
+  - name: {{ name }}.items.search
+    enabled: true
+  - name: {{ name }}.item.get
+    enabled: true
+{%- if with_effects %}
+  - name: {{ name }}.message.propose
+    enabled: false               # SEC-21: effect tools start disabled
+# {{ name }}.message.execute is internal (port 8081, Executor only) and is never registered (EFF-02).
+{%- endif %}
