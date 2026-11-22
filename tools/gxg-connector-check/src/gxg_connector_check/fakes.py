@@ -25,7 +25,8 @@ class FakeApproval:
     jwks: bytes
     connector_id: str
     intents: dict[str, dict[str, Any]] = field(default_factory=dict)  # intent_id -> create body
-    dispatched: list[str] = field(default_factory=list)  # execution ids, in order
+    dispatched: list[str] = field(default_factory=list)  # execution ids dispatched, in order
+    dispatch_requests: list[str] = field(default_factory=list)  # every dispatch request, also refused ones
     down: bool = False  # every request fails to connect (EX-16)
     dispatch_status: int | None = None  # forced answer of dispatch, e.g. 423 (kill switch)
 
@@ -59,6 +60,7 @@ class FakeApproval:
         return httpx2.Response(404, json={"code": "not_found", "message": "not found"})
 
     def _dispatch(self, execution: str) -> httpx2.Response:
+        self.dispatch_requests.append(execution)
         if self.dispatch_status is not None:
             return httpx2.Response(self.dispatch_status, json={"code": "effect_disabled", "message": "forced"})
         if execution in self.dispatched:

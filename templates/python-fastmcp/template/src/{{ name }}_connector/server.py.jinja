@@ -42,7 +42,7 @@ def build(
 ) -> tuple[Starlette, Connector]:
     store, files = mcp.bundle_store(settings, logs.startup)
     connector = Connector(backend or Backend(), store)
-    readiness = [store.readiness]
+    readiness = [store.readiness, connector.backend.readiness]
     if settings.approval_url:  # effects: Approval Service client and executor JWKS (MCC-09: both in /readyz)
         approval, jwks = effects.connect(settings, CONNECTOR_ID, wiring or effects.Wiring())
         connector.enable_effects(approval, jwks, files.refresh)
@@ -55,8 +55,9 @@ def build(settings: mcp.Settings, backend: Backend | None = None) -> tuple[Starl
     store, files = mcp.bundle_store(settings, logs.startup)
     connector = Connector(backend or Backend(), store)
     tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)
-    # Read-only connector: backend + valid bundle; no Approval Service (MCC-09).
-    return mcp.create_app(CONNECTOR_ID, tools, files.refresh, store.readiness, logs.startup), connector
+    # MCC-09: backend + valid bundle; a read-only connector does not depend on the Approval Service.
+    ready = mcp.readiness_of(store.readiness, connector.backend.readiness)
+    return mcp.create_app(CONNECTOR_ID, tools, files.refresh, ready, logs.startup), connector
 {% endif %}
 
 def configs(settings: mcp.Settings, app: Starlette, connector: Connector) -> list[uvicorn.Config]:

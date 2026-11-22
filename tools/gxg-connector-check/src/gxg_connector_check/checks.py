@@ -21,7 +21,7 @@ import jsonschema
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from gxg_connector_kit import exec_token, mcp
+from gxg_connector_kit import effects, exec_token, mcp
 from gxg_connector_kit.errors import ERROR_CODES, GxgError
 from gxg_connector_kit.grants import BundleStore
 from gxg_connector_kit.identity import StubIssuer
@@ -73,7 +73,19 @@ def wrong_type(env: Env, call: Call) -> dict[str, Any]:
 
 
 def single(env: Env) -> list[Call]:
-    return [c for c in env.harness.calls if c.missing is not None]
+    return [c for c in env.harness.calls if specs(env)[c.tool]["resource"].get("scope") != "list"]
+
+
+def listing(env: Env) -> list[Call]:
+    return [c for c in env.harness.calls if specs(env)[c.tool]["resource"].get("scope") == "list"]
+
+
+def input_props(env: Env, tool: str) -> dict[str, Any]:
+    props: dict[str, Any] = mcp.load_schema(env.harness.root, specs(env)[tool]["input_schema"]).get("properties", {})
+    return props
+
+
+REQUIRED_FAILURES = {"rate_limited", "temporarily_unavailable", "crash"}
 
 
 async def started(env: Env, **overrides: Any) -> tuple[Running, Any]:
@@ -127,11 +139,31 @@ async def test_results_are_typed_and_bounded(env: Env) -> None:
                 assert isinstance(bound, int) and limit and limit.get("maximum", bound + 1) <= bound, call.tool
                 assert len(got["items"]) <= bound
                 assert code(await c.call(call.tool, {**call.args, "limit": bound + 1})) == "invalid_input"
+                assert call.empty is not None, f"{call.tool}: set Call.empty (a call that finds nothing)"
+                nothing = ok(await c.call(call.tool, call.empty))  # an empty result is a success, not an error
+                assert nothing["items"] == [] and nothing.get("complete", True) is True, nothing
+                if "next_cursor" in out_schema.get("properties", {}):
+                    await pages(env, c, call, got)
+
+
+async def pages(env: Env, c: Client, call: Call, full: dict[str, Any]) -> None:
+    """MCC-04: `limit=1` gives a cursor; the next page is the next item; the cursor is bound to its caller."""
+    assert len(full["items"]) >= 2, f"{call.tool}: Call.args must find at least 2 items"
+    first = ok(await c.call(call.tool, {**call.args, "limit": 1}))
+    assert len(first["items"]) == 1 and first["next_cursor"], f"{call.tool}: a cut page has a next_cursor"
+    second = ok(await c.call(call.tool, {**call.args, "limit": 1, "cursor": first["next_cursor"]}))
+    assert [i["id"] for i in first["items"] + second["items"]] == [i["id"] for i in full["items"][:2]], call.tool
+    theirs = await c.call(
+        call.tool, {**call.args, "limit": 1, "cursor": first["next_cursor"]}, principal=env.harness.stranger
+    )
+    assert code(theirs) == "invalid_input", f"{call.tool}: another principal's cursor"
 
 
 @pytest.mark.check("MC-03")
 async def test_provider_failures_have_their_codes(env: Env) -> None:
     """MCC-05: 429 -> `rate_limited` with `retry_after_s`; unavailable/timeout before start -> retryable."""
+    missing = REQUIRED_FAILURES - set(env.harness.failures)
+    assert not missing, f"Harness.failures must include {sorted(missing)}: the provider's failure modes"
     running, client = await started(env)
     call = env.harness.calls[0]
     async with client as c:
@@ -180,6 +212,12 @@ async def test_health_and_readiness(env: Env, tmp_path: Path) -> None:
                 call = env.harness.calls[0]
                 assert code(await c.call(call.tool, call.args)) == "temporarily_unavailable"
                 assert running.calls() == 0
+            else:  # MCC-09: the backend is part of readiness
+                running.fail("temporarily_unavailable")
+                down = await c.http.get("/readyz")
+                assert (down.status_code, down.json()) == (503, {"status": "not_ready"}), "ready with the backend down"
+                running.fail(None)
+                assert (await c.http.get("/readyz")).status_code == 200
 
 
 # --- SC: identity, tenant, resources ----------------------------------------------------------------------------
@@ -225,8 +263,8 @@ async def test_identity_is_not_taken_from_arguments_headers_or_meta(env: Env) ->
                 refused = r.get("isError") is True and r["structuredContent"].get("code") == "invalid_input"
                 assert refused or r == plain, f"{call.tool}: {why} changed whose call it is"
             assert plain != mine, f"{call.tool}: another tenant's caller gets the reader's result"
-            if call.missing is not None:
-                assert plain == await c.call(call.tool, call.missing, principal=h.stranger), call.tool
+            if call in single(env):
+                assert plain == await c.call(call.tool, call.missing or {}, principal=h.stranger), call.tool
             else:
                 assert not h.rids(call.tool, ok(plain)) & h.rids(call.tool, ok(mine)), call.tool
 
@@ -258,16 +296,18 @@ async def test_hidden_and_foreign_resources_are_not_found_like_missing_ones(env:
     """A resource without a grant, of another tenant, or that does not exist: the same `not_found`, byte for byte
     (GR-17, TEN-02)."""
     h = env.harness
-    calls = single(env)
-    assert calls, "the harness names no single resource (Call.missing): SC-05 cannot be checked"
+    named = single(env) + [c for c in listing(env) if any(k.endswith("_ids") for k in input_props(env, c.tool))]
+    assert named, "the harness names no resource (Call.missing): SC-05 cannot be checked"
     _, client = await started(env)
     async with client as c:
-        for call in calls:
+        for call in named:
             assert call.missing is not None and call.hidden is not None, f"{call.tool}: set missing and hidden"
             missing = await c.call(call.tool, call.missing)
-            assert code(missing) == "not_found"
+            assert code(missing) == "not_found", f"{call.tool}: a missing named resource is not_found"
             assert await c.call(call.tool, call.hidden) == missing, f"{call.tool}: a hidden resource differs"
-            assert await c.call(call.tool, call.args, principal=h.stranger) == missing, f"{call.tool}: foreign differs"
+            if call in single(env):
+                foreign = await c.call(call.tool, call.args, principal=h.stranger)
+                assert foreign == missing, f"{call.tool}: foreign differs"
 
 
 @pytest.mark.check("SC-09")
@@ -275,7 +315,7 @@ async def test_no_secret_token_or_payload_in_responses_and_logs(
     env: Env, caplog: pytest.LogCaptureFixture, capfd: pytest.CaptureFixture[str]
 ) -> None:
     """The provider credential and identity tokens appear in no response and no log line (SEC-17, SEC-18)."""
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.INFO)  # the production level (gxg_connector_kit.mcp.setup_logging)
     running, client = await started(env)
     h = env.harness
     seen: list[Any] = []
@@ -289,10 +329,17 @@ async def test_no_secret_token_or_payload_in_responses_and_logs(
                     tokens += identity.values()
                     seen.append(await c.call(call.tool, call.args, identity=identity))
         running.fail(None)
+        marker = f"gxg-marker-{uuid.uuid4().hex}"  # free text of the caller: a query, a message
+        for call in [*h.calls, *([h.propose] if h.propose is not None else [])]:
+            for prop, schema in input_props(env, call.tool).items():
+                if schema.get("type") == "string" and not {"format", "pattern", "enum", "const"} & set(schema):
+                    who = h.actor if call is h.propose and h.actor else h.reader
+                    await c.call(call.tool, {**call.args, prop: marker}, principal=who)
     out, err = capfd.readouterr()
     blob = json.dumps(seen) + caplog.text + out + err
     assert env.secret not in blob, "the provider credential leaked"
     assert not [t for t in tokens if t in blob], "an identity token is in a response or a log"
+    assert marker not in caplog.text + out + err, "a caller's text (query, message) is in a log line (SEC-18)"
 
 
 @pytest.mark.check("SC-10")
@@ -312,7 +359,9 @@ async def test_grants_filter_and_no_provider_call_without_grants(env: Env) -> No
             assert (code(r) == "not_found") if r.get("isError") else not h.rids(call.tool, ok(r)), call.tool
         assert running.calls() == 0, "the provider was called for a principal without any grant"
         for call in h.calls:
+            before = running.calls()
             rids = h.rids(call.tool, ok(await c.call(call.tool, call.args)))
+            assert running.calls() > before, f"{call.tool}: Running.calls() does not count provider calls"
             assert rids, f"{call.tool}: Call.args must return at least one resource"
             assert all(store.check(tenant, h.reader, "read", rid).allowed for rid in rids), call.tool
             r = await c.call(call.tool, call.args, principal=h.stranger)
@@ -343,6 +392,14 @@ def token(env: Env, intent_id: str, body: dict[str, Any], **change: Any) -> tupl
         "idk": body["idempotency_key"], **change,
     }  # fmt: skip
     return exec_token.sign(signer, claims, now=now), execution
+
+
+def retarget(env: Env, intent_id: str, body: dict[str, Any], **change: str) -> tuple[str, str]:
+    """A token whose `ahs` is recomputed for the changed target, so only the target check can refuse it."""
+    target = {"ten": body["requester"]["tenant_id"], "con": body["connection_id"], "res": body["resource_id"]} | change
+    ahs = effects.args_hash(body["tool_key"], body["tool_version"], target["ten"], target["con"], target["res"],
+                            body["canonical_args"])  # fmt: skip
+    return token(env, intent_id, body, ahs=ahs, **change)
 
 
 async def execute(env: Env, running: Running, intent_id: str, body: dict[str, Any], **kw: Any) -> httpx2.Response:
@@ -408,6 +465,7 @@ async def test_execute_without_a_valid_token_is_refused_before_the_provider(env:
         await proposed(env, c)
     intent_id, body = intent_of(env)
     other = Ed25519PrivateKey.generate()
+    unserved = body["resource_id"].rsplit("/", 1)[0] + "/gxg-check-unserved"
     cases: dict[str, tuple[dict[str, Any], int]] = {
         "no service JWT": ({"svc": ""}, 401),
         "service JWT of an unknown key": ({"svc": f"Bearer {env.executor_jwt(signer=other)}"}, 401),
@@ -419,6 +477,12 @@ async def test_execute_without_a_valid_token_is_refused_before_the_provider(env:
         "another aud": ({"token": token(env, intent_id, body, aud="other-connector")}, 401),
         "unknown kid": ({"token": token(env, intent_id, body, key=other)}, 401),
         "expired": ({"token": token(env, intent_id, body, now=lambda: time.time() - 600)}, 401),
+        # EFF-18 п.3: a valid token for a target this connector does not serve (the hash agrees with it)
+        "a resource it does not serve": ({"token": retarget(env, intent_id, body, res=unserved)}, 403),
+        "a tenant it does not serve": (
+            {"token": retarget(env, intent_id, body, ten="t-gxg-unknown", req="agent:t-gxg-unknown:x")},
+            403,
+        ),
     }
     for why, (kw, status) in cases.items():
         r = await execute(env, running, intent_id, body, **kw)
@@ -440,6 +504,8 @@ async def test_one_token_dispatches_once(env: Env) -> None:
     again = await execute(env, running, intent_id, body, token=tok)
     assert again.status_code in (401, 409), again.text
     assert env.approval.dispatched == [tok[1]] and running.calls() == 1
+    # the connector's own jti cache refuses the replay: no second dispatch request (EFF-18 п.1)
+    assert env.approval.dispatch_requests == [tok[1]], "the replay reached dispatch"
 
 
 @pytest.mark.effects

@@ -213,9 +213,10 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
     entry = REPORT[check]
     if entry["status"] != "failed":
         entry["status"] = "failed" if report.failed else "passed"
-    if report.failed:
-        lines = report.longreprtext.strip().splitlines()
-        entry.setdefault("errors", []).append(f"{name}: {lines[-1][:400] if lines else 'failed'}")
+    if report.failed:  # the assertion itself, not the ExceptionGroup frame of an async test
+        crash = getattr(report.longrepr, "reprcrash", None)
+        message = crash.message if crash is not None else report.longreprtext.strip().splitlines()[-1]
+        entry.setdefault("errors", []).append(f"{name}: {message[:400]}")
 
 
 def pytest_sessionfinish(session: pytest.Session) -> None:

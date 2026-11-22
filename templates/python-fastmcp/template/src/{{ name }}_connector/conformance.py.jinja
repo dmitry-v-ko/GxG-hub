@@ -55,7 +55,13 @@ def harness() -> Harness:
         nobody="agent:t-alpha:nobody",
         stranger="agent:t-beta:reader",
         calls=[
-            Call("{{ name }}.items.search", {"query": "status"}),
+            Call(
+                "{{ name }}.items.search",
+                {"query": "status"},
+                missing={"query": "status", "collection_ids": ["no-such-collection"]},
+                hidden={"query": "status", "collection_ids": ["c-secret"]},  # only an expired grant
+                empty={"query": "no item has this text"},
+            ),
             Call(
                 "{{ name }}.item.get",
                 {"item_id": items["c-public"]},

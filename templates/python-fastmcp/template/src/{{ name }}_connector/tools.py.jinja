@@ -23,7 +23,8 @@ from gxg_connector_kit.exec_token import ExecutorJwks
 {%- endif %}
 from gxg_connector_kit.grants import {% if with_effects %}BundleStore, {% endif %}GrantResolver
 from gxg_connector_kit.identity import IdentityVerifier
-from gxg_connector_kit.mcp import Access, Handler, Result
+from gxg_connector_kit.errors import GxgError
+from gxg_connector_kit.mcp import NOT_FOUND, Access, Handler, Result
 
 from .backend import Backend, Item
 
@@ -111,10 +112,14 @@ class Connector:
                 decision = access.check(rid(connection, c))
                 if decision.allowed:
                     readable[c] = str(decision.grant_id)
-        binding = json.dumps([tenant, access.ident.principal, query, limit]).encode()
+        requested: list[str] | None = args.get("collection_ids")
+        if requested is not None and any(c not in readable for c in requested):
+            raise GxgError("not_found", NOT_FOUND)  # GR-17: a named collection without a grant, or none at all
+        collections = sorted(set(requested) if requested is not None else readable)
+        binding = json.dumps([tenant, access.ident.principal, query, collections, limit]).encode()
         offset = self._cursor.offset(binding, args.get("cursor"))
-        found = self.backend.search(tenant, set(readable), query) if readable and connection else []
-        visible: list[Item] = [i for i in found if i.collection in readable]  # GR-16: whatever the provider returned
+        found = self.backend.search(tenant, set(collections), query) if collections and connection else []
+        visible: list[Item] = [i for i in found if i.collection in collections]  # GR-16: whatever the provider returned
         page = visible[offset : offset + limit]
         items = [
             {

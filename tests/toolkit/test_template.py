@@ -151,7 +151,9 @@ def test_copier_update_brings_template_changes_and_keeps_the_domain(tmp_path: Pa
     hub = tmp_path / "hub"
     subprocess.run(["git", "clone", "--quiet", str(REPO), str(hub)], check=True, timeout=300)
     git = ["git", "-c", "user.email=ci@example.invalid", "-c", "user.name=ci"]
-    old = subprocess.run(["git", "rev-parse", "HEAD"], cwd=hub, capture_output=True, text=True, check=True).stdout.strip()
+    old = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=hub, capture_output=True, text=True, check=True
+    ).stdout.strip()
     svc = tmp_path / "svc"
     cmd = [str(REPO / "scripts" / "new-connector"), "--name", "sample", "--dest", str(svc), "--kit-url",
            f"file://{hub}", "--kit-rev", old]  # fmt: skip
@@ -165,7 +167,9 @@ def test_copier_update_brings_template_changes_and_keeps_the_domain(tmp_path: Pa
         with (src / name).open("a", encoding="utf-8") as f:
             f.write("# template change\n")
     subprocess.run([*git, "commit", "-qam", "template change"], cwd=hub, check=True, timeout=60)
-    new = subprocess.run(["git", "rev-parse", "HEAD"], cwd=hub, capture_output=True, text=True, check=True).stdout.strip()
+    new = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=hub, capture_output=True, text=True, check=True
+    ).stdout.strip()
     copier.run_update(str(svc), vcs_ref=new, defaults=True, overwrite=True, quiet=True)
     pkg = svc / "src" / "sample_connector"
     assert (pkg / "server.py").read_text(encoding="utf-8").endswith("# template change\n")  # owned by the template

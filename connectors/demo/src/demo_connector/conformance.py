@@ -56,7 +56,13 @@ def harness() -> Harness:
         stranger="agent:t-beta:reader",
         calls=[
             Call("demo.boards.list", {}),
-            Call("demo.notes.search", {"query": "status"}),
+            Call(
+                "demo.notes.search",
+                {"query": "status"},
+                missing={"query": "status", "board_ids": ["no-such-board"]},
+                hidden={"query": "status", "board_ids": ["a-secret"]},
+                empty={"query": "no note has this text"},
+            ),
             Call(
                 "demo.note.get",
                 {"note_id": boards["a-public"].notes[0].id},

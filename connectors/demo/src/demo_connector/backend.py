@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 from gxg_connector_kit.errors import GxgError
+from gxg_connector_kit.readiness import Readiness
 
 from . import data
 from .data import Board, Note
@@ -32,6 +33,12 @@ class Backend:
         self.failure: BackendFailure | None = None  # set by POST /_test/backend/fail: every call fails (MC-03)
         self.delay_s = 0.0  # set by POST /_test/backend/fail `slow:<ms>`: every call waits (MC-03)
         self.calls: Counter[str] = Counter()  # tests: backend calls per method (AC-M3-07, AC-M3-08)
+
+    def readiness(self) -> Readiness:
+        """MCC-09: the backend answers (in-process fixtures: unless a test mode makes it unavailable)."""
+        if self.failure in ("temporarily_unavailable", "timeout_before_start"):
+            return Readiness(False, ("backend is not available",))
+        return Readiness(True)
 
     def _enter(self, kind: str) -> None:
         """Count the call, then apply the test failure mode (the service behind the connector is down)."""

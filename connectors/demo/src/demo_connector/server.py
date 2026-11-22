@@ -37,8 +37,9 @@ def build(settings: mcp.Settings, backend: Backend | None = None) -> tuple[Starl
     store, files = mcp.bundle_store(settings, logs.startup)
     connector = Connector(backend or Backend(), store)
     tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)
-    # Read-only connector: backend + valid bundle; no Approval Service (MCC-09).
-    return mcp.create_app(CONNECTOR_ID, tools, files.refresh, store.readiness, logs.startup), connector
+    # MCC-09: backend + valid bundle; a read-only connector does not depend on the Approval Service.
+    ready = mcp.readiness_of(store.readiness, connector.backend.readiness)
+    return mcp.create_app(CONNECTOR_ID, tools, files.refresh, ready, logs.startup), connector
 
 
 def configs(settings: mcp.Settings, app: Starlette, connector: Connector) -> list[uvicorn.Config]:

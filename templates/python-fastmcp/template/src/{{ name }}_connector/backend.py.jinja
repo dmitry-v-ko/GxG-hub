@@ -27,6 +27,7 @@ from gxg_connector_kit.errors import GxgError
 {%- if with_effects %}
 from gxg_connector_kit.exec_token import ExecutionClaims
 {%- endif %}
+from gxg_connector_kit.readiness import Readiness
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "items.json"
 Failure = Literal["rate_limited", "temporarily_unavailable", "timeout_before_start", "commit_then_drop", "reject"]
@@ -57,6 +58,12 @@ class Backend:
 {%- if with_effects %}
         self.journal: dict[str, str] = {}  # provider key (intent_id) -> operation id
 {%- endif %}
+
+    def readiness(self) -> Readiness:
+        """MCC-09: the provider answers. Replace with a cheap call to the real provider (no credentials in errors)."""
+        if self.failure in ("temporarily_unavailable", "timeout_before_start"):
+            return Readiness(False, ("provider is not available",))
+        return Readiness(True)
 
     def _enter(self, kind: str) -> None:
         """Count the call, then apply the test failure mode."""

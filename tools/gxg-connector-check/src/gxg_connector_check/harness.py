@@ -26,8 +26,9 @@ FailureMode = str  # rate_limited | temporarily_unavailable | crash | commit_the
 class Call:
     tool: str
     args: dict[str, Any]  # a valid call of `Harness.reader` (or `actor` for propose) with a non-empty result
-    missing: dict[str, Any] | None = None  # `scope: single`: names a resource that does not exist
-    hidden: dict[str, Any] | None = None  # `scope: single`: names an existing resource the caller has no grant on
+    missing: dict[str, Any] | None = None  # names a resource that does not exist (single; list with an *_ids filter)
+    hidden: dict[str, Any] | None = None  # names an existing resource the caller has no grant on (same)
+    empty: dict[str, Any] | None = None  # list tools: a valid call that finds nothing (an empty result is a success)
 
 
 @dataclass
@@ -48,7 +49,7 @@ class Harness:
     reader: str  # has `read` on part of its tenant's resources
     nobody: str  # same tenant, no grant at all
     stranger: str  # another tenant, with grants on its own resources
-    calls: list[Call]  # at least one per public read tool
+    calls: list[Call]  # at least one per public read tool; a list call's args find at least 2 items (pagination)
     secret_env: str  # provider credential variable: its value never appears in a response or a log (SC-09)
     rids: Callable[[str, dict[str, Any]], set[str]]  # RIDs a result of a tool refers to (SC-10)
     actor: str | None = None  # effects: has `read` and `propose` on the resource of `propose`
