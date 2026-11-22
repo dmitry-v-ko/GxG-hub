@@ -641,6 +641,7 @@ source = { editable = "connectors/kb" }
 dependencies = [
     { name = "fastmcp" },
     { name = "gxg-connector-kit" },
+    { name = "httpx2" },
     { name = "pyyaml" },
 ]
 
@@ -648,6 +649,7 @@ dependencies = [
 requires-dist = [
     { name = "fastmcp", specifier = "==4.1.8" },
     { name = "gxg-connector-kit", editable = "packages/gxg-connector-kit" },
+    { name = "httpx2", specifier = ">=2.16.2,<3" },
     { name = "pyyaml", specifier = ">=6,<7" },
 ]
 

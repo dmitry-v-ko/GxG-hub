@@ -326,9 +326,9 @@ async def test_search_query_to_the_kb_is_narrowed(kb: Kb, monkeypatch: pytest.Mo
         return await real(tenant, collections, query, offset=offset, limit=limit)
 
     monkeypatch.setattr(kb.backend, "search", search)
-    first = await kb.ok(SEARCH, {"query": "e", "limit": 2})
-    await kb.ok(SEARCH, {"query": "e", "limit": 2, "cursor": first["next_cursor"]})
-    await kb.ok(CONTEXT, {"query": "e", "max_documents": 3})
+    first = await kb.ok(SEARCH, {"query": "renewal", "limit": 2})
+    await kb.ok(SEARCH, {"query": "renewal", "limit": 2, "cursor": first["next_cursor"]})
+    await kb.ok(CONTEXT, {"query": "renewal", "max_documents": 3})
     # GR-16: the filter goes to the KB, not only after it; the KB returns one page, not every match (F5)
     assert seen == [(["sales"], 0, 2), (["sales"], 2, 2), (["sales"], 0, 3)]
 
@@ -432,20 +432,20 @@ async def test_bad_identity_is_refused_before_the_kb(kb: Kb) -> None:
 
 
 async def test_pages_and_cursor_binding(kb: Kb) -> None:
-    first = await kb.ok(SEARCH, {"query": "e", "limit": 2}, principal=ALPHA_READER)
+    first = await kb.ok(SEARCH, {"query": "renewal", "limit": 2}, principal=ALPHA_READER)
     assert ids(first) == SALES[:2] and first["next_cursor"] is not None
-    last = await kb.ok(SEARCH, {"query": "e", "limit": 2, "cursor": first["next_cursor"]})
+    last = await kb.ok(SEARCH, {"query": "renewal", "limit": 2, "cursor": first["next_cursor"]})
     assert ids(last) == SALES[2:] and last["next_cursor"] is None
     for args, principal in (
         ({"query": "other", "limit": 2}, ALPHA_READER),
-        ({"query": "e", "limit": 3}, ALPHA_READER),
-        ({"query": "e", "limit": 2}, ALPHA_NOBODY),
-        ({"query": "e", "limit": 2, "collections": ["sales"]}, ALPHA_READER),
+        ({"query": "renewal", "limit": 3}, ALPHA_READER),
+        ({"query": "renewal", "limit": 2}, ALPHA_NOBODY),
+        ({"query": "renewal", "limit": 2, "collections": ["sales"]}, ALPHA_READER),
     ):
         err = await kb.error(SEARCH, {**args, "cursor": first["next_cursor"]}, principal=principal)
         assert err["code"] == "invalid_input", args
-    assert (await kb.error(SEARCH, {"query": "e", "cursor": "1.zz"}))["code"] == "invalid_input"
-    exact = await kb.ok(SEARCH, {"query": "e", "limit": 3})
+    assert (await kb.error(SEARCH, {"query": "renewal", "cursor": "1.zz"}))["code"] == "invalid_input"
+    exact = await kb.ok(SEARCH, {"query": "renewal", "limit": 3})
     assert ids(exact) == SALES and exact["next_cursor"] is None
 
 
@@ -584,7 +584,7 @@ async def test_default_limits(kb: Kb) -> None:
     ctx = await kb.ok(CONTEXT, {"query": "contract"})
     assert len(ctx["documents"]) == 5  # max_documents default 5
     kb.fake.entities[:] = [entity(900, "Big", "x" * 9000)]
-    big = await kb.ok(CONTEXT, {"query": "x"})
+    big = await kb.ok(CONTEXT, {"query": "xxx"})
     assert len(big["context"]) == 4000  # max_chars default 4000
 
 
@@ -632,10 +632,10 @@ async def test_get_result_and_errors_exactly(kb: Kb) -> None:
 
 
 async def test_cursor_offset_is_signed(kb: Kb) -> None:
-    first = await kb.ok(SEARCH, {"query": "e", "limit": 1})
+    first = await kb.ok(SEARCH, {"query": "renewal", "limit": 1})
     offset, mac = first["next_cursor"].split(".")
     assert offset == "1"
-    assert (await kb.error(SEARCH, {"query": "e", "limit": 1, "cursor": f"2.{mac}"}))["code"] == "invalid_input"
+    assert (await kb.error(SEARCH, {"query": "renewal", "limit": 1, "cursor": f"2.{mac}"}))["code"] == "invalid_input"
 
 
 async def test_tool_timeout_from_the_manifest(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -791,7 +791,11 @@ async def test_a_slow_kb_times_out_by_the_manifest(
         http, session = await connect(stack, app)
         k = Kb(connector, http, session, env.issuer)
         started = time.monotonic()
-        for tool, args in ((GET, {"document_id": SALES[0]}), (SEARCH, {"query": "x"}), (CONTEXT, {"query": "x"})):
+        for tool, args in (
+            (GET, {"document_id": SALES[0]}),
+            (SEARCH, {"query": "contract"}),
+            (CONTEXT, {"query": "contract"}),
+        ):
             assert await k.error(tool, args) == {
                 "code": "temporarily_unavailable",
                 "message": "KB did not answer in time",
@@ -1100,7 +1104,6 @@ async def test_kb_tool_errors_and_non_json_are_internal_errors(kb: Kb, caplog: p
     kb.fake.text = "not json"
     assert await kb.error(GET, {"document_id": SALES[0]}) == INTERNAL
     kb.fake.text, kb.fake.tool_error = None, True
-    assert await kb.error(GET, {"document_id": SALES[0]}) == INTERNAL
     assert await kb.error(SEARCH, {"query": "contract"}) == INTERNAL
     assert "kb-secret-text" not in caplog.text  # the KB's text never leaves the adapter (SEC-18)
 
@@ -1275,3 +1278,56 @@ async def test_build_reads_the_connections_file(env: Env, tmp_path: Path) -> Non
     assert connector.backend._conns["t-alpha"].key == "alpha-read"
     _, none = server.build(server.Settings(**{**vars(env.settings), "connections_file": None}))
     assert none.backend.connections == {}
+
+
+# Cycle 4: critic cycle 3 M1, M2, m2, m4, m6 ---------------------------------------------------------------
+
+
+async def test_a_hung_kb_makes_readyz_fail_in_time_and_frees_the_lock(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(backend_module, "READY_TIMEOUT_S", 0.3)
+    kb.fake.delay_s = 60  # accepts the connection and does not answer (M1)
+    r = await asyncio.wait_for(kb.http.get("/readyz"), 2)  # an unbounded probe fails here instead of hanging
+    assert r.status_code == 503
+    kb.fake.delay_s = 0
+    started = time.monotonic()
+    assert ids(await kb.ok(SEARCH, {"query": "contract"})) == ["101", "102"]  # the probe released the lock
+    assert time.monotonic() - started < 2
+    assert (await kb.http.get("/readyz")).status_code == 200
+
+
+async def test_kb_get_tool_error_is_not_found_like_a_missing_document(kb: Kb) -> None:
+    no_grant = await kb.call(GET, {"document_id": HR})  # exists, collection hr: no grant
+    kb.fake.tool_error = True  # a KB that answers a missing id with a tool error (M2)
+    missing = await kb.call(GET, {"document_id": "999"})
+    assert missing == no_grant  # byte for byte: no existence oracle (SC-05)
+    assert missing["structuredContent"] == NOT_FOUND
+
+
+async def test_readyz_is_503_not_500_on_any_kb_failure(kb: Kb) -> None:
+    for status in (404, 400, 418):
+        kb.fake.http_status = status
+        r = await kb.http.get("/readyz")
+        assert (r.status_code, r.json()) == (503, {"status": "not_ready"}), status
+
+
+async def test_an_oversized_kb_answer_is_refused(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(backend_module, "MAX_RESPONSE_BYTES", 10)  # every KB answer is larger (G12)
+    assert await kb.error(GET, {"document_id": SALES[0]}) == INTERNAL
+    assert await kb.backend.ready() is False
+
+
+async def test_a_query_without_a_real_word_does_not_reach_the_kb(kb: Kb) -> None:
+    for q in ("ab", "a b c", "--", "x y"):
+        r = await kb.ok(SEARCH, {"query": q})
+        assert r["items"] == [] and r["complete"] is True, q
+    assert kb.fake.calls["kb_search"] == 0  # G16: kb_search would return arbitrary rows
+    assert ids(await kb.ok(SEARCH, {"query": "pip"})) == ["103"]  # three characters are enough
+
+
+def test_response_size_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    limit = backend_module.MAX_RESPONSE_BYTES
+    assert not backend_module.too_big(httpx2.Headers({"content-length": str(limit)}))
+    assert backend_module.too_big(httpx2.Headers({"content-length": str(limit + 1)}))
+    monkeypatch.setattr(backend_module, "MAX_RESPONSE_BYTES", 0)
+    assert not backend_module.too_big(httpx2.Headers({}))  # no Content-Length: not bounded (chunked, shortcut)
+    assert backend_module.too_big(httpx2.Headers({"content-length": "1"}))

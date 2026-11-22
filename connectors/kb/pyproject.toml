@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn
     "gxg-connector-kit",
+    "httpx2>=2.16.2,<3",  # the KB client's HTTP (backend.py); already installed by mcp
     "pyyaml>=6,<7",  # gxg-manifest.yaml is read at start; already installed by fastmcp
 ]
 

@@ -49,7 +49,7 @@ def test_ac_m6_02_search_and_context_return_only_the_granted_collection(stand: S
         got = ok(call(stand, ALPHA_READER, SEARCH, {"query": "contract"}, path))
         assert {i["id"] for i in got["items"]} == {"101", "102"}, path
         assert got["source_refs"] == ["kb:kb-main/collection/sales"]
-        everything = ok(call(stand, ALPHA_READER, SEARCH, {"query": "e", "limit": 50}, path))
+        everything = ok(call(stand, ALPHA_READER, SEARCH, {"query": "renewal", "limit": 50}, path))
         assert {i["id"] for i in everything["items"]} == ALPHA_SALES  # no count of hidden matches (SC-10)
         ctx = ok(call(stand, ALPHA_READER, CONTEXT, {"query": "contract"}, path))
         assert {d["id"] for d in ctx["documents"]} == {"101", "102"}

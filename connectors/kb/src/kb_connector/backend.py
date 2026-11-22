@@ -50,8 +50,11 @@ WRITE_TOOLS = frozenset(
 SEARCH_WINDOW = 50  # kb_search limit is at most 50 and has no offset (G9)
 TYPES_TTL_S = 300.0  # entity types change only with KB migrations
 CONNECT_TIMEOUT_S = 5.0
+READY_TIMEOUT_S = 5.0  # one readiness probe per connection; it holds the connection's lock, so it must be bounded
+MAX_RESPONSE_BYTES = 2_000_000  # G12: the SDK reads a JSON response whole
 RETRY_AFTER_S = 5
 _ID = re.compile(r"[1-9][0-9]{0,17}")  # kb.entities.id is a positive integer
+_WORD = re.compile(r"\w{3}")
 
 
 @dataclass(frozen=True)
@@ -95,6 +98,10 @@ class ContractError(RuntimeError):
     the class name only, and KB text never leaves this module."""
 
 
+class ToolFailed(ContractError):
+    """The KB answered a tools/call with isError. Its text is unknown and never passed on."""
+
+
 class KeyRefused(RuntimeError):
     """The KB refused the wrapper's own key (HTTP 401/403): internal_error, not the caller's unauthenticated."""
 
@@ -116,6 +123,8 @@ class Backend:
 
         async def seen(response: httpx2.Response) -> None:
             statuses.append(response)
+            if too_big(response.headers):
+                raise ContractError
 
         async with self._locks[tenant]:
             try:
@@ -136,7 +145,7 @@ class Backend:
 
         result = await self._session(tenant, use)
         if result.is_error:
-            raise ContractError
+            raise ToolFailed
         try:  # the KB has no outputSchema: one text item with JSON (G10)
             first = result.content[0]
             assert isinstance(first, mt.TextContent)  # noqa: S101 - caught below as contract drift
@@ -153,9 +162,9 @@ class Backend:
             return {t.name for t in (await s.list_tools()).tools}
 
         for tenant in self._conns:
-            try:
-                listed = await self._session(tenant, names)
-            except (GxgError, RuntimeError):
+            try:  # bounded: a KB that accepts and never answers must not hang /readyz or hold the lock (M1)
+                listed = await asyncio.wait_for(self._session(tenant, names), READY_TIMEOUT_S)
+            except Exception:
                 return False
             if not KB_TOOLS <= listed or listed & WRITE_TOOLS:
                 return False
@@ -203,7 +212,12 @@ class Backend:
         if tenant not in self._conns or not _ID.fullmatch(document_id):
             return None  # no KB call for an id the KB cannot have
         keys = await self._type_keys(tenant)
-        row = await self._call(tenant, "kb_get", {"id": int(document_id)})
+        try:
+            row = await self._call(tenant, "kb_get", {"id": int(document_id)})
+        except (
+            ToolFailed
+        ):  # the KB's "not found" form is unknown (audit G1): every tool error looks like a miss (SC-05)
+            return None
         if isinstance(row, dict) and "item" in row:
             row = row["item"]
         return None if row is None else self._document(tenant, row, keys)
@@ -215,14 +229,20 @@ class Backend:
         rows (G9): the wrapper always asks for the whole window and pages over the rows it keeps (published, own
         workspace), so dropped rows do not shorten a page. complete is False when the window was full and the
         page could not be filled from it: the KB may have more."""
-        if not collections or tenant not in self._conns:
-            return [], False, True
+        if not collections or tenant not in self._conns or not _WORD.search(query):
+            return [], False, True  # G16: without a word of 3+ characters kb_search returns arbitrary rows
         keys = await self._type_keys(tenant)
         args = {"query": query, "entity_types": collections, "limit": SEARCH_WINDOW, "include_body": True}
         rows = _rows(await self._call(tenant, "kb_search", args))
         docs = [d for d in (self._document(tenant, r, keys) for r in rows) if d is not None]
         more = len(docs) > offset + limit
         return docs[offset : offset + limit], more, more or len(rows) < SEARCH_WINDOW
+
+
+def too_big(headers: httpx2.Headers) -> bool:
+    """G12: an answer above MAX_RESPONSE_BYTES by its Content-Length.
+    shortcut: a chunked answer without Content-Length is not bounded here."""
+    return int(headers.get("content-length") or 0) > MAX_RESPONSE_BYTES
 
 
 def _rows(data: Any) -> list[Any]:
@@ -250,7 +270,7 @@ def _classify(exc: Exception, statuses: list[httpx2.Response]) -> Exception:
     stack: list[BaseException] = [exc]  # exception groups and chains are trees: no cycles
     while stack:
         e = stack.pop()
-        if isinstance(e, GxgError):
+        if isinstance(e, GxgError | ContractError):
             return e
         if isinstance(e, httpx2.TransportError):  # connect, read and other timeouts, refused connections
             return GxgError("temporarily_unavailable", "KB is not available")
