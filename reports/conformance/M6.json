@@ -751,7 +751,7 @@
   "ruff_mypy": "ruff check, ruff format --check, mypy (all CI invocations): clean",
   "ponytail_review": "self-review of the cycle 2 diff: (1) the stand caught what the unit tests did not: without its own formatter a handler gets basicConfig's 'LEVEL:name:' prefix and audit lines stop being JSON -> fixed and asserted; (2) ContextForge keeps tool schemas from registration: a changed output schema (truncated) broke an existing stand until bootstrap refreshes gateway tools on every run; (3) search pages come from the KB (offset/limit), so an item dropped by the re-check makes a page shorter than limit — safe (never more), noted; (4) copies from demo remain (F9, shortcut). No open Must fix",
   "check_all": "scripts/ci/check-all.sh at 9df3faa: every step up to stand/run.sh passed; stand failed on the stale ContextForge schema -> bootstrap refresh (570a17b); stand/run.sh and mutmut.sh rerun at 570a17b: passed",
-  "ci_github": "not checked: GitHub runners may not pick up jobs (M5 note); verified locally only"
+  "ci_github": "not green on GitHub: every job of every branch is refused before start by account billing ('recent account payments have failed', critic cycle 2); verified locally only (check-all, stand, mutmut). Rerun CI on the head once billing is fixed, before the PR"
  },
  "known_limits": [
   "fake-KB, not the KB of gxg_agents_v2: AC-M6-01, 03, 04 blocked by access",

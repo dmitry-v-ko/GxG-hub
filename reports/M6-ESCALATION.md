@@ -47,4 +47,4 @@
 - `connectors/kb`: wrapper на FastMCP + `gxg-connector-kit`, tools `kb.documents.search`, `kb.documents.get`, `kb.context.get`; права по коллекциям через grants (GR-16, GR-17), `not_found` для чужой коллекции и tenant'а побайтно как для отсутствующего (SC-05, SC-10); async постраничный порт KB; данные KB в пределах схем выхода; `bundle_version` в аудите. 55 юнит-тестов, mutmut без неэквивалентных выживших.
 - Стенд M5 + `kb`: gateway и virtual server на team, правила `unified_pdp`, общий bundle; `stand/tests/test_kb.py` через ContextForge. Итог: M6 3 × 35, M5 3 × 29 passed (`reports/conformance/M6.json`).
 - `docs/audits/kb-gap-audit.md` — шаблон аудита и план AC-M6-04 (аудит не выполнен).
-- CI на GitHub не проверялся (раннеры могут не подхватывать jobs, заметка M5); всё проверено локально (`scripts/ci/check-all.sh`).
+- CI на GitHub не зелёный не из-за кода: все jobs всех веток отклоняются до старта из-за биллинга аккаунта («recent account payments have failed»). Всё проверено локально (`scripts/ci/check-all.sh`, стенд, mutmut). Перед PR — перезапустить CI после исправления биллинга.
