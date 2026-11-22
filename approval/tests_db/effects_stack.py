@@ -192,7 +192,9 @@ class Servers:
     """uvicorn servers on Unix sockets in one event loop, in a background thread."""
 
     def __init__(self, apps: list[tuple[Any, str]]) -> None:
-        self.servers = [uvicorn.Server(uvicorn.Config(a, uds=s, log_level="warning", lifespan="on")) for a, s in apps]
+        # timeout_graceful_shutdown: stop() does not wait for a request a test left hanging (slow:30000).
+        cfgs = [uvicorn.Config(a, uds=s, log_level="warning", lifespan="on", timeout_graceful_shutdown=1) for a, s in apps]
+        self.servers = [uvicorn.Server(c) for c in cfgs]
         self.thread = threading.Thread(target=lambda: asyncio.run(self._serve()), daemon=True)
         self.thread.start()
         deadline = time.time() + 20
