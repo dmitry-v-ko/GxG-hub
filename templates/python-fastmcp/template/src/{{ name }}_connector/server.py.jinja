@@ -38,13 +38,13 @@ def parse_keys(value: str, name: str = "{{ P }}_BUNDLE_KEYS") -> dict[str, Ed255
 
 {% if with_effects %}
 def build(
-    settings: mcp.Settings, backend: Backend | None = None, wiring: effects.Wiring = effects.Wiring()
+    settings: mcp.Settings, backend: Backend | None = None, wiring: effects.Wiring | None = None
 ) -> tuple[Starlette, Connector]:
     store, files = mcp.bundle_store(settings, logs.startup)
     connector = Connector(backend or Backend(), store)
     readiness = [store.readiness]
     if settings.approval_url:  # effects: Approval Service client and executor JWKS (MCC-09: both in /readyz)
-        approval, jwks = effects.connect(settings, CONNECTOR_ID, wiring)
+        approval, jwks = effects.connect(settings, CONNECTOR_ID, wiring or effects.Wiring())
         connector.enable_effects(approval, jwks, files.refresh)
         readiness.append(jwks.readiness)
     tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)

@@ -21,7 +21,7 @@ from gxg_connector_kit import {% if with_effects %}effects, {% endif %}mcp
 {%- if with_effects %}
 from gxg_connector_kit.exec_token import ExecutorJwks
 {%- endif %}
-from gxg_connector_kit.grants import GrantResolver{% if with_effects %}, BundleStore{% endif %}
+from gxg_connector_kit.grants import {% if with_effects %}BundleStore, {% endif %}GrantResolver
 from gxg_connector_kit.identity import IdentityVerifier
 from gxg_connector_kit.mcp import Access, Handler, Result
 
@@ -117,7 +117,12 @@ class Connector:
         visible: list[Item] = [i for i in found if i.collection in readable]  # GR-16: whatever the provider returned
         page = visible[offset : offset + limit]
         items = [
-            {"id": i.id, "title": i.title, "excerpt": i.text[:EXCERPT_MAX], "source_ref": rid(str(connection), i.collection)}
+            {
+                "id": i.id,
+                "title": i.title,
+                "excerpt": i.text[:EXCERPT_MAX],
+                "source_ref": rid(str(connection), i.collection),
+            }
             for i in page
         ]
         content = {

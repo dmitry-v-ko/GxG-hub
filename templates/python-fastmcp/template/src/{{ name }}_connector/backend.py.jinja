@@ -1,6 +1,8 @@
 {%- set P = name | upper -%}
-"""Fake provider of `{{ name }}`: collections of items of two tenants, a call counter and failure modes
-{%- if with_effects %}, a journal of sends, idempotent by `intent_id`{% endif %} (mcp-toolkit-v1).
+"""Fake provider of `{{ name }}` (mcp-toolkit-v1): items of two tenants, a call counter, failure modes.
+{%- if with_effects %}
+Sends go to a journal, idempotent by `intent_id` (EFF-18 п.5); `commit_then_drop` loses the answer (EX-11).
+{%- endif %}
 
 Replace it with the client of the real provider, keeping `calls` and `failure` for tests and the conformance suite.
 The provider credential `{{ P }}_PROVIDER_TOKEN` is read here and never leaves this module (SC-09).
@@ -18,9 +20,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, get_args
 
-from gxg_connector_kit.errors import GxgError
 {%- if with_effects %}
 from gxg_connector_kit.effects import Dropped, Sent
+{%- endif %}
+from gxg_connector_kit.errors import GxgError
+{%- if with_effects %}
 from gxg_connector_kit.exec_token import ExecutionClaims
 {%- endif %}
 

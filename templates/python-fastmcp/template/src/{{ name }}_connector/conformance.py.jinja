@@ -68,6 +68,8 @@ def harness() -> Harness:
         failures=("rate_limited", "temporarily_unavailable", "timeout_before_start", "crash"),
 {%- if with_effects %}
         actor="agent:t-alpha:actor",
-        propose=Call("{{ name }}.message.propose", {"collection_id": "c-public", "recipient": "alice_01", "text": "Привет"}),
+        propose=Call(
+            "{{ name }}.message.propose", {"collection_id": "c-public", "recipient": "alice_01", "text": "Привет"}
+        ),
 {%- endif %}
     )

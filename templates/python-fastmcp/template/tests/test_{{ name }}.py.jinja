@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from {{ name }}_connector.backend import Backend
 from gxg_connector_kit.errors import GxgError
+from {{ name }}_connector.backend import Backend
 
 
 def test_search_stays_in_the_named_collections_of_the_tenant() -> None:
