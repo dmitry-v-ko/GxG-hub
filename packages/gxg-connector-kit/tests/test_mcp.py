@@ -844,5 +844,5 @@ async def test_published_schemas_are_the_files(world: World) -> None:
         listed = {t.name: t for t in (await s.list_tools()).tools}
     for t in TOOLS:
         name, inp, out = str(t["name"]), str(t["input_schema"]), str(t["output_schema"])
-        assert listed[name].input_schema == SCHEMAS[inp.split("/")[-1]], name
-        assert listed[name].output_schema == SCHEMAS[out.split("/")[-1]], name
+        assert listed[name].input_schema == SCHEMAS[inp.rsplit("/", maxsplit=1)[-1]], name
+        assert listed[name].output_schema == SCHEMAS[out.rsplit("/", maxsplit=1)[-1]], name
