@@ -1562,10 +1562,17 @@ async def test_port_completeness_names_each_reason(db: Db) -> None:
 async def test_port_connects_as_the_connector_with_its_application_name(tg: Tg, db: Db) -> None:
     """AC-M11-03's stand counter counts `application_name=gxg-telegram` connections; readiness uses its own name."""
     log = db.pg.root / "log"
-    before = log.read_text(errors="replace").count("application_name=gxg-telegram")
+
+    def mine() -> list[str]:  # this test's database only: parallel workers (mutmut) share the cluster log
+        return [
+            ln
+            for ln in log.read_text(errors="replace").splitlines()
+            if f"database={db.name} " in ln and "application_name=gxg-telegram" in ln
+        ]
+
+    before = len(mine())
     await tg.ok("telegram.thread.read", {"chat_ref": REF["a-sales"]})
     assert (await tg.http.get("/readyz")).status_code == 200
-    lines = [ln for ln in log.read_text(errors="replace").splitlines() if "application_name=gxg-telegram" in ln]
-    new = lines[before:]
+    new = mine()[before:]
     assert [ln.split("application_name=")[1] for ln in new] == ["gxg-telegram", "gxg-telegram-ready"]
     assert all(f"user={seed.READER}" in ln for ln in new)
