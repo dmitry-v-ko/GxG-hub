@@ -1,0 +1,331 @@
+{
+  "milestone": "M8",
+  "role": "independent critic, cycle 3 (separate session; closed checklist = required_improvements of reports/critic/M8-cycle-2.json + new_regression search)",
+  "branch": "claude/m8-executor",
+  "commit": "ddf8c9f",
+  "base": "3c2f0b0 (claude/integration)",
+  "diff_reviewed": "f348c6a (cycle-2 critic report)..ddf8c9f",
+  "reviewed_at": "2026-11-22",
+  "threshold": 9,
+  "score": 6.0,
+  "score_before_caps": 9.5,
+  "caps_applied": [
+    "dod",
+    "major"
+  ],
+  "cap_note": "Code side of the checklist done: provider key = intent_id in send and reconcile (EFF-18 p.5, EFF-25), real-stack two-requesters test passes and fails when the key is put back to idk; exec-keys/ ignored + git check-ignore test; 0003 SQL row in MUTATIONS and killed, 'shared across tenants' row killed, full driver 98 rows 0 not as expected; .gitleaksignore lines; minors done. Two things keep it below 9: (1) new_regression: the log.warning line of 45017be shifted the mutant ids of Executor.take; mutmut-equivalent.txt still lists take__mutmut_29, the survivor is take__mutmut_36 (same cast no-op), so scripts/ci/mutmut.sh exits 1 and check-all.sh is red (DoD-1: cap 6); (2) checklist item 4 not done: reports/conformance/M8.json is still the cycle-1 file (commit a01c564, no ci_local), reports/mutmut/M8.txt and M8-sql.txt are cycle-1 text (DoD-1/DoD-3 evidence, major). Both fixes are small; nothing in the code needs to change.",
+  "dimensions": {
+    "spec": 3.0,
+    "tests": 2.0,
+    "security": 2.0,
+    "code": 1.5,
+    "ops": 1.0,
+    "evidence": 0.0
+  },
+  "reproduction": {
+    "environment": "cloud container, 4 cores; dockerd started by hand; PostgreSQL 16.6 (postgres:16.6-alpine, --network none, Unix socket) x3 for parallel runs; M5 stand from ddf8c9f (stand/init.py, demo image with DOCKER_BUILD_FLAGS=--network host + proxy CA secret, docker compose up --wait, stand/bootstrap.py); uv venv Python 3.13; git worktrees at ddf8c9f for mutmut and the SQL driver; a full (non-shallow) clone of ddf8c9f for gitleaks range",
+    "tests": "GXG_TEST_PG_SOCKET_DIR: (cd approval && pytest tests tests_db) -> 439 passed (98 s); connectors/demo -> 145 passed; packages/gxg-connector-kit -> 373 passed; root pytest (check-all step) -> 973 passed",
+    "ci_local": {
+      "commit": "ddf8c9f",
+      "command": "scripts/ci/check-all.sh step by step (errexit off, every step run): all steps except 'pytest approval/tests_db' (run separately above, green), stand/run.sh (stand steps run by hand, see stand) and scripts/ci/mutmut.sh (M8 modules run by hand, see mutmut)",
+      "result": "RED. Green: uv lock --check x2, uv sync --locked, ruff check, ruff format --check, 6 mypy runs, root pytest 973 passed, schema_lock, kit coverage gate, demo tests, prove_schema_guard, gitleaks tree HEAD, gxg-policy validate + lint, bundle_smoke, docker_smoke OK. Red in this shallow clone (203 commits): gitleaks range 0000..HEAD (4 findings tests/ci/test_check_secrets.py:23 in shallow-boundary commits bcff838, 2869731, 77d04f6, 77662af) and tests/secrets 20/21; the same range in a full clone of ddf8c9f (327 commits): no leaks (finding 5, backlog). Red for every clone: scripts/ci/mutmut.sh would exit 1 on the stale/unlisted id of finding 1 (mutmut.sh fails on unexplained or stale ids)."
+    },
+    "stand": "M5 stand built from ddf8c9f. stand/tests full suite (fresh) -> 33 passed (540 s), no hang this time. AC-M8-13: stand/tests/test_ex.py -v -> 4 passed (204 s). Restart/recreate rounds of stand/run.sh not run (M5 path, not touched by this diff).",
+    "mutmut": {
+      "approval": "uv run mutmut run 'gxg_approval.executor*' 'gxg_approval.keys*' 'gxg_approval.intents.x_propose*' (clean mutants/, worktree at ddf8c9f): 932 killed, 13 survived, 0 timeout, 0 no_tests. 12 survivors listed; gxg_approval.executor.xǁExecutorǁtake__mutmut_36 (cast(None, …)) NOT listed; listed gxg_approval.executor.xǁExecutorǁtake__mutmut_29 is killed now (stale) -> finding 1",
+      "connectors/demo": "uv run mutmut run 'demo_connector.effects*' 'demo_connector.provider*': 884 killed, 30 survived, 0 timeout; all 30 listed in scripts/ci/mutmut-equivalent.txt, no unlisted, no stale",
+      "kit": "exec_token.py not changed in this diff: not re-run"
+    },
+    "sql_mutations": "scripts/ci/mutate_m7_sql.py, all 98 rows (first 17 in one run, the other 81 split in three runs on three PostgreSQL servers by `what` substrings): 93 killed, 5 equivalent, 0 not as expected, every run exit 0. Checklist rows: 'idempotency unique per tenant, not per requester (EFF-08)' (0003, now in MUTATIONS) killed; 'idempotency key shared across tenants' killed; 'idempotency key shared across requesters (EFF-08)' killed.",
+    "sql_rows": [
+      "equivalent  0001_core.py: equivalent: T1 writes the policy decision in the transaction that inserts the auto intent, so a moved auto intent always has one and the EXISTS check refuses it",
+      "equivalent  0001_core.py: equivalent: an execution in outcome_unknown belongs to an intent in outcome_unknown, and T7 (the only insert into executions) is allowed only from approved: the index is a second guard",
+      "equivalent  0001_core.py: equivalent: every caller passes a row it locked FOR UPDATE (_gxg_intent/_gxg_execution or gxg_cancel), so the version cannot differ; callers with a client version compare it before the move",
+      "equivalent  0001_core.py: equivalent: version 1 means no move yet, and the insert guard makes every auto intent approved at T1",
+      "equivalent  0002_executor.py: equivalent: the CONTINUE WHEN after the row lock skips every execution that is not reserved",
+      "killed      0001_core.py: T12a does not count",
+      "killed      0001_core.py: T2 deadline from 1 h, not the window frozen at T1",
+      "killed      0001_core.py: a cleared switch still blocks T7/T9",
+      "killed      0001_core.py: a machine principal approves",
+      "killed      0001_core.py: another connector dispatches",
+      "killed      0001_core.py: any target status",
+      "killed      0001_core.py: approval expired early",
+      "killed      0001_core.py: approve without required step-up",
+      "killed      0001_core.py: approved intent never queued for execution",
+      "killed      0001_core.py: approved without execution deadline",
+      "killed      0001_core.py: approver outside allowed_approvers",
+      "killed      0001_core.py: audit rows can be changed",
+      "killed      0001_core.py: auto usage count without its index",
+      "killed      0001_core.py: born terminal",
+      "killed      0001_core.py: born with attempts used",
+      "killed      0001_core.py: born with version > 1",
+      "killed      0001_core.py: born without encrypted preview",
+      "killed      0001_core.py: cancel another requester's intent",
+      "killed      0001_core.py: cancel another tenant's intent (same principal ID)",
+      "killed      0001_core.py: cancel with a stale version",
+      "killed      0001_core.py: decision after the approval deadline",
+      "killed      0001_core.py: decision on changed args",
+      "killed      0001_core.py: dispatch after the reservation lease",
+      "killed      0001_core.py: dispatch declared unknown early",
+      "killed      0001_core.py: dispatch does not count",
+      "killed      0001_core.py: every role runs every transition",
+      "killed      0001_core.py: execution state ignored",
+      "killed      0001_core.py: execution window expired early",
+      "killed      0001_core.py: executor reads preview",
+      "killed      0001_core.py: human intent without approvals",
+      "killed      0001_core.py: intent born in any status",
+      "killed      0001_core.py: kill switch ignored at T7",
+      "killed      0001_core.py: kill switch ignored at T9",
+      "killed      0001_core.py: manual outcome without a reason",
+      "killed      0001_core.py: manual outcome, stale version",
+      "killed      0001_core.py: move from any status",
+      "killed      0001_core.py: no execution window after approval",
+      "killed      0001_core.py: non-terminal status gets terminal_at",
+      "killed      0001_core.py: policy decision counted as a human approval",
+      "killed      0001_core.py: policy decision for a non-auto intent",
+      "killed      0001_core.py: quorum needs one vote more",
+      "killed      0001_core.py: quorum of one",
+      "killed      0001_core.py: rejections counted as approvals",
+      "killed      0001_core.py: requester approves own intent",
+      "killed      0001_core.py: reservation released early",
+      "killed      0001_core.py: reserve after the execution window",
+      "killed      0001_core.py: reserve after the last attempt",
+      "killed      0001_core.py: retry after the execution window",
+      "killed      0001_core.py: retry after the last attempt",
+      "killed      0001_core.py: second policy decision",
+      "killed      0001_core.py: second vote of one human",
+      "killed      0001_core.py: stale screen decides",
+      "killed      0001_core.py: status and approval mode disagree",
+      "killed      0001_core.py: token sub of another intent dispatches",
+      "killed      0001_core.py: tool kill switch ignored at T7/T9",
+      "killed      0001_core.py: two votes of one human",
+      "killed      0001_core.py: ui reads args",
+      "killed      0001_core.py: ui runs T9 and T6",
+      "killed      0001_core.py: ui writes executions",
+      "killed      0001_core.py: unknown decision accepted",
+      "killed      0001_core.py: unknown outcome never reconciled again",
+      "killed      0002_executor.py: AS-10 release leaves the execution reserved",
+      "killed      0002_executor.py: executor cannot release after a key removal",
+      "killed      0002_executor.py: release aborts on an execution dispatched between the loop's SELECT and the lock",
+      "killed      0002_executor.py: released intent never re-queued",
+      "killed      0003_idempotency_per_requester.py: idempotency unique per tenant, not per requester (EFF-08)",
+      "killed      executor.py: a kill-switched row is retried without backoff",
+      "killed      executor.py: delivered outbox rows handled again",
+      "killed      executor.py: executor eats the notifier's rows",
+      "killed      executor.py: kill-switched row without backoff count",
+      "killed      executor.py: outcome_unknown never reconciled",
+      "killed      executor.py: reconcile backoff ignores the time waited",
+      "killed      executor.py: rows are never delivered",
+      "killed      intents.py: T1 without the tenant lock",
+      "killed      intents.py: a cleared switch blocks T1",
+      "killed      intents.py: auto day limit window too long",
+      "killed      intents.py: auto day limit window too short (fail open)",
+      "killed      intents.py: auto hour limit counts the day",
+      "killed      intents.py: auto hour window too short (fail open)",
+      "killed      intents.py: auto limit counts another tenant's intents",
+      "killed      intents.py: auto limit counts human intents of the rule",
+      "killed      intents.py: auto limit counts other rules",
+      "killed      intents.py: hourly quota counts all history",
+      "killed      intents.py: hourly quota counts another tenant's intents",
+      "killed      intents.py: hourly quota counts other requesters",
+      "killed      intents.py: idempotency key shared across requesters (EFF-08)",
+      "killed      intents.py: idempotency key shared across tenants",
+      "killed      intents.py: pending caps count another tenant's intents",
+      "killed      intents.py: pending caps count every status",
+      "killed      intents.py: read another requester's",
+      "killed      intents.py: read another tenant's intent (same principal ID)",
+      "killed      intents.py: requester pending cap counts the whole tenant",
+      "killed      intents.py: retry_after_s from the newest intent"
+    ],
+    "own_experiments": [
+      "checklist 1: effects.py provider_key=claims['idk'] put back by hand -> test_same_key_of_two_requesters_is_two_provider_effects, test_ac01, test_ac08 x2 fail (4 failed); restored",
+      "checklist 2: git check-ignore -v approval/deploy/exec-keys/signing-keys.json -> .gitignore:28 exec-keys/; secrets path -> .gitignore:11",
+      "checklist 5: gitleaks range 0000..HEAD in a full clone of ddf8c9f -> no leaks (both configs); in this shallow clone 4 findings in other boundary commits",
+      "finding 1: mutmut show take__mutmut_36 -> cast(tuple[uuid.UUID], …) -> cast(None, …), the mutant listed before as take__mutmut_29"
+    ]
+  },
+  "checklist_cycle_2": [
+    {
+      "item": "1. provider key per intent (intent_id, EFF-18 p.5 by owner's order) in send and reconcile; real-stack test two requesters, same key, different text -> two effects, both succeeded",
+      "status": "done",
+      "evidence": "effects.py:224 provider_key=claims['sub']; provider.py send/lookup by provider_key; test_executor.py::test_same_key_of_two_requesters_is_two_provider_effects passed, fails with idk; AC-M8-01/02/08 assert provider_key == intent_id, passed"
+    },
+    {
+      "item": "2. exec-keys/ in .gitignore + git check-ignore test",
+      "status": "done",
+      "evidence": ".gitignore:28; test_deploy.py::test_host_secret_files_are_ignored_by_git passed"
+    },
+    {
+      "item": "3. 0003 driver row runs test_propose.py; full driver 0 not as expected",
+      "status": "done",
+      "evidence": "row moved to MUTATIONS (all tests_db); killed; full driver 98 rows, 0 not as expected"
+    },
+    {
+      "item": "3b. one principal in two tenants, same key -> two intents; 'shared across tenants' row killed",
+      "status": "done",
+      "evidence": "test_propose.py::test_same_principal_and_key_in_two_tenants_is_two_intents passed; row killed"
+    },
+    {
+      "item": "4. reports/conformance/M8.json for the final commit with ci_local; reports/mutmut/M8.txt with counts, survivor ids, full driver output; .gitleaksignore for the 2 base-history findings",
+      "status": "partly done",
+      "evidence": ".gitleaksignore lines added (green in a full clone). M8.json: commit a01c564, cycle 1, no ci_local; M8.txt and M8-sql.txt last changed in a01c564 (git log -- reports/conformance/M8.json reports/mutmut/M8.txt). Not done -> finding 2"
+    },
+    {
+      "item": "5. minors 5 (backlog rows), 6 (enum equality test), 7 (log on no-key deferral), 9 (to backlog)",
+      "status": "done",
+      "evidence": "docs/backlog.md: 10 rows restored + M8 #9 + #8; test_effects.py::test_propose_output_statuses_are_the_intent_statuses; executor.py:138 WARNING with test assertion; Stand.rpc timeout in backlog"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-M8-01",
+      "status": "passed",
+      "evidence": "test_executor.py::test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so PASSED (journal 1 row, provider_key == intent_id, same text_hash)"
+    },
+    {
+      "id": "AC-M8-02",
+      "status": "passed",
+      "evidence": "test_ac02_50_intents_10_executors_no_dedupe_one_call_each PASSED (50 rows, one per intent_id)"
+    },
+    {
+      "id": "AC-M8-03",
+      "status": "passed",
+      "evidence": "test_ac03_invalid_execution_tokens_are_401_without_dispatch PASSED"
+    },
+    {
+      "id": "AC-M8-04",
+      "status": "passed",
+      "evidence": "test_ac04_replay_after_success_is_409_and_the_provider_is_called_once PASSED"
+    },
+    {
+      "id": "AC-M8-05",
+      "status": "passed",
+      "evidence": "test_ac05_changed_args_are_422[text], [recipient] PASSED"
+    },
+    {
+      "id": "AC-M8-06",
+      "status": "passed",
+      "evidence": "test_ac06_commit_then_drop_is_unknown_then_reconciled_succeeded PASSED"
+    },
+    {
+      "id": "AC-M8-07",
+      "status": "passed",
+      "evidence": "test_ac07_connector_killed_after_dispatch, test_ac07_t14_when_the_executor_dies_too PASSED"
+    },
+    {
+      "id": "AC-M8-08",
+      "status": "passed",
+      "evidence": "test_ac08_timeout_before_start_twice_then_ok (calls by intent_id), test_ac08_max_attempts_2_ends_failed PASSED"
+    },
+    {
+      "id": "AC-M8-09",
+      "status": "passed",
+      "evidence": "test_ac09_executor_dies_between_reserve_and_dispatch PASSED"
+    },
+    {
+      "id": "AC-M8-10",
+      "status": "passed",
+      "evidence": "test_ac10_kill_switch_after_reserve_before_dispatch PASSED"
+    },
+    {
+      "id": "AC-M8-11",
+      "status": "passed",
+      "evidence": "test_ac11_propose_grant_revoked_between_approve_and_execute PASSED"
+    },
+    {
+      "id": "AC-M8-12",
+      "status": "passed",
+      "evidence": "test_ac12_approval_service_unavailable PASSED"
+    },
+    {
+      "id": "AC-M8-13",
+      "status": "passed",
+      "evidence": "M5 stand via ContextForge: stand/tests/test_ex.py -v 4 passed (204 s); full stand suite 33 passed"
+    },
+    {
+      "id": "AC-M8-14",
+      "status": "passed",
+      "evidence": "test_ac14_rotation_without_downtime_and_removal_of_a_compromised_kid, test_ac14_removed_kid_is_refused_at_dispatch_at_once_and_by_the_connector_within_10_min PASSED"
+    }
+  ],
+  "dod": {
+    "1_ci_green": "not met: check-all red at scripts/ci/mutmut.sh (finding 1); gitleaks range red only in a shallow clone (finding 5); no ci_local in the conformance report",
+    "2_ac_automated": "met: AC-M8-01..14 automated, all passed",
+    "3_report": "not met: reports/conformance/M8.json is the cycle-1 report (a01c564)",
+    "4_mutation": "substance met (no non-equivalent survivor in M8 modules; SQL driver 0 not as expected), but the gate's list is stale (finding 1) and reports/mutmut/M8.txt is not updated",
+    "5_no_skip": "met: no skip/xfail in the diff",
+    "6_ready_made_first": "met: plan M8-cycle-3.md, no new self-written component"
+  },
+  "findings": [
+    {
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "DoD-1, DoD-4",
+      "where": "scripts/ci/mutmut-equivalent.txt:133 (cause approval/src/gxg_approval/executor.py:138, commit 45017be)",
+      "problem": "The added log.warning line shifted the mutant ids of Executor.take. The list holds take__mutmut_29 (killed now, stale); the surviving equivalent is take__mutmut_36 (cast(None, …)), unlisted. scripts/ci/mutmut.sh exits 1 on both, so check-all.sh and the CI job mutmut are red.",
+      "required_improvement": "Rename take__mutmut_29 to take__mutmut_36 on line 133; re-run approval mutmut and confirm 13 survivors = 13 listed."
+    },
+    {
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "DoD-1, DoD-3, checklist item 4",
+      "where": "reports/conformance/M8.json, reports/mutmut/M8.txt, reports/mutmut/M8-sql.txt",
+      "problem": "Evidence for the final commit is not committed: M8.json is the cycle-1 report (commit a01c564, no ci_local); M8.txt and M8-sql.txt are cycle-1 text without the cycle-3 counts, survivor ids and full driver output.",
+      "required_improvement": "After finding 1, run scripts/ci/check-all.sh to the end on the final commit in a full (non-shallow) clone; commit M8.json for that commit with ci_local (commit, command, exit 0, per-step result), and M8.txt with per-package counts, survivor ids and the full SQL driver output (98 rows, 0 not as expected)."
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "EFF-25",
+      "where": "connectors/demo/src/demo_connector/provider.py:29, :117-124",
+      "problem": "lookup() reads only the new table sends; a send journalled in the old table calls (cycle-2 volume) with an open outcome_unknown is reconciled as not_executed.",
+      "required_improvement": "Backlog: one README line (drop the demo provider volume, or settle open outcome_unknown, before the upgrade)."
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "-",
+      "where": "approval/tests/test_deploy.py:93-97",
+      "problem": "test_host_secret_files_are_ignored_by_git fails without a .git directory (export, build context) with no reason given.",
+      "required_improvement": "Backlog: skip when REPO/.git is missing."
+    },
+    {
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "checklist item 4 (gitleaks)",
+      "where": ".gitleaksignore:33-36",
+      "problem": "The two fingerprints fit one clone depth; in a shallow clone of 203 commits the boundary commits are others (bcff838, 2869731, 77d04f6, 77662af) and gitleaks range + tests/secrets are red. In a full clone: clean. Already in docs/backlog.md (M8 cycle-2 #8).",
+      "required_improvement": "Backlog as written: unshallow (or refuse a shallow repo) in check-all before range; then drop the two lines."
+    }
+  ],
+  "existing_solutions": "No new self-written component in the diff; SQL mutations stay on the hand driver (mutmut does not mutate SQL text; confirmed in M7).",
+  "threat_model": [
+    {
+      "path": "two requesters of one tenant with one idempotency_key collide at the provider (cycle-2 critical)",
+      "status": "closed",
+      "evidence": "provider key = intent_id; test_same_key_of_two_requesters_is_two_provider_effects; mutation by hand -> 4 failed"
+    },
+    {
+      "path": "one principal ID in two tenants with one key",
+      "status": "closed",
+      "evidence": "test_same_principal_and_key_in_two_tenants_is_two_intents; SQL row 'shared across tenants' killed"
+    },
+    {
+      "path": "executor signing seeds committed by git add -A",
+      "status": "closed",
+      "evidence": "exec-keys/ in .gitignore; git check-ignore test"
+    },
+    {
+      "path": "reconcile of another tenant's intent by intent_id",
+      "status": "closed",
+      "evidence": "reconcile needs the executor service JWT; intent_id is a server-issued UUID (no change in the diff)"
+    }
+  ],
+  "required_improvements": [
+    "1. Finding 1: scripts/ci/mutmut-equivalent.txt:133 take__mutmut_29 -> take__mutmut_36; approval mutmut: 13 survivors, all listed, none stale.",
+    "2. Finding 2 (checklist item 4 again): on the final commit, in a full (non-shallow) clone, scripts/ci/check-all.sh to the end with exit 0; commit reports/conformance/M8.json for that commit with ci_local (commit, command, exit, per-step result) and reports/mutmut/M8.txt with per-package counts, survivor ids and the full SQL driver output.",
+    "3. Minors 3-5 to docs/backlog.md (5 is already there)."
+  ],
+  "ponytail_review": "reports/critic/M8-cycle-3.review.md",
+  "lean_lines": 0
+}
