@@ -93,5 +93,5 @@ def test_executor_signing_keys_come_from_a_directory_only_it_mounts() -> None:
 def test_host_secret_files_are_ignored_by_git() -> None:
     """The operator writes the seeds and secrets next to compose.yaml (README): `git add -A` must not take them."""
     for path in ("approval/deploy/exec-keys/signing-keys.json", "approval/deploy/secrets/svc_key_executor"):
-        r = subprocess.run(["git", "-C", str(REPO), "check-ignore", "-q", path], check=False)  # noqa: S603, S607
+        r = subprocess.run(["git", "-C", str(REPO), "check-ignore", "-q", path], check=False)
         assert r.returncode == 0, path

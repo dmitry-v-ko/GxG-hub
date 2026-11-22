@@ -161,6 +161,15 @@ def test_same_key_in_another_tenant_is_another_intent(
     assert a.json()["intent_id"] != b.json()["intent_id"]
 
 
+def test_same_principal_and_key_in_two_tenants_is_two_intents(propose: Callable[..., Any]) -> None:
+    """EFF-08: the key is per (tenant, requester, key); one principal ID registered in both tenants is two requesters."""
+    beta = {"tenant": "t-beta", "connection": "demo-b", "resource": "demo:demo-b/board/b2"}
+    a = propose(key="idem-shared-2", requester="agent:shared")
+    b = propose(key="idem-shared-2", requester="agent:shared", **beta)
+    assert a.status_code == b.status_code == 201
+    assert a.json()["intent_id"] != b.json()["intent_id"]
+
+
 def test_50_parallel_identical_requests_make_one_row(
     world: Any, api_pool: ConnectionPool[Any], owner: psycopg.Connection[Any]
 ) -> None:

@@ -167,6 +167,9 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      "auto hour limit counts the day"),
     (INT, "AND approval_mode = 'auto' AND %s", "AND %s", "auto limit counts human intents of the rule"),
     (INT, "AND %s = ANY(rule_ids)", "AND (%s = ANY(rule_ids) OR true)", "auto limit counts other rules"),
+    # migration 0003 (M8, EFF-08 per requester): pinned by test_propose.py, so it runs with every DB test
+    (MIG3, "UNIQUE (tenant_id, requester_principal, idempotency_key)", "UNIQUE (tenant_id, idempotency_key)",
+     "idempotency unique per tenant, not per requester (EFF-08)"),
 ]  # fmt: skip
 # M8: AS-10 release (migration 0002) and the executor's SQL (outbox claim, delivery, reconcile backoff).
 M8_MUTATIONS: list[tuple[str, str, str, str]] = [
@@ -179,8 +182,6 @@ M8_MUTATIONS: list[tuple[str, str, str, str]] = [
      EQUIVALENT + "the CONTINUE WHEN after the row lock skips every execution that is not reserved"),
     (MIG2, "    CONTINUE WHEN (x.e).state <> 'reserved';  -- dispatched or released meanwhile\n", "",
      "release aborts on an execution dispatched between the loop's SELECT and the lock"),
-    (MIG3, "UNIQUE (tenant_id, requester_principal, idempotency_key)", "UNIQUE (tenant_id, idempotency_key)",
-     "idempotency unique per tenant, not per requester (EFF-08)"),
     (EXE, "WHERE o.delivered_at IS NULL AND o.topic", "WHERE o.topic", "delivered outbox rows handled again"),
     (EXE, "o.topic IN ('execute', 'reconcile')", "o.topic IN ('execute')", "outcome_unknown never reconciled"),
     (EXE, "o.topic IN ('execute', 'reconcile')", "o.topic IN ('execute', 'reconcile', 'notify', 'webhook')",
