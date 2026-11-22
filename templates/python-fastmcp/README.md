@@ -1,6 +1,6 @@
 # Шаблон `python-fastmcp`
 
-Шаблон MCP-коннектора GxG ([MCP Toolkit](../../docs/specs/mcp-toolkit-v1.md), веха M1.1), собранный из эталона [`demo`](../../connectors/demo). Движок — [copier](https://copier.readthedocs.io/): `copier update` по `.copier-answers.yml` доносит изменения шаблона до сервисов в других репозиториях.
+Шаблон MCP-коннектора GxG ([MCP Toolkit](../../docs/specs/mcp-toolkit-v1.md), веха M1.1), собранный из эталона [`demo`](../../connectors/demo). Движок — [copier](https://copier.readthedocs.io/). Его `copier.yml` лежит в корне репозитория (`_subdirectory` указывает сюда): copier берёт шаблон только из корня git-репозитория. Сервис вне репозитория создаётся из git на закреплённом commit и следует за шаблоном так: `uvx copier update --vcs-ref <commit> --data kit_rev=<commit>`, затем `uv lock` и `scripts/check-all.sh`. Файлы домена (`_skip_if_exists`) при этом не меняются — это проверяет `tests/toolkit/test_template.py`.
 
 ```bash
 scripts/new-connector --name <domain> --lang python [--with-effects]            # connectors/<domain>, кит по path
