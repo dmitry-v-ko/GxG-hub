@@ -16,9 +16,9 @@ from typing import Any
 import httpx2
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 from gxg_connector_check import bundle
 from gxg_connector_check.fakes import FakeApproval
-
 from gxg_connector_kit import effects, exec_token, mcp, svc_jwt
 from gxg_connector_kit.effects import Dropped, Sent
 from gxg_connector_kit.errors import GxgError

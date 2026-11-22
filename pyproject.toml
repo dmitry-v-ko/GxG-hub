@@ -110,7 +110,7 @@ ignore = [
 "approval/src/gxg_approval/migrations/**" = ["S101", "S608", "E501"]  # static DDL from code constants
 
 [tool.ruff.lint.isort]
-known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_policy", "demo_connector"]
+known-first-party = ["gxg_connector_kit", "gxg_connector_check", "gxg_approval", "gxg_policy", "demo_connector"]
 
 [tool.mypy]
 # Baseline for every package; the strict set is enforced separately with

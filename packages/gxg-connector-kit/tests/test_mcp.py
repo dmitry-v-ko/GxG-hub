@@ -19,10 +19,10 @@ import pytest
 import uvicorn
 import yaml
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from gxg_connector_check import bundle
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from gxg_connector_check import bundle
 from gxg_connector_kit import mcp
 from gxg_connector_kit.cf_identity import ContextForgeVerifier
 from gxg_connector_kit.errors import GxgError

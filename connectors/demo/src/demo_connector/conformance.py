@@ -9,7 +9,6 @@ import os
 from typing import Any, get_args
 
 from gxg_connector_check import Call, Harness, Running
-
 from gxg_connector_kit.effects import Wiring
 from gxg_connector_kit.mcp import Settings as KitSettings
 
