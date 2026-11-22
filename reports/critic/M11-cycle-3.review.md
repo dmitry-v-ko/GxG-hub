@@ -31,11 +31,23 @@ Checked by hand:
    - **Fix:** Also match `search_path` lines, or note the limit in `SOURCE.md` as `shortcut:`.
    - **If we skip it:** A migration written in that style slips through; low chance.
 
+6. **The 1-second flood-wait stand test fails at random** (`stand/tests/test_telegram.py:L438-452`, not changed in this cycle)
+   - **What this is:** `test_ac_m11_04[1]` sets a 1 s flood wait, then makes six calls through ContextForge and expects every read to say `rate_limited`.
+   - **Problem:** When the second passes mid-loop, `search` correctly stops saying `rate_limited` and the test fails. Critic's check-all: fresh stand run 49/50; 2 of 8 reruns of this test failed. So check-all is red.
+   - **Fix:** Set the defer again before each read check, or check reads with a delay that cannot run out during the loop.
+   - **If we skip it:** check-all on the final head stays red one run in three or four.
+
+7. **mutmut verdicts depend on the checkout path and on load** (`scripts/ci/mutmut-equivalent.txt:85`, demo `server.x_build__mutmut_9`)
+   - **What this is:** `mutmut.sh` fails on listed mutants that are now killed and on unlisted timeouts.
+   - **Problem:** In a worktree under `/tmp`, `telegram tools.x_load_schema__mutmut_4` is killed (the `..` parent walk finds no file there), and demo `x_build__mutmut_9` times out under parallel stand load. `mutmut.sh` exit 1, not caused by this cycle.
+   - **Fix:** backlog: path-independent `load_schema` (package data, F7); list demo `x_build_9` as a timeout, like telegram `x_build_10`.
+   - **If we skip it:** DoD-4 fails outside the usual checkout or on a busy machine.
+
 ## Nice to have
 
 4. **Worktree clones are refused** (`scripts/ci/check-all.sh:L29`): `[ -d "$upstream/.git" ]` is false for a `git worktree` (`.git` is a file). `git -C "$upstream" rev-parse --git-dir >/dev/null` accepts both.
 5. **Typo** (`connectors/telegram/README.md:L49`): "grant истёк , чат" — space before the comma.
 
-Verdict: fix 1 first (and 2 for the evidence).
+Verdict: fix 1 and 6 first, then 2 (one green check-all on the final head).
 
 Not checked: the drift check against the real gxg_agents_v2 (no clone in this session: the repo could not be attached), so `check-all` ran with `UPSTREAM_DRIFT=skip`; GitHub Actions job `telegram-upstream` and the `GXG_AGENTS_V2_TOKEN` secret (Actions off: billing).
