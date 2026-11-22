@@ -8,7 +8,6 @@ ships its schemas as package data.
 
 from __future__ import annotations
 
-import base64
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,15 +17,12 @@ import yaml
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from gxg_connector_kit import _schema, canonical
+from gxg_connector_kit._jwt import b64url_encode as b64url
 from gxg_connector_kit.exec_token import public_jwk
 from gxg_connector_kit.mcp import BUNDLE_FILE, SIG_FILE
 
 TOOL_KEYS = ("name", "version", "effect_class", "action", "executes_via", "dispatch_timeout_s", "preview")
 KID = "gxg-check"
-
-
-def b64url(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
 def public(key: Ed25519PublicKey) -> str:
@@ -35,7 +31,7 @@ def public(key: Ed25519PublicKey) -> str:
 
 def grants(root: Path) -> list[dict[str, Any]]:
     docs = [
-        yaml.safe_load(f.read_text(encoding="utf-8")) for f in sorted((root / "fixtures" / "grants").glob("*.yaml"))
+        yaml.safe_load(f.read_bytes()) for f in sorted((root / "fixtures" / "grants").glob("*.yaml"))
     ]
     if not docs:
         raise ValueError(f"no grants in {root}/fixtures/grants/")

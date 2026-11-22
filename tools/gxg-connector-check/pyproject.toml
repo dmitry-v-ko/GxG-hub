@@ -21,9 +21,12 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "gxg_connector_check"
 
-# DoD-4: mutmut on the suite's key conditions. Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh).
+# DoD-4: mutmut here covers bundle.py (a wrong test bundle would make every check pass or fail for the wrong
+# reason). The checks themselves (checks.py) are tests: their strength is shown by the broken copies
+# (tests/test_broken.py, tests/toolkit/test_template.py), which also cover cli.py's exit code end to end;
+# plugin.py and fakes.py are test infrastructure exercised by every check. Run: scripts/ci/mutmut.sh.
 [tool.mutmut]
 source_paths = ["src/gxg_connector_check/"]
-only_mutate = ["*/bundle.py", "*/fakes.py", "*/cli.py"]
+only_mutate = ["*/bundle.py"]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q", "-m", "not e2e"]

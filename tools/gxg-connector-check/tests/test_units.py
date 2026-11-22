@@ -57,12 +57,23 @@ def test_bundle_refuses_what_it_cannot_build(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no grants in"):
         bundle.grants(tmp_path)
     (tmp_path / "fixtures" / "grants" / "t.yaml").write_text("tenant: t\ngroups: {g: [a]}\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="groups are not supported"):
+    with pytest.raises(ValueError, match=r"^test bundle: groups are not supported, list the principals$"):
         bundle.grants(tmp_path)
-    with pytest.raises(ValueError, match=r"^test bundle: "):
+    with pytest.raises(ValueError, match=r"^test bundle: .* at /tenants/t/grants$"):
         bundle.write(tmp_path / "b", [{"tenant": "t"}], {"schema_version": 1, "services": []},
                      Ed25519PrivateKey.generate(), built_at=BUILT_AT)  # fmt: skip
     assert not (tmp_path / "b").exists()
+
+
+def test_bundle_write_makes_its_directory(tmp_path: Path) -> None:
+    key = Ed25519PrivateKey.generate()
+    pub = key.public_key()
+    platform = bundle.registry({"connector": "demo", "tools": []}, ["t-alpha"], executor=pub, svc=pub, approval=pub)
+    docs = bundle.grants(DEMO)[:1]
+    for _ in range(2):  # a second write over the first is fine
+        bundle.write(tmp_path / "a" / "b", docs, platform, key, built_at=BUILT_AT)
+    doc = json.loads((tmp_path / "a" / "b" / mcp.BUNDLE_FILE).read_bytes())
+    assert doc["built_at"] == "2026-11-22T10:00:00Z" and list(doc["tenants"]) == ["t-alpha"]
 
 
 def test_jwks_and_keys_setting() -> None:
