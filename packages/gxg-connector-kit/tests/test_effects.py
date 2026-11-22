@@ -66,7 +66,7 @@ class Provider:
         if self.mode == "crash":
             raise RuntimeError("boom")
         if self.mode == "slow":
-            import asyncio  # noqa: PLC0415
+            import asyncio
 
             await asyncio.sleep(0.3)
         if self.mode == "ok_without_receipt":
@@ -586,7 +586,7 @@ async def test_connect_wires_the_approval_transport(tmp_path: Path) -> None:
 
 
 async def test_internal_duration_and_spaced_token(rig: Rig, caplog: pytest.LogCaptureFixture) -> None:
-    import logging  # noqa: PLC0415
+    import logging
 
     caplog.set_level(logging.INFO)
     await rig.propose()

@@ -53,7 +53,7 @@ fi
 sort "$tmp/all.txt" > "$all"
 grep -E '^\s+\S+: ' "$tmp/results.txt" | sed -E 's/^\s+//; s/: .*//' | sort > "$tmp/left.txt" || true
 # only the listed mutants of the directories run now (a subset run must not call the others stale)
-sed -E 's/: .*//' "$all" | sort > "$tmp/ran.txt"
+sed -E 's/: .*//' "$tmp/all.txt" | sed 's/^ *//' | sort > "$tmp/ran.txt"
 { grep -oE "^[^ #]+" "$equivalent" || true; } | sort | comm -12 - "$tmp/ran.txt" > "$tmp/allowed.txt"
 unexplained=$(comm -23 "$tmp/left.txt" "$tmp/allowed.txt")
 stale=$(comm -13 "$tmp/left.txt" "$tmp/allowed.txt")
