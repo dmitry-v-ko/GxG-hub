@@ -88,3 +88,7 @@ kb_connector.tools.xǁConnectorǁtools__mutmut_10  # M6: as demo: encoding None 
 kb_connector.tools.xǁConnectorǁtools__mutmut_12  # M6: as demo: codec names are case-insensitive
 kb_connector.tools.xǁConnectorǁ_readable__mutmut_11  # M6: the connection returned with an empty set is never used: no search, no item, no source_ref
 kb_connector.server.xǁBundleFilesǁ__init____mutmut_3  # M6: as demo: _seen None vs "": both mean "nothing loaded yet"; an (mtime, mtime) tuple never equals either
+kb_connector.backend.x_http_client__mutmut_6  # M6: HTTP header names are case-insensitive (RFC 9110): "authorization" is the same header
+kb_connector.backend.x_http_client__mutmut_7  # M6: the same, "AUTHORIZATION"
+kb_connector.backend.x__classify__mutmut_10  # M6: httpx Headers.get is case-insensitive: "RETRY-AFTER" reads the same header
+kb_connector.backend.x__classify__mutmut_11  # M6: the default is used only when the header is missing, and "XXXX" is not digits either: both fall back to RETRY_AFTER_S

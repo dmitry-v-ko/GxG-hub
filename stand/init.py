@@ -6,12 +6,14 @@ Writes (all git-ignored, never commit them):
   stand/secrets/bundle.seed    grants bundle signing seed; public half in .env
   stand/secrets/bundle/        grants bundle of connectors/*/fixtures/grants (merged per tenant), signed (GR-11)
   stand/secrets/plugins.yaml   ContextForge plugins; bootstrap.py fills in the team and gateway ids
+  stand/secrets/kb/            fake-KB keys (read per tenant, one write key), the wrapper's connections.json (M6)
 Synthetic only: the stand never holds a real credential.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 import os
 import secrets
 import shutil
@@ -134,6 +136,35 @@ def plugins_yaml(tenants: dict[str, str], connectors: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+KB_WORKSPACES = {"t-alpha": "11111111-1111-4111-8111-111111111111", "t-beta": "22222222-2222-4222-8222-222222222222"}
+
+
+def kb_secrets() -> None:
+    """Synthetic fake-KB keys and the wrapper's KB connections (kept if they exist). The wrapper gets only the read
+    key of each tenant; the write key exists to show that a read key cannot write (the shape of AC-M6-04)."""
+    kb = SECRETS / "kb"
+    if (kb / "connections.json").exists():
+        return
+    kb.mkdir(exist_ok=True)
+    kb.chmod(0o755)  # read by the containers' non-root users
+    keys, connections = {}, {}
+    for tenant, ws in KB_WORKSPACES.items():
+        key = secrets.token_urlsafe(32)
+        keys[key] = {"workspace_id": ws, "role": "read"}
+        (kb / f"{tenant}.key").write_text(key)
+        connections[tenant] = {
+            "connection_id": "kb-main",
+            "url": "http://fake-kb:8080/mcp",
+            "workspace_id": ws,
+            "key_file": f"/run/kb/{tenant}.key",
+        }
+    keys[secrets.token_urlsafe(32)] = {"workspace_id": KB_WORKSPACES["t-alpha"], "role": "write"}
+    (kb / "fake-keys.json").write_text(json.dumps(keys))
+    (kb / "connections.json").write_text(json.dumps(connections))
+    for f in kb.iterdir():
+        f.chmod(0o644)
+
+
 def main() -> None:
     SECRETS.mkdir(mode=0o700, exist_ok=True)
     os.umask(0o077)
@@ -171,6 +202,7 @@ def main() -> None:
     missing = {"DEMO_IDENTITY_KEYS", "DEMO_BUNDLE_KEYS", "DEMO_PROVIDER_TOKEN"} - set(env_values())
     if missing:
         sys.exit(f".env exists without {sorted(missing)}: move it away and rerun")
+    kb_secrets()
     # GR-13: a bundle older than 24 h makes demo not ready; every run re-signs it (CI does it every 6 h, GR-13a)
     build_bundle(seed, SECRETS / "bundle")
     if not (SECRETS / "plugins.yaml").exists():

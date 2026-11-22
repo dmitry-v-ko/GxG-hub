@@ -206,7 +206,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: m5-conformance
+          name: stand-conformance  # M5.json and M6.json
           path: |
             reports/conformance/M5.json
             reports/conformance/M6.json

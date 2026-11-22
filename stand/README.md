@@ -33,7 +33,7 @@ KEEP=1 stand/run.sh          # то же, стенд остаётся запущ
 ```bash
 uv run python stand/init.py       # .env и stand/secrets/: секреты и ключи (один раз), bundle (переподписывается при каждом запуске)
 docker build --build-arg KEEP_TEST_CONTROLS=1 -t gxg-demo:stand -f connectors/demo/Dockerfile .
-docker build -t gxg-kb:stand -f connectors/kb/Dockerfile .
+docker build --build-arg KEEP_FAKE_KB=1 -t gxg-kb:stand -f connectors/kb/Dockerfile .  # kb and fake-kb
 docker compose up -d --wait
 uv run python stand/bootstrap.py  # идемпотентно: team, агенты, токены, gateways, servers, конфиг плагина
 uv run pytest stand/tests -p no:cacheprovider --force-enable-socket -o pythonpath="stand/tests stand gateway/contextforge"

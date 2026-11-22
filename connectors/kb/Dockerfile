@@ -12,9 +12,12 @@ COPY schemas/search-result.schema.json schemas/
 COPY connectors/kb connectors/kb
 WORKDIR /app/connectors/kb
 # Optional secret `ca-bundle`: a TLS-intercepting proxy's CA for the download only, never stored in a layer.
+# The dev stand builds with KEEP_FAKE_KB=1 (the same image runs fake-kb); the production image drops the fake.
+ARG KEEP_FAKE_KB=0
 RUN --mount=type=secret,id=ca-bundle,required=false \
     if [ -f /run/secrets/ca-bundle ]; then export SSL_CERT_FILE=/run/secrets/ca-bundle; fi \
-    && uv sync --no-dev
+    && uv sync --no-dev \
+    && if [ "$KEEP_FAKE_KB" != 1 ]; then rm src/kb_connector/fake_kb.py fixtures/kb.json; fi
 
 FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 COPY --from=build /app /app

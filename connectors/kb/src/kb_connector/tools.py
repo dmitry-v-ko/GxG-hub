@@ -168,14 +168,13 @@ class Connector:
 
     async def _search(
         self, ident: VerifiedIdentity, args: dict[str, Any], offset: int, limit: int
-    ) -> tuple[str, list[Document], bool, set[str]]:
-        """(connection, visible page, more after it, grant ids). The KB returns one page of the allowed collections
-        only (GR-16); every item is checked again, whatever the KB returned."""
+    ) -> tuple[str, list[Document], bool, bool, set[str]]:
+        """(connection, visible page, more after it, complete, grant ids). The KB returns one page of the allowed
+        collections only (GR-16); every item is checked again, whatever the KB returned."""
         connection, readable = await self._readable(ident, args.get("collections"))
-        hits, more = (
-            await self.backend.search(ident.tenant_id, sorted(readable), args["query"], offset=offset, limit=limit)
-            if readable
-            else ([], False)
+        # nothing readable: the backend makes no KB call (an empty filter must never mean "all")
+        hits, more, complete = await self.backend.search(
+            ident.tenant_id, sorted(readable), args["query"], offset=offset, limit=limit
         )
         visible, grant_ids = [], set()
         for d in hits:
@@ -183,7 +182,7 @@ class Connector:
             if d.collection in readable and decision.allowed:
                 visible.append(d)
                 grant_ids.add(str(decision.grant_id))
-        return connection, visible, more, grant_ids
+        return connection, visible, more, complete, grant_ids
 
     async def documents_search(self, ident: VerifiedIdentity, args: dict[str, Any]) -> Result:
         limit: int = args.get("limit", 20)
@@ -192,7 +191,7 @@ class Connector:
         ).encode()
         cursor = args.get("cursor")
         offset = 0 if cursor is None else self._offset(binding, cursor)
-        connection, page, more, grant_ids = await self._search(ident, args, offset, limit)
+        connection, page, more, complete, grant_ids = await self._search(ident, args, offset, limit)
         ref = rid(connection, "")
         items = [
             {
@@ -206,8 +205,8 @@ class Connector:
         content = {
             "items": items,
             "next_cursor": self._cursor(binding, offset + limit) if more else None,
-            "complete": True,
-            "partial_reasons": [],
+            "complete": complete,
+            "partial_reasons": [] if complete else ["truncated"],  # the KB's 50-row window (G9)
             "source_refs": sorted({i["source_ref"] for i in items}),
         }
         return content, {"grant_id": sorted(grant_ids)}
@@ -240,7 +239,8 @@ class Connector:
         """The search above, then excerpts joined up to max_chars (a cut document marks the result truncated)."""
         max_docs: int = args.get("max_documents", 5)
         max_chars: int = args.get("max_chars", 4000)
-        connection, visible, truncated, grant_ids = await self._search(ident, args, 0, max_docs)
+        connection, visible, more, complete, grant_ids = await self._search(ident, args, 0, max_docs)
+        truncated = more or not complete
         text, used = "", []
         for d in visible:
             sep = "\n\n" if text else ""

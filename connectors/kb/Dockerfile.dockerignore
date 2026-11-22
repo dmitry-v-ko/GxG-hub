@@ -8,3 +8,4 @@
 **/mutants
 **/.pytest_cache
 connectors/kb/tests
+connectors/kb/vendor

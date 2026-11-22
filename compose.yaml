@@ -118,13 +118,19 @@ services:
     build:
       context: .
       dockerfile: connectors/kb/Dockerfile
+      args:
+        KEEP_FAKE_KB: "1"  # stand only: the same image also runs fake-kb
     restart: unless-stopped
+    depends_on:
+      fake-kb: {condition: service_started}
     environment:
       # the same identity adapter and bundle keys as demo: one ContextForge, one CI bundle
       KB_IDENTITY_KEYS: ${DEMO_IDENTITY_KEYS:?run stand/init.py}
       KB_BUNDLE_KEYS: ${DEMO_BUNDLE_KEYS:?run stand/init.py}
+      KB_CONNECTIONS_FILE: /run/kb/connections.json  # tenant -> fake-kb URL, workspace, read key file (Q2)
     volumes:
       - ./stand/secrets/bundle:/bundle:ro
+      - ./stand/secrets/kb:/run/kb:ro
       - kb-state:/var/lib/kb
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]
@@ -132,10 +138,25 @@ services:
       retries: 30
     networks:
       connectors: {ipv4_address: 10.250.0.12}
+      kb-backend: {}
+
+  fake-kb:
+    # M6: stands in for the KB Access Layer (kb_access is not in gxg_agents_v2, docs/audits/kb-gap-audit.md G1) with
+    # its audited client contract. Only the kb wrapper reaches it: own internal network, no port.
+    image: gxg-kb:stand
+    restart: unless-stopped
+    command: ["python", "-m", "kb_connector.fake_kb"]
+    environment:
+      FAKE_KB_KEYS_FILE: /run/kb/fake-keys.json
+    volumes:
+      - ./stand/secrets/kb:/run/kb:ro
+    networks:
+      kb-backend: {}
 
 networks:
   edge: {}
   db: {internal: true}
+  kb-backend: {internal: true}  # kb <-> fake-kb only
   connectors:
     internal: true
     # No address for the host on this bridge: the docker host itself has no route to demo (AC-M5-03).

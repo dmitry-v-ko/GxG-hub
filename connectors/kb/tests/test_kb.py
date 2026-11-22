@@ -1,7 +1,9 @@
 """KB wrapper connector (M6), in-process: collection grants (AC-M6-02 logic, SC-05, SC-10 on KB), identity,
 schemas, readiness. The same checks through ContextForge: stand/tests/test_kb.py.
 
-The MCP client is the official SDK over Streamable HTTP on httpx2's ASGITransport (no TCP socket). The bundle
+Every call goes through the real KB adapter (kb_connector.backend) to the fake-KB MCP server of the audited KB
+contract (kb_connector.fake_kb), both in process. The MCP client is the official SDK over Streamable HTTP on
+httpx2's ASGITransport (no TCP socket). The bundle
 is built by `gxg-policy build` from fixtures/grants/ with a key made here; identities come from the kit's test
 issuer (GXG_PROFILE=test).
 """
@@ -35,9 +37,11 @@ from gxg_connector_kit import TokenError
 from gxg_connector_kit import cf_identity as cf
 from gxg_connector_kit.identity import StubIssuer
 from gxg_policy import cli as policy_cli
+from kb_connector import backend as backend_module
 from kb_connector import server
 from kb_connector import tools as tools_module
-from kb_connector.backend import Backend, Document
+from kb_connector.backend import Backend, Connection, Document
+from kb_connector.fake_kb import FakeKb, Key
 from kb_connector.tools import Connector, load_schema
 
 pytestmark = pytest.mark.anyio
@@ -45,8 +49,14 @@ pytestmark = pytest.mark.anyio
 REPO = next(p for p in Path(__file__).resolve().parents if (p / "policies").is_dir())
 KB = REPO / "connectors" / "kb"
 ALPHA_READER, ALPHA_NOBODY, BETA_READER = "agent:t-alpha:reader", "agent:t-alpha:nobody", "agent:t-beta:reader"
-SALES = ["d-1f6c0a", "d-3c9d27", "d-82b4e1"]  # t-alpha sales, sorted by id
-HR, PUBLIC, BETA_SALES = "d-a07e55", "d-e4419b", "d-5b2f90"
+SALES = ["101", "102", "103"]  # t-alpha published sales, in KB order
+HR, PUBLIC, DRAFT, ARCHIVED, BETA_SALES = "104", "105", "106", "107", "201"
+WS_ALPHA, WS_BETA = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+KEYS = {"alpha-read": Key(WS_ALPHA, "read"), "beta-read": Key(WS_BETA, "read"), "alpha-write": Key(WS_ALPHA, "write")}
+CONNECTIONS = {
+    "t-alpha": Connection("kb-main", "http://fake-kb/mcp", WS_ALPHA, "alpha-read"),
+    "t-beta": Connection("kb-main", "http://fake-kb/mcp", WS_BETA, "beta-read"),
+}
 KID = "kb-test"
 SEARCH, GET, CONTEXT = "kb.documents.search", "kb.documents.get", "kb.context.get"
 
@@ -110,8 +120,17 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Env:
 
 
 class Kb:
-    def __init__(self, connector: Connector, http: httpx2.AsyncClient, session: ClientSession, issuer: StubIssuer):
+    def __init__(
+        self,
+        connector: Connector,
+        http: httpx2.AsyncClient,
+        session: ClientSession,
+        issuer: StubIssuer,
+        fake: Any = None,
+    ):
         self.connector, self.backend = connector, connector.backend
+        self.fake: FakeKb = fake
+
         self.http, self.session, self.issuer = http, session, issuer
 
     def identity(self, principal: str, **kw: Any) -> dict[str, str]:
@@ -155,18 +174,56 @@ async def connect(stack: AsyncExitStack, app: Any) -> tuple[httpx2.AsyncClient, 
 
 
 @pytest.fixture
-async def kb(env: Env) -> AsyncIterator[Kb]:
-    app, connector = server.build(env.settings, Backend())
+async def fake() -> AsyncIterator[FakeKb]:
+    kb = FakeKb(dict(KEYS))
+    async with kb.http.router.lifespan_context(kb.http):
+        yield kb
+
+
+def to(kb: FakeKb) -> Any:
+    """The adapter's HTTP client, on the fake-KB's ASGI app instead of a socket."""
+
+    def client(conn: Connection) -> httpx2.AsyncClient:
+        return httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=kb), headers={"Authorization": f"Bearer {conn.key}"}
+        )
+
+    return client
+
+
+@pytest.fixture
+def backend(fake: FakeKb) -> Backend:
+    return Backend(dict(CONNECTIONS), to(fake))
+
+
+@pytest.fixture
+async def kb(env: Env, backend: Backend, fake: FakeKb) -> AsyncIterator[Kb]:
+    app, connector = server.build(env.settings, backend)
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
-        yield Kb(connector, http, session, env.issuer)
+        yield Kb(connector, http, session, env.issuer, fake)
+
+
+def entity(id: int, title: str, body: str, *, type_id: int = 1, ws: str = WS_ALPHA, **kw: Any) -> dict[str, Any]:
+    """A kb.entities row of the fake-KB."""
+    return {
+        "id": id,
+        "workspace_id": ws,
+        "entity_type_id": type_id,
+        "title": title,
+        "summary": "s",
+        "body_md": body,
+        "status": "published",
+        "archived_at": None,
+        "updated_at": "2026-10-09T00:00:00Z",
+    } | kw
 
 
 def serving(docs: list[Document]) -> Any:
     """A KB search that ignores the collections and returns `docs` (paged like the real port)."""
 
     async def search(tenant: str, collections: list[str], query: str, *, offset: int, limit: int) -> Any:
-        return docs[offset : offset + limit], len(docs) > offset + limit
+        return docs[offset : offset + limit], len(docs) > offset + limit, True
 
     return search
 
@@ -180,6 +237,7 @@ def audit_lines(caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
 
 
 NOT_FOUND = {"code": "not_found", "message": "not found", "retryable": False}
+INTERNAL = {"code": "internal_error", "message": "internal error", "retryable": False}
 
 
 # Tools, schemas, readiness --------------------------------------------------------------------------
@@ -210,13 +268,13 @@ async def test_results_match_the_output_schemas(kb: Kb) -> None:
     jsonschema.validate(await kb.ok(CONTEXT, {"query": "contract", "max_chars": 100}), ctx)
 
 
-async def test_readyz_and_healthz(kb: Kb, env: Env) -> None:
+async def test_readyz_and_healthz(kb: Kb, env: Env, backend: Backend) -> None:
     assert (await kb.http.get("/healthz")).json() == {"status": "ok"}
     assert (await kb.http.get("/readyz")).status_code == 200
     for f in env.settings.bundle_dir.iterdir():
         f.unlink()
     settings = server.Settings(**{**vars(env.settings), "state_file": env.settings.state_file.with_name("other")})
-    app, connector = server.build(settings, Backend())
+    app, connector = server.build(settings, backend)
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
         assert (await http.get("/readyz")).status_code == 503  # GR-12: no bundle, not ready
@@ -225,12 +283,14 @@ async def test_readyz_and_healthz(kb: Kb, env: Env) -> None:
     assert connector.backend.calls.total() == 0
 
 
-async def test_stale_bundle_is_not_ready(env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_stale_bundle_is_not_ready(
+    env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, backend: Backend
+) -> None:
     keys = build_bundle(tmp_path / "old", monkeypatch, built_at="2026-01-01T00:00:00Z")  # GR-13: older than 24 h
     settings = server.Settings(
         **{**vars(env.settings), "bundle_dir": tmp_path / "old", "bundle_keys": keys, "state_file": tmp_path / "s"}
     )
-    app, _ = server.build(settings, Backend())
+    app, _ = server.build(settings, backend)
     async with AsyncExitStack() as stack:
         http, _ = await connect(stack, app)
         assert (await http.get("/readyz")).status_code == 503
@@ -247,12 +307,14 @@ async def test_input_is_validated(kb: Kb) -> None:
 
 
 async def test_search_returns_only_the_granted_collection(kb: Kb) -> None:
-    # "contract" matches sales, hr (expired grant) and public (no grant) documents of t-alpha, and t-beta's sales.
+    # "contract" matches sales, hr (expired grant), public (no grant), a sales draft and an archived sales row of
+    # t-alpha, and t-beta's sales. The KB returns the draft and the archived row too (G8): the wrapper drops them (Q3).
     r = await kb.ok(SEARCH, {"query": "contract"})
-    assert sorted(ids(r)) == ["d-1f6c0a", "d-82b4e1"]
+    assert ids(r) == ["101", "102"]
     assert r["source_refs"] == ["kb:kb-main/collection/sales"]
-    assert kb.backend.calls["search"] == 1
-    assert kb.backend.calls["collections"] == 0  # exact grants: the KB is not asked for its collections
+    assert kb.fake.calls == {"kb_search": 1, "kb_list_entity_types": 1}  # types once: entity_type_id -> collection
+    await kb.ok(SEARCH, {"query": "contract"})
+    assert kb.fake.calls == {"kb_search": 2, "kb_list_entity_types": 1}  # the types are cached
 
 
 async def test_search_query_to_the_kb_is_narrowed(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -272,7 +334,10 @@ async def test_search_query_to_the_kb_is_narrowed(kb: Kb, monkeypatch: pytest.Mo
 
 
 async def test_every_search_item_is_checked_again(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
-    every = kb.backend.documents["t-alpha"]
+    every = [
+        Document(d, c, "t", "contract", "2026-10-01T00:00:00Z")
+        for d, c in zip(["101", "102", "103", "104", "105"], ["sales", "sales", "sales", "hr", "public"], strict=True)
+    ]
     monkeypatch.setattr(kb.backend, "search", serving(every))  # a KB that ignores the filter
     r = await kb.ok(SEARCH, {"query": "anything", "limit": 50})
     assert sorted(ids(r)) == SALES
@@ -298,20 +363,19 @@ async def test_named_collection_without_grant_is_not_found_before_the_kb(kb: Kb)
         assert await kb.error(CONTEXT, {"query": "contract", "collections": collections}) == NOT_FOUND
     assert kb.backend.calls.total() == 0  # GR-17 and zero KB calls on refusals
     r = await kb.ok(SEARCH, {"query": "contract", "collections": ["sales", "sales"]})
-    assert sorted(ids(r)) == ["d-1f6c0a", "d-82b4e1"]
+    assert sorted(ids(r)) == ["101", "102"]
     assert (await kb.ok(SEARCH, {"query": "contract", "collections": []}))["items"] == []
 
 
 async def test_get_other_collection_or_tenant_is_not_found_like_a_missing_one(kb: Kb) -> None:
     assert (await kb.ok(GET, {"document_id": SALES[0]}))["collection"] == "sales"
-    replies = [await kb.call(GET, {"document_id": d}) for d in (HR, PUBLIC, BETA_SALES, "d-000000")]
+    replies = [await kb.call(GET, {"document_id": d}) for d in (HR, PUBLIC, BETA_SALES, "999")]
     assert all(r == replies[-1] for r in replies), replies  # SC-05: byte for byte as for a missing document
     assert replies[-1]["structuredContent"] == NOT_FOUND
 
 
 async def test_get_collection_comes_from_the_kb(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
-    hr = kb.backend.documents["t-alpha"][3]
-    assert hr.collection == "hr"
+    assert (await kb.backend.get_document("t-alpha", HR)).collection == "hr"  # type: ignore[union-attr]
     r = await kb.call(GET, {"document_id": HR, "collection": "sales"})  # GR-01: the argument is ignored
     assert r["structuredContent"] == NOT_FOUND
 
@@ -323,8 +387,8 @@ async def test_expired_grant_gives_nothing(kb: Kb) -> None:
 
 async def test_tenants_with_the_same_collection_name_do_not_mix(kb: Kb) -> None:
     beta = await kb.ok(SEARCH, {"query": "contract"}, principal=BETA_READER)
-    assert ids(beta) == [BETA_SALES]
-    assert kb.backend.calls["collections"] == 1  # mask collection/*: the KB lists t-beta's collections
+    assert ids(beta) == [BETA_SALES]  # t-beta's own `sales`: its key and workspace (Q2)
+    assert kb.fake.calls["kb_list_entity_types"] == 1  # mask collection/*: the collections come from the KB
     assert await kb.error(GET, {"document_id": SALES[0]}, principal=BETA_READER) == NOT_FOUND
     alpha = await kb.ok(SEARCH, {"query": "beta"})
     assert BETA_SALES not in ids(alpha)
@@ -347,7 +411,7 @@ async def test_tenant_without_kb_connection_sees_nothing(kb: Kb, monkeypatch: py
 
 async def test_identity_in_arguments_changes_nothing(kb: Kb) -> None:
     args = {"query": "contract", "tenant_id": "t-beta", "agent_id": BETA_READER, "principal": BETA_READER}
-    assert sorted(ids(await kb.ok(SEARCH, args))) == ["d-1f6c0a", "d-82b4e1"]  # SC-03
+    assert sorted(ids(await kb.ok(SEARCH, args))) == ["101", "102"]  # SC-03
 
 
 async def test_bad_identity_is_refused_before_the_kb(kb: Kb) -> None:
@@ -387,11 +451,11 @@ async def test_pages_and_cursor_binding(kb: Kb) -> None:
 
 async def test_context_joins_excerpts_within_the_budget(kb: Kb) -> None:
     full = await kb.ok(CONTEXT, {"query": "contract"})
-    docs = {d.id: d for d in kb.backend.documents["t-alpha"]}
-    expected = "\n\n".join(f"## {docs[i].title}\n{docs[i].content}" for i in ("d-1f6c0a", "d-82b4e1"))
+    docs = {str(e["id"]): e for e in kb.fake.entities}
+    expected = "\n\n".join(f"## {docs[i]['title']}\n{docs[i]['body_md']}" for i in ("101", "102"))
     assert full["context"] == expected
     assert full["complete"] is True and full["partial_reasons"] == []
-    assert [d["id"] for d in full["documents"]] == ["d-1f6c0a", "d-82b4e1"]
+    assert [d["id"] for d in full["documents"]] == ["101", "102"]
     assert full["source_refs"] == ["kb:kb-main/collection/sales"]
 
     cut = await kb.ok(CONTEXT, {"query": "contract", "max_chars": 100})
@@ -399,12 +463,12 @@ async def test_context_joins_excerpts_within_the_budget(kb: Kb) -> None:
     assert cut["complete"] is False and cut["partial_reasons"] == ["truncated"]
 
     one = await kb.ok(CONTEXT, {"query": "contract", "max_documents": 1})
-    assert [d["id"] for d in one["documents"]] == ["d-1f6c0a"] and one["complete"] is False
+    assert [d["id"] for d in one["documents"]] == ["101"] and one["complete"] is False
 
-    exact = len(f"## {docs['d-1f6c0a'].title}\n{docs['d-1f6c0a'].content}")
+    exact = len(f"## {docs['101']['title']}\n{docs['101']['body_md']}")
     assert exact < 100
     edge = await kb.ok(CONTEXT, {"query": "contract", "max_chars": 100})
-    assert [d["id"] for d in edge["documents"]] == ["d-1f6c0a", "d-82b4e1"]  # the second one is cut, not dropped
+    assert [d["id"] for d in edge["documents"]] == ["101", "102"]  # the second one is cut, not dropped
 
 
 async def test_context_stops_when_the_budget_is_spent(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -422,11 +486,23 @@ async def test_context_stops_when_the_budget_is_spent(kb: Kb, monkeypatch: pytes
 
 
 async def test_kb_failures_are_mcc05_codes(kb: Kb) -> None:
-    kb.backend.failure = "rate_limited"
+    kb.fake.http_status = 429  # with Retry-After: 7
     err = await kb.error(SEARCH, {"query": "contract"})
-    assert err == {"code": "rate_limited", "message": "KB rate limit", "retryable": True, "retry_after_s": 5}
-    kb.backend.failure = "temporarily_unavailable"
-    assert (await kb.error(GET, {"document_id": SALES[0]}))["code"] == "temporarily_unavailable"
+    assert err == {"code": "rate_limited", "message": "KB rate limit", "retryable": True, "retry_after_s": 7}
+    for status in (502, 503, 504, 500):
+        kb.fake.http_status = status
+        assert await kb.error(GET, {"document_id": SALES[0]}) == {
+            "code": "temporarily_unavailable",
+            "message": "KB is not available",
+            "retryable": True,
+        }
+    for status in (401, 403):  # the wrapper's own key is refused: not the caller's identity
+        kb.fake.http_status = status
+        assert await kb.error(GET, {"document_id": SALES[0]}) == INTERNAL
+    kb.fake.http_status, kb.fake.retry_after = 429, None
+    assert (await kb.error(GET, {"document_id": SALES[0]}))["retry_after_s"] == 5  # no Retry-After: the default
+    kb.fake.retry_after = "soon"
+    assert (await kb.error(GET, {"document_id": SALES[0]}))["retry_after_s"] == 5
 
 
 async def test_unexpected_error_is_internal_error_without_its_text(
@@ -449,8 +525,8 @@ async def test_audit_line_per_call_without_query_or_content(kb: Kb, caplog: pyte
     await kb.error(SEARCH, {"query": "pipeline", "collections": ["hr"]})
     lines = audit_lines(caplog)
     assert [(a["tool"], a["outcome"], a["kb_calls"]) for a in lines] == [
-        (SEARCH, "ok", 1),
-        (GET, "not_found", 1),
+        (SEARCH, "ok", 2),  # kb_list_entity_types (first call, then cached) + kb_search
+        (GET, "not_found", 1),  # kb_get: the KB names the collection (hr), then no grant
         (SEARCH, "not_found", 0),
     ]
     assert lines[0]["grant_id"] == ["alpha-reader-kb-sales"]
@@ -477,9 +553,9 @@ def test_configuration_is_checked() -> None:
         server.NoVerifier().verify({})
 
 
-async def test_production_without_identity_keys_refuses_every_call(env: Env) -> None:
+async def test_production_without_identity_keys_refuses_every_call(env: Env, backend: Backend) -> None:
     settings = server.Settings(**{**vars(env.settings), "profile": "production", "test_issuer_key": None})
-    app, connector = server.build(settings, Backend())
+    app, connector = server.build(settings, backend)
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
         err = await Kb(connector, http, session, env.issuer).error(SEARCH, {"query": "contract"})
@@ -497,8 +573,7 @@ def test_main_refuses_to_start_on_bad_config(caplog: pytest.LogCaptureFixture) -
 
 def many(kb: Kb, n: int, content: str = "contract") -> None:
     """n more sales documents of t-alpha, ids after the fixtures."""
-    docs = [Document(f"d-z{i:03}", "sales", f"Extra {i}", content, "2026-10-09T00:00:00Z") for i in range(n)]
-    kb.backend.documents["t-alpha"] += docs
+    kb.fake.entities += [entity(300 + i, f"Extra {i}", content) for i in range(n)]
 
 
 async def test_default_limits(kb: Kb) -> None:
@@ -508,7 +583,7 @@ async def test_default_limits(kb: Kb) -> None:
     assert page["complete"] is True and page["partial_reasons"] == []
     ctx = await kb.ok(CONTEXT, {"query": "contract"})
     assert len(ctx["documents"]) == 5  # max_documents default 5
-    kb.backend.documents["t-alpha"] = [Document("d-big", "sales", "Big", "x" * 9000, "2026-10-09T00:00:00Z")]
+    kb.fake.entities[:] = [entity(900, "Big", "x" * 9000)]
     big = await kb.ok(CONTEXT, {"query": "x"})
     assert len(big["context"]) == 4000  # max_chars default 4000
 
@@ -528,7 +603,7 @@ async def test_context_no_room_left_stops_without_a_separator(kb: Kb, monkeypatc
 async def test_get_result_and_errors_exactly(kb: Kb) -> None:
     got = await kb.ok(GET, {"document_id": SALES[0]})
     assert got == {
-        "id": "d-1f6c0a",
+        "id": "101",
         "collection": "sales",
         "title": "Pricing 2027",
         "content": "Pricing plan: three tiers. Contract renewal in Q2.",
@@ -548,7 +623,7 @@ async def test_get_result_and_errors_exactly(kb: Kb) -> None:
         "message": "cursor is not valid for this caller and query",
         "retryable": False,
     }
-    kb.backend.failure = "temporarily_unavailable"
+    kb.fake.http_status = 503
     assert await kb.error(SEARCH, {"query": "contract"}) == {
         "code": "temporarily_unavailable",
         "message": "KB is not available",
@@ -580,7 +655,9 @@ async def test_tool_timeout_from_the_manifest(kb: Kb, monkeypatch: pytest.Monkey
     assert seen == [10.0]
 
 
-async def test_identity_is_bound_to_the_tool_and_arguments(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_identity_is_bound_to_the_tool_and_arguments(
+    env: Env, monkeypatch: pytest.MonkeyPatch, backend: Backend
+) -> None:
     seen: list[dict[str, Any]] = []
     real = server.StubVerifier.verify
 
@@ -589,18 +666,18 @@ async def test_identity_is_bound_to_the_tool_and_arguments(env: Env, monkeypatch
         return real(self, headers, **binding)
 
     monkeypatch.setattr(server.StubVerifier, "verify", verify)
-    app, connector = server.build(env.settings, Backend())
+    app, connector = server.build(env.settings, backend)
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
         await Kb(connector, http, session, env.issuer).ok(GET, {"document_id": SALES[0]})
     assert seen == [{"tool": GET, "arguments": {"document_id": SALES[0]}}]
 
 
-async def test_no_bundle_get_does_not_reach_the_kb(env: Env) -> None:
+async def test_no_bundle_get_does_not_reach_the_kb(env: Env, backend: Backend) -> None:
     for f in env.settings.bundle_dir.iterdir():
         f.unlink()
     settings = server.Settings(**{**vars(env.settings), "state_file": env.settings.state_file.with_name("other")})
-    app, connector = server.build(settings, Backend())
+    app, connector = server.build(settings, backend)
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
         k = Kb(connector, http, session, env.issuer)
@@ -620,17 +697,17 @@ async def test_tenant_without_a_kb(kb: Kb, monkeypatch: pytest.MonkeyPatch) -> N
     assert kb.backend.calls.total() == 0
 
 
-async def test_backend_counts_calls_and_knows_only_its_tenants() -> None:
-    b = Backend()
+async def test_backend_counts_calls_and_knows_only_its_tenants(backend: Backend) -> None:
+    b = backend
     assert await b.list_collections("t-gamma") == [] and await b.get_document("t-gamma", SALES[0]) is None
-    assert await b.search("t-gamma", ["sales"], "contract", offset=0, limit=5) == ([], False)
-    page, more = await b.search("t-alpha", ["sales", "hr"], "contract", offset=1, limit=1)
-    assert [d.id for d in page] == ["d-1f6c0a"] and more is True  # (collection, id): hr d-a07e55, sales d-1f6c0a…
-    assert await b.search("t-alpha", ["sales", "hr"], "contract", offset=2, limit=1) == (
-        [d for d in b.documents["t-alpha"] if d.id == "d-82b4e1"],
-        False,
-    )
-    assert b.calls == {"collections": 1, "get": 1, "search": 3}
+    assert await b.search("t-gamma", ["sales"], "contract", offset=0, limit=5) == ([], False, True)
+    assert b.calls.total() == 0  # no connection for the tenant: no KB call
+    # KB order (id): 101, 102 sales, 104 hr, 106 draft, 107 archived; the wrapper keeps 101, 102, 104
+    page, more, complete = await b.search("t-alpha", ["sales", "hr"], "contract", offset=1, limit=1)
+    assert [d.id for d in page] == ["102"] and more is True and complete is True
+    page, more, complete = await b.search("t-alpha", ["sales", "hr"], "contract", offset=2, limit=1)
+    assert [(d.id, d.collection) for d in page] == [("104", "hr")] and more is False and complete is True
+    assert b.calls == {"kb_list_entity_types": 1, "kb_search": 2}
 
 
 async def test_audit_lines_exactly(kb: Kb, caplog: pytest.LogCaptureFixture) -> None:
@@ -651,7 +728,7 @@ async def test_audit_lines_exactly(kb: Kb, caplog: pytest.LogCaptureFixture) -> 
             "bundle_version": "0" * 40,  # GR-14: the bundle that allowed it
             "grant_id": ["alpha-reader-kb-sales"],
             "outcome": "ok",
-            "kb_calls": 1,
+            "kb_calls": 2,  # kb_list_entity_types + kb_get
         }
     ]
     assert lines[1]["grant_id"] == ["alpha-reader-kb-sales"] and lines[1]["outcome"] == "ok"
@@ -699,14 +776,16 @@ async def test_internal_error_frames_go_to_the_errors_log(
 # Cycle 2: a slow KB, long documents, readiness, the production verifier, logging, main() ---------------
 
 
-async def test_a_slow_kb_times_out_by_the_manifest(env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_a_slow_kb_times_out_by_the_manifest(
+    env: Env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, backend: Backend
+) -> None:
     manifest = yaml.safe_load((KB / "gxg-manifest.yaml").read_text())
     for t in manifest["tools"]:
         t["limits"]["timeout_s"] = 0.2
     (tmp_path / "gxg-manifest.yaml").write_text(yaml.safe_dump(manifest))
     monkeypatch.setattr(tools_module, "MANIFEST", tmp_path / "gxg-manifest.yaml")
-    backend = Backend()
-    backend.delay_s = 5  # the async port is cancelled by asyncio.wait_for, a hung KB does not block the process
+    backend._client = to(slow := FakeKb(dict(KEYS)))
+    slow.delay_s = 5  # the async port is cancelled by asyncio.wait_for, a hung KB does not block the process
     app, connector = server.build(env.settings, backend)
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
@@ -722,35 +801,32 @@ async def test_a_slow_kb_times_out_by_the_manifest(env: Env, tmp_path: Path, mon
 
 
 async def test_long_kb_documents_are_cut_to_the_output_schemas(kb: Kb) -> None:
-    long = Document("d-long", "sales", "T" * 400, "contract " + "x" * 30000, "2026-10-01T00:00:00Z")
-    kb.backend.documents["t-alpha"].append(long)
-    got = await kb.ok(GET, {"document_id": "d-long"})
+    kb.fake.entities.append(entity(900, "T" * 400, "contract " + "x" * 30000))
+    got = await kb.ok(GET, {"document_id": "900"})
     assert len(got["title"]) == 300 and len(got["content"]) == 20000 and got["truncated"] is True
     jsonschema.validate(got, load_schema("schemas/document-get.output.json"))
     found = await kb.ok(SEARCH, {"query": "contract", "limit": 50})
-    item = next(i for i in found["items"] if i["id"] == "d-long")
+    item = next(i for i in found["items"] if i["id"] == "900")
     assert len(item["title"]) == 300 and len(item["excerpt"]) == 500
     jsonschema.validate(found, load_schema("../../schemas/search-result.schema.json"))
     ctx = await kb.ok(CONTEXT, {"query": "xxx", "max_chars": 8000})
-    assert ctx["documents"] == [{"id": "d-long", "title": "T" * 300, "source_ref": "kb:kb-main/collection/sales"}]
+    assert ctx["documents"] == [{"id": "900", "title": "T" * 300, "source_ref": "kb:kb-main/collection/sales"}]
     assert ctx["context"].startswith("## " + "T" * 300 + "\n") and len(ctx["context"]) == 8000
     jsonschema.validate(ctx, load_schema("schemas/context-get.output.json"))
-    exact = Document("d-exact", "sales", "E", "y" * 20000, "2026-10-01T00:00:00Z")
-    kb.backend.documents["t-alpha"].append(exact)
-    assert (await kb.ok(GET, {"document_id": "d-exact"}))["truncated"] is False
+    kb.fake.entities.append(entity(901, "E", "y" * 20000))
+    assert (await kb.ok(GET, {"document_id": "901"}))["truncated"] is False
 
 
 async def test_readyz_needs_the_kb(kb: Kb, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
-    monkeypatch.setattr(kb.backend, "ready", lambda: False)
+    kb.fake.http_status = 503
     r = await kb.http.get("/readyz")
     assert (r.status_code, r.json()) == (503, {"status": "not_ready"})
     events = [json.loads(m.getMessage()) for m in caplog.records if m.name == "kb_connector"]
-    assert events[-1] == {"event": "not_ready", "reasons": ["kb_unreachable"]}
-    monkeypatch.setattr(kb.backend, "ready", lambda: True)
+    assert events[-1] == {"event": "not_ready", "reasons": ["kb_not_ready"]}
+    kb.fake.http_status = None
     r = await kb.http.get("/readyz")
     assert (r.status_code, r.json()) == (200, {"status": "ready"})
-    assert Backend().ready() is True
 
 
 def cf_identity(key: Ed25519PrivateKey, tool: str, args: dict[str, Any], *, aud: str = "kb", kid: str = "cf-1") -> str:
@@ -770,14 +846,16 @@ def cf_identity(key: Ed25519PrivateKey, tool: str, args: dict[str, Any], *, aud:
     return jwt.encode(claims, key, algorithm="EdDSA", headers={"typ": cf.TYP, "kid": kid})
 
 
-async def test_contextforge_identity_keys_select_the_kit_verifier(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+async def test_contextforge_identity_keys_select_the_kit_verifier(
+    env: Env, caplog: pytest.LogCaptureFixture, backend: Backend
+) -> None:
     caplog.set_level(logging.INFO)
     key, other = Ed25519PrivateKey.generate(), Ed25519PrivateKey.generate()
     keys = f"cf-0={public_key(other.public_key())}, cf-1={public_key(key.public_key())}"
     settings = server.Settings(
         **{**vars(env.settings), "profile": "production", "test_issuer_key": None, "identity_keys": keys}
     )
-    app, connector = server.build(settings, Backend())
+    app, connector = server.build(settings, backend)
     args = {"document_id": SALES[0]}
     async with AsyncExitStack() as stack:
         http, session = await connect(stack, app)
@@ -926,28 +1004,14 @@ def test_no_verifier_refuses_with_a_reason() -> None:
     assert exc.value.code == "unauthenticated" and exc.value.reason == "no identity verifier configured"
 
 
-def test_backend_is_fast_by_default() -> None:
-    b = Backend()
-    assert b.delay_s == 0
-
-    async def three() -> None:
-        await b.list_collections("t-alpha")
-        await b.get_document("t-alpha", SALES[0])
-        await b.search("t-alpha", ["sales"], "x", offset=0, limit=1)
-
-    started = time.monotonic()
-    asyncio.run(three())
-    assert time.monotonic() - started < 0.5
-
-
 async def test_nothing_readable_has_no_next_page(kb: Kb) -> None:
     r = await kb.ok(SEARCH, {"query": "contract", "limit": 1}, principal=ALPHA_NOBODY)
     assert r["items"] == [] and r["next_cursor"] is None
 
 
-async def test_bundle_loaded_event_at_start(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+async def test_bundle_loaded_event_at_start(env: Env, caplog: pytest.LogCaptureFixture, backend: Backend) -> None:
     caplog.set_level(logging.INFO)
-    server.build(env.settings, Backend())
+    server.build(env.settings, backend)
     events = [json.loads(m.getMessage()) for m in caplog.records if m.name == "kb_connector"]
     assert events == [{"event": "bundle_loaded", "bundle_version": "0" * 40}]
 
@@ -962,3 +1026,252 @@ async def test_mcp_endpoint_is_stateless_json_named_kb(kb: Kb) -> None:
     assert r.headers["content-type"].startswith("application/json")  # json_response
     assert "mcp-session-id" not in r.headers  # stateless_http: one request, one answer, no session
     assert r.json()["result"]["serverInfo"]["name"] == "kb"
+
+
+# Cycle 3: the adapter on the audited KB contract (docs/audits/kb-gap-audit.md) --------------------------
+
+
+async def test_adapter_sends_the_audited_arguments_with_the_read_key(backend: Backend, fake: FakeKb) -> None:
+    await backend.search("t-alpha", ["sales"], "contract", offset=0, limit=2)
+    await backend.search("t-beta", ["hr", "sales"], "contract", offset=40, limit=20)
+    await backend.get_document("t-alpha", "101")
+    window = {"limit": 50, "include_body": True}  # always the KB's whole window: it has no offset (G9)
+    assert fake.requests == [
+        ("kb_list_entity_types", WS_ALPHA, {}),
+        ("kb_search", WS_ALPHA, {"query": "contract", "entity_types": ["sales"]} | window),
+        ("kb_list_entity_types", WS_BETA, {}),  # cached per connection
+        ("kb_search", WS_BETA, {"query": "contract", "entity_types": ["hr", "sales"]} | window),
+        ("kb_get", WS_ALPHA, {"id": 101}),  # the id as the KB's integer
+    ]
+
+
+async def test_the_kb_window_cut_is_reported(kb: Kb) -> None:
+    many(kb, 60)  # 62 published sales matches for "contract": more than the KB's 50-row window
+    first = await kb.ok(SEARCH, {"query": "contract", "limit": 20})
+    assert first["complete"] is True and first["next_cursor"] is not None
+    deep = await kb.ok(SEARCH, {"query": "contract", "limit": 20, "cursor": first["next_cursor"]})
+    deeper = await kb.ok(SEARCH, {"query": "contract", "limit": 20, "cursor": deep["next_cursor"]})
+    assert deeper["complete"] is False and deeper["partial_reasons"] == ["truncated"]  # G9: the KB cut it
+    assert deeper["next_cursor"] is None
+    ctx = await kb.ok(CONTEXT, {"query": "contract", "max_documents": 2})
+    assert ctx["complete"] is False  # more matches than max_documents
+
+
+async def test_rows_of_another_workspace_drafts_and_archived_are_dropped(kb: Kb) -> None:
+    # kb_get does not check the workspace (G6): t-alpha asking for t-beta's row by id gets not_found
+    assert await kb.error(GET, {"document_id": BETA_SALES}) == NOT_FOUND
+    assert kb.fake.calls["kb_get"] == 1
+    for hidden in (DRAFT, ARCHIVED):  # Q3: readers get published, not archived
+        assert await kb.error(GET, {"document_id": hidden}) == NOT_FOUND
+    kb.fake.entities.append(entity(902, "Other ws contract", "contract", ws=WS_BETA))
+    kb.fake.keys["alpha-read"] = Key(WS_BETA, "read")  # a KB that ignores the key's workspace in search
+    r = await kb.ok(SEARCH, {"query": "contract", "limit": 50})
+    assert r["items"] == []  # every row is of another workspace than the connection's
+
+
+async def test_ids_the_kb_cannot_have_are_not_found_without_a_call(kb: Kb) -> None:
+    for bad in ("0", "-1", "abc", "1e3", "01", "1" * 19, "d-101"):
+        assert await kb.error(GET, {"document_id": bad}) == NOT_FOUND, bad
+    assert kb.fake.calls.total() == 0
+
+
+async def test_unknown_or_inactive_entity_type_is_not_found(kb: Kb) -> None:
+    kb.fake.entities.append(entity(903, "Retired", "contract", type_id=4))  # type 4 is not active
+    kb.fake.entities.append(entity(904, "Unknown", "contract", type_id=99))
+    for i in ("903", "904"):
+        assert await kb.error(GET, {"document_id": i}) == NOT_FOUND
+
+
+async def test_contract_drift_is_internal_error_without_the_kb_text(kb: Kb, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    await kb.backend.list_collections("t-alpha")  # types cached: `answer` replaces the search result only
+    for answer in ({"unexpected": "shape kb-secret-text"}, [{"id": "101"}], [{"id": True}], ["row"], "not a list"):
+        kb.fake.answer = answer
+        assert await kb.error(SEARCH, {"query": "contract"}) == INTERNAL, answer
+    kb.fake.answer = None
+    kb.backend._types.clear()
+    kb.fake.entity_types.append({"id": "x", "key": "bad", "label": "Bad", "is_active": True})
+    assert await kb.error(SEARCH, {"query": "contract"}) == INTERNAL
+    assert "kb-secret-text" not in caplog.text
+
+
+async def test_kb_tool_errors_and_non_json_are_internal_errors(kb: Kb, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    kb.fake.text = "not json"
+    assert await kb.error(GET, {"document_id": SALES[0]}) == INTERNAL
+    kb.fake.text, kb.fake.tool_error = None, True
+    assert await kb.error(GET, {"document_id": SALES[0]}) == INTERNAL
+    assert await kb.error(SEARCH, {"query": "contract"}) == INTERNAL
+    assert "kb-secret-text" not in caplog.text  # the KB's text never leaves the adapter (SEC-18)
+
+
+async def test_structured_answers_and_list_wrappers_are_accepted(kb: Kb) -> None:
+    rows = [e for e in kb.fake.entities if e["id"] in (101, 102)]
+    await kb.backend.list_collections("t-alpha")  # the entity types are cached: `answer` applies to the next calls
+    for answer in ({"items": rows}, {"entities": rows}):
+        kb.fake.answer = answer
+        assert ids(await kb.ok(SEARCH, {"query": "contract"})) == ["101", "102"]
+    kb.fake.answer = {"item": rows[0]}
+    assert (await kb.ok(GET, {"document_id": "101"}))["id"] == "101"
+
+
+async def test_readyz_needs_the_three_tools_and_no_write_tool(kb: Kb) -> None:
+    assert (await kb.http.get("/readyz")).status_code == 200
+    kb.backend._conns["t-alpha"] = Connection("kb-main", "http://fake-kb/mcp", WS_ALPHA, "alpha-write")
+    assert (await kb.http.get("/readyz")).status_code == 503  # a write key lists kb_create (G4, Q4)
+    kb.backend._conns["t-alpha"] = CONNECTIONS["t-alpha"]
+    assert (await kb.http.get("/readyz")).status_code == 200
+    kb.fake.mcp.disable(names={"kb_list_entity_types"})
+    assert (await kb.http.get("/readyz")).status_code == 503  # a needed tool is missing (G15)
+
+
+async def test_no_connections_is_not_ready(env: Env) -> None:
+    app, _ = server.build(env.settings, Backend({}))
+    async with AsyncExitStack() as stack:
+        http, _ = await connect(stack, app)
+        assert (await http.get("/readyz")).status_code == 503
+
+
+async def test_calls_to_one_connection_are_sequential(backend: Backend, fake: FakeKb) -> None:
+    fake.delay_s = 0.02
+    await asyncio.gather(*(backend.get_document("t-alpha", "101") for _ in range(4)))
+    assert fake.max_active == 1  # one request at a time per connection (G13)
+    fake.max_active = 0
+    await asyncio.gather(backend.get_document("t-alpha", "101"), backend.get_document("t-beta", "201"))
+    assert fake.max_active == 2  # the lock is per connection, not global
+
+
+async def test_transport_errors_are_temporarily_unavailable(env: Env) -> None:
+    def refused(conn: Connection) -> httpx2.AsyncClient:
+        def fail(request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("refused", request=request)
+
+        return httpx2.AsyncClient(transport=httpx2.MockTransport(fail))
+
+    b = Backend(dict(CONNECTIONS), refused)
+    with pytest.raises(backend_module.GxgError) as exc:
+        await b.get_document("t-alpha", "101")
+    assert exc.value.to_dict() == {
+        "code": "temporarily_unavailable",
+        "message": "KB is not available",
+        "retryable": True,
+    }
+    assert await b.ready() is False
+
+
+def test_connections_file(tmp_path: Path) -> None:
+    (tmp_path / "alpha.key").write_text("alpha-read\n")
+    (tmp_path / "c.json").write_text(
+        json.dumps(
+            {
+                "t-alpha": {
+                    "connection_id": "kb-main",
+                    "url": "http://kb/mcp",
+                    "workspace_id": WS_ALPHA,
+                    "key_file": str(tmp_path / "alpha.key"),
+                }
+            }
+        )
+    )
+    assert backend_module.load_connections(tmp_path / "c.json") == {
+        "t-alpha": Connection("kb-main", "http://kb/mcp", WS_ALPHA, "alpha-read")
+    }
+    s = server.Settings.from_env({"KB_CONNECTIONS_FILE": str(tmp_path / "c.json")})
+    assert s.connections_file == tmp_path / "c.json"
+    assert server.Settings.from_env({}).connections_file is None
+
+
+def test_default_http_client_sends_the_key_and_a_connect_timeout() -> None:
+    c = backend_module.http_client(CONNECTIONS["t-alpha"])
+    assert c.headers["authorization"] == "Bearer alpha-read" and c.timeout.connect == 5.0
+    assert c.timeout.read is None and c.follow_redirects is False
+
+
+async def test_the_fake_refuses_writes_with_a_read_key(fake: FakeKb) -> None:
+    """The shape of AC-M6-04 on the fake (not on the KB): a read key does not see or run kb_create."""
+
+    async def call(key: str) -> Any:
+        async with httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=fake), headers={"authorization": f"Bearer {key}"}
+        ) as h:
+            async with streamable_http_client("http://fake-kb/mcp", http_client=h) as (r, w), ClientSession(r, w) as s:
+                await s.initialize()
+                names = {t.name for t in (await s.list_tools()).tools}
+                res = await s.call_tool(
+                    "kb_create", {"title": "probe", "summary": "s", "body_md": "b", "entity_type_id": 1}
+                )
+                return names, res.is_error
+
+    before = len(fake.entities)
+    assert await call("alpha-read") == ({"kb_search", "kb_get", "kb_list_entity_types"}, True)
+    assert len(fake.entities) == before
+    assert (await call("alpha-write"))[1] is False and len(fake.entities) == before + 1
+
+
+async def test_kb_key_refusal_is_its_own_internal_error(kb: Kb, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    for status in (401, 403, 404, 400):
+        kb.fake.http_status = status
+        await kb.error(GET, {"document_id": SALES[0]})
+    errors = [a["error"] for a in audit_lines(caplog)]
+    assert errors[:2] == ["KeyRefused", "KeyRefused"]  # an operator sees our key was refused
+    assert "KeyRefused" not in errors[2:]
+
+
+async def test_entity_types_are_cached_for_the_ttl(
+    backend: Backend, fake: FakeKb, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = [1000.0]
+    monkeypatch.setattr(backend_module.time, "monotonic", lambda: now[0])
+    await backend.list_collections("t-alpha")
+    now[0] += backend_module.TYPES_TTL_S - 1
+    await backend.list_collections("t-alpha")
+    assert fake.calls["kb_list_entity_types"] == 1
+    now[0] += 1  # exactly the TTL: fetched again
+    await backend.list_collections("t-alpha")
+    assert fake.calls["kb_list_entity_types"] == 2
+
+
+async def test_only_active_entity_types_are_collections(backend: Backend, monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [{"id": 1, "key": "sales", "is_active": True}, {"id": 2, "key": "hr", "is_active": False}]
+
+    async def call(tenant: str, tool: str, args: dict[str, Any]) -> Any:
+        assert (tool, args) == ("kb_list_entity_types", {})
+        return rows
+
+    monkeypatch.setattr(backend, "_call", call)
+    assert await backend.list_collections("t-alpha") == ["sales"]
+    backend._types.clear()
+    rows.append({"id": 3, "key": "public"})  # no is_active: not the contract
+    with pytest.raises(backend_module.ContractError):
+        await backend.list_collections("t-alpha")
+
+
+async def test_missing_fields_become_empty_and_summary_stands_in_for_the_body(kb: Kb) -> None:
+    bare = {"id": 905, "workspace_id": WS_ALPHA, "entity_type_id": 1, "status": "published", "archived_at": None}
+    kb.fake.entities += [bare, entity(906, "Only summary", "", summary="the summary")]
+    got = await kb.ok(GET, {"document_id": "905"})
+    assert (got["title"], got["content"], got["updated_at"]) == ("", "", "")
+    assert (await kb.ok(GET, {"document_id": "906"}))["content"] == "the summary"
+
+
+async def test_build_reads_the_connections_file(env: Env, tmp_path: Path) -> None:
+    (tmp_path / "k").write_text("alpha-read")
+    (tmp_path / "c.json").write_text(
+        json.dumps(
+            {
+                "t-alpha": {
+                    "connection_id": "kb-main",
+                    "url": "http://kb/mcp",
+                    "workspace_id": WS_ALPHA,
+                    "key_file": str(tmp_path / "k"),
+                }
+            }
+        )
+    )
+    settings = server.Settings(**{**vars(env.settings), "connections_file": tmp_path / "c.json"})
+    _, connector = server.build(settings)
+    assert connector.backend.connections == {"t-alpha": "kb-main"}
+    assert connector.backend._conns["t-alpha"].key == "alpha-read"
+    _, none = server.build(server.Settings(**{**vars(env.settings), "connections_file": None}))
+    assert none.backend.connections == {}

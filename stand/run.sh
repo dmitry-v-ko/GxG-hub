@@ -13,7 +13,7 @@ uv run python stand/init.py
 docker build -q ${DOCKER_BUILD_FLAGS:-} --build-arg KEEP_TEST_CONTROLS=1 -t gxg-demo:stand \
   -f connectors/demo/Dockerfile . > /dev/null
 # shellcheck disable=SC2086
-docker build -q ${DOCKER_BUILD_FLAGS:-} -t gxg-kb:stand -f connectors/kb/Dockerfile . > /dev/null  # M6
+docker build -q ${DOCKER_BUILD_FLAGS:-} --build-arg KEEP_FAKE_KB=1 -t gxg-kb:stand -f connectors/kb/Dockerfile . > /dev/null  # M6: kb and fake-kb
 docker compose up -d --wait
 uv run python stand/bootstrap.py
 mkdir -p "$out"

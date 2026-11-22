@@ -1,23 +1,19 @@
 {
-  "_comment": "Synthetic fake-KB (M6): stands in for the KB of gxg_agents_v2 until the gap audit. No real data.",
-  "tenants": {
-    "t-alpha": {
-      "connection": "kb-main",
-      "collections": {"sales": "Alpha sales", "hr": "Alpha HR", "public": "Alpha public"},
-      "documents": [
-        {"id": "d-1f6c0a", "collection": "sales", "title": "Pricing 2027", "content": "Pricing plan: three tiers. Contract renewal in Q2.", "updated_at": "2026-10-01T09:00:00Z"},
-        {"id": "d-82b4e1", "collection": "sales", "title": "Contract template", "content": "Standard contract with renewal clause and discount table.", "updated_at": "2026-10-03T12:30:00Z"},
-        {"id": "d-3c9d27", "collection": "sales", "title": "Pipeline review", "content": "Pipeline review notes: two renewals at risk.", "updated_at": "2026-10-05T08:15:00Z"},
-        {"id": "d-a07e55", "collection": "hr", "title": "Salary bands", "content": "Salary bands and the renewal of employment contracts.", "updated_at": "2026-09-20T10:00:00Z"},
-        {"id": "d-e4419b", "collection": "public", "title": "Company profile", "content": "Public profile. Contract partners listed on the site.", "updated_at": "2026-08-11T16:45:00Z"}
-      ]
-    },
-    "t-beta": {
-      "connection": "kb-main",
-      "collections": {"sales": "Beta sales"},
-      "documents": [
-        {"id": "d-5b2f90", "collection": "sales", "title": "Beta contract", "content": "Beta contract renewal terms. Confidential to t-beta.", "updated_at": "2026-10-02T11:00:00Z"}
-      ]
-    }
-  }
+  "_comment": "Synthetic fake-KB (M6) in the shape of kb.entities / kb_list_entity_types (docs/audits/kb-gap-audit.md). No real data. Two workspaces: one per tenant (Q2).",
+  "entity_types": [
+    {"id": 1, "key": "sales", "label": "Sales", "is_active": true},
+    {"id": 2, "key": "hr", "label": "HR", "is_active": true},
+    {"id": 3, "key": "public", "label": "Public", "is_active": true},
+    {"id": 4, "key": "retired", "label": "Retired type", "is_active": false}
+  ],
+  "entities": [
+    {"id": 101, "workspace_id": "11111111-1111-4111-8111-111111111111", "entity_type_id": 1, "title": "Pricing 2027", "summary": "Pricing plan", "body_md": "Pricing plan: three tiers. Contract renewal in Q2.", "status": "published", "archived_at": null, "updated_at": "2026-10-01T09:00:00Z"},
+    {"id": 102, "workspace_id": "11111111-1111-4111-8111-111111111111", "entity_type_id": 1, "title": "Contract template", "summary": "Standard contract", "body_md": "Standard contract with renewal clause and discount table.", "status": "published", "archived_at": null, "updated_at": "2026-10-03T12:30:00Z"},
+    {"id": 103, "workspace_id": "11111111-1111-4111-8111-111111111111", "entity_type_id": 1, "title": "Pipeline review", "summary": "Pipeline notes", "body_md": "Pipeline review notes: two renewals at risk.", "status": "published", "archived_at": null, "updated_at": "2026-10-05T08:15:00Z"},
+    {"id": 104, "workspace_id": "11111111-1111-4111-8111-111111111111", "entity_type_id": 2, "title": "Salary bands", "summary": "HR", "body_md": "Salary bands and the renewal of employment contracts.", "status": "published", "archived_at": null, "updated_at": "2026-09-20T10:00:00Z"},
+    {"id": 105, "workspace_id": "11111111-1111-4111-8111-111111111111", "entity_type_id": 3, "title": "Company profile", "summary": "Public", "body_md": "Public profile. Contract partners listed on the site.", "status": "published", "archived_at": null, "updated_at": "2026-08-11T16:45:00Z"},
+    {"id": 106, "workspace_id": "11111111-1111-4111-8111-111111111111", "entity_type_id": 1, "title": "Draft contract", "summary": "Draft", "body_md": "Draft contract terms, not reviewed.", "status": "draft", "archived_at": null, "updated_at": "2026-10-06T08:00:00Z"},
+    {"id": 107, "workspace_id": "11111111-1111-4111-8111-111111111111", "entity_type_id": 1, "title": "Old contract", "summary": "Archived", "body_md": "Old contract, archived.", "status": "published", "archived_at": "2026-10-07T00:00:00Z", "updated_at": "2026-10-07T00:00:00Z"},
+    {"id": 201, "workspace_id": "22222222-2222-4222-8222-222222222222", "entity_type_id": 1, "title": "Beta contract", "summary": "Beta", "body_md": "Beta contract renewal terms. Confidential to t-beta.", "status": "published", "archived_at": null, "updated_at": "2026-10-02T11:00:00Z"}
+  ]
 }

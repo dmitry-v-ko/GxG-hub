@@ -8,6 +8,9 @@ Configuration (environment; no secrets, only public keys and paths):
   KB_IDENTITY_KEYS     `kid=ed25519:<base64url>[,kid=...]`: ContextForge identity adapter keys (ADR-0001 C);
                        without them every call is refused
   KB_TEST_ISSUER_KEY   test profile only: public key of the test identity issuer
+  KB_CONNECTIONS_FILE  {tenant: {connection_id, url, workspace_id, key_file}}: the KB connection of each tenant
+                       (Q2); key_file holds the wrapper's read key (a secret file, never in Git). Without it no
+                       tenant has a KB and /readyz fails
 """
 
 from __future__ import annotations
@@ -33,7 +36,7 @@ from gxg_connector_kit.cf_identity import ContextForgeVerifier
 from gxg_connector_kit.grants import BundleError, BundleStore
 from gxg_connector_kit.identity import IdentityVerifier, StubVerifier, VerifiedIdentity
 
-from .backend import Backend
+from .backend import Backend, load_connections
 from .tools import Connector, errors
 
 CONNECTOR_ID = "kb"  # `aud` of identity assertions; id in the platform registry
@@ -53,6 +56,7 @@ class Settings:
     state_file: Path
     test_issuer_key: str | None
     identity_keys: str
+    connections_file: Path | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:
@@ -63,6 +67,7 @@ class Settings:
             state_file=Path(env.get("KB_STATE_FILE", "/var/lib/kb/bundle-state.json")),
             test_issuer_key=env.get("KB_TEST_ISSUER_KEY") or None,
             identity_keys=env.get("KB_IDENTITY_KEYS", ""),
+            connections_file=Path(env["KB_CONNECTIONS_FILE"]) if env.get("KB_CONNECTIONS_FILE") else None,
         )
         if s.profile != "test" and s.test_issuer_key is not None:
             raise ConfigError("the test issuer is allowed only with GXG_PROFILE=test")
@@ -134,7 +139,7 @@ def create_app(
     async def readyz(_: Request) -> JSONResponse:
         # Read-only connector: the KB + a valid bundle; no Approval Service (MCC-09). Reasons stay in the log.
         refresh()
-        reasons = list(store.readiness().reasons) + ([] if connector.backend.ready() else ["kb_unreachable"])
+        reasons = list(store.readiness().reasons) + ([] if await connector.backend.ready() else ["kb_not_ready"])
         if reasons:
             log.warning(json.dumps({"event": "not_ready", "reasons": reasons}))
         return JSONResponse({"status": "not_ready" if reasons else "ready"}, status_code=503 if reasons else 200)
@@ -143,7 +148,8 @@ def create_app(
 
 
 def build(settings: Settings, backend: Backend | None = None) -> tuple[Starlette, Connector]:
-    backend = backend or Backend()
+    if backend is None:
+        backend = Backend(load_connections(settings.connections_file) if settings.connections_file else {})
     settings.state_file.parent.mkdir(parents=True, exist_ok=True)
     files = BundleFiles(
         BundleStore(parse_keys(settings.bundle_keys, "KB_BUNDLE_KEYS"), state_file=settings.state_file),
@@ -173,7 +179,7 @@ def main(env: Mapping[str, str] = os.environ) -> int:
     logging.basicConfig(level=logging.INFO, handlers=log_handlers())
     try:
         app, _ = build(Settings.from_env(env))
-    except (ConfigError, RuntimeError, ValueError, OSError) as exc:
+    except (ConfigError, RuntimeError, ValueError, OSError, KeyError) as exc:
         log.error(json.dumps({"event": "startup_refused", "reason": str(exc)}))
         return 2
     uvicorn.run(app, host="0.0.0.0", port=8080, log_level="warning")  # noqa: S104
