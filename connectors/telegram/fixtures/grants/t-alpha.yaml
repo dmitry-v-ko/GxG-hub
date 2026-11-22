@@ -1,0 +1,34 @@
+# Test grants of the Telegram connector (M11). Synthetic: chat_refs of fixtures/service.json, no secrets.
+tenant: t-alpha
+schema_version: 1
+
+connections:
+  - id: tg-main
+    domain: telegram
+    credential_ref: secret://t-alpha/telegram/main
+
+principals:
+  agents:
+    - id: agent:t-alpha:reader
+    - id: agent:t-alpha:nobody
+
+grants:
+  - id: alpha-reader-chats            # a-partners, a-sales, a-gap; not a-secret (expired) nor a-hidden (none)
+    subjects: [agent:t-alpha:reader]
+    actions: [read]
+    resources:
+      - telegram:tg-main/chat/tgc1_p_9lawHi_ooJlPEFNsEP-_cyzUfsAMqZ
+      - telegram:tg-main/chat/tgc1_qSJPyTsrJM5DsCiK-ktzZW_G4ROtF3Dv
+      - telegram:tg-main/chat/tgc1_hcImubsK1nq6gEYGfX-8XKMpfwDXlvJ0
+  - id: alpha-reader-collect          # collect on a-partners and a-gap: read on a-sales gives no collect
+    subjects: [agent:t-alpha:reader]
+    actions: [collect]
+    resources:
+      - telegram:tg-main/chat/tgc1_p_9lawHi_ooJlPEFNsEP-_cyzUfsAMqZ
+      - telegram:tg-main/chat/tgc1_hcImubsK1nq6gEYGfX-8XKMpfwDXlvJ0
+  - id: alpha-reader-chat-expired     # GR-06: expired, gives nothing (SC-10)
+    subjects: [agent:t-alpha:reader]
+    actions: [read, collect]
+    resources:
+      - telegram:tg-main/chat/tgc1_YKRB8CkL4S5bgusJZxVoQqvda6bdAzvG
+    expires_at: "2026-01-01T00:00:00Z"

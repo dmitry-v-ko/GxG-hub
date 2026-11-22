@@ -3,8 +3,9 @@
 `uv run python stand/bootstrap.py` after `docker compose up -d`:
   teams t-alpha, t-beta (private); agents reader and nobody in each (<name>@<tenant>.agents.gxg.example.com,
   role member, one API token bound to its team: SEC-02); gateway `demo-<tenant>` -> http://demo:8080/mcp in each
-  team (visibility team); a virtual server per team; an alias on t-alpha's demo.boards.list. No `*.execute` tool is
-  registered (EFF-02); one left by an earlier (M5) bootstrap is deleted. Then the identity adapter
+  team (visibility team); gateway `telegram-<tenant>` -> http://telegram:8080/mcp (M11); a virtual server per team and
+  connector; an alias on t-alpha's demo.boards.list. No `*.execute` tool is registered (EFF-02); one left by an
+  earlier (M5) bootstrap is deleted. Then the identity adapter
   gets the team and gateway ids (stand/secrets/plugins.yaml) and ContextForge restarts if they changed.
 State for the tests (ids, agent tokens) -> stand/secrets/state.json (git-ignored).
 shortcut: REST calls instead of config as code; ContextForge v1.1.1 has no import for users and tokens.
@@ -79,7 +80,7 @@ def login(env: dict[str, str]) -> str:
     return str(r.json()["access_token"])
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915 - one linear bootstrap, step by step
     env = env_values()
     wait_healthy()
     api = Api(login(env))
@@ -139,6 +140,18 @@ def main() -> None:
             },
         )
         t["gateway_id"] = gw["id"]
+        tg = gateways.get(f"telegram-{tenant}") or api(  # M11: the Telegram connector, its own virtual server
+            "POST",
+            "/v1/gateways",
+            {
+                "name": f"telegram-{tenant}",
+                "url": "http://telegram:8080/mcp",
+                "transport": "STREAMABLEHTTP",
+                "teamId": team["id"],
+                "visibility": "team",
+            },
+        )
+        t["tg_gateway_id"] = tg["id"]
     tools = items(api("GET", "/v1/tools?include_inactive=true&limit=0"), "tools")
     servers = {s["name"]: s for s in items(api("GET", "/v1/servers?include_inactive=true&limit=0"), "servers")}
     for tenant, t in state["teams"].items():
@@ -154,6 +167,18 @@ def main() -> None:
             },
         )
         t["server_id"] = srv["id"]
+        tg_own = [x for x in tools if x.get("gatewayId") == t["tg_gateway_id"]]
+        t["tg_tools"] = {x["originalName"]: {"id": x["id"], "name": x["name"]} for x in tg_own}
+        tg_srv = servers.get(f"vs-tg-{tenant}") or api(
+            "POST",
+            "/v1/servers",
+            {
+                "server": {"name": f"vs-tg-{tenant}", "associated_tools": [x["id"] for x in tg_own]},
+                "team_id": t["id"],
+                "visibility": "team",
+            },
+        )
+        t["tg_server_id"] = tg_srv["id"]
     alpha = state["teams"]["t-alpha"]
     boards = alpha["tools"]["demo.boards.list"]
     if boards["name"] != ALIAS:
@@ -166,7 +191,8 @@ def main() -> None:
     STATE.chmod(0o600)
     plugins = plugins_yaml(
         {t["id"]: tenant for tenant, t in state["teams"].items()},
-        {t["gateway_id"]: "demo" for t in state["teams"].values()},
+        {t["gateway_id"]: "demo" for t in state["teams"].values()}
+        | {t["tg_gateway_id"]: "telegram" for t in state["teams"].values()},
     )
     if (SECRETS / "plugins.yaml").read_text() != plugins:
         (SECRETS / "plugins.yaml").write_text(plugins)

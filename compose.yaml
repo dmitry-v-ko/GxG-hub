@@ -112,9 +112,62 @@ services:
     networks:
       connectors: {ipv4_address: 10.250.0.10}
 
+  telegram-archive:
+    # M11, ADR-0004: the telegram_archive database of the existing Telegram service, as a local stand-in: the
+    # vendored gxg_agents_v2 migrations, the connector's read-only role and synthetic fixtures (never real chats).
+    # log_connections: the stand counts the connector's queries here (AC-M11-03).
+    image: pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
+    restart: unless-stopped
+    command: ["postgres", "-c", "log_connections=on", "-c", "log_line_prefix=%m app=%a "]
+    environment:
+      POSTGRES_DB: archive
+      POSTGRES_USER: archive_owner
+      POSTGRES_PASSWORD: ${TELEGRAM_ARCHIVE_OWNER_PASSWORD:?run stand/init.py}
+      TELEGRAM_ARCHIVE_PASSWORD: ${TELEGRAM_ARCHIVE_PASSWORD:?run stand/init.py}  # read by 30-reader-password.sh
+    volumes:
+      - ./connectors/telegram/archive/00_capability_hub_connections.sql:/docker-entrypoint-initdb.d/00.sql:ro
+      - ./connectors/telegram/archive/20261105010000_telegram_archive.sql:/docker-entrypoint-initdb.d/10.sql:ro
+      - ./connectors/telegram/archive/20261106010000_telegram_archive_semantic.sql:/docker-entrypoint-initdb.d/11.sql:ro
+      - ./connectors/telegram/archive/reader_role.sql:/docker-entrypoint-initdb.d/20.sql:ro
+      - ./stand/telegram-archive-reader.sh:/docker-entrypoint-initdb.d/30-reader-password.sh:ro
+      - ./stand/secrets/archive-seed.sql:/docker-entrypoint-initdb.d/40.sql:ro
+      - tg-archive-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archive_owner -d archive"]
+      interval: 2s
+      retries: 30
+    networks: [tg-archive]
+
+  telegram:
+    # M11, ADR-0004: the Telegram connector, a separate service; it reads the archive above with
+    # gxg_telegram_reader and never talks to Telegram. Same identity adapter key and grants bundle as demo.
+    image: gxg-telegram:stand
+    build:
+      context: .
+      dockerfile: connectors/telegram/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      telegram-archive: {condition: service_healthy}
+    environment:
+      TELEGRAM_ARCHIVE_DSN: postgresql://gxg_telegram_reader:${TELEGRAM_ARCHIVE_PASSWORD}@telegram-archive:5432/archive
+      TELEGRAM_CONNECTIONS: "t-alpha=tg-main:svc-alpha,t-beta=tg-main:svc-beta"
+      TELEGRAM_IDENTITY_KEYS: ${DEMO_IDENTITY_KEYS:?run stand/init.py}
+      TELEGRAM_BUNDLE_KEYS: ${DEMO_BUNDLE_KEYS:?run stand/init.py}
+    volumes:
+      - ./stand/secrets/bundle:/bundle:ro
+      - telegram-state:/var/lib/telegram
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]
+      interval: 3s
+      retries: 30
+    networks:
+      connectors: {ipv4_address: 10.250.0.9}  # inside SSRF_ALLOWED_NETWORKS 10.250.0.8/30 with demo; .11 is SC-07's redirector
+      tg-archive: {}
+
 networks:
   edge: {}
   db: {internal: true}
+  tg-archive: {internal: true}  # the connector and its archive only (M11)
   connectors:
     internal: true
     # No address for the host on this bridge: the docker host itself has no route to demo (AC-M5-03).
@@ -125,3 +178,5 @@ networks:
 volumes:
   pgdata:
   demo-state:
+  telegram-state:
+  tg-archive-data:

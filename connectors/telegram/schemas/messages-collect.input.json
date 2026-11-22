@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "telegram.messages.collect input",
+  "description": "Messages of one chat archived after the cursor, oldest first (CollectSource of Signals). Pass next_cursor back unchanged. Extra fields are ignored (SC-03).",
+  "type": "object",
+  "required": ["chat_ref"],
+  "properties": {
+    "chat_ref": {"type": "string", "pattern": "^tgc1_[A-Za-z0-9_-]{32}$"},
+    "cursor": {"type": ["string", "null"], "pattern": "^tgk1\\.[0-9]{1,18}\\.[0-9]{1,15}$"},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50}
+  }
+}

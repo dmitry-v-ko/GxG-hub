@@ -1,0 +1,11 @@
+-- Restore the INSERT policy on kb_entity_feedback that was dropped by
+-- 20260701001000_fix_remaining_security_warnings.sql without a replacement.
+--
+-- kb_entity_feedback has no sensitive data (curator like/dislike + a comment).
+-- The original table design (20260608120000_kb_entity_feedback.sql) intentionally
+-- keeps RLS open for anon and relies on app-layer gating instead: /api/feedback
+-- is only reachable from the kb.agents.* host and now requires a logged-in
+-- session (frontend/middleware.ts). Without this policy, RLS silently rejected
+-- every insert whenever the API route fell back to the anon key (i.e. whenever
+-- KB_SUPABASE_SERVICE_KEY wasn't set), which is what broke the Curator note UI.
+CREATE POLICY "feedback_insert_all" ON public.kb_entity_feedback FOR INSERT WITH CHECK (true);

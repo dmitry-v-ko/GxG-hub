@@ -4,7 +4,7 @@
 # Root ([tool.mutmut] in pyproject.toml): M0.1 (AC-M0.1-03) scripts/ci/ and conftest.py, M2 widening_gate.py.
 # tools/gxg-policy (its own [tool.mutmut]): M2 gxg_policy {diff,lint,bundle,load}; mutmut maps src/ paths
 # to module names, so it runs from that directory. connectors/demo (M3, its own lockfile and [tool.mutmut]):
-# tools.py, backend.py. gateway/contextforge (M5, setup.cfg): gxg_identity/core.py. packages/gxg-connector-kit
+# tools.py, backend.py. connectors/telegram (M11, the same layout): tools.py, server.py. gateway/contextforge (M5, setup.cfg): gxg_identity/core.py. packages/gxg-connector-kit
 # (M1, its own [tool.mutmut]; in this loop since M5): _jwt, exec_token, svc_jwt, grants, canonical, cf_identity.
 # approval/ui, approval/notifier (M9, own lockfiles and [tool.mutmut]; run with the root environment, where their
 # DB tests find the Approval Service fixtures): ui app, stepup, render, config, cli; notifier bot (its cli.py is
@@ -32,7 +32,7 @@ export GXG_TEST_PG_SOCKET_DIR="$pgsock"
 root=$(pwd)
 # MUTMUT_PACKAGES: space-separated subset of these directories (DoD-1: a milestone runs the packages it changes;
 # every package at integration and before main). Default: all.
-for dir in ${MUTMUT_PACKAGES:-tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit approval \
+for dir in ${MUTMUT_PACKAGES:-tools/gxg-policy connectors/demo connectors/telegram gateway/contextforge packages/gxg-connector-kit approval \
   approval/ui approval/notifier .}; do
   (
     cd "$dir"

@@ -1,0 +1,46 @@
+[project]
+name = "gxg-connector-telegram"
+version = "0.1.0"
+description = "Telegram MCP connector, read-only (M11): a facade over the existing Telegram service's domain ports."
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn
+    "gxg-connector-kit",
+    "pyyaml>=6,<7",  # gxg-manifest.yaml is read at start; already installed by fastmcp
+    "psycopg[binary]>=3.2,<4",  # the telegram_archive database of the existing service (ADR-0004)
+]
+# No Telegram client library (telethon, pyrogram, pyrofork, tdlib): the existing service is the only
+# session owner (AC-M11-02); tests/test_telegram.py checks uv.lock.
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "telegram_connector"
+
+[tool.uv.sources]
+gxg-connector-kit = { path = "../../packages/gxg-connector-kit", editable = true }
+gxg-policy = { path = "../../tools/gxg-policy", editable = true }
+
+[dependency-groups]
+dev = ["pytest>=8.3,<10", "gxg-policy", "mutmut==3.8.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["archive"]  # archive/seed.py: schema and synthetic fixtures of the test database
+addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+xfail_strict = true
+
+# DoD-4: the modules with the M11 key conditions (grant checks before the service, error mapping, escaping).
+# Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh does it in CI).
+[tool.mutmut]
+source_paths = ["src/telegram_connector/"]
+only_mutate = ["*/tools.py", "*/server.py", "*/archive.py"]
+also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml", "archive/"]
+pytest_add_cli_args_test_selection = ["tests"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
+# The tests run a real PostgreSQL (initdb per run): mutmut's CPU-time limit from the clean run is too tight under
+# load and turned killable mutants into timeouts.
+timeout_constant = 60
+timeout_multiplier = 3

@@ -1,0 +1,361 @@
+{
+ "milestone": "M11",
+ "role": "independent critic, cycle 2",
+ "branch": "claude/m11-telegram-read",
+ "commit": "11f61a84f76cc182d27ad6792ffbb2a89c4b8bcc",
+ "base": "fb14af1 (claude/m5-readonly-poc)",
+ "reviewed_diff": "fb14af1..11f61a8 (cycle: 2cebc81..11f61a8)",
+ "threshold": 9,
+ "score": 8.0,
+ "caps_applied": [
+  "major"
+ ],
+ "dimensions": {
+  "spec": 2.5,
+  "tests": 1.5,
+  "security": 2.0,
+  "code": 1.0,
+  "ops": 1.0,
+  "evidence": 0.5
+ },
+ "acceptance": [
+  {
+   "id": "AC-M11-01",
+   "status": "passed",
+   "evidence": "Checked as ADR-0004 prescribes: local archive DB (vendored gxg_agents_v2 migrations, byte-equal to the clone at f1c4d6d by check_upstream.sh) through ContextForge. Critic check-all: stand/run.sh fresh / after-restart / after-recreate, 50/50 each, incl. SC-03, SC-04, SC-05, SC-09, SC-10, MC-02, MC-03 for telegram; in-process 104 passed"
+  },
+  {
+   "id": "AC-M11-02",
+   "status": "passed",
+   "evidence": "Structural, as ADR-0004 states ('по построению'): no Telegram client in uv.lock/src, no TG_* env in the container, no route out (stand probe), reader role cannot write. Critic's own PG16 cluster from seed.schema_sql(): has_function_privilege EXECUTE = false on all 7 telegram_archive functions, 0 SECURITY DEFINER functions executable by gxg_telegram_reader; INSERT/UPDATE/DELETE/apply_chat_batch refused (in-process test)"
+  },
+  {
+   "id": "AC-M11-03",
+   "status": "passed",
+   "evidence": "stand: log_connections count of application_name=gxg-telegram unchanged for other tenant / no grant / expired / forged / collect with only read / agent without grants (3 tools x 3 paths), SC-01 by-name, SC-06, bad bundle; in-process port counter 0. Critic mutations killed: mask_for_everyone (all_of_type -> True), no_named_recheck, scope_check_off"
+  },
+  {
+   "id": "AC-M11-04",
+   "status": "passed",
+   "evidence": "stand test_ac_m11_04 1/7/3600 s: collect -> rate_limited, retryable, retry_after_s in [N-1, N] (remaining delay from connection_state.retry_after); search/thread -> complete=false, partial_reasons rate_limited (design recorded in the cycle plan, see F4). Critic mutation collect_ignores_flood killed"
+  },
+  {
+   "id": "AC-M11-05",
+   "status": "passed",
+   "evidence": "stand test_sc09_and_ac_m11_05: 1000 calls, 0 fixture texts, peer ids, reader password in connector logs; psycopg errors logged by class name only (archive.py _run)"
+  }
+ ],
+ "dod": {
+  "1_ci_green": "met: critic's own full KEEP=1 scripts/ci/check-all.sh on 11f61a8 -> 'check-all: OK', EXIT=0, 70m50s (see ci_local). GitHub Actions not run (billing; owner decision DoD-1)",
+  "2_ac_automated": "met: AC-M11-01..05 automated (stand + in-process)",
+  "3_report": "present; M11.json is for 7d90948 and composed of partial runs (F7, minor); M5.json = fb14af1 version (restored)",
+  "4_mutmut": "met: connectors/telegram 1279 mutants, 1258 killed, 18 survived + 2 no tests + 1 timeout = 21, all 21 in mutmut-equivalent.txt; critic checked diffs (autocommit None, LIMIT +2, upper-case identifiers, chats=None on the no-connection path): equivalent; mutmut.sh exit 0 inside check-all",
+  "5_no_skip": "met: root 902 passed, telegram 104 passed, stand 3x50 passed, 0 skipped",
+  "6_existing_solutions": "see existing_solutions"
+ },
+ "ci_local": {
+  "command": "KEEP=1 DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt' scripts/ci/check-all.sh",
+  "commit": "11f61a8 (clean tree, full history, 299 commits)",
+  "result": "check-all: OK, EXIT=0, real 70m50s: lockfiles, ruff, mypy sets, root pytest 902 passed, schema lock, kit coverage, demo 64 passed, telegram 104 passed, prove_schema_guard, gitleaks tree + range 'no leaks found', tests/secrets 21 passed, gxg-policy, bundle_smoke, demo docker_smoke, stand/run.sh fresh/after-restart/after-recreate 50/50 each, scripts/ci/mutmut.sh OK",
+  "after": "generated reports/conformance/M5.json, M11.json, reports/mutmut/M11.txt restored with git checkout"
+ },
+ "commands": {
+  "root_pytest": "uv run pytest -q -p no:cacheprovider -> 902 passed, 148 subtests passed (executor claims 903)",
+  "telegram_pytest": "cd connectors/telegram && uv run pytest -q -> 104 passed (inside check-all and in a git-archive copy)",
+  "mutmut": "rm -rf mutants && mutmut run (inside scripts/ci/mutmut.sh) + mutmut results: 21 not killed, all listed",
+  "stand": "inside check-all: 3 x 50 passed (separate quick run not repeated)",
+  "gitleaks": "scripts/ci/gitleaks.sh tree HEAD and range 0000000..HEAD: no leaks found",
+  "upstream_schema": "connectors/telegram/archive/check_upstream.sh /home/user/gxg_agents_v2 -> equal; sha256 equal to SOURCE.md; no other gxg_agents_v2 migration at f1c4d6d touches telegram_archive",
+  "role_privileges": "own PG16 cluster: EXECUTE false on all telegram_archive functions, BYPASSRLS t, CONNECTION LIMIT 32",
+  "manual_mutations": "git archive copy, baseline 104 passed; scope_check_off, search_no_chat_filter, collect_ignores_flood, mask_for_everyone, no_named_recheck, no_text_cut -> all killed",
+  "order_tie_experiment": "own PG16: 2 chats x 200 messages with equal (ts_rank, sent_at, message_id); connector's offset paging (LIMIT offset+limit+1, slice): page size 3 -> 102 returned / 93 unique; 5 -> 100/94; 7 -> 105/99; 9 -> 108/102 (F1)"
+ },
+ "checklist_cycle_1": [
+  {
+   "item": "1 restore M4/M5 docs",
+   "status": "closed",
+   "evidence": "git diff fb14af1..11f61a8 -- docs/adr/0001 empty; security-v1/target-platform/backlog diffs only add ADR-0003/0004 owner decisions and backlog lines; M5 backlog F6/F11-F13 present"
+  },
+  {
+   "item": "2 port or owner decision on AC-M11-01/02",
+   "status": "closed",
+   "evidence": "ADR-0004 (owner, 2026-11-21): archive DB with a SELECT-only role, no test account; ArchiveService implemented, production profile starts with TELEGRAM_ARCHIVE_DSN, fake removed"
+  },
+  {
+   "item": "3 port contract follows gxg_agents_v2",
+   "status": "closed_with_minor",
+   "evidence": "search SQL equals PostgresTelegramArchiveRepository.search; scope = Connection's archive, held by the service's purge_out_of_scope / purge_unscoped triggers (read: archive ⊆ scope incl. folder members); tests with the real trigger and mask+outside scope on 3 tools. Remaining: per-chat collect and the M12 dedupe key not recorded in service-integration-v1 (F5, minor); not-yet-synced scope chat -> not_found instead of not_synced (F3, minor)"
+  },
+  {
+   "item": "4 AC-M11-02 without the constant counter",
+   "status": "closed",
+   "evidence": "structural evidence per ADR-0004; counter removed with the fake"
+  },
+  {
+   "item": "5 evidence",
+   "status": "closed",
+   "evidence": "M5.json = fb14af1; CI billing recorded; ci_local present (but composed of partial runs: F7 minor); critic's full run green"
+  },
+  {
+   "item": "6 SC-06, MC-01, SC-01 by name, SC-08 for telegram",
+   "status": "closed",
+   "evidence": "stand/tests/test_telegram.py test_sc01_*, test_sc06_*, test_sc08_*, test_mc01_*: passed 3x"
+  },
+  {
+   "item": "7 minors F7-F10",
+   "status": "closed",
+   "evidence": "F8 cut before escape (mutation no_text_cut killed), F9 untrusted in the search description, F10 fake removed and archive/fixtures in Dockerfile.dockerignore, F7 in docs/backlog.md"
+  }
+ ],
+ "findings": [
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "MC-02 (pagination), GR-16/search-result 'complete'",
+   "where": "connectors/telegram/src/telegram_connector/archive.py ArchiveService.search ORDER BY; tools.py Connector.search offset cursor",
+   "problem": "ORDER BY ts_rank DESC, sent_at DESC, message_id DESC is not a total order across chats (message_id is per chat). With equal keys in two chats, PostgreSQL top-N sort orders ties differently for different LIMIT, and the connector pages by re-querying LIMIT offset+limit+1: items are duplicated and lost across pages while complete=true. Reproduced on PG16 (page size 3: 102 returned, 93 unique)",
+   "required_improvement": "Add c.chat_ref as the last ORDER BY key; test: two chats with equal rank/sent_at/message_id, page through, assert every item exactly once"
+  },
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "ADR-0004 'Последствия' (контрактный тест схемы ... и уведомление при обновлении), CON-TG-02/CON-TG-06",
+   "where": "connectors/telegram/archive/SOURCE.md, check_upstream.sh, tests test_vendored_schema_is_the_pinned_upstream",
+   "problem": "Both checks compare the vendored files with the same pinned commit; nothing looks at newer gxg_agents_v2 commits, so the 'notification on update' the ADR requires does not exist. A gxg_agents_v2 migration that renames a read column or changes the purge-on-scope-removal trigger leaves Hub CI green; the connector's scope boundary ('the archive holds only scope chats') rests on that trigger",
+   "required_improvement": "A check that fails/notifies when gxg_agents_v2 has commits after the pinned one touching supabase/migrations with telegram_archive or capability_hub.connections (e.g. check_upstream.sh --drift: git fetch; git log <pinned>..origin/main -- supabase/migrations | grep), wired into check-all/ci.yml (scheduled), or a pinned git submodule + Dependabot/Renovate gitsubmodule updates; document it in SOURCE.md"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "CON-TG-08 completeness, archive-repository.ts search (not_synced)",
+   "where": "archive.py _state (len(rows) != len(set(refs)) -> chat_forbidden); connectors/telegram/README.md runbook",
+   "problem": "A scope chat granted but not yet synced has no chats row; thread/collect answer not_found and a search naming it fails entirely, where the real search returns not_synced. Fail closed, but contract and runbook ('чат вне scope') diverge",
+   "required_improvement": "backlog: document in README/tool description; revisit when the role may read the Connection scope"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "AC-M11-04, service-integration-v1 Telegram (collect), CON-TG-11",
+   "where": "archive.py ArchiveService.collect (wait is not None -> flood_wait)",
+   "problem": "Any account-wide flood wait (up to 86400 s) blocks collect of already archived, uncollected messages, while search/thread serve them; the existing Chat folders collection does not block. Decision only in the cycle plan, not in the spec",
+   "required_improvement": "Record the decision in service-integration-v1 (or return the page with partial_reasons rate_limited)"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "cycle-1 checklist item 3, AC-M12-01",
+   "where": "docs/specs/service-integration-v1.md (Telegram tools)",
+   "problem": "Per-chat collect and dedupe key chat_ref:message_id (vs the old peer_id:message_id) recorded only in reports/M11-ESCALATION.md #4, not in the spec the M12 executor reads",
+   "required_improvement": "One line in service-integration-v1 under the tools table"
+  },
+  {
+   "severity": "minor",
+   "origin": "missed_earlier",
+   "ref": "Качество кода, backlog F7",
+   "where": "tools.py TelegramTool.run, server.py Settings/parse_keys/BundleFiles/NoVerifier",
+   "problem": "~150 lines copied from connectors/demo (shortcut, in backlog)",
+   "required_improvement": "backlog F7 (already recorded)"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "DoD-1, DoD-3",
+   "where": "reports/conformance/M11.json commit/ci_local/acceptance",
+   "problem": "No single green check-all on one commit by the executor (7d90948: mutmut failed; b1976fd: stand not rerun); 'in-process twins (105 passed)' vs 104; root 903 vs critic's 902",
+   "required_improvement": "Regenerate M11.json and ci_local from one full check-all on the final HEAD"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "AC-M11-03 evidence",
+   "where": "stand/tests/test_telegram.py requests()",
+   "problem": "Counts connections, not queries; equal only while the adapter opens one connection per call (shortcut). With psycopg_pool the stand counter stops proving AC-M11-03",
+   "required_improvement": "backlog: when a pool is added, count statements (log_statement / pg_stat_statements by role)"
+  }
+ ],
+ "required_improvements": [
+  "1. Make the search order total: add c.chat_ref as the last ORDER BY key in ArchiveService.search; add a test with two chats with equal (rank, sent_at, message_id) paged with small limits asserting each item appears exactly once (F1).",
+  "2. Implement the schema-update notification of ADR-0004: a drift check against gxg_agents_v2 commits after the pinned one (migrations touching telegram_archive or capability_hub.connections) run by check-all/scheduled CI and failing loudly, or a pinned submodule with Dependabot/Renovate updates; describe it in archive/SOURCE.md (F2).",
+  "3. Add one line to service-integration-v1 (Telegram): collect is per chat over the archive with cursor (archived_us, message_id), dedupe key chat_ref:message_id, mapping to peer_id:message_id decided in M12; and that collect answers rate_limited while the Connection's sync is deferred (F4, F5).",
+  "4. Regenerate reports/conformance/M11.json and ci_local from one full check-all on the final HEAD (F7).",
+  "5. Minors F3, F6, F8 to docs/backlog.md with M11."
+ ],
+ "ponytail_review": "reports/critic/M11-cycle-2.review.md",
+ "existing_solutions": [
+  {
+   "component": "ArchiveService (archive.py)",
+   "alternative": "psycopg 3 (used); the service's PostgresTelegramArchiveRepository is TypeScript in-process (not reusable); no read API/MCP of the service (ADR-0004)",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "search SQL",
+   "alternative": "copied from archive-repository.ts search (same contract)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "vendored migrations + check_upstream.sh",
+   "alternative": "git submodule pinned to the commit + Dependabot/Renovate (gitsubmodule) would also give the update notification ADR-0004 asks for; git diff/cmp used",
+   "verdict": "justified_custom for vendoring (stand needs files), notification missing (F2)"
+  },
+  {
+   "component": "test PostgreSQL fixture (Pg, initdb/pg_ctl on a unix socket)",
+   "alternative": "pytest-postgresql (client fixture over TCP; root run blocks sockets via pytest-socket), testing.postgresql (unmaintained); reason recorded as shortcut",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "reader_role.sql",
+   "alternative": "PostgreSQL column-level GRANT, default_transaction_read_only, statement_timeout (native features used)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "seed.py synthetic fixtures",
+   "alternative": "service's apply_chat_batch (would need valid batches; direct inserts are simpler for fixtures)",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "stand archive DB init (telegram-archive-reader.sh)",
+   "alternative": "docker-entrypoint-initdb.d of the official image (used)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "stand AC-M11-03 counter",
+   "alternative": "PostgreSQL log_connections (used); pg_stat_statements when pooled (F8)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "connection per call",
+   "alternative": "psycopg_pool.AsyncConnectionPool (shortcut recorded)",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "TelegramTool.run / Settings / BundleFiles copies",
+   "alternative": "connectors/demo (copied), move to gxg-connector-kit (backlog F7)",
+   "verdict": "use_existing (shortcut)"
+  },
+  {
+   "component": "mutation testing",
+   "alternative": "mutmut 3.8.1 (used)",
+   "verdict": "use_existing"
+  }
+ ],
+ "threat_model": [
+  {
+   "path": "identity in arguments/forwarded headers/_meta/forged X-GxG-Identity through ContextForge (SC-03)",
+   "status": "closed",
+   "evidence": "stand test_sc03_* 3x50 green"
+  },
+  {
+   "path": "direct call with forged/foreign-key/unknown kid/expired/other aud/other tool/other args/garbage/no identity (SC-04)",
+   "status": "closed",
+   "evidence": "stand test_sc04_*; archive connection counter unchanged"
+  },
+  {
+   "path": "replay of a captured identity assertion",
+   "status": "closed",
+   "evidence": "SC-04 replay case; shared jti store across replicas out_of_scope (one replica)"
+  },
+  {
+   "path": "same aud for both tenants' gateways",
+   "status": "closed",
+   "evidence": "tenant from signed tenant_id, TELEGRAM_CONNECTIONS maps tenant -> service Connection; SC-05"
+  },
+  {
+   "path": "read another tenant's chat / no grant / expired / forged chat_ref (SC-05, GR-17)",
+   "status": "closed",
+   "evidence": "stand test_sc05_and_ac_m11_03_*: byte-identical not_found, log_connections counter unchanged; mutations killed"
+  },
+  {
+   "path": "collect with only a read grant",
+   "status": "closed",
+   "evidence": "SC-05 case; in-process tests"
+  },
+  {
+   "path": "search returns ungranted chats or hidden counts (GR-16, SC-10)",
+   "status": "closed",
+   "evidence": "SQL filtered by chat_refs, items rechecked; mutations search_no_chat_filter, no_named_recheck, mask_for_everyone killed"
+  },
+  {
+   "path": "mask grant + chat outside the Connection scope on the real service",
+   "status": "closed",
+   "evidence": "archive ⊆ scope by the service's purge_out_of_scope/purge_unscoped triggers (same transaction); tests with the real trigger on 3 tools; mutation scope_check_off killed. Holds only while the upstream schema keeps that trigger: F2"
+  },
+  {
+   "path": "search cursor tampering",
+   "status": "closed",
+   "evidence": "HMAC binding unchanged; test_cursor_offset_cannot_be_changed"
+  },
+  {
+   "path": "collect cursor reused on another chat/tenant",
+   "status": "closed",
+   "evidence": "position only; grant checked each call"
+  },
+  {
+   "path": "cross-team call by name of telegram-t-beta-* (SC-01)",
+   "status": "closed",
+   "evidence": "stand test_sc01_other_team_telegram_tools_are_refused_by_name"
+  },
+  {
+   "path": "direct network reach of the connector from edge (SC-06)",
+   "status": "closed",
+   "evidence": "stand test_sc06_*: edge cannot reach; archive not reachable from connectors network"
+  },
+  {
+   "path": "agent Authorization header passed through",
+   "status": "closed",
+   "evidence": "stand test_agent_authorization_header_never_reaches_the_connector"
+  },
+  {
+   "path": "member agent renames/registers tools or gateways",
+   "status": "closed",
+   "evidence": "stand test_member_role_cannot_rename_register_or_replace_tools"
+  },
+  {
+   "path": "prompt injection / bidi / zero-width (SEC-11, CON-TG-08)",
+   "status": "closed",
+   "evidence": "escape after cut, untrusted flags, search description; SC-08 through ContextForge"
+  },
+  {
+   "path": "leak of texts, peer ids, secrets in logs/replies (SC-09, AC-M11-05)",
+   "status": "closed",
+   "evidence": "1000-call stand test incl. reader password; psycopg errors by class name only"
+  },
+  {
+   "path": "connector opens its own Telegram session",
+   "status": "closed",
+   "evidence": "structural (ADR-0004): no client lib, no TG env, no route out"
+  },
+  {
+   "path": "fake service or test controls in production",
+   "status": "closed",
+   "evidence": "fake and testctl removed; test issuer refused outside GXG_PROFILE=test"
+  },
+  {
+   "path": "invalid/stale grants bundle (GR-12, GR-13)",
+   "status": "closed",
+   "evidence": "stand test_sc10_nothing_granted_and_bad_bundle_*: temporarily_unavailable before the archive"
+  },
+  {
+   "path": "service failure mapping (MC-03)",
+   "status": "closed",
+   "evidence": "archive stopped, 40 s table lock (14 < t < 25 s), connector down: stand 3x"
+  },
+  {
+   "path": "connector-to-service authentication (SEC-24) on the real port",
+   "status": "closed",
+   "evidence": "no Hub service call; PostgreSQL role auth with a password secret (ADR-0004); write refused by privileges (critic: no executable function, INSERT denied)"
+  },
+  {
+   "path": "spec regression weakening SEC-03 text",
+   "status": "closed",
+   "evidence": "docs restored to fb14af1 plus owner decisions"
+  }
+ ],
+ "backlog": [
+  "F3 not-yet-synced scope chat -> not_found",
+  "F6 demo pipeline copy (already F7 in backlog)",
+  "F8 stand counter counts connections (revisit with a pool)"
+ ],
+ "lean_lines": 150,
+ "verdict": "not ready: all AC pass and the cycle-1 checklist is closed, but two new majors: search paging is not a total order (duplicates/losses on cross-chat ties, reproduced), and the ADR-0004 schema-update notification is missing; both are small fixes",
+ "not_checked": "real Supabase archive (BYPASSRLS provisioning, PUBLIC privileges in other schemas), GitHub Actions (billing), full-text performance at production volume"
+}

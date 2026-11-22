@@ -11,6 +11,7 @@ dependencies = [
     "gxg-connector-demo",
     "gxg-approval-ui",
     "gxg-approval-notifier",
+    "gxg-connector-telegram",
 ]
 
 [dependency-groups]
@@ -56,6 +57,7 @@ gxg-policy = { workspace = true }
 gxg-connector-demo = { path = "connectors/demo", editable = true }
 gxg-approval-ui = { path = "approval/ui", editable = true }
 gxg-approval-notifier = { path = "approval/notifier", editable = true }
+gxg-connector-telegram = { path = "connectors/telegram", editable = true }
 
 [tool.pytest.ini_options]
 minversion = "8.3"
@@ -73,6 +75,7 @@ testpaths = [
     "approval/ui/tests",
     "tools/gxg-policy/tests",
     "connectors/demo/tests",
+    "connectors/telegram/tests",
     "spikes/m4-contextforge/tests",
     "spikes/m4.1-gateways/tests",
     "gateway/contextforge/tests",
@@ -81,7 +84,7 @@ testpaths = [
 xfail_strict = true
 # `from scripts.ci import ...` in tests: mutmut tracks code by its dotted module name.
 # Test helpers of gxg-connector-kit (kit_testing.py); importlib mode does not add test dirs to sys.path.
-pythonpath = [".", "packages/gxg-connector-kit/tests"]
+pythonpath = [".", "packages/gxg-connector-kit/tests", "connectors/telegram/archive"]
 markers = [
     "e2e: runs a CI script as a subprocess; mutmut deselects these (its trampolines do not reach child processes)",
 ]
@@ -112,7 +115,7 @@ ignore = [
 "approval/src/gxg_approval/migrations/**" = ["S101", "S608", "E501"]  # static DDL from code constants
 
 [tool.ruff.lint.isort]
-known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_approval_ui", "gxg_approval_notifier", "gxg_policy", "demo_connector"]
+known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_approval_ui", "gxg_approval_notifier", "gxg_policy", "demo_connector", "telegram_connector"]
 
 [tool.mypy]
 # Baseline for every package; the strict set is enforced separately with
@@ -126,7 +129,7 @@ no_implicit_optional = true
 strict_equality = true
 # scripts/ci is imported as `scripts.ci.*` (tests, mutmut), not as top-level modules.
 explicit_package_bases = true
-mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "approval/ui/src", "approval/notifier/src", "tools/gxg-policy/src", "connectors/demo/src", ".", "approval/tests_db"]
+mypy_path = ["packages/gxg-connector-kit/src", "packages/gxg-connector-kit/tests", "approval/src", "approval/ui/src", "approval/notifier/src", "tools/gxg-policy/src", "connectors/demo/src", "connectors/telegram/src", "connectors/telegram/archive", ".", "approval/tests_db"]
 
 [[tool.mypy.overrides]]
 # authlib ships no type information (types-Authlib is a separate, lagging stub package)

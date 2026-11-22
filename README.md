@@ -30,7 +30,7 @@
 - `tests/contract/` — schema smoke-тесты (не end-to-end проверка безопасности).
 - `policies/` — grants, политики согласования, реестр платформы (примеры, без секретов).
 - `connectors/` — каталог коннекторов и их статус. Коннекторы пока не реализованы.
-- `compose.yaml`, `stand/` — локальный dev-стенд (M5): ContextForge, PostgreSQL, `demo`.
+- `compose.yaml`, `stand/` — локальный dev-стенд (M5, M11): ContextForge, PostgreSQL, `demo`, `telegram` (на fake-сервисе).
 - `gateway/contextforge/` — наш плагин ContextForge `gxg_identity` (ADR-0001, вариант C).
 
 ## Локальный стенд (только разработка)
@@ -55,6 +55,7 @@ Python-workspace на [uv](https://docs.astral.sh/uv/), Python ≥ 3.12. Пак�
 | `approval/` | `gxg-approval` / `gxg_approval` | Каркас (M0), реализация — M7+ |
 | `tools/gxg-policy/` | `gxg-policy` / `gxg_policy` | Каркас (M0), реализация — M2 |
 | `connectors/demo/` | `gxg-connector-demo` / `demo_connector` | Каркас (M0), свой `uv.lock`; реализация — M3 |
+| `connectors/telegram/` | `gxg-connector-telegram` / `telegram_connector` | Read-only (M11), свой `uv.lock` |
 
 ```bash
 uv sync && uv run pytest          # все тесты: tests/contract, tests/ci, unit-тесты пакетов
