@@ -26,7 +26,7 @@ MODES: tuple[Mode, ...] = ("ok", "reject", "rate_limited", "timeout_before_start
 EFFECT = ("ok", "commit_then_drop")
 RETRY_AFTER_S = 3
 _SLOW = re.compile(r"slow:([0-9]{1,6})")
-_SCHEMA = """CREATE TABLE IF NOT EXISTS calls (
+_SCHEMA = """CREATE TABLE IF NOT EXISTS sends (  -- was `calls`, keyed by idempotency_key (cycle 2): left as is
   id INTEGER PRIMARY KEY, tenant TEXT NOT NULL, provider_key TEXT NOT NULL, execution_id TEXT NOT NULL,
   recipient TEXT NOT NULL, text_hash TEXT NOT NULL, attempt INTEGER NOT NULL,
   outcome TEXT NOT NULL, operation_id TEXT, at TEXT NOT NULL)"""
@@ -94,16 +94,16 @@ class Provider:
             first = None
             if self.dedupe and mode == "ok":
                 first = self._db.execute(
-                    "SELECT operation_id FROM calls WHERE provider_key = ? AND outcome IN (?, ?) ORDER BY id LIMIT 1",
+                    "SELECT operation_id FROM sends WHERE provider_key = ? AND outcome IN (?, ?) ORDER BY id LIMIT 1",
                     (provider_key, *EFFECT),
                 ).fetchone()
             outcome = "duplicate" if first else mode
             operation = first[0] if first else (f"demo-op-{uuid.uuid4()}" if mode in EFFECT else None)
-            attempt = self._db.execute("SELECT count(*) FROM calls WHERE provider_key = ?", (provider_key,)).fetchone()[
-                0
-            ]
+            (attempt,) = self._db.execute(
+                "SELECT count(*) FROM sends WHERE provider_key = ?", (provider_key,)
+            ).fetchone()
             self._db.execute(
-                "INSERT INTO calls (tenant, provider_key, execution_id, recipient, text_hash, attempt, outcome,"
+                "INSERT INTO sends (tenant, provider_key, execution_id, recipient, text_hash, attempt, outcome,"
                 " operation_id, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (tenant, provider_key, execution_id, recipient, text_hash(text), attempt + 1, outcome, operation,
                  datetime.now(UTC).isoformat()),
@@ -118,7 +118,7 @@ class Provider:
         """Reconcile: (executed, operation id) of a provider key."""
         with self._lock:
             row = self._db.execute(
-                "SELECT operation_id FROM calls WHERE provider_key = ? AND outcome IN (?, ?) ORDER BY id LIMIT 1",
+                "SELECT operation_id FROM sends WHERE provider_key = ? AND outcome IN (?, ?) ORDER BY id LIMIT 1",
                 (provider_key, *EFFECT),
             ).fetchone()
         return (row is not None, row[0] if row else None)
@@ -126,7 +126,7 @@ class Provider:
     def calls(self, provider_key: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute(
-                f"SELECT {_COLUMNS} FROM calls"  # noqa: S608 (constant column list)
+                f"SELECT {_COLUMNS} FROM sends"  # noqa: S608 (constant column list)
                 + (" WHERE provider_key = ?" if provider_key is not None else "")
                 + " ORDER BY id",
                 () if provider_key is None else (provider_key,),

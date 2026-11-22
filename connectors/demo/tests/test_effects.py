@@ -373,6 +373,17 @@ def test_provider_dedupes_by_provider_key_unless_no_dedupe(tmp_path: Path) -> No
     assert [c["outcome"] for c in p.calls()] == ["ok", "duplicate", "ok", "ok"]  # in call order
 
 
+def test_provider_opens_a_journal_of_the_old_layout(tmp_path: Path) -> None:
+    """A volume from before EFF-18 p.5 holds `calls` keyed by idempotency_key: the provider keeps working."""
+    import sqlite3
+
+    path = tmp_path / "j.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE calls (id INTEGER PRIMARY KEY, idempotency_key TEXT NOT NULL)")
+    p = Provider(path)
+    assert send(p).outcome == "ok" and len(p.calls()) == 1
+
+
 def test_provider_modes_count_and_lookup(tmp_path: Path) -> None:
     p = Provider(tmp_path / "j.sqlite3")
     p.set_mode("timeout_before_start", count=2)
