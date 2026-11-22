@@ -33,4 +33,8 @@ DoD-1 (a16fc39): the milestone's check-all runs mutmut only for the packages M8 
 | 4 | 01f1c68 | exit 1 | all steps green up to mutmut (stand 33/33 ×3); mutmut: 1 `timeout` (x_rules 187, exit −24); SQL driver baseline red. Cause: mutmut 3.8.1 sends a stale wall-timeout `SIGXCPU` by PID, and `kernel.pid_max` 32768 wraps in ~150 s (backlog); `pid_max` raised to 4194304 in the container (Ubuntu runner default) |
 | 5 | 01f1c68 | stopped | superseded by DoD-1 (milestone packages only) → db17e0e (`MUTMUT_PACKAGES`) |
 | 6 | db17e0e | stand 6/33 | stand state from the stopped run 5 (`state.json` vs ContextForge DB, backlog); volumes and `state.json` reset |
-| 7 | db17e0e (+c7b37ca docs) | running | |
+| 7 | db17e0e (+c7b37ca, 34c9929 docs) | running: lock checks, ruff, mypy, pytest 973, tests_db 357, kit 373 + coverage gate, demo 145, schema guard, gitleaks tree/range, tests/secrets, policy validate/lint, bundle_smoke, docker_smoke green; stand running (18:10 UTC) | |
+
+## Status (Что \| Зачем \| Почему)
+
+- Gate run 7 on db17e0e | green check-all for gate closure | the owner's gate rule needs one green run on the final commit
