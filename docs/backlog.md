@@ -31,3 +31,9 @@
 | M9 | reports/critic/M9-cycle-2.json | N2: тесты оставляют поток перезагрузки bundle (50 мс) и открытые пулы psycopg до конца сессии | Stop-событие для загрузчика в тестах; закрывать/подменять `ConnectionPool` в фикстуре cli |
 | M9 | reports/critic/M9-cycle-2.json | N3: цикл уровней httpx/httpx2/httpcore в `ui/app.py` без теста | Одна проверка уровней, как `test_bot_module_sets_the_httpx_level` |
 | M9 | reports/critic/M9-cycle-2.json | N4: `approval/config.bundle_store` — однострочная обёртка | Звать `bundle_store_from_env` напрямую, обёртку удалить |
+| M9 | reports/critic/M9-final.json | F-1: access-лог uvicorn пишет `GET /auth/callback?code=<authorization code>&state=…` на INFO | `access_log=False` или фильтр query в логах ui |
+| M9 | reports/critic/M9-final.json | F-2: строки `notify` в outbox хранят `title`, `target_label`, `requester` бессрочно (нет очистки outbox) | Очистка доставленных строк outbox вместе с RET-01/RET-02 (M10) |
+| M9 | reports/critic/M9-final.json | F-3: список и кнопки по роли из bundle; approver вне замороженного `allowed_approvers` видит кнопки и получает 403 | Учитывать `allowed_approvers` в `can_decide` и списке |
+| M9 | reports/critic/M9-final.json | F-5: двойной префикс в логе `getUpdates: getUpdates: …` | Убрать префикс в `cli.updates` |
+| M9 | reports/critic/M9-final.json | F-6: строка AC-M10-08 стоит после таблицы M10 под «Этап D» | Переставить в плане (оркестратор, docs) |
+| M9 | reports/critic/M9-final.json | F-7: на shallow-клоне gitleaks ругается на граничные коммиты и `check-all` падает | В README/`check-all`: `git fetch --unshallow` перед проверкой |

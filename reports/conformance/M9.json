@@ -3,7 +3,7 @@
  "cycle": 2,
  "branch": "claude/m9-ui-bot",
  "base": "origin/claude/integration 3c2f0b0",
- "commit": "aaa770cd3e88f341d7927f3f6f934763741f92f0",
+ "commit": "40bc8a5ad6db631071944d907f536be9c19ab8db",
  "run_at": "2026-11-21T23:43:54Z",
  "author": "Claude Code (milestone owner, M9)",
  "plan": "reports/plans/M9-cycle-2.md",
@@ -275,11 +275,13 @@
    "F13": "ci_local below"
   }
  },
- "commit_note": "Code under test: aaa770c (cycle 2). This report is a later reports-only commit.",
+ "commit_note": "Code under test: 40bc8a5 (cycle 2 + approval tests for two intents.py survivors found by mutmut.sh on aaa770c). 53a1631 adds timeout_constant to connectors/demo [tool.mutmut] only.",
  "previous_critic": "reports/critic/M9-cycle-1.json (6.0); checklist = its required_improvements, see self_check.cycle_2_checklist",
  "ci_local": {
-  "commit": "aaa770cd3e88f341d7927f3f6f934763741f92f0",
+  "commit": "40bc8a5ad6db631071944d907f536be9c19ab8db",
   "command": "scripts/ci/check-all.sh (DOCKER_BUILD_FLAGS with the sandbox proxy CA)",
-  "result": "running since 2026-11-21T23:15:08Z: every stage up to and including stand/run.sh passed (stand 29/0 fresh, after-restart, after-recreate); scripts/ci/mutmut.sh still running — result added in a reports-only commit"
+  "owner_run_aaa770c": "exit 1 in mutmut.sh: 5 surviving mutants in approval intents.py (preview envelope keys, no-approver alert); fixed by tests in 40bc8a5, the 545 propose/_insert mutants rerun: all killed",
+  "owner_run_40bc8a5": "exit 1 in mutmut.sh only, with 0 survivors and 3 'timeout' mutants under machine load: approval transitions x_rules 188/193 (killed when rerun alone) and connectors/demo server.x_build__mutmut_9 (store=None; the demo tests fail on it in 1 s when the mutation is applied by hand; mutmut times out waiting for test_real_process_*) -> connectors/demo [tool.mutmut] timeout_constant = 60 (53a1631). Every other stage green: lint, mypy, root pytest 931, approval/tests_db 310, ui+notifier tests_db 109 incl. Playwright E2E, deploy 6, kit coverage, demo 64, schema guard, gitleaks, tests/secrets 21, policy, stand 29/0 x3; SQL mutations 103, 0 not as expected",
+  "final_critic_run_40bc8a5": "check-all: OK, EXIT=0 (129 min), mutmut.sh passed with no survivors (reports/critic/M9-final.json)"
  }
 }
