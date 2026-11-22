@@ -101,7 +101,7 @@ Fallback `index → scan` только при `temporarily_unavailable` или `
 
 ## Fake provider
 
-Хранит журнал `(idempotency_key, recipient, text_hash, attempt, outcome, at)` и счётчик вызовов.
+Хранит журнал `(provider_key, recipient, text_hash, attempt, outcome, at)` и счётчик вызовов. `provider_key` = `intent_id` (EFF-18 п.5).
 
 Режимы задаются **только в тестовом профиле** (`DEMO_TEST_CONTROLS=1`, endpoint слушает только `127.0.0.1`, в production-образе отсутствует):
 
@@ -114,9 +114,9 @@ Fallback `index → scan` только при `temporarily_unavailable` или `
 | `commit_then_drop` | Записывает, затем обрывает ответ | EX-11 |
 | `slow:<ms>` | Задержка ответа | Гонки, таймауты |
 
-Тестовые endpoint'ы: `PUT /_test/provider/mode`, `GET /_test/provider/calls?idempotency_key=…`, `POST /_test/index/fail` (ломает `index` для теста fallback).
+Тестовые endpoint'ы: `PUT /_test/provider/mode`, `GET /_test/provider/calls?provider_key=…`, `POST /_test/index/fail` (ломает `index` для теста fallback).
 
-Fake provider поддерживает идемпотентность по `idempotency_key`, как хороший реальный провайдер. Отдельный режим `no_dedupe` её выключает, чтобы проверить, что защита от дублей работает и без провайдера.
+Fake provider поддерживает идемпотентность по `provider_key` (`intent_id`), как хороший реальный провайдер. Отдельный режим `no_dedupe` её выключает, чтобы проверить, что защита от дублей работает и без провайдера.
 
 ## Identity в тестах
 

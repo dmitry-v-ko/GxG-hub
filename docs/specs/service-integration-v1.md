@@ -16,16 +16,24 @@
 
 Существующий [Telegram connector](https://github.com/dmitry-v-ko/gxg_agents_v2/blob/main/docs/current/telegram-ingestion.md) владеет пользовательской сессией, блокировками, archive-sync, per-chat scope, flood-wait и секретами. Второго session-owner'а не создаём.
 
-Новый **Telegram MCP-коннектор** — фасад к его доменным портам:
+**Решение владельца 2026-11-22 ([ADR-0005](../adr/0005-telegram-service-mcp.md), заменяет ADR-0004).** Telegram-коннектор — отдельный сервис `gxg-telegram-service`. Он единственный владеет сессией и архивом и сам является MCP-сервером по [MCC](mcp-connector-contract-v1.md) за ContextForge. Права устроены так:
+- видимость tools — RBAC и `unified_pdp` ContextForge;
+- чаты — grants;
+- запись — `propose`, затем политика или approver, затем Executor.
+
+Mastra из `gxg_agents_v2` ходит в Telegram только через Hub. Прямого чтения базы архива из Hub нет.
+
+Tools Telegram-коннектора:
 
 | Tool | Class | Этап |
 | --- | --- | --- |
-| `telegram.messages.search` | `read` | B: архив разрешённых чатов; live fallback позже, в рамках тех же прав |
+| `telegram.messages.search` | `read` | B: архив разрешённых чатов; live fallback — после решения по сессии |
 | `telegram.thread.read` | `read` | B: ограниченная история одного разрешённого чата |
-| `telegram.messages.collect` | `read` | D: cursor-based сбор для Signals |
+| `telegram.messages.collect` | `read` | D: cursor-based сбор из архива для Signals (свежесть = задержка archive-sync) |
 | `telegram.message.propose` | `external_effect` | E: выключен до прохождения этапа C на fake provider |
 
-- Chat scope проверяется до открытия сессии, чтения архива или live API — на каждом маршруте fallback.
+- Chat scope проверяется до чтения архива (и до live API, когда он появится): запрос к базе фильтруется списком разрешённых `chat_ref`.
+- Чат в RID — `chat_ref` архива (стабильный внутренний ID чата), а не peer ID Telegram: `telegram:<connection>/chat/<chat_ref>`. Peer ID остаётся внутренним идентификатором провайдера (MCC-04).
 - В логи не попадают сессии, peer ID и тексты сообщений.
 - Полнотекстовая модель `telegram_archive` уже есть, но как capability не опубликована (на 2026-11-13). Это задача адаптера, а не повод переписывать хранилище.
 - Notify-бот Approval Service — **отдельный** бот, не связанный с этой сессией.
