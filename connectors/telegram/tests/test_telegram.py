@@ -108,9 +108,14 @@ class Pg:
             return cur.fetchall() if cur.description else []
 
     def database(self) -> str:
-        name = f"t{next(self._n)}"
-        self.sql("postgres", f"CREATE DATABASE {name} TEMPLATE tpl")
-        return name
+        name = f"t{os.getpid()}_{next(self._n)}"  # mutmut forks workers that share one cluster
+        for _ in range(100):  # a concurrent CREATE ... TEMPLATE tpl holds the template for a moment
+            try:
+                self.sql("postgres", f"CREATE DATABASE {name} TEMPLATE tpl")
+                return name
+            except psycopg.errors.ObjectInUse:
+                time.sleep(0.05)
+        raise AssertionError("template database stayed busy")
 
 
 @pytest.fixture(scope="session")
