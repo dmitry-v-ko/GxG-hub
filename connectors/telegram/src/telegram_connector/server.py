@@ -187,7 +187,7 @@ def build(settings: Settings, service: TelegramService | None = None) -> tuple[S
     return create_app(connector, verifier, files.refresh, store), connector
 
 
-def configs(settings: Settings, app: Starlette, connector: Connector) -> list[uvicorn.Config]:
+def configs(app: Starlette) -> list[uvicorn.Config]:
     return [uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="warning")]  # noqa: S104
 
 
@@ -217,9 +217,9 @@ def main(env: Mapping[str, str] = os.environ) -> int:
         logging.getLogger(noisy).setLevel(logging.WARNING)
     try:
         settings = Settings.from_env(env)
-        app, connector = build(settings)
+        app, _ = build(settings)
     except (ConfigError, RuntimeError, ValueError, OSError) as exc:
         log.error(json.dumps({"event": "startup_refused", "reason": str(exc)}))
         return 2
-    serve(configs(settings, app, connector))
+    serve(configs(app))
     return 0

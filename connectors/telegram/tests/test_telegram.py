@@ -377,7 +377,7 @@ def test_identity_keys_select_the_contextforge_verifier(env: Env) -> None:
     )
     app, connector = server.build(settings)
     assert isinstance(connector.service, ArchiveService) and connector.service.dsn == settings.archive_dsn
-    assert [(c.host, c.port) for c in server.configs(settings, app, connector)] == [("0.0.0.0", 8080)]  # noqa: S104
+    assert [(c.host, c.port) for c in server.configs(app)] == [("0.0.0.0", 8080)]  # noqa: S104
     assert connector.connections == {"t-alpha": ("tg-main", "svc-alpha"), "t-beta": ("tg-main", "svc-beta")}
 
 
@@ -1105,8 +1105,8 @@ def test_no_verifier_refuses_with_a_reason() -> None:
 
 
 def test_servers_listen_where_the_spec_says(env: Env) -> None:
-    app, connector = server.build(env.settings)
-    (only,) = server.configs(env.settings, app, connector)
+    app, _ = server.build(env.settings)
+    (only,) = server.configs(app)
     assert (only.host, only.port, only.log_level) == ("0.0.0.0", 8080, "warning")  # noqa: S104
 
 
@@ -1500,3 +1500,67 @@ async def test_last_page_before_the_service_limit_is_not_truncated(tg: Tg) -> No
     second = await tg.ok("telegram.messages.search", {"query": "budget", "limit": 34, "cursor": first["next_cursor"]})
     assert len(first["items"]) + len(second["items"]) == total
     assert (second["next_cursor"], "truncated" in second["partial_reasons"]) == (None, False)
+
+
+# the archive port itself (archive.py): exact rows, page boundaries, completeness, how it connects ---------------
+
+
+async def test_port_rows_carry_edits_replies_and_utc_times(db: Db) -> None:
+    db.sql(
+        """UPDATE telegram_archive.messages SET edited_at = '2026-11-20T10:00:00+03:00', reply_to = 3
+        WHERE peer_id = %s AND message_id = 5""",
+        (seed.PEER["a-sales"],),
+    )
+    page = await ArchiveService(db.dsn).read_thread("svc-alpha", REF["a-sales"], 6, 1)
+    (m,) = page.items
+    sent = db.sql(
+        "SELECT sent_at FROM telegram_archive.messages WHERE peer_id = %s AND message_id = 5", (seed.PEER["a-sales"],)
+    )[0][0]
+    assert (m.message_id, m.edited_at, m.reply_to) == (5, "2026-11-20T07:00:00Z", 3)
+    assert m.sent_at == sent.isoformat().replace("+00:00", "Z") and m.sent_at.endswith("Z")
+    newer = (await ArchiveService(db.dsn).read_thread("svc-alpha", REF["a-sales"], 7, 1)).items[0]
+    assert (newer.message_id, newer.edited_at) == (6, None)
+
+
+@pytest.mark.parametrize("method", ["search", "read_thread", "collect"])
+async def test_port_more_is_exactly_past_the_page(db: Db, method: str) -> None:
+    archive, ref, total = ArchiveService(db.dsn), REF["a-sales"], len(texts_of("a-sales"))
+
+    async def page(limit: int) -> Any:
+        if method == "search":
+            return await archive.search("svc-alpha", "message", [ref], limit)
+        if method == "read_thread":
+            return await archive.read_thread("svc-alpha", ref, None, limit)
+        return await archive.collect("svc-alpha", ref, None, limit)
+
+    full, short = await page(total), await page(total - 1)
+    assert (len(full.items), full.more, len(short.items), short.more) == (total, False, total - 1, True)
+    if method == "search":
+        assert (full.partial_reasons, short.partial_reasons) == ([], ["result_limit"])
+
+
+async def test_port_completeness_names_each_reason(db: Db) -> None:
+    archive = ArchiveService(db.dsn)
+    gap = await archive.read_thread("svc-alpha", REF["a-gap"], None, 1)
+    assert gap.partial_reasons == ["not_synced", "sync_gap"]
+    db.sql("UPDATE telegram_archive.chats SET gap = false WHERE chat_ref = %s", (REF["a-gap"],))
+    assert (await archive.read_thread("svc-alpha", REF["a-gap"], None, 1)).partial_reasons == ["not_synced"]
+    db.sql("UPDATE telegram_archive.chats SET gap = true, state = 'synced' WHERE chat_ref = %s", (REF["a-gap"],))
+    assert (await archive.read_thread("svc-alpha", REF["a-gap"], None, 1)).partial_reasons == ["sync_gap"]
+    db.defer("svc-alpha", 30)
+    assert (await archive.search("svc-alpha", "message", [REF["a-sales"]], 50)).partial_reasons == ["flood_wait"]
+    with pytest.raises(ServiceError) as exc:
+        await archive.collect("svc-alpha", REF["a-sales"], None, 5)
+    assert exc.value.kind == "flood_wait" and 28 < float(exc.value.retry_after_seconds or 0) <= 30
+
+
+async def test_port_connects_as_the_connector_with_its_application_name(tg: Tg, db: Db) -> None:
+    """AC-M11-03's stand counter counts `application_name=gxg-telegram` connections; readiness uses its own name."""
+    log = db.pg.root / "log"
+    before = log.read_text(errors="replace").count("application_name=gxg-telegram")
+    await tg.ok("telegram.thread.read", {"chat_ref": REF["a-sales"]})
+    assert (await tg.http.get("/readyz")).status_code == 200
+    lines = [ln for ln in log.read_text(errors="replace").splitlines() if "application_name=gxg-telegram" in ln]
+    new = lines[before:]
+    assert [ln.split("application_name=")[1] for ln in new] == ["gxg-telegram", "gxg-telegram-ready"]
+    assert all(f"user={seed.READER}" in ln for ln in new)
