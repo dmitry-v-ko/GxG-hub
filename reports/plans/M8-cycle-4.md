@@ -11,7 +11,7 @@ milestone. Improvement cycles used: 3 of 4 (cycles 2, 3, 4).
 | # | Item | Change | Status |
 | --- | --- | --- | --- |
 | 1 | stale equivalent id | `take__mutmut_29` → `take__mutmut_36`; approval: 13 survivors, all listed, none stale | done in 1e7c951 (before the critic report reached the branch) |
-| 2 | evidence on the final commit | `scripts/ci/check-all.sh` to the end in a full clone, exit 0; `reports/conformance/M8.json` with `ci_local` (commit, command, exit, per step); `reports/mutmut/M8.txt` per package, survivor ids, full SQL driver output | in progress: see «Gate runs» below |
+| 2 | evidence on the final commit | `scripts/ci/check-all.sh` to the end in a full clone, exit 0; `reports/conformance/M8.json` with `ci_local` (commit, command, exit, per step); `reports/mutmut/M8.txt` per package, survivor ids, full SQL driver output | done: gate run 7, 34fa1ed, d562679 |
 | 3 | minors 3–5 | 3 (old provider table on reconcile) → `docs/backlog.md`; 4 (check-ignore test without `.git`) fixed: skips with a reason; 5 already in the backlog | done in ff0b209 |
 
 ## Closure by gate
@@ -33,8 +33,8 @@ DoD-1 (a16fc39): the milestone's check-all runs mutmut only for the packages M8 
 | 4 | 01f1c68 | exit 1 | all steps green up to mutmut (stand 33/33 ×3); mutmut: 1 `timeout` (x_rules 187, exit −24); SQL driver baseline red. Cause: mutmut 3.8.1 sends a stale wall-timeout `SIGXCPU` by PID, and `kernel.pid_max` 32768 wraps in ~150 s (backlog); `pid_max` raised to 4194304 in the container (Ubuntu runner default) |
 | 5 | 01f1c68 | stopped | superseded by DoD-1 (milestone packages only) → db17e0e (`MUTMUT_PACKAGES`) |
 | 6 | db17e0e | stand 6/33 | stand state from the stopped run 5 (`state.json` vs ContextForge DB, backlog); volumes and `state.json` reset |
-| 7 | db17e0e (+c7b37ca, 34c9929 docs) | running: lock checks, ruff, mypy, pytest 973, tests_db 357, kit 373 + coverage gate, demo 145, schema guard, gitleaks tree/range, tests/secrets, policy validate/lint, bundle_smoke, docker_smoke green; stand 33/33 ×3 (fresh, after restart, after recreate); mutmut demo, kit, approval done (0 timeouts); SQL driver running, 61 of ~98 rows done, all as expected (20:17 UTC) | |
+| 7 | db17e0e (code; docs-only heartbeats on top) | **exit 0**: every step green; stand 33/33 ×3; mutmut approval, demo, kit 0 timeouts, 79 not killed = 79 listed; SQL driver 98 rows, 0 not as expected | `kernel.pid_max` 4194304; stand volumes and `state.json` reset |
 
 ## Status
 
-Gate run 7 on db17e0e: the green check-all the gate closure needs.
+Gate run 7 green (exit 0). Heartbeat e7a808e committed the SQL driver's in-flight mutant of `0001_core.py` (`git commit -a`); restored in 9bc0eb5, code tree = db17e0e. Evidence: reports/mutmut/M8.txt (34fa1ed), reports/conformance/M8.json (d562679), reports/M8-READY.md.
