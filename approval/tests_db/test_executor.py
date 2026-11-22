@@ -1038,13 +1038,20 @@ def test_repeat_propose_after_success_returns_the_intent_as_it_is_now(stack: Sta
     assert len(stack.demo.calls()) == 1
 
 
-def test_without_an_active_signing_key_nothing_is_reserved_and_no_attempt_is_spent(stack: Stack) -> None:
+def test_without_an_active_signing_key_nothing_is_reserved_and_no_attempt_is_spent(
+    stack: Stack, caplog: pytest.LogCaptureFixture
+) -> None:
     """AS-10: after removing the only key (or before a new key's not_before) intents wait, they do not fail."""
     later = {"seed": stack.signing[0]["seed"], "not_before": "2999-01-01T00:00:00Z"}
     stack.signing = [later]
     created = stack.propose()
     ex = stack.executor()
     assert ex.run_once() is True  # the row is deferred with the backoff
+    (warning,) = [r for r in caplog.records if r.name == "gxg_approval.executor"]
+    assert warning.levelname == "WARNING"
+    assert warning.getMessage() == (
+        f"executor: no active signing key, intent {created['intent_id']} waits (AS-10: keys rotate)"
+    )
     assert ex.run_once() is False
     assert stack.status(created["intent_id"]) == "approved"
     assert stack.intent(created["intent_id"])["attempts"] == 0 and stack.executions(created["intent_id"]) == []

@@ -413,6 +413,13 @@ async def test_provider_test_controls(tmp_path: Path) -> None:
         assert (await c.put("/_test/provider/mode", json={"mode": "ok"})).status_code == 404
 
 
+def test_propose_output_statuses_are_the_intent_statuses() -> None:
+    """An idempotent repeat returns the intent as it is now (EFF-08): every status of intent-status may come back."""
+    ours = schema("schemas/message-propose.output.json")["properties"]["status"]["enum"]
+    platform = json.loads((REPO / "schemas" / "intent-status.schema.json").read_text("utf-8"))
+    assert ours == platform["properties"]["status"]["enum"]
+
+
 def test_manifest_propose_matches_the_spec_example() -> None:
     """MCC-01: the propose entry of the manifest is the one of schemas/examples/demo.gxg-manifest.yaml."""
     ours = yaml.safe_load((DEMO / "gxg-manifest.yaml").read_text())["tools"]

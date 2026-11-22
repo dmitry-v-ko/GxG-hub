@@ -135,6 +135,7 @@ class Executor:
                 self._reconcile(intent_id)
             elif topic == "execute" and status == "approved":  # else moved on (cancelled, expired, executing)
                 if not self.keys.active():  # AS-10: no key to sign with yet: wait, do not spend an attempt
+                    log.warning("executor: no active signing key, intent %s waits (AS-10: keys rotate)", intent_id)
                     self.conn.execute(_SQL_DEFER, (outbox_id,))
                     return True
                 try:

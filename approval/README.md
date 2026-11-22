@@ -43,7 +43,7 @@ Kill switch, включённый после reserve, срабатывает н�
 | 1 | хост: `gxg-approval keys rotate` | Новый ключ сразу в JWKS, в файле executor'а — с `not_before = now + 15 мин`. `api` отдаёт его без рестарта, коннекторы видят ≤ 10 мин (кеш AS-09) |
 | 2 | — | Через 15 мин executor подписывает новым ключом (выбор по `not_before`, файл перечитывается на ходу) |
 | 3 | через 24 ч, хост: `gxg-approval keys remove --kid <старый>` | Старый ключ уходит из JWKS и файла executor'а |
-| Компрометация | хост: `gxg-approval keys remove --kid <kid>`, затем `docker compose exec executor gxg-approval keys release` | `dispatch` отказывает токенам ключа сразу, коннекторы — ≤ 10 мин; все `reserved` исполнения освобождаются (T10 без ожидания lease). Если активного ключа не осталось, executor не резервирует: строки outbox ждут с backoff, попытки не тратятся, intents остаются `approved` до появления ключа (`rotate`, +15 мин) или до конца окна исполнения (T8). Поэтому держите опубликованный запасной ключ (шаг 1 заранее) |
+| Компрометация | хост: `gxg-approval keys remove --kid <kid>`, затем `docker compose exec executor gxg-approval keys release` | `dispatch` отказывает токенам ключа сразу, коннекторы — ≤ 10 мин; все `reserved` исполнения освобождаются (T10 без ожидания lease). Если активного ключа не осталось, executor не резервирует (лог `WARNING executor: no active signing key …`): строки outbox ждут с backoff, попытки не тратятся, intents остаются `approved` до появления ключа (`rotate`, +15 мин) или до конца окна исполнения (T8). Поэтому держите опубликованный запасной ключ (шаг 1 заранее) |
 
 ## Алерты
 
