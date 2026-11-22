@@ -1094,6 +1094,13 @@ def test_keys_cli_rotate_remove_and_release(stack: Stack, pg: Any, monkeypatch: 
         cli.main(["keys", "remove"])
 
 
+# Lock waits of this test's database only: pg_locks is cluster-wide, and mutmut runs mutants in parallel.
+WAITING_HERE = (
+    "SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a USING (pid)"
+    " WHERE NOT l.granted AND a.datname = current_database()"
+)
+
+
 def test_release_skips_an_execution_dispatched_while_it_waited_for_the_lock(stack: Stack, pg: Any) -> None:
     """gxg_release_reserved: the loop saw the execution `reserved`; by the time it holds the intent lock it is
     `dispatching` — it is skipped (CONTINUE WHEN), the call does not abort, the other reservation is released."""
@@ -1102,19 +1109,21 @@ def test_release_skips_an_execution_dispatched_while_it_waited_for_the_lock(stac
     assert isinstance(ex.take(), Reserved) and isinstance(ex.take(), Reserved)
     blocker = pg.connect("gxg_owner")
     blocker.autocommit = False
-    blocker.execute("SELECT 1 FROM intents WHERE intent_id = %s FOR UPDATE", (first["intent_id"],))
     result: list[Any] = []
-    releaser = threading.Thread(target=lambda: result.append(_release_or_error(pg)))
-    releaser.start()
-    deadline = time.time() + 10
-    while stack.owner.execute("SELECT count(*) FROM pg_locks WHERE NOT granted").fetchone() != (1,):
-        assert time.time() < deadline, "the release did not wait for the intent lock"
-        time.sleep(0.05)
-    blocker.execute("UPDATE executions SET state = 'dispatching', dispatched_at = now(), "
-                    "dispatch_lease_until = now() + interval '90 seconds' WHERE intent_id = %s",
-                    (first["intent_id"],))  # fmt: skip
-    blocker.commit()
-    blocker.close()
+    releaser = threading.Thread(target=lambda: result.append(_release_or_error(pg)), daemon=True)
+    try:  # a failed wait must not leave the lock held: the releaser would block the session forever
+        blocker.execute("SELECT 1 FROM intents WHERE intent_id = %s FOR UPDATE", (first["intent_id"],))
+        releaser.start()
+        deadline = time.time() + 10
+        while stack.owner.execute(WAITING_HERE).fetchone() != (1,):
+            assert time.time() < deadline, "the release did not wait for the intent lock"
+            time.sleep(0.05)
+        blocker.execute("UPDATE executions SET state = 'dispatching', dispatched_at = now(), "
+                        "dispatch_lease_until = now() + interval '90 seconds' WHERE intent_id = %s",
+                        (first["intent_id"],))  # fmt: skip
+        blocker.commit()
+    finally:
+        blocker.close()
     releaser.join(timeout=10)
     assert result == [1]
     assert stack.executions(first["intent_id"])[0][1] == "dispatching"
