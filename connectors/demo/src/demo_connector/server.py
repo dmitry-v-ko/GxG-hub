@@ -1,8 +1,8 @@
 """MCP server of `demo`: the kit's FastMCP plumbing (gxg_connector_kit.mcp) over Streamable HTTP, /healthz, /readyz.
 
-Configuration: `gxg_connector_kit.mcp.Settings` with the `DEMO_` prefix (no secrets, only public keys and paths):
-GXG_PROFILE, DEMO_BUNDLE_DIR, DEMO_BUNDLE_KEYS, DEMO_STATE_FILE, DEMO_IDENTITY_KEYS, DEMO_TEST_ISSUER_KEY,
-DEMO_TEST_CONTROLS=1 (test profile only: POST /_test/index/fail and friends on 127.0.0.1:8090).
+Made from templates/python-fastmcp (scripts/new-connector); `copier update` keeps this file in step with the template.
+Configuration: `gxg_connector_kit.mcp.Settings` with the `DEMO_` prefix (no secrets, only public keys and paths);
+DEMO_TEST_CONTROLS=1 (test profile only) serves testctl.py on 127.0.0.1:8090.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def build(settings: mcp.Settings, backend: Backend | None = None) -> tuple[Starl
     store, files = mcp.bundle_store(settings, logs.startup)
     connector = Connector(backend or Backend(), store)
     tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)
-    # Read-only connector: backend (in-process fixtures) + valid bundle; no Approval Service (MCC-09).
+    # Read-only connector: backend + valid bundle; no Approval Service (MCC-09).
     return mcp.create_app(CONNECTOR_ID, tools, files.refresh, store.readiness, logs.startup), connector
 
 

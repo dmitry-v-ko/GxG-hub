@@ -1,0 +1,6 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_src_path: ../../templates/python-fastmcp
+kit_source: path
+name: demo
+repo: ../..
+with_effects: false

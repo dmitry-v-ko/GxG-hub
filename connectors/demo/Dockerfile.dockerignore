@@ -1,7 +1,7 @@
 # Build context is the repository root; only what the image needs goes in.
 *
 !packages/gxg-connector-kit
-!schemas/search-result.schema.json
+!schemas
 !connectors/demo
 **/.venv
 **/__pycache__

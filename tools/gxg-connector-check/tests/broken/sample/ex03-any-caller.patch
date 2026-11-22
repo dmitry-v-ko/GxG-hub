@@ -1,0 +1,36 @@
+diff --git a/src/sample_connector/tools.py b/src/sample_connector/tools.py
+index 225bb4d..9512db3 100644
+--- a/src/sample_connector/tools.py
++++ b/src/sample_connector/tools.py
+@@ -34,6 +34,11 @@ def rid(connection: str, collection: str) -> str:
+     return f"{DOMAIN}:{connection}/{RTYPE}/{collection}"
+ 
+ 
++class AnyCaller:
++    def verify(self, token: str, **_: Any) -> None:
++        return None
++
++
+ class Connector:
+     """`gxg_connector_kit.mcp.Domain` of `sample`."""
+ 
+@@ -51,7 +56,7 @@ class Connector:
+         if not isinstance(self.grants, BundleStore):
+             raise TypeError("effects need the bundle store (platform registry, AS-06)")
+         self.approval = approval
+-        self.internal = effects.Internal(
++        self.internal = effects.Internal(  # type: ignore[assignment]
+             connector_id=self.connector_id,
+             tools=list(self._specs.values()),
+             grants=self.grants,
+@@ -61,7 +66,9 @@ class Connector:
+             serves=self.serves,
+             refresh=refresh,
+             logs=logs,
+-        ).app()
++        )
++        self.internal.callers = AnyCaller()  # type: ignore[assignment]  # BROKEN: no service JWT check (AS-06)
++        self.internal = self.internal.app()  # type: ignore[assignment]
+ 
+     def serves(self, tenant: str, connection: str, resource: str) -> bool:
+         """EFF-18 п.3: the execution token's tenant, connection and resource are this connector's."""
