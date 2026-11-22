@@ -469,11 +469,11 @@ flowchart TD
 | AC-M10-05 | Все метрики из таблицы approval-service-v1 доступны на `/metrics`; правила alert'ов загружаются в Prometheus без ошибок; искусственный `outcome_unknown` старше 1 ч поднимает alert |
 | AC-M10-06 | MC-05: повтор SC- и EX-тестов на следующей минорной версии ContextForge и FastMCP проходит (или зафиксированы регрессии и pin не меняется) |
 | AC-M10-07 | **Выход этапа C:** отчёт `reports/conformance/stage-C.json` — EX-01…EX-24 и MC-05 в статусе `passed` |
+| AC-M10-08 | AS-30: решение без валидного WebAuthn-assertion, с assertion для другого `intent_id`/`args_hash`/`version`/`decision`, повтор assertion, assertion ключа, зарегистрированного не через `decider` → отказ, строка в `decisions` не создана; роль `gxg_ui` не может вызвать `gxg_decide` (ошибка прав) |
 
 ---
 
 ## Этап D — реальные чтения и Signals
-| AC-M10-08 | AS-30: решение без валидного WebAuthn-assertion, с assertion для другого `intent_id`/`args_hash`/`version`/`decision`, повтор assertion, assertion ключа, зарегистрированного не через `decider` → отказ, строка в `decisions` не создана; роль `gxg_ui` не может вызвать `gxg_decide` (ошибка прав) |
 
 ### M11 — Telegram read-only
 
