@@ -282,7 +282,13 @@ def test_propose_is_listed_and_execute_is_not(stack: Stack) -> None:
 
 def test_human_approval_path(stack: Stack, pg: Any) -> None:
     """Without an auto rule: pending_approval → a human approves (T2) → executed."""
-    stack.reload(policies={"t-alpha": {"tenant": "t-alpha", "schema_version": 1, "rules": []}})
+    # M9: T1 freezes the tenant's approvers from the bundle and gxg_decide checks them, so the human is one
+    human = "oidc:https://idp.example.invalid:9"
+    grants = yaml.safe_load((DEMO / "fixtures/grants/t-alpha.yaml").read_text("utf-8"))
+    grants["principals"]["humans"] = [{"id": human, "roles": ["approver"]}]
+    stack.reload(
+        grants={"t-alpha": grants}, policies={"t-alpha": {"tenant": "t-alpha", "schema_version": 1, "rules": []}}
+    )
     created = stack.propose()
     assert created["status"] == "pending_approval"
     ex = stack.executor()
@@ -291,7 +297,7 @@ def test_human_approval_path(stack: Stack, pg: Any) -> None:
     with pg.connect("gxg_ui") as ui:
         ui.execute(
             "SELECT gxg_decide(%s, %s, 'approve', %s, %s, false, null)",
-            (created["intent_id"], "oidc:https://idp.example.invalid:9", i["version"], i["canonical_args_hash"]),
+            (created["intent_id"], human, i["version"], i["canonical_args_hash"]),
         )
     stack.drain(ex, lambda: stack.status(created["intent_id"]) == "succeeded")
     assert len(stack.demo.calls()) == 1
