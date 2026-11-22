@@ -1119,5 +1119,8 @@ async def test_readyz_follows_the_backend(demo: Demo) -> None:
     demo.backend.failure = "temporarily_unavailable"
     r = await demo.http.get("/readyz")
     assert (r.status_code, r.json()) == (503, {"status": "not_ready"})
+    demo.backend.failure = "timeout_before_start"
+    assert (await demo.http.get("/readyz")).status_code == 503
+    assert dataclasses.astuple(demo.backend.readiness()) == (False, ("backend is not available",))
     demo.backend.failure = "rate_limited"  # limited, not down
     assert (await demo.http.get("/readyz")).status_code == 200
