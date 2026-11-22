@@ -35,6 +35,6 @@ DoD-1 (a16fc39): the milestone's check-all runs mutmut only for the packages M8 
 | 6 | db17e0e | stand 6/33 | stand state from the stopped run 5 (`state.json` vs ContextForge DB, backlog); volumes and `state.json` reset |
 | 7 | db17e0e (+c7b37ca, 34c9929 docs) | running: lock checks, ruff, mypy, pytest 973, tests_db 357, kit 373 + coverage gate, demo 145, schema guard, gitleaks tree/range, tests/secrets, policy validate/lint, bundle_smoke, docker_smoke green; stand 33/33 ×3 (fresh, after restart, after recreate); mutmut demo, kit, approval done (0 timeouts); SQL driver running (19:26 UTC) | |
 
-## Status (Что \| Зачем \| Почему)
+## Status
 
-- Gate run 7 on db17e0e | green check-all for gate closure | the owner's gate rule needs one green run on the final commit
+Gate run 7 on db17e0e: the green check-all the gate closure needs.
