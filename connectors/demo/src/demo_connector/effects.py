@@ -221,9 +221,8 @@ class Effects:
         try:
             sent = await self.provider.send(
                 tenant=claims["ten"],
-                intent_id=claims["sub"],
+                provider_key=claims["sub"],  # intent_id (EFF-18 p.5), not the agent's per-requester key
                 execution_id=claims["jti"],
-                idempotency_key=claims["idk"],
                 recipient=args["recipient"],
                 text=args["text"],
             )
@@ -276,7 +275,7 @@ class Effects:
         if not RECONCILE_BODY.is_valid(body):
             raise GxgError("invalid_input", "body does not match the reconcile request")
         entry |= {"intent_id": body["intent_id"], "execution_id": body["execution_id"]}
-        executed, operation = self.provider.lookup(body["intent_id"])
+        executed, operation = self.provider.lookup(body["intent_id"])  # provider key (EFF-25)
         return {
             "intent_id": body["intent_id"],
             "execution_id": body["execution_id"],

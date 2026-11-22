@@ -341,29 +341,27 @@ async def test_internal_endpoints_need_an_executor_service_jwt(settings: server.
 # --- fake provider ---------------------------------------------------------------------------------
 
 
-def send(p: Provider, key: str = "k-1", intent: str = "i-1", tenant: str = "t-alpha") -> Any:
+def send(p: Provider, key: str = "i-1", tenant: str = "t-alpha") -> Any:
     import asyncio
 
-    return asyncio.run(
-        p.send(tenant=tenant, intent_id=intent, execution_id="e", idempotency_key=key, recipient="r_1", text="t")
-    )
+    return asyncio.run(p.send(tenant=tenant, provider_key=key, execution_id="e", recipient="r_1", text="t"))
 
 
-def test_provider_dedupes_by_tenant_and_key_unless_no_dedupe(tmp_path: Path) -> None:
+def test_provider_dedupes_by_provider_key_unless_no_dedupe(tmp_path: Path) -> None:
     p = Provider(tmp_path / "j.sqlite3")
     first = send(p)
     again = send(p)
     assert (first.outcome, again.outcome) == ("ok", "duplicate") and again.operation_id == first.operation_id
-    assert send(p, tenant="t-beta").outcome == "ok"  # another tenant's account: no dedupe across tenants
+    other = send(p, key="i-2")  # another intent: another effect
+    assert other.outcome == "ok" and other.operation_id != first.operation_id
     p.set_mode("ok,no_dedupe")
     assert send(p).outcome == "ok"
-    calls = p.calls("k-1")
-    assert [c["attempt"] for c in calls if c["tenant"] == "t-alpha"] == [1, 2, 3]
+    calls = p.calls("i-1")
+    assert [c["attempt"] for c in calls] == [1, 2, 3]
     assert set(calls[0]) == {
         "tenant",
-        "intent_id",
+        "provider_key",
         "execution_id",
-        "idempotency_key",
         "recipient",
         "text_hash",
         "attempt",
@@ -378,15 +376,15 @@ def test_provider_dedupes_by_tenant_and_key_unless_no_dedupe(tmp_path: Path) -> 
 def test_provider_modes_count_and_lookup(tmp_path: Path) -> None:
     p = Provider(tmp_path / "j.sqlite3")
     p.set_mode("timeout_before_start", count=2)
-    assert [send(p, intent="i-2").outcome for _ in range(3)] == ["timeout_before_start", "timeout_before_start", "ok"]
+    assert [send(p, key="i-2").outcome for _ in range(3)] == ["timeout_before_start", "timeout_before_start", "ok"]
     assert p.lookup("i-2")[0] is True and p.lookup("i-unknown") == (False, None)
     for mode in ("reject", "rate_limited"):
         p.set_mode(mode)
-        assert send(p, key=f"k-{mode}", intent=f"i-{mode}").outcome == mode
+        assert send(p, key=f"i-{mode}").outcome == mode
         assert p.lookup(f"i-{mode}") == (False, None)
     p.set_mode("commit_then_drop")
     with pytest.raises(Dropped):
-        send(p, key="k-drop", intent="i-drop")
+        send(p, key="i-drop")
     assert p.lookup("i-drop")[0] is True  # the effect happened
     p.set_mode("ok,slow:5")
     assert p.delay_s == 0.005 and p.dedupe
@@ -406,10 +404,8 @@ async def test_provider_test_controls(tmp_path: Path) -> None:
         assert r.status_code == 200 and provider.mode == "reject" and provider.remaining == 1
         assert (await c.put("/_test/provider/mode", json={"mode": 5})).status_code == 400
         assert (await c.put("/_test/provider/mode", json={"mode": "bad"})).status_code == 400
-        await provider.send(
-            tenant="t-alpha", intent_id="i", execution_id="e", idempotency_key="k-1", recipient="r_1", text="t"
-        )
-        r = await c.get("/_test/provider/calls", params={"idempotency_key": "k-1"})
+        await provider.send(tenant="t-alpha", provider_key="i", execution_id="e", recipient="r_1", text="t")
+        r = await c.get("/_test/provider/calls", params={"provider_key": "i"})
         assert r.json()["count"] == 1 and r.json()["calls"][0]["outcome"] == "reject"
     without = testctl.create_app(Backend(scan_delay_s=0))
     async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=without), base_url="http://ctl") as c:
@@ -498,8 +494,8 @@ async def test_execute_dispatches_then_calls_the_provider_once(internal: Interna
     assert d.url.path == f"/v1/executions/{EXECUTION}/dispatch" and json.loads(d.content) == {"execution_token": token}
     assert _jwt_claims(d.headers["authorization"].split()[1])["aud"] == "approval-api"
     (call,) = internal.provider.calls()
-    assert (call["tenant"], call["intent_id"], call["execution_id"], call["idempotency_key"], call["recipient"]) == (
-        "t-alpha", INTENT, EXECUTION, "cand-1:v1", "partner_1",
+    assert (call["tenant"], call["provider_key"], call["execution_id"], call["recipient"]) == (
+        "t-alpha", INTENT, EXECUTION, "partner_1",
     )  # fmt: skip
     again = await internal.execute(token)
     assert again.status_code == 409 and again.json()["message"] == "execution token already used"  # AC-M8-04

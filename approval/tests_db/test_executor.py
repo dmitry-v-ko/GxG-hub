@@ -252,7 +252,7 @@ def test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so(
     assert time.time() - started <= 10
     calls = stack.demo.calls()
     assert len(calls) == 1
-    assert calls[0]["idempotency_key"] == "cand-1:v1" and calls[0]["outcome"] == "ok"
+    assert calls[0]["provider_key"] == created["intent_id"] and calls[0]["outcome"] == "ok"  # EFF-18 p.5
     assert calls[0]["text_hash"] == hashlib.sha256(TEXT.encode()).hexdigest()
     assert stack.intent(created["intent_id"])["attempts"] == 1
     assert stack.executions(created["intent_id"]) == [(1, "succeeded", None)]
@@ -325,7 +325,7 @@ def test_ac02_50_intents_10_executors_no_dedupe_one_call_each(stack: Stack) -> N
             t.join()
     calls = stack.demo.calls()
     assert len(calls) == 50
-    assert sorted(c["idempotency_key"] for c in calls) == [f"race-{n:04d}" for n in range(50)]
+    assert sorted(c["provider_key"] for c in calls) == sorted(ids)  # one per intent
     assert {c["outcome"] for c in calls} == {"ok"}
     reserved_by = stack.owner.execute("SELECT count(DISTINCT reserved_by) FROM executions").fetchone()
     assert reserved_by is not None and reserved_by[0] > 1  # really concurrent
@@ -548,14 +548,14 @@ def test_ac07_t14_when_the_executor_dies_too(stack: Stack, pg: Any) -> None:
 
 
 def test_ac08_timeout_before_start_twice_then_ok(stack: Stack) -> None:
-    """EX-12, EX-23: failed_before_effect is retried with a new execution and the same idempotency key."""
+    """EX-12, EX-23: failed_before_effect is retried with a new execution and the same provider key (intent_id)."""
     stack.demo.mode("timeout_before_start", count=2)
     created = stack.propose(idempotency_key="retry-key-1")
     ex = stack.executor()
     stack.drain(ex, lambda: stack.status(created["intent_id"]) in ("succeeded", "failed"))
     assert stack.status(created["intent_id"]) == "succeeded"
     assert stack.intent(created["intent_id"])["attempts"] == 3
-    calls = stack.demo.calls("retry-key-1")
+    calls = stack.demo.calls(created["intent_id"])  # one provider key for every attempt
     assert [c["outcome"] for c in calls] == ["timeout_before_start", "timeout_before_start", "ok"]
     assert len({c["execution_id"] for c in calls}) == 3  # a new execution_id per attempt
     assert [e[1] for e in stack.executions(created["intent_id"])] == [
@@ -573,7 +573,7 @@ def test_ac08_max_attempts_2_ends_failed(stack: Stack) -> None:
     stack.drain(ex, lambda: stack.status(created["intent_id"]) in ("succeeded", "failed"))
     assert stack.status(created["intent_id"]) == "failed"
     assert stack.intent(created["intent_id"])["attempts"] == 2
-    assert len(stack.demo.calls("retry-key-2")) == 2
+    assert len(stack.demo.calls(created["intent_id"])) == 2
 
 
 def test_rejecting_provider_fails_before_effect(stack: Stack) -> None:
@@ -638,6 +638,37 @@ def test_ac10_kill_switch_after_reserve_before_dispatch(stack: Stack, pg: Any) -
         admin.execute("UPDATE switches SET blocked = false WHERE scope = 'tenant:t-alpha'")
     stack.owner.execute("UPDATE outbox SET available_at = now() - interval '1 hour'")
     stack.drain(ex, lambda: stack.status(alpha["intent_id"]) == "succeeded")
+
+
+def test_same_key_of_two_requesters_is_two_provider_effects(stack: Stack) -> None:
+    """EFF-08 (per requester) + EFF-18 p.5: two agents of t-alpha use the same idempotency key with different
+    messages → two intents, two provider effects keyed by intent_id, two operation ids, both succeeded."""
+    other = "agent:t-alpha:actor2"
+    grants = yaml.safe_load((DEMO / "fixtures" / "grants" / "t-alpha.yaml").read_text())
+    grants["principals"]["agents"].append({"id": other})
+    for g in grants["grants"]:
+        if g["id"] == "alpha-actor-public":
+            g["subjects"].append(other)
+    policy = auto_policy("t-alpha", ACTOR_A)
+    policy["rules"][0]["match"]["requesters"].append(other)
+    stack.reload(grants={"t-alpha": grants}, policies={"t-alpha": policy, "t-beta": auto_policy("t-beta", ACTOR_B)})
+    first = stack.propose(idempotency_key="shared-key-1", text="first message")
+    second = stack.propose(other, idempotency_key="shared-key-1", text="second message", recipient="partner_2")
+    assert first["intent_id"] != second["intent_id"]
+    ex = stack.executor()
+    ids = (first["intent_id"], second["intent_id"])
+    stack.drain(ex, lambda: all(stack.status(i) == "succeeded" for i in ids))
+    calls = stack.demo.calls()
+    assert sorted(c["provider_key"] for c in calls) == sorted(ids)
+    assert {c["outcome"] for c in calls} == {"ok"}
+    assert {c["text_hash"] for c in calls} == {
+        hashlib.sha256(t).hexdigest() for t in (b"first message", b"second message")
+    }
+    ops = stack.owner.execute(
+        "SELECT intent_id::text, provider_operation_id FROM executions WHERE state = 'succeeded'"
+    ).fetchall()
+    assert sorted(o[0] for o in ops) == sorted(ids)
+    assert len({o[1] for o in ops}) == 2 and all(o[1] for o in ops)  # two provider receipts
 
 
 # --- AC-M8-11 -------------------------------------------------------------------------------------

@@ -63,7 +63,7 @@ def create_app(backend: Backend, provider: Provider | None = None) -> Starlette:
     async def provider_calls(request: Request) -> JSONResponse:
         if provider is None:
             return JSONResponse({"error": "effects are not configured"}, status_code=404)
-        calls = provider.calls(request.query_params.get("idempotency_key"))
+        calls = provider.calls(request.query_params.get("provider_key"))
         return JSONResponse({"count": len(calls), "calls": calls})
 
     return Starlette(

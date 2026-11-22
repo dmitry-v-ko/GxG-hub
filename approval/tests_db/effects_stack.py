@@ -237,8 +237,8 @@ class DemoClient:
     def mode(self, mode: str, count: int | None = None) -> None:
         self.ctl("PUT", "/_test/provider/mode", json={"mode": mode, "count": count})
 
-    def calls(self, key: str | None = None) -> list[dict[str, Any]]:
-        params = {"idempotency_key": key} if key else {}
+    def calls(self, provider_key: str | None = None) -> list[dict[str, Any]]:
+        params = {"provider_key": provider_key} if provider_key else {}
         calls: list[dict[str, Any]] = self.ctl("GET", "/_test/provider/calls", params=params)["calls"]
         return calls
 

@@ -1,10 +1,10 @@
 """Fake provider of `demo` (demo-connector-v1 «Fake provider»): a journal of sends in SQLite, idempotent by key.
 
 The provider is remote: it records a call when it receives it, `slow:<ms>` delays only the answer.
-Journal row per call: `(tenant, intent_id, execution_id, idempotency_key, recipient, text_hash, attempt, outcome, at)`;
-the row count is the call counter, and it survives restarts (a file in the volume). A call has an effect when its
-outcome is `ok` or `commit_then_drop`. Dedupe is per `(tenant, idempotency_key)`, like a provider account per tenant
-connection; a repeated key returns the first receipt and is logged as `duplicate` (no second effect).
+Journal row per call: `(tenant, provider_key, execution_id, recipient, text_hash, attempt, outcome, at)`; the row
+count is the call counter, and it survives restarts (a file in the volume). A call has an effect when its outcome is
+`ok` or `commit_then_drop`. The provider key is the `intent_id` (EFF-18 p.5): unique per intent, the same for every
+attempt. A repeated key returns the first receipt and is logged as `duplicate` (no second effect).
 Modes are set only through the test controls (`testctl.py`, test profile). The text itself is never stored.
 """
 
@@ -27,10 +27,10 @@ EFFECT = ("ok", "commit_then_drop")
 RETRY_AFTER_S = 3
 _SLOW = re.compile(r"slow:([0-9]{1,6})")
 _SCHEMA = """CREATE TABLE IF NOT EXISTS calls (
-  id INTEGER PRIMARY KEY, tenant TEXT NOT NULL, intent_id TEXT NOT NULL, execution_id TEXT NOT NULL,
-  idempotency_key TEXT NOT NULL, recipient TEXT NOT NULL, text_hash TEXT NOT NULL, attempt INTEGER NOT NULL,
+  id INTEGER PRIMARY KEY, tenant TEXT NOT NULL, provider_key TEXT NOT NULL, execution_id TEXT NOT NULL,
+  recipient TEXT NOT NULL, text_hash TEXT NOT NULL, attempt INTEGER NOT NULL,
   outcome TEXT NOT NULL, operation_id TEXT, at TEXT NOT NULL)"""
-_COLUMNS = "tenant, intent_id, execution_id, idempotency_key, recipient, text_hash, attempt, outcome, at"
+_COLUMNS = "tenant, provider_key, execution_id, recipient, text_hash, attempt, outcome, at"
 
 
 class Dropped(Exception):
@@ -87,29 +87,26 @@ class Provider:
                 self.mode, self.remaining = "ok", None
         return mode
 
-    async def send(
-        self, *, tenant: str, intent_id: str, execution_id: str, idempotency_key: str, recipient: str, text: str
-    ) -> Sent:
+    async def send(self, *, tenant: str, provider_key: str, execution_id: str, recipient: str, text: str) -> Sent:
         """One call, journalled at once; `slow` delays the answer. Raises Dropped for commit_then_drop."""
         with self._lock:
             mode = self._take_mode()
             first = None
             if self.dedupe and mode == "ok":
                 first = self._db.execute(
-                    "SELECT operation_id FROM calls WHERE tenant = ? AND idempotency_key = ? AND outcome IN (?, ?)"
-                    " ORDER BY id LIMIT 1",
-                    (tenant, idempotency_key, *EFFECT),
+                    "SELECT operation_id FROM calls WHERE provider_key = ? AND outcome IN (?, ?) ORDER BY id LIMIT 1",
+                    (provider_key, *EFFECT),
                 ).fetchone()
             outcome = "duplicate" if first else mode
             operation = first[0] if first else (f"demo-op-{uuid.uuid4()}" if mode in EFFECT else None)
-            attempt = self._db.execute(
-                "SELECT count(*) FROM calls WHERE tenant = ? AND idempotency_key = ?", (tenant, idempotency_key)
-            ).fetchone()[0]
+            attempt = self._db.execute("SELECT count(*) FROM calls WHERE provider_key = ?", (provider_key,)).fetchone()[
+                0
+            ]
             self._db.execute(
-                "INSERT INTO calls (tenant, intent_id, execution_id, idempotency_key, recipient, text_hash, attempt,"
-                " outcome, operation_id, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (tenant, intent_id, execution_id, idempotency_key, recipient, text_hash(text), attempt + 1, outcome,
-                 operation, datetime.now(UTC).isoformat()),
+                "INSERT INTO calls (tenant, provider_key, execution_id, recipient, text_hash, attempt, outcome,"
+                " operation_id, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (tenant, provider_key, execution_id, recipient, text_hash(text), attempt + 1, outcome, operation,
+                 datetime.now(UTC).isoformat()),
             )  # fmt: skip
         if self.delay_s:
             await asyncio.sleep(self.delay_s)
@@ -117,21 +114,21 @@ class Provider:
             raise Dropped
         return Sent(outcome, operation)
 
-    def lookup(self, intent_id: str) -> tuple[bool, str | None]:
-        """Reconcile: (executed, operation id) of an intent, by its client reference."""
+    def lookup(self, provider_key: str) -> tuple[bool, str | None]:
+        """Reconcile: (executed, operation id) of a provider key."""
         with self._lock:
             row = self._db.execute(
-                "SELECT operation_id FROM calls WHERE intent_id = ? AND outcome IN (?, ?) ORDER BY id LIMIT 1",
-                (intent_id, *EFFECT),
+                "SELECT operation_id FROM calls WHERE provider_key = ? AND outcome IN (?, ?) ORDER BY id LIMIT 1",
+                (provider_key, *EFFECT),
             ).fetchone()
         return (row is not None, row[0] if row else None)
 
-    def calls(self, idempotency_key: str | None = None) -> list[dict[str, Any]]:
+    def calls(self, provider_key: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute(
                 f"SELECT {_COLUMNS} FROM calls"  # noqa: S608 (constant column list)
-                + (" WHERE idempotency_key = ?" if idempotency_key is not None else "")
+                + (" WHERE provider_key = ?" if provider_key is not None else "")
                 + " ORDER BY id",
-                () if idempotency_key is None else (idempotency_key,),
+                () if provider_key is None else (provider_key,),
             ).fetchall()
         return [dict(r) for r in rows]
