@@ -42,7 +42,17 @@ CASES = {  # patch -> (the check that catches it, every check that fails: an exa
     "09-secret-in-audit": ("SC-09", {"SC-09"}),
     # /readyz is 200 without a valid bundle
     "10-always-ready": ("MCC-09", {"MCC-09"}),
+    # cycle 2 (critic M1.1-cycle-1): the harness itself, lists, logs, readiness
+    "11-calls-always-zero": ("SC-10", {"SC-10"}),  # the harness counts no provider call: positive control
+    "12-failures-only-crash": ("MC-03", {"MC-03"}),  # the harness hides the provider's failure modes
+    "13-hidden-board-dropped": ("SC-05", {"SC-05"}),  # a named board without a grant is silently dropped
+    "14-empty-is-not-found": ("MC-02", {"MC-02"}),  # an empty search is an error
+    "15-cursor-never": ("MC-02", {"MC-02"}),  # a cut page has no next_cursor
+    "16-cursor-unbound": ("MC-02", {"MC-02"}),  # another principal can use the cursor
+    "17-query-in-audit": ("SC-09", {"SC-09"}),  # the caller's query in the audit line
+    "18-backend-always-ready": ("MCC-09", {"MCC-09"}),  # /readyz ignores the backend
 }
+FIRST_TEN = sorted(CASES)[:10]
 pytestmark = pytest.mark.e2e  # child processes: mutmut's trampolines do not reach them
 
 
@@ -66,11 +76,13 @@ def test_demo_passes(tmp_path: Path) -> None:
     code, report, out = check(DEMO, tmp_path)
     assert code == 0, out
     assert {k for k, v in report.items() if v["status"] == "passed"} == {c for c, _ in CASES.values()} | {"MC-01"}
+    assert len(CASES) == 18
     assert all(v["status"] in ("passed", "not_applicable") for v in report.values()), report
 
 
 def test_every_broken_copy_has_its_own_check() -> None:
-    assert len(CASES) == 10 and len({c for c, _ in CASES.values()}) == 10
+    """AC-M1.1-02: ten copies, each on its own check; the later ones add positive controls of those checks."""
+    assert len({CASES[n][0] for n in FIRST_TEN}) == 10
     assert sorted(p.stem for p in (BROKEN / "demo").glob("*.patch")) == sorted(CASES)
 
 

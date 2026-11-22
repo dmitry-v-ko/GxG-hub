@@ -466,6 +466,12 @@ async def test_execute_without_a_valid_token_is_refused_before_the_provider(env:
     intent_id, body = intent_of(env)
     other = Ed25519PrivateKey.generate()
     unserved = body["resource_id"].rsplit("/", 1)[0] + "/gxg-check-unserved"
+    # the actor may propose on it: only the connector's target check (EFF-18 п.3) can refuse the token
+    grant = {"id": "gxg-check-unserved", "subjects": [body["requester"]["principal"]], "actions": ["read", "propose"],
+             "resources": [unserved]}  # fmt: skip
+    granted = [{**d, "grants": [*d["grants"], grant]} if d["tenant"] == body["requester"]["tenant_id"] else d
+               for d in env.grants]  # fmt: skip
+    env.write_bundle(granted, datetime.now(UTC))
     cases: dict[str, tuple[dict[str, Any], int]] = {
         "no service JWT": ({"svc": ""}, 401),
         "service JWT of an unknown key": ({"svc": f"Bearer {env.executor_jwt(signer=other)}"}, 401),

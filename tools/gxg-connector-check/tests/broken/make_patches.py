@@ -1,6 +1,6 @@
-"""Regenerates tests/broken/demo/*.patch from connectors/demo (run from the repository root after demo changes):
+"""Regenerates tests/broken/{demo,sample}/*.patch from connectors/demo and the template (run from the repository root after demo changes):
 
-    uv run python tools/gxg-connector-check/tests/broken/make_demo_patches.py
+    uv run python tools/gxg-connector-check/tests/broken/make_patches.py
 
 Each case is a few exact replacements in a copy of demo; the patch is their diff. tests/test_broken.py applies them.
 """
@@ -10,8 +10,11 @@ import shutil
 import subprocess
 import tempfile
 
+import copier
+
 S = pathlib.Path(tempfile.mkdtemp())
 DEMO = pathlib.Path("connectors/demo")
+C, ST = "src/demo_connector/conformance.py", "schemas/notes-search.input.json"
 OUT = pathlib.Path("tools/gxg-connector-check/tests/broken/demo")
 IGNORE = shutil.ignore_patterns(".venv", "mutants", "__pycache__", ".pytest_cache", "uv.lock", "tests")
 T, SV = "src/demo_connector/tools.py", "src/demo_connector/server.py"
@@ -220,14 +223,192 @@ case(
     [
         (
             SV,
-            '''    return mcp.create_app(CONNECTOR_ID, tools, files.refresh, store.readiness, logs.startup), connector''',
-            '''    always = lambda: Readiness(True)  # noqa: E731 - BROKEN: ready without a valid bundle
-    return mcp.create_app(CONNECTOR_ID, tools, files.refresh, always, logs.startup), connector''',
+            '''    ready = mcp.readiness_of(store.readiness, connector.backend.readiness)''',
+            '''    ready = lambda: Readiness(True)  # noqa: E731 - BROKEN: ready without a valid bundle''',
         ),
         (
             SV,
             "from gxg_connector_kit import mcp\n",
             "from gxg_connector_kit import mcp\nfrom gxg_connector_kit.readiness import Readiness\n",
         ),
+    ],
+)
+
+# --- cycle 2: positive controls of the harness, lists, logs, readiness ------------------------------------------
+case(
+    "11-calls-always-zero", [(C, "calls=lambda: sum(backend.calls.values())", "calls=lambda: 0")]
+)  # BROKEN: counts nothing
+case("12-failures-only-crash", [(C, "failures=(*BACKEND_FAILURES, \"crash\"),", "failures=(\"crash\",),  # BROKEN")])
+case(
+    "13-hidden-board-dropped",
+    [
+        (
+            T,
+            """        if requested is not None and any(b not in readable for b in requested):
+            raise GxgError("not_found", NOT_FOUND)  # GR-17: a named board without a grant""",
+            """        if requested is not None:  # BROKEN: a named board without a grant is silently dropped (GR-17)
+            requested = [b for b in requested if b in readable]""",
+        )
+    ],
+)
+case(
+    "14-empty-is-not-found",
+    [
+        (
+            T,
+            """        page = visible[offset : offset + limit]""",
+            """        if not visible:
+            raise GxgError("not_found", NOT_FOUND)  # BROKEN: an empty result is a success (MCC-04)
+        page = visible[offset : offset + limit]""",
+        )
+    ],
+)
+case(
+    "15-cursor-never",
+    [
+        (
+            T,
+            """            "next_cursor": self._cursor.make(binding, offset + limit) if more else None,""",
+            """            "next_cursor": None,  # BROKEN: a cut page has no cursor""",
+        )
+    ],
+)
+case(
+    "16-cursor-unbound",
+    [
+        (
+            T,
+            """        binding = json.dumps([ident.tenant_id, ident.principal, query, boards, limit]).encode()""",
+            """        binding = json.dumps([query, limit]).encode()  # BROKEN: the cursor is not bound to its caller""",
+        )
+    ],
+)
+case(
+    "17-query-in-audit",
+    [
+        (
+            T,
+            """        return content, {"grant_id": sorted(grant_ids), "method": method}""",
+            """        return content, {"grant_id": sorted(grant_ids), "method": method, "q": query}  # BROKEN: text in the log""",
+        )
+    ],
+)
+case(
+    "18-backend-always-ready",
+    [
+        (
+            B,
+            """        if self.failure in ("temporarily_unavailable", "timeout_before_start"):
+            return Readiness(False, ("backend is not available",))""",
+            """        if False:  # BROKEN: readiness ignores the backend (MCC-09)
+            return Readiness(False, ("backend is not available",))""",
+        )
+    ],
+)
+
+# --- sample --with-effects (the template rendered here): EX checks -------------------------------------------
+SAMPLE = S / "sample-base"
+OUT_SAMPLE = pathlib.Path("tools/gxg-connector-check/tests/broken/sample")
+copier.run_copy(".", SAMPLE, data={"name": "sample", "with_effects": True, "kit_source": "path", "repo": "../.."},
+                defaults=True, quiet=True)  # fmt: skip
+ST_TOOLS, ST_BACKEND = "src/sample_connector/tools.py", "src/sample_connector/backend.py"
+
+
+def sample(name: str, edits: list[tuple[str, str, str]]) -> None:
+    new = S / name
+    shutil.copytree(SAMPLE, new)
+    for rel, old, repl in edits:
+        text = (new / rel).read_text(encoding="utf-8")
+        assert text.count(old) == 1, (name, rel, old[:60])
+        (new / rel).write_text(text.replace(old, repl), encoding="utf-8")
+    cmd = ["git", "diff", "--no-index", "--src-prefix=a/", "--dst-prefix=b/", "sample-base", name]
+    diff = subprocess.run(cmd, cwd=S, capture_output=True, text=True, check=False).stdout
+    diff = diff.replace("a/sample-base/", "a/").replace(f"b/{name}/", "b/")
+    (OUT_SAMPLE / f"{name}.patch").write_text(diff, encoding="utf-8")
+
+
+INTERNAL_END = """            logs=logs,
+        ).app()
+"""
+sample(
+    "ex03-any-caller",
+    [
+        (
+            ST_TOOLS,
+            INTERNAL_END,
+            """            logs=logs,
+        )
+        internal.callers = AnyCaller()  # type: ignore[assignment]  # BROKEN: no service JWT check (AS-06)
+        self.internal = internal.app()
+""",
+        ),
+        (ST_TOOLS, "        self.internal = effects.Internal(", "        internal = effects.Internal("),
+        (
+            ST_TOOLS,
+            "class Connector:",
+            """class AnyCaller:
+    def verify(self, token: str, **_: Any) -> Any:
+        return type("Caller", (), {"serves": lambda self, tenant: True})()
+
+
+class Connector:""",
+        ),
+    ],
+)
+sample(
+    "ex03-unverified-token",
+    [
+        (
+            ST_TOOLS,
+            INTERNAL_END,
+            """            logs=logs,
+        )
+        internal.tokens.verify = lambda token: jwt.decode(token, options={"verify_signature": False})  # type: ignore[method-assign]  # BROKEN
+        self.internal = internal.app()
+""",
+        ),
+        (ST_TOOLS, "        self.internal = effects.Internal(", "        internal = effects.Internal("),
+        (ST_TOOLS, "import json\n", "import json\n\nimport jwt\n"),
+    ],
+)
+sample(
+    "ex03-serves-everything",
+    [
+        (
+            ST_TOOLS,
+            """        own = self.backend.connections.get(tenant)""",
+            """        return True  # BROKEN: any tenant, connection and resource (EFF-18 п.3)
+        own = self.backend.connections.get(tenant)""",
+        )
+    ],
+)
+sample(
+    "ex04-no-jti-cache",
+    [
+        (
+            ST_TOOLS,
+            INTERNAL_END,
+            """            logs=logs,
+        )
+        internal.tokens._jti.add = lambda *a, **k: True  # type: ignore[method-assign]  # BROKEN: no replay cache
+        self.internal = internal.app()
+""",
+        ),
+        (ST_TOOLS, "        self.internal = effects.Internal(", "        internal = effects.Internal("),
+    ],
+)
+sample(
+    "ex11-retry-lost-answer",
+    [
+        (
+            ST_BACKEND,
+            """        if self.failure == "commit_then_drop":
+            raise Dropped
+""",
+            """        if self.failure == "commit_then_drop":
+            self.failure = None
+            return await self.send(claims, args)  # BROKEN: retries a lost answer (EFF-24: never automatically)
+""",
+        )
     ],
 )

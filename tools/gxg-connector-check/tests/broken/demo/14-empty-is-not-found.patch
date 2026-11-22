@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index 34549d6..11e693b 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -109,6 +109,8 @@ class Connector:
+                 if decision.allowed:
+                     visible.append(n)
+                     grant_ids.add(str(decision.grant_id))
++        if not visible:
++            raise GxgError("not_found", NOT_FOUND)  # BROKEN: an empty result is a success (MCC-04)
+         page = visible[offset : offset + limit]
+         more = offset + limit < len(visible)
+         items = [

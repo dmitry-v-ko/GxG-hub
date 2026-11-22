@@ -18,12 +18,12 @@ from starlette.applications import Starlette
 
 {% endif -%}
 from gxg_connector_kit import {% if with_effects %}effects, {% endif %}mcp
+from gxg_connector_kit.errors import GxgError
 {%- if with_effects %}
 from gxg_connector_kit.exec_token import ExecutorJwks
 {%- endif %}
 from gxg_connector_kit.grants import {% if with_effects %}BundleStore, {% endif %}GrantResolver
 from gxg_connector_kit.identity import IdentityVerifier
-from gxg_connector_kit.errors import GxgError
 from gxg_connector_kit.mcp import NOT_FOUND, Access, Handler, Result
 
 from .backend import Backend, Item

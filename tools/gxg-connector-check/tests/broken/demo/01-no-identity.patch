@@ -1,5 +1,5 @@
 diff --git a/src/demo_connector/server.py b/src/demo_connector/server.py
-index 71f3a0d..097db40 100644
+index 7bf8d43..a97d703 100644
 --- a/src/demo_connector/server.py
 +++ b/src/demo_connector/server.py
 @@ -9,13 +9,15 @@ from __future__ import annotations
@@ -45,6 +45,6 @@ index 71f3a0d..097db40 100644
      connector = Connector(backend or Backend(), store)
 -    tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)
 +    tools = connector.tools(Lenient(mcp.verifier(settings, CONNECTOR_ID)), files.refresh)
-     # Read-only connector: backend + valid bundle; no Approval Service (MCC-09).
-     return mcp.create_app(CONNECTOR_ID, tools, files.refresh, store.readiness, logs.startup), connector
- 
+     # MCC-09: backend + valid bundle; a read-only connector does not depend on the Approval Service.
+     ready = mcp.readiness_of(store.readiness, connector.backend.readiness)
+     return mcp.create_app(CONNECTOR_ID, tools, files.refresh, ready, logs.startup), connector

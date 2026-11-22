@@ -123,6 +123,9 @@ def test_new_service_in_its_own_repository_passes_its_gate(effects: bool, tmp_pa
 
 SAMPLE_BROKEN = {  # AC-M1.1-02 for the effect checks: broken copies of the generated `sample --with-effects`
     "ex03-any-caller": ("EX-03", {"EX-03"}),  # execute accepts any caller: no service JWT check (AS-06)
+    "ex03-unverified-token": ("EX-03", {"EX-03", "EX-04"}),  # «execute без токена»: no signature check at all
+    "ex03-serves-everything": ("EX-03", {"EX-03"}),  # serves() is always True: any target (EFF-18 п.3)
+    "ex04-no-jti-cache": ("EX-04", {"EX-04"}),  # a replayed token reaches dispatch (EFF-18 п.1)
     "ex11-retry-lost-answer": ("EX-11", {"EX-11"}),  # a lost answer is retried: a second provider call
 }
 

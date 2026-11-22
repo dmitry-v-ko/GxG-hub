@@ -1,8 +1,8 @@
 diff --git a/src/sample_connector/backend.py b/src/sample_connector/backend.py
-index c45ee33..3019173 100644
+index 36a1da1..bb74b1a 100644
 --- a/src/sample_connector/backend.py
 +++ b/src/sample_connector/backend.py
-@@ -79,7 +79,8 @@ class Backend:
+@@ -86,7 +86,8 @@ class Backend:
              return Sent("timeout_before_start", None)
          self.journal[key] = str(uuid.uuid4())
          if self.failure == "commit_then_drop":
