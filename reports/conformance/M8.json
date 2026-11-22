@@ -1,12 +1,12 @@
 {
  "milestone": "M8",
- "cycle": 1,
+ "cycle": 4,
  "branch": "claude/m8-executor",
  "base": "3c2f0b0 (origin/claude/integration)",
- "commit": "a01c564",
- "run_at": "2026-11-21",
+ "commit": "9bc0eb5",
+ "run_at": "2026-11-22",
  "author": "M8 milestone owner (Claude)",
- "plan": "reports/plans/M8-cycle-1.md",
+ "plan": "reports/plans/M8-cycle-4.md (cycles 1–3: reports/plans/M8-cycle-1.md, M8-cycle-2.md, M8-cycle-3.md)",
  "environment": "cloud container, 4 cores; PostgreSQL 16.6 (postgres:16.6-alpine, --network none, Unix socket); Docker 29.10 (dockerd started by hand); Python 3.13.18 (uv venv, requires-python >= 3.12)",
  "contextforge_image_digest": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
  "sdk_versions": {
@@ -31,18 +31,19 @@
   {
    "id": "AC-M8-01",
    "status": "passed",
-   "expected": "propose → auto-approve → executor → demo → provider; effects.status = succeeded ≤ 10 s; journal 1 row, same idempotency_key and text_hash",
-   "actual": "succeeded via the approval MCP facade (effects.status) in ~1 s; journal 1 row ok, idempotency_key cand-1:v1, text_hash = sha256(text); attempts 1; receipt stored; executed event and gxg_executions_total +1",
+   "expected": "propose → auto-approve → executor → demo → provider; effects.status = succeeded ≤ 10 s; journal 1 row with provider key = intent_id (EFF-18 p.5) and the same text_hash",
+   "actual": "succeeded via the approval MCP facade (effects.status) in ~1 s; journal 1 row ok, provider_key = intent_id, text_hash = sha256(text); attempts 1; receipt stored; executed event and gxg_executions_total +1",
    "tests": [
     "approval/tests_db/test_executor.py::test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so",
-    "approval/tests_db/test_executor.py::test_human_approval_path"
+    "approval/tests_db/test_executor.py::test_human_approval_path",
+    "approval/tests_db/test_executor.py::test_same_key_of_two_requesters_is_two_provider_effects"
    ]
   },
   {
    "id": "AC-M8-02",
    "status": "passed",
-   "expected": "50 approved intents, 10 executors, no_dedupe, provider 200 ms → 50 journal rows, one per key (EX-10)",
-   "actual": "50 rows, keys race-0000…0049 once each, all ok; executions 50; reserved_by > 1 instance (real threads, one PostgreSQL)",
+   "expected": "50 approved intents, 10 executors, no_dedupe, provider 200 ms → 50 journal rows, one per provider key intent_id (EX-10)",
+   "actual": "50 rows, provider keys = the 50 intent ids once each, all ok; executions 50; reserved_by > 1 instance (real threads, one PostgreSQL)",
    "tests": [
     "approval/tests_db/test_executor.py::test_ac02_50_intents_10_executors_no_dedupe_one_call_each"
    ]
@@ -100,8 +101,8 @@
   {
    "id": "AC-M8-08",
    "status": "passed",
-   "expected": "timeout_before_start ×2 then ok → succeeded, attempts 3, same idempotency_key; max_attempts 2 → failed (EX-12, EX-23)",
-   "actual": "outcomes [timeout_before_start, timeout_before_start, ok], 3 execution ids, attempts 3, succeeded; with max_attempts 2 (set in test setup, see pending_owner_decision) → failed, attempts 2, 2 calls",
+   "expected": "timeout_before_start ×2 then ok → succeeded, attempts 3, journal rows with one provider key intent_id; max_attempts 2 → failed (EX-12, EX-23)",
+   "actual": "outcomes [timeout_before_start, timeout_before_start, ok] under one provider key (intent_id), 3 execution ids, attempts 3, succeeded; with max_attempts 2 (set in test setup, see pending_owner_decision) → failed, attempts 2, 2 calls",
    "tests": [
     "approval/tests_db/test_executor.py::test_ac08_timeout_before_start_twice_then_ok",
     "approval/tests_db/test_executor.py::test_ac08_max_attempts_2_ends_failed"
@@ -171,11 +172,63 @@
    ]
   }
  ],
+ "cycle2_checklist": [
+  {
+   "item": "1 propose output vs idempotent repeat",
+   "status": "done",
+   "evidence": "message-propose.output.json status = 11 statuses of intent-status; test_repeat_propose_after_success_returns_the_intent_as_it_is_now (real MCP client: 200, same intent, succeeded)"
+  },
+  {
+   "item": "2 no active signing key",
+   "status": "done",
+   "evidence": "executor.take: no key → outbox row deferred (backoff), no reservation, no attempt; test_without_an_active_signing_key_nothing_is_reserved_and_no_attempt_is_spent; README compromise row"
+  },
+  {
+   "item": "3 key file visible after rotation; keys CLI",
+   "status": "done",
+   "evidence": "compose: ./exec-keys directory mount for the executor only (test_executor_signing_keys_come_from_a_directory_only_it_mounts); README: rotate/remove on the host, release in the executor container; one release function executor.release_reserved used by Executor and `keys release`; test_keys_cli_rotate_remove_and_release (cli.main against the DB)"
+  },
+  {
+   "item": "4 temp seed file mode",
+   "status": "done",
+   "evidence": "os.open(O_CREAT|O_EXCL, 0600); test_the_seed_file_is_created_0600 (chmod disabled, umask 022)"
+  },
+  {
+   "item": "5 client cache key",
+   "status": "done",
+   "evidence": "cli._executor caches by (service id, internal_url)"
+  },
+  {
+   "item": "6 CONTINUE WHEN guard",
+   "status": "done",
+   "evidence": "test_release_skips_an_execution_dispatched_while_it_waited_for_the_lock (second session holds the intent lock, moves the execution to dispatching); driver row no longer 'equivalent', killed (manual and driver)"
+  },
+  {
+   "item": "7 evidence",
+   "status": "done",
+   "evidence": "full scripts/ci/check-all.sh incl. scripts/ci/mutmut.sh (all packages, full SQL driver) on the commit below (ci_local); reports/mutmut/M8.txt with counts and survivor ids; DoD-6 rows in reports/plans/M8-cycle-2.md"
+  },
+  {
+   "item": "8 minors",
+   "status": "done",
+   "evidence": "7: provider gets the canonical args (test_the_provider_gets_the_canonical_args); 8, 9, 12 → docs/backlog.md"
+  },
+  {
+   "item": "N1 EFF-08 per requester (owner decision, docs 643ea3e)",
+   "status": "done",
+   "evidence": "migration 0003: UNIQUE (tenant_id, requester_principal, idempotency_key); _SQL_BY_KEY by the three columns; cycle-1 requester branch removed; test_same_key_of_two_requesters_is_two_intents, test_the_database_enforces_one_key_per_requester; SQL driver rows for the constraint and the requester condition"
+  },
+  {
+   "item": "N2 DoD-1 ci_local",
+   "status": "done",
+   "evidence": "field ci_local"
+  }
+ ],
  "new_scope_from_m7": [
   {
    "item": "idempotency across requesters (M7-final #2)",
-   "status": "done",
-   "evidence": "intents.py: another requester's key → 409 conflict, same body as a hash conflict, no data of the other intent; approval/tests_db/test_propose.py::test_another_requesters_key_is_a_conflict_without_its_intent (two agents of t-alpha); AC-M7-04 for one requester unchanged (test_idempotent_repeat, 50 parallel). DDL UNIQUE (tenant_id, requester_principal, idempotency_key) not changed: pending_owner_decision"
+   "status": "done (cycle 2: owner decision, per-requester key space)",
+   "evidence": "see cycle2_checklist N1; AC-M7-04 for one requester unchanged (test_idempotent_repeat, 50 parallel)"
   },
   {
    "item": "T2 window mutant (M7-final #3)",
@@ -184,41 +237,307 @@
   }
  ],
  "dod": {
-  "DoD-1": "PR to main not created (instruction); GitHub CI not confirmed (runners); every CI step reproduced locally (self_check.check_all)",
+  "DoD-1": "check-all.sh green in a full clone (ci_local); mutmut for the packages M8 changes (DoD-1 owner decision 2026-11-22: approval, connectors/demo, packages/gxg-connector-kit); GitHub CI not confirmed (no Actions minutes)",
   "DoD-2": "all 14 AC by automated tests (AC-M8-13 on the live stand)",
   "DoD-3": "this file",
   "DoD-4": "mutmut on approval (executor, keys + M7 modules), connectors/demo (effects, provider, server, tools, backend), kit exec_token; SQL mutations of migration 0002 and executor SQL; survivors only listed equivalents (self_check.mutmut)",
   "DoD-5": "no skip/xfail (repository policy)",
-  "DoD-6": "table in reports/plans/M8-cycle-1.md"
+  "DoD-6": "tables in reports/plans/M8-cycle-1.md … M8-cycle-4.md"
  },
  "spec_interpretations": [
   "AS-12 / AC-M8-03 vs AC-M8-04: a replayed jti is 401, except a jti this connector already dispatched → 409",
   "AS-12: any non-200 or unusable answer → the execution's state decides: reserved → T12a (attempt counted), dispatching → T13",
-  "AS-10: compromise → `gxg-approval keys remove --compromised` = remove from both files + gxg_release_reserved() (T10 move without lease wait), as the executor DB role",
+  "AS-10: compromise → host `gxg-approval keys remove --kid K` (both files) + `gxg-approval keys release` in the executor (gxg_release_reserved, T10 move without lease wait, executor DB role); without an active key the executor waits instead of spending attempts",
   "AS-27: gxg_release_reserved granted to gxg_executor (its row covers T7–T17 incl. T10 move semantics)",
   "EFF-02 on the stand: no permanent *.execute registration; the PDP deny rule is proven on a probe tool for the duration of one test",
-  "demo reconcile looks up by intent_id (client reference passed to the provider): the reconcile body carries no tenant",
-  "fake provider: records a call when it receives it; slow:<ms> delays only the answer; dedupe per (tenant, idempotency_key)"
+  "EFF-18 p.5 / EFF-25 (59993e4): the provider idempotency key is the intent_id (token `sub`); reconcile looks up by it",
+  "fake provider: records a call when it receives it; slow:<ms> delays only the answer; dedupe per provider_key; journal table `sends` (the cycle-2 table `calls` is left untouched)"
  ],
  "pending_owner_decision": [
-  "max_attempts per tool («Политика tool», EFF «Сроки»): approval-policy.schema.json has no field; default 3 from the DDL; AC-M8-08 sets the column in test setup",
-  "EFF-08 / DDL: UNIQUE (tenant_id, requester_principal, idempotency_key) instead of (tenant_id, idempotency_key) (key squatting by another agent of the tenant still makes the owner's propose 409)"
+  "max_attempts per tool («Политика tool», EFF «Сроки»): approval-policy.schema.json has no field; default 3 from the DDL; AC-M8-08 sets the column in test setup"
  ],
  "known_limitations": [
   "the effect path through ContextForge (propose via CF) is not on the stand: no Approval Service there (plan decision 7)",
   "executor has no /healthz,/readyz (M7 backlog for workers → M10/M14); refuses to start without key, DB role or valid bundle",
   "metrics are counters in-process; no metrics endpoint for the executor yet (M10)",
-  "full scripts/ci/mutate_m7_sql.py run (96 rows) not repeated: the 82 M7 rows ran at M7 close on an unchanged 0001 migration; this cycle ran the 14 M8 rows + the 2 touched M7 rows"
+  "GitHub CI: no Actions minutes; DoD-1 by ci_local (owner decision 2026-11-21)",
+  "mutmut 3.8.1 needs kernel.pid_max well above 32768 (stale SIGXCPU on reused PIDs); set to 4194304 for the gate run (docs/backlog.md)",
+  "full mutmut of every package is for the integration branch and before main (DoD-1)"
  ],
+ "ci_local": {
+  "commit": "db17e0e (code); final commit 9bc0eb5 has the same code tree (docs/backlog.md, reports/plans only differ)",
+  "code_commit": "db17e0e",
+  "clone": "full (not shallow)",
+  "command": "DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt' MUTMUT_PACKAGES='connectors/demo packages/gxg-connector-kit approval' scripts/ci/check-all.sh",
+  "exit": 0,
+  "steps": [
+   {
+    "step": "uv lock --check",
+    "evidence": [
+     "Resolved 116 packages in 2ms"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv lock --check",
+    "evidence": [
+     "Resolved 81 packages in 3ms"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv sync --locked",
+    "evidence": [
+     "Resolved 116 packages in 2ms"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run ruff check .",
+    "evidence": [
+     "All checks passed!"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run ruff format --check .",
+    "evidence": [
+     "already formatted"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/tests approval/src approval/tests scripts tests/secrets",
+    "evidence": [
+     "Success: no issues found in 59 source files"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run mypy --strict conftest.py tests/ci",
+    "evidence": [
+     "Success: no issues found in 8 source files"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run mypy --strict approval/tests_db",
+    "evidence": [
+     "Success: no issues found in 10 source files"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run mypy tools/gxg-policy/src tools/gxg-policy/tests connectors/demo/src connectors/demo/tests tests/contract",
+    "evidence": [
+     "Success: no issues found in 26 source files"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "MYPYPATH=stand/tests:stand:gateway/contextforge",
+    "evidence": [],
+    "result": "passed"
+   },
+   {
+    "step": "uv run mypy --exclude mutants stand gateway/contextforge",
+    "evidence": [
+     "Success: no issues found in 12 source files"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run pytest",
+    "evidence": [
+     "973 passed, 6 warnings in 61.11s (0:01:01) =================="
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run pytest approval/tests_db",
+    "evidence": [
+     "357 passed, 2 warnings in 79.96s (0:01:19) =================="
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run python scripts/ci/schema_lock.py",
+    "evidence": [],
+    "result": "passed"
+   },
+   {
+    "step": "uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-branch --cov-report=json:coverage-kit.json",
+    "evidence": [
+     "373 passed in 20.97s"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run python scripts/ci/check_coverage.py coverage-kit.json",
+    "evidence": [],
+    "result": "passed"
+   },
+   {
+    "step": "uv sync --locked",
+    "evidence": [
+     "Resolved 81 packages in 2ms"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run pytest -q",
+    "evidence": [
+     "145 passed in 16.94s"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run python scripts/ci/prove_schema_guard.py",
+    "evidence": [],
+    "result": "passed"
+   },
+   {
+    "step": "scripts/ci/gitleaks.sh tree HEAD",
+    "evidence": [
+     "no leaks found"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "scripts/ci/gitleaks.sh range 0000000000000000000000000000000000000000..HEAD",
+    "evidence": [
+     "no leaks found"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run pytest tests/secrets",
+    "evidence": [
+     "21 passed in 54.08s =============================="
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "uv run gxg-policy validate policies/",
+    "evidence": [],
+    "result": "passed"
+   },
+   {
+    "step": "uv run gxg-policy lint policies/",
+    "evidence": [],
+    "result": "passed"
+   },
+   {
+    "step": "bash scripts/ci/bundle_smoke.sh",
+    "evidence": [],
+    "result": "passed"
+   },
+   {
+    "step": "connectors/demo/docker_smoke.sh",
+    "evidence": [
+     "OK"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "stand/run.sh",
+    "evidence": [
+     "{\"fresh\": {\"passed\": 33, \"failed\": 0}, \"after-restart\": {\"passed\": 33, \"failed\": 0}, \"after-recreate\": {\"passed\": 33, \"failed\": 0}} (stand report commit 9e0cf1c: docs-only heartbeat on db17e0e)"
+    ],
+    "result": "passed"
+   },
+   {
+    "step": "scripts/ci/mutmut.sh $SCRATCH/ca8-mutmut.txt $SCRATCH/ca8-mutmut-all.txt",
+    "evidence": [
+     "approval 2229/24/0 timeout, connectors/demo 1859/42, kit 1160/11; not killed 79 = listed 79",
+     "SQL driver: 98 mutations listed: 0 not as expected",
+     "mutmut: OK, no surviving non-equivalent mutants",
+     "SQL mutations: OK"
+    ],
+    "result": "passed"
+   }
+  ],
+  "run": "gate run 7, 17:42–20:4x UTC 2026-11-22, cloud container 4 cores, kernel.pid_max 4194304",
+  "earlier_runs": "reports/plans/M8-cycle-4.md «Gate runs»: runs 1–6 and why each failed or was stopped",
+  "github_ci": "not confirmed: no Actions minutes (owner decision 2026-11-21, ci_local instead)",
+  "note_e7a808e": "heartbeat commit e7a808e (19:26, during the SQL driver) included the driver's in-flight mutant of 0001_core.py; restored in 9bc0eb5. Every other step had run before; the driver measures its own mutations against the working tree"
+ },
  "self_check": {
-  "tests": "uv run pytest → 967 passed, 148 subtests; approval/tests + approval/tests_db on PostgreSQL 16.6 → 429 passed, 0 skipped; connectors/demo 142 passed; kit 375 passed, coverage gate _jwt/canonical/identity 100 % branches",
-  "stand": "stand/run.sh (fresh, after restart, after recreate): 31/33, 33/33, 33/33 — the 2 fresh failures were test_mc expecting the manifest's propose on the read-only stand, fixed before the other runs; re-run on the final demo image: 33/33",
+  "tests": "gate run 7 (ci_local): uv run pytest 973 passed; approval/tests_db 357 passed on PostgreSQL 16.6; kit 373 passed + coverage gate; connectors/demo 145 passed; tests/secrets 21 passed",
+  "stand": "stand/run.sh: fresh 33/33, after restart 33/33, after recreate 33/33 (ContextForge v1.1.1 by digest)",
   "docker_smoke": "connectors/demo/docker_smoke.sh: OK",
   "lint_types": "ruff check, ruff format --check, mypy --strict (kit, approval, scripts, tests/secrets, conftest+tests/ci, approval/tests_db), mypy (gxg-policy, demo, contract, stand): clean",
-  "mutmut": "see reports/mutmut/M8.txt",
-  "sql_mutations": "reports/mutmut/M8-sql.txt: 14 M8 rows + 2 M7 rows: all killed or listed equivalent (2), 0 not as expected",
-  "gitleaks": "scripts/ci/gitleaks.sh tree HEAD and range 3c2f0b0..HEAD: no leaks found",
-  "ponytail_review": "reports/conformance/M8-cycle-1.self-review.md",
-  "check_all": "uv lock --check ×2, schema_lock, prove_schema_guard 66/66, gxg-policy validate/lint, bundle_smoke, tests/secrets 21 passed, coverage gate — green; GitHub CI not confirmed (runners)"
+  "mutmut": "reports/mutmut/M8.txt: approval 2229 killed / 24 survived / 0 timeout of 2253; connectors/demo 1859 / 42 / 2 no tests of 1903; kit 1160 / 11 of 1171; 79 not killed, all listed in scripts/ci/mutmut-equivalent.txt with a reason, none stale",
+  "sql_mutations": "scripts/ci/mutate_m7_sql.py (full output in reports/mutmut/M8.txt): 98 rows, 0 not as expected",
+  "gitleaks": "scripts/ci/gitleaks.sh tree HEAD and range 0000…HEAD in a full clone: no leaks found",
+  "ponytail_review": "own diff of cycle 4 (effects_stack shutdown timeout, lock-wait test, MUTMUT_PACKAGES): each line needed; MUTMUT_PACKAGES unset keeps the full run unchanged (CI); a subset narrows only the stale check to the mutants that ran",
+  "flakiness_found": [
+   "test servers waited 20 s for a hanging request at stop (uvicorn graceful shutdown) → timeout_graceful_shutdown=1 (75a0de9, c630ad9)",
+   "lock-wait test counted pg_locks cluster-wide: with mutants in parallel, another database's waits made it fail or pass without checking; a failed wait left the lock held → own database via pg_stat_activity, blocker closed in finally (01f1c68)",
+   "mutmut 3.8.1 stale wall-timeout SIGXCPU on reused PIDs with kernel.pid_max 32768 → pid_max 4194304 in the container; backlog",
+   "stand bootstrap trusts stand/secrets/state.json after an interrupted run → backlog"
+  ],
+  "check_all": "scripts/ci/check-all.sh exit 0 in a full clone (ci_local); GitHub CI not confirmed (no Actions minutes)"
+ },
+ "cycle3_checklist": [
+  {
+   "item": "1 provider key collides across requesters (critical) → provider key = intent_id (spec 59993e4)",
+   "status": "done",
+   "evidence": "effects.execute passes claims['sub'] (intent_id) as provider_key; provider journal `sends` keyed by provider_key; reconcile looks up by intent_id; test_same_key_of_two_requesters_is_two_provider_effects (two t-alpha requesters, same key, different text and recipient → two intents, two journal rows keyed by the two intent ids, two operation ids, both succeeded); with claims['idk'] put back the test fails (with ac01, ac08: 4 failed)"
+  },
+  {
+   "item": "2 exec-keys/ not ignored",
+   "status": "done",
+   "evidence": ".gitignore `exec-keys/`; test_host_secret_files_are_ignored_by_git (git check-ignore; fails without the line; skips outside a git checkout)"
+  },
+  {
+   "item": "3 0003 driver row runs the wrong tests",
+   "status": "done",
+   "evidence": "row moved to MUTATIONS (all tests_db); see self_check.sql_mutations"
+  },
+  {
+   "item": "3b key shared across tenants row",
+   "status": "done",
+   "evidence": "test_same_principal_and_key_in_two_tenants_is_two_intents (agent:shared); `tenant_id = %s OR true` mutant fails it (manual and driver)"
+  },
+  {
+   "item": "4 evidence",
+   "status": "done",
+   "evidence": "this file (ci_local, self_check) and reports/mutmut/M8.txt for the commit below; .gitleaksignore lines for c10fd9b, 8128dee"
+  },
+  {
+   "item": "5 minors",
+   "status": "done",
+   "evidence": "10 backlog rows restored; test_propose_output_statuses_are_the_intent_statuses; WARNING on no-key deferral (asserted in test_without_an_active_signing_key…); Stand.rpc timeout and shallow-clone gitleaks → docs/backlog.md"
+  },
+  {
+   "item": "critic cycle 3 (on ddf8c9f) required 1–3",
+   "status": "done",
+   "evidence": "take__mutmut_36 listed (29 removed); check-all to the end on a full clone (ci_local); minors 3–5 → docs/backlog.md (provider old table; check-ignore test skips outside git)"
+  }
+ ],
+ "closure": "by gate (owner decision 2026-11-22, plan «Ускорение процесса, третья редакция», p. 1): no new critic; the orchestrator checks the items and this report against the commit",
+ "cycle4_checklist": [
+  {
+   "item": "1 stale equivalent id take__mutmut_29 → take__mutmut_36 (cycle-3 critic finding 1, major)",
+   "status": "done",
+   "evidence": "1e7c951; reports/mutmut/M8.txt: approval 24 survivors (24 listed), Executor.take: _6, _36; none stale"
+  },
+  {
+   "item": "2 evidence on the final commit (cycle-3 critic finding 2, major)",
+   "status": "done",
+   "evidence": "ci_local: check-all.sh exit 0, full clone, per step; reports/mutmut/M8.txt (per-package counts, survivor ids with reasons, full SQL driver output); this file"
+  },
+  {
+   "item": "3 minors 3–5 → backlog",
+   "status": "done",
+   "evidence": "docs/backlog.md M8 rows (old provider table `calls`; shallow-clone gitleaks); the check-ignore test skips without .git (ff0b209)"
+  }
+ ],
+ "score_history": {
+  "cycle 1": 7.0,
+  "cycle 2": 6.0,
+  "cycle 3": 6.0,
+  "cycle 4": "closure by gate (no critic)"
  }
 }
