@@ -11,6 +11,7 @@
 # mutmut exits 0 with survivors, so this script fails on any survivor, untested or timed-out mutant not
 # listed in scripts/ci/mutmut-equivalent.txt (each with a reason; the list has no M0.1 mutant, so every
 # M0.1 mutant must be killed), and on any listed mutant that is killed now (stale list).
+# MUTMUT_PACKAGES (env): which package directories to run, default all; the SQL driver always runs.
 # REPORT_FILE: summary (default stdout). ALL_RESULTS_FILE: every mutant with its status, sorted.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -25,7 +26,9 @@ pg=$(docker run -d --rm --network none -e POSTGRES_USER=test -e POSTGRES_HOST_AU
 trap 'docker stop "$pg" > /dev/null 2>&1 || true' EXIT
 for _ in $(seq 240); do docker logs "$pg" 2>&1 | grep -q "PostgreSQL init process complete" && break; sleep 0.5; done
 export GXG_TEST_PG_SOCKET_DIR="$pgsock"
-for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit approval .; do
+# MUTMUT_PACKAGES: space-separated subset of these directories (DoD-1: a milestone runs the packages it changes;
+# every package at integration and before main). Default: all.
+for dir in ${MUTMUT_PACKAGES:-tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit approval .}; do
   (
     cd "$dir"
     rm -rf mutants  # no stale results from an earlier run
@@ -42,6 +45,10 @@ uv run --quiet python scripts/ci/mutate_m7_sql.py > "$tmp/sql.txt" 2>&1 || sql_o
 sort "$tmp/all.txt" > "$all"
 grep -E '^\s+\S+: ' "$tmp/results.txt" | sed -E 's/^\s+//; s/: .*//' | sort > "$tmp/left.txt" || true
 { grep -oE "^[^ #]+" "$equivalent" || true; } | sort > "$tmp/allowed.txt"
+if [ -n "${MUTMUT_PACKAGES:-}" ]; then  # a subset: the list's entries of the packages not run are not stale
+  sed 's/: .*//' "$tmp/all.txt" | sort | comm -12 "$tmp/allowed.txt" - > "$tmp/allowed-run.txt"
+  mv "$tmp/allowed-run.txt" "$tmp/allowed.txt"
+fi
 unexplained=$(comm -23 "$tmp/left.txt" "$tmp/allowed.txt")
 stale=$(comm -13 "$tmp/left.txt" "$tmp/allowed.txt")
 {

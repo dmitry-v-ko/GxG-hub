@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 REPO = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())  # also from mutmut's copy
 COMPOSE = REPO / "approval/deploy/compose.yaml"
-# AS-28 «Свои секреты на процесс», for the processes of M7. A secret not in this table is a finding.
+# AS-28 «Свои секреты на процесс», for the processes of M7 and M8. A secret not in this table is a finding.
 AS28 = {
     "postgres": {"db_superuser_password"},  # the DBA side, not a process of the service
     "migrate": {"db_dsn_owner"},  # password of the owner role: only the migration job
     "api": {"db_dsn_api"},  # its role; payload *public* keys and JWKS are configuration
     "mcp": {"svc_key_mcp"},  # its service JWT key; no database role in use
     "sweeper": {"db_dsn_sweeper"},
+    # its role, its service JWT key, the args (not preview) payload keys; signing keys: a directory (below)
+    "executor": {"db_dsn_executor", "svc_key_executor", "payload_args_keys"},
 }
 SECRETISH = re.compile(r"(?i)(password|passwd|secret|token|private|dsn|seed)")
 
@@ -60,9 +64,11 @@ def test_secret_files_are_mounted_where_the_process_reads_them() -> None:
 def test_internal_processes_have_no_egress() -> None:
     doc = load()
     assert doc["networks"]["internal"]["internal"] is True
+    assert doc["networks"]["connectors"]["internal"] is True
     for name, s in doc["services"].items():
-        assert s["networks"] == ["internal"], name
-        assert "ports" not in s, name  # nothing of M7 is published outside (SEC-13)
+        # only the executor reaches the connectors' network (SEC-14)
+        assert s["networks"] == (["internal", "connectors"] if name == "executor" else ["internal"]), name
+        assert "ports" not in s, name  # nothing is published outside (SEC-13)
 
 
 def test_db_tests_gate_ci_ok() -> None:
@@ -70,3 +76,25 @@ def test_db_tests_gate_ci_ok() -> None:
     jobs = yaml.safe_load((REPO / ".github/workflows/ci.yml").read_text("utf-8"))["jobs"]
     assert "approval-db" in jobs["ci-ok"]["needs"]
     assert any(s.get("run") == "uv run pytest approval/tests_db" for s in jobs["approval-db"]["steps"])
+
+
+def test_executor_signing_keys_come_from_a_directory_only_it_mounts() -> None:
+    """AS-10 without restart: rotation replaces the file atomically, which a single-file mount would not show."""
+    services = load()["services"]
+    path = services["executor"]["environment"]["GXG_EXEC_SIGNING_KEYS_FILE"]
+    mounts = {m.split(":")[1]: m for m in services["executor"]["volumes"]}
+    directory = str(Path(path).parent)
+    assert mounts[directory] == f"./exec-keys:{directory}:ro"
+    others = [m for name, s in services.items() if name != "executor" for m in s.get("volumes", [])]
+    assert not [m for m in others if m.startswith("./exec-keys")]  # AS-28: nobody else sees the seeds
+    jwks = services["api"]["environment"]["GXG_EXEC_JWKS_FILE"]
+    assert any(m == f"./config:{Path(jwks).parent}:ro" for m in services["api"]["volumes"])  # a directory too
+
+
+def test_host_secret_files_are_ignored_by_git() -> None:
+    """The operator writes the seeds and secrets next to compose.yaml (README): `git add -A` must not take them."""
+    if not (REPO / ".git").exists():
+        pytest.skip("not a git checkout (export or build context): nothing to commit by mistake")
+    for path in ("approval/deploy/exec-keys/signing-keys.json", "approval/deploy/secrets/svc_key_executor"):
+        r = subprocess.run(["git", "-C", str(REPO), "check-ignore", "-q", path], check=False)
+        assert r.returncode == 0, path

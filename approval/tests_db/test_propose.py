@@ -19,6 +19,8 @@ from gxg_approval.api import create_app
 from gxg_approval.crypto import Decryptor
 from gxg_connector_kit import _schema
 
+BOT, SIGNALS = "agent:t-alpha:bot", "agent:t-alpha:signals"
+
 
 def stored_hash(owner: psycopg.Connection[Any]) -> str:
     row = owner.execute("SELECT canonical_args_hash FROM intents").fetchone()
@@ -118,6 +120,32 @@ def test_idempotent_repeat(client: TestClient, world: Any, owner: psycopg.Connec
     assert count(owner) == 1 and count(owner, "outbox") == 1
 
 
+def test_same_key_of_two_requesters_is_two_intents(
+    client: TestClient, world: Any, owner: psycopg.Connection[Any]
+) -> None:
+    """EFF-08 (owner 2026-11-21): idempotency per (tenant, requester, key). Two agents of one tenant, one key: each
+    gets its own intent and repeats find only their own; the other's intent is never returned."""
+    key = "signals:cand-1:v1"
+    mine = client.post("/v1/intents", json=world.body(key=key, requester=SIGNALS), headers=world.auth())
+    theirs = client.post("/v1/intents", json=world.body(key=key, requester=BOT), headers=world.auth())
+    assert (mine.status_code, theirs.status_code) == (201, 201)  # same args, same key: still two intents
+    assert mine.json()["intent_id"] != theirs.json()["intent_id"]
+    again = client.post("/v1/intents", json=world.body(key=key, requester=BOT), headers=world.auth())
+    assert again.status_code == 200 and again.json() == theirs.json()
+    other = client.post("/v1/intents", json=world.body(key=key, requester=SIGNALS, args={"text": "x"}),
+                        headers=world.auth())  # fmt: skip
+    assert other.status_code == 409 and mine.json()["intent_id"] not in other.text
+    rows = owner.execute("SELECT requester_principal FROM intents ORDER BY requester_principal").fetchall()
+    assert rows == [(BOT,), (SIGNALS,)]
+
+
+def test_the_database_enforces_one_key_per_requester(owner: psycopg.Connection[Any], world: Any, client: Any) -> None:
+    constraint = owner.execute(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'intents'::regclass AND contype = 'u'"
+    ).fetchall()
+    assert constraint == [("UNIQUE (tenant_id, requester_principal, idempotency_key)",)]
+
+
 def test_same_key_in_another_tenant_is_another_intent(
     propose: Callable[..., Any], owner: psycopg.Connection[Any]
 ) -> None:
@@ -129,6 +157,15 @@ def test_same_key_in_another_tenant_is_another_intent(
         connection="demo-b",
         resource="demo:demo-b/board/b2",
     )
+    assert a.status_code == b.status_code == 201
+    assert a.json()["intent_id"] != b.json()["intent_id"]
+
+
+def test_same_principal_and_key_in_two_tenants_is_two_intents(propose: Callable[..., Any]) -> None:
+    """EFF-08: the key is per (tenant, requester, key); one principal ID in both tenants is two requesters."""
+    beta = {"tenant": "t-beta", "connection": "demo-b", "resource": "demo:demo-b/board/b2"}
+    a = propose(key="idem-shared-2", requester="agent:shared")
+    b = propose(key="idem-shared-2", requester="agent:shared", **beta)
     assert a.status_code == b.status_code == 201
     assert a.json()["intent_id"] != b.json()["intent_id"]
 

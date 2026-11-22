@@ -1,0 +1,434 @@
+{
+  "milestone": "M8",
+  "role": "independent critic, cycle 2 (separate session; closed checklist of cycle 1 + new_regression search)",
+  "branch": "claude/m8-executor",
+  "commit": "d487b4a",
+  "base": "3c2f0b0 (claude/integration)",
+  "diff_reviewed": "b98ff3d (cycle-1 critic report)..d487b4a",
+  "reviewed_at": "2026-11-22",
+  "threshold": 9,
+  "score": 6.0,
+  "score_before_caps": 7.0,
+  "caps_applied": [
+    "critical",
+    "major"
+  ],
+  "cap_note": "Checklist of cycle 1 done (3 major closed with tests, minors 4-7 done, EFF-08 per requester by migration 0003, T2 window test present). The owner's EFF-08 change opened a new_regression on the effect path: the provider idempotency key is still the bare idempotency_key, so two requesters of one tenant with one key collide at the provider, the second approved effect is never executed and is recorded succeeded with the first one's receipt (critical: spec invariant EFF-08 'чужой ключ нельзя ни занять' and EFF-27 broken at the effect). Plus major new_regressions: executor signing seeds moved to a directory Git does not ignore (gitleaks does not catch the file), cycle-2 evidence not committed (DoD-1 ci_local, DoD-3, checklist item 7), the SQL driver has 2 survivors from this cycle (the 0003 row runs the wrong tests; the tenant condition of the new per-requester lookup is untested) (driver exit 1, so scripts/ci/mutmut.sh is red). Cap 6.",
+  "dimensions": {
+    "spec": 1.5,
+    "tests": 1.5,
+    "security": 1.0,
+    "code": 1.5,
+    "ops": 0.5,
+    "evidence": 0.0
+  },
+  "reproduction": {
+    "environment": "cloud container, 4 cores; dockerd started by hand; PostgreSQL 16.6 (container m8pg, Unix socket, no network); M5 stand built by stand/run.sh from d487b4a (DOCKER_BUILD_FLAGS with the proxy CA secret); Python 3.13 uv venv; two git worktrees at d487b4a for mutmut and the SQL driver",
+    "tests": "GXG_TEST_PG_SOCKET_DIR pytest approval/tests approval/tests_db -> 436 passed (83 s); check-all steps: uv run pytest (root) 970 passed; approval/tests_db (own Docker PG) 355 passed; kit 373 passed + coverage gate 100 % branches (exec_token 18/18, svc_jwt 12/12, grants 50/50, canonical 20/20, identity 8/8, _jwt 38/38); connectors/demo 143 passed; AC subset of test_executor.py -v: 17 passed (AC-M8-02 2.8 s)",
+    "ci_local": {
+      "commit": "d487b4a",
+      "command": "scripts/ci/check-all.sh without its last line (scripts/ci/mutmut.sh: full mutmut not requested; M8 modules run separately below), DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,... --build-arg HTTPS_PROXY/HTTP_PROXY'",
+      "result": "RED at 'scripts/ci/gitleaks.sh range 0000..HEAD' and tests/secrets::test_this_repository_is_clean: 2 generic-api-key findings in tests/ci/test_check_secrets.py:23 of base commits c10fd9b and 8128dee (in 3c2f0b0, not M8; visible because this clone has 259 commits; missing from .gitleaksignore). Every other step green: uv lock --check x2, uv sync --locked, ruff check, ruff format --check, 6 mypy runs, root pytest, approval/tests_db, schema_lock, kit coverage gate, demo tests, prove_schema_guard 66/66, gitleaks tree HEAD, gitleaks range 3c2f0b0..HEAD (no leaks), tests/secrets 20/21 (the one above), gxg-policy validate + lint, bundle_smoke, docker_smoke OK. stand/run.sh: not green in this environment, see stand"
+    },
+    "stand": "stand/run.sh fresh suite hung in test_sc03_identity_in_arguments_headers_and_meta_changes_nothing (py-spy: Stand.rpc standlib.py:153, no timeout) for > 40 min; ContextForge v1.1.1 logs 'Error in database cleanup task: ForeignKeyViolation ... fk_mcp_messages_session_id' (its own session registry). Second full run of stand/tests on the same stand: E/F in test_sc*, hung again in test_sc01 Stand.rpc. M5 tests, read-only demo path, not touched by this diff. AC-M8-13: stand/tests/test_ex.py -v on the live stand -> 4 passed (184 s)",
+    "mutmut": {
+      "approval": "uv run mutmut run 'gxg_approval.executor*' 'gxg_approval.keys*' 'gxg_approval.intents.x_propose*' (clean mutants/, worktree at d487b4a): 938 mutants, 925 killed, 13 survived, 0 timeout, 0 no_tests; the 13 = exactly the listed gxg_approval.executor/keys equivalents of scripts/ci/mutmut-equivalent.txt (no unlisted, no stale)",
+      "connectors/demo": "uv run mutmut run 'demo_connector.effects*' 'demo_connector.provider*': 922 mutants, 890 killed, 32 survived, all 32 listed in scripts/ci/mutmut-equivalent.txt (no unlisted, no stale)",
+      "migrations": "SQL text, not mutated by mutmut: see sql_mutations"
+    },
+    "sql_mutations": "scripts/ci/mutate_m7_sql.py 'not per requester' 'shared across requesters': intents.py 'idempotency key shared across requesters (EFF-08)' killed; 0003 'idempotency unique per tenant, not per requester (EFF-08)' SURVIVED -> 1 not as expected, exit 1 (finding 4). The same mutant applied by hand: test_propose.py::test_same_key_of_two_requesters_is_two_intents and ::test_the_database_enforces_one_key_per_requester fail (the guard is tested; the row runs M8_TESTS, which do not include test_propose.py). Full driver (worktree at d487b4a, GXG_TEST_PG_SOCKET_DIR): 98 rows, 2 not as expected, exit 1: SURVIVED intents.py 'idempotency key shared across tenants' (finding 10) and SURVIVED 0003 row (finding 4); the 5 equivalent rows (4 M7 + 1 M8 'WHERE true ORDER BY reserved_at') stayed equivalent; every other row killed, incl. the de-labelled CONTINUE WHEN row (cycle-1 #6)",
+    "own_experiments": [
+      "finding 1: test_executor.py stack, grants and auto policy for agent:t-alpha:actor and agent:t-alpha:reader on a-public; both propose with idempotency_key 'shared-key-1', texts differ, recipients partner_1/partner_2 -> two intents, both 'succeeded'; provider journal [(A, partner_1, ok), (B, partner_2, duplicate)]; executions of A and B carry the same provider_operation_id (temporary test file, not committed)",
+      "finding 2: git check-ignore approval/deploy/exec-keys/signing-keys.json -> not ignored; probe repo with a synthetic seed file at that path, scripts/ci/gitleaks.sh tree HEAD (both configs) -> no leaks found",
+      "cycle-1 #3: docker run -v $D/exec-keys:/run/gxg/exec-keys:ro; os.replace on the host -> container reads v2 at once",
+      "finding 4: mutate_m7_sql.py on the two EFF-08 rows, then the 0003 mutant by hand against test_propose.py"
+    ]
+  },
+  "checklist_cycle_1": [
+    {
+      "item": "1. propose output statuses + e2e repeat through a real MCP client",
+      "status": "done",
+      "evidence": "message-propose.output.json enum == schemas/intent-status.schema.json enum (11); test_repeat_propose_after_success_returns_the_intent_as_it_is_now (ClientSession through DemoClient.propose) passed"
+    },
+    {
+      "item": "2. no reserve without an active signing key, attempt not spent; README row",
+      "status": "done",
+      "evidence": "executor.py:137-139 keys.active() before gxg_reserve, _SQL_DEFER; test_without_an_active_signing_key_nothing_is_reserved_and_no_attempt_is_spent passed (approved, attempts 0, no executions, outbox attempts 1, then executed with attempts 1); README «Компрометация» row rewritten"
+    },
+    {
+      "item": "3. key file from a directory, README where each command runs, CLI test against the DB, one release function",
+      "status": "done",
+      "evidence": "compose ./exec-keys:/run/gxg/exec-keys:ro + test_executor_signing_keys_come_from_a_directory_only_it_mounts; docker experiment sees the replaced file; keys release -> executor.release_reserved (shared with Executor); test_keys_cli_rotate_remove_and_release passed. New regression from the move: finding 2"
+    },
+    {
+      "item": "4. temp key file 0600 from creation",
+      "status": "done",
+      "evidence": "keys._write os.open O_CREAT|O_EXCL mode; test_the_seed_file_is_created_0600 (chmod patched out, umask 022) passed"
+    },
+    {
+      "item": "5. client cache by (id, internal_url)",
+      "status": "done",
+      "evidence": "cli.py:77-80 (no test; one line, not risky)"
+    },
+    {
+      "item": "6. deterministic CONTINUE WHEN test, label removed",
+      "status": "done",
+      "evidence": "test_release_skips_an_execution_dispatched_while_it_waited_for_the_lock passed; driver row no longer 'equivalent:'"
+    },
+    {
+      "item": "7. mutmut + full SQL driver re-run, counts and survivor ids in reports/mutmut/M8.txt, DoD-6 rows",
+      "status": "partly",
+      "evidence": "DoD-6 rows in reports/plans/M8-cycle-2.md (JsonFile, SigningKeys, _dispatched); mutmut-equivalent.txt renumbered and matches my run; reports/mutmut/M8.txt and reports/conformance/M8.json not updated (still cycle 1, a01c564): finding 3"
+    },
+    {
+      "item": "8. minors 7, 9 fixed or backlog; 8, 12 backlog",
+      "status": "done",
+      "evidence": "7 fixed (test_the_provider_gets_the_canonical_args); 8, 9, 12 in docs/backlog.md"
+    },
+    {
+      "item": "EFF-08 per requester (migration 0003)",
+      "status": "done_with_regression",
+      "evidence": "0003 drops intents_tenant_id_idempotency_key_key, adds UNIQUE (tenant_id, requester_principal, idempotency_key); _SQL_BY_KEY by three columns; test_same_key_of_two_requesters_is_two_intents, test_the_database_enforces_one_key_per_requester passed. Effect path not adapted: finding 1"
+    },
+    {
+      "item": "T2 execution_deadline window != 3600",
+      "status": "done",
+      "evidence": "test_state_machine.py:320-333 test_t2_deadline_is_the_window_frozen_at_t1 (600 s window, later 20 min policy ignored) passed"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-M8-01",
+      "status": "passed",
+      "evidence": "test_ac01_auto_approved_propose_succeeds_and_effects_status_says_so PASSED"
+    },
+    {
+      "id": "AC-M8-02",
+      "status": "passed",
+      "evidence": "test_ac02_50_intents_10_executors_no_dedupe_one_call_each PASSED (2.83 s, 50 journal rows, 10 executor threads on own gxg_executor connections)"
+    },
+    {
+      "id": "AC-M8-03",
+      "status": "passed",
+      "evidence": "test_ac03_invalid_execution_tokens_are_401_without_dispatch PASSED"
+    },
+    {
+      "id": "AC-M8-04",
+      "status": "passed",
+      "evidence": "test_ac04_replay_after_success_is_409_and_the_provider_is_called_once PASSED"
+    },
+    {
+      "id": "AC-M8-05",
+      "status": "passed",
+      "evidence": "test_ac05_changed_args_are_422[text|recipient] PASSED"
+    },
+    {
+      "id": "AC-M8-06",
+      "status": "passed",
+      "evidence": "test_ac06_commit_then_drop_is_unknown_then_reconciled_succeeded PASSED"
+    },
+    {
+      "id": "AC-M8-07",
+      "status": "passed",
+      "evidence": "test_ac07_connector_killed_after_dispatch, test_ac07_t14_when_the_executor_dies_too PASSED"
+    },
+    {
+      "id": "AC-M8-08",
+      "status": "passed",
+      "evidence": "test_ac08_timeout_before_start_twice_then_ok, test_ac08_max_attempts_2_ends_failed PASSED"
+    },
+    {
+      "id": "AC-M8-09",
+      "status": "passed",
+      "evidence": "test_ac09_executor_dies_between_reserve_and_dispatch PASSED"
+    },
+    {
+      "id": "AC-M8-10",
+      "status": "passed",
+      "evidence": "test_ac10_kill_switch_after_reserve_before_dispatch PASSED (423, provider 0, t-beta executed)"
+    },
+    {
+      "id": "AC-M8-11",
+      "status": "passed",
+      "evidence": "test_ac11_propose_grant_revoked_between_approve_and_execute PASSED"
+    },
+    {
+      "id": "AC-M8-12",
+      "status": "passed",
+      "evidence": "test_ac12_approval_service_unavailable PASSED"
+    },
+    {
+      "id": "AC-M8-13",
+      "status": "passed",
+      "evidence": "stand/tests/test_ex.py on the live M5 stand through ContextForge: 4 passed (no *execute* listed, 5 name forms refused, unified_pdp denies a registered execute probe, probe deleted)"
+    },
+    {
+      "id": "AC-M8-14",
+      "status": "passed",
+      "evidence": "test_ac14_rotation_without_downtime_and_removal_of_a_compromised_kid, test_ac14_removed_kid_is_refused_at_dispatch_at_once_and_by_the_connector_within_10_min PASSED; deployment path: directory mount (docker experiment) and test_keys_cli_rotate_remove_and_release"
+    }
+  ],
+  "dod": {
+    "DoD-1": "ci_local of the executor missing at d487b4a; my check-all run red only on a base-history gitleaks finding (missed_earlier, finding 8) and the stand (ContextForge session cleanup, finding 9); scripts/ci/mutmut.sh would be red on the 0003 driver row (finding 4)",
+    "DoD-2": "met: all 14 AC by automated tests, re-run green",
+    "DoD-3": "not met for cycle 2: reports/conformance/M8.json is the cycle-1 report (finding 3)",
+    "DoD-4": "mutmut on M8 modules: only listed equivalents (938 + 922 mutants); SQL driver: 2 survivors, both new in this cycle: the 0003 row runs the wrong test files (finding 4), and the tenant condition of the per-requester lookup is no longer pinned by any test (finding 10)",
+    "DoD-5": "met: 0 skipped, no xfail",
+    "DoD-6": "met: three rows added in reports/plans/M8-cycle-2.md"
+  },
+  "findings": [
+    {
+      "id": 1,
+      "severity": "critical",
+      "origin": "new_regression",
+      "ref": "EFF-08 (owner decision 2026-11-21), EFF-18 п.5, EFF-25, EFF-27; threat path 'idempotency key of another requester in the same tenant'",
+      "where": "approval/src/gxg_approval/migrations/versions/0003_idempotency_per_requester.py:16; approval/src/gxg_approval/executor.py:194 (idk = bare idempotency_key); connectors/demo/src/demo_connector/effects.py:226; connectors/demo/src/demo_connector/provider.py:97-103 (dedupe per (tenant, key))",
+      "problem": "Idempotency is per requester since 0003, but the provider idempotency key is still the bare idempotency_key. Two requesters of one tenant with the same key get two intents; the second reaches the provider with the same (tenant, key), the provider returns the first receipt (outcome duplicate), the connector reports succeeded, and the second intent ends succeeded with the first intent's provider_operation_id. The second approved message (other recipient, other text) is never sent. An agent that knows Signals' key format (signals:<candidate>:v<n>) suppresses Signals' approved effects this way: the squatting path the owner decision was meant to close is moved to the effect, and now silent. Reconcile by idempotency_key (EFF-25) would do the same",
+      "reproduction": "test_executor.py stack; grants and auto policy for agent:t-alpha:actor and agent:t-alpha:reader on a-public; propose by both with idempotency_key 'shared-key-1' (texts differ, recipients partner_1/partner_2); drain -> statuses (succeeded, succeeded); provider journal [(A, partner_1, ok), (B, partner_2, duplicate)]; both executions provider_operation_id demo-op-82a0b67c-...",
+      "required_improvement": "Provider idempotency key unique per (tenant, requester, key): the connector derives it from the token (e.g. f\"{claims['req']}/{claims['idk']}\" or SHA-256 of both) and passes it to the provider and to reconcile; the fake provider journal keeps the intent's idempotency_key column for AC-M8-01/08; one sentence in EFF-18 п.5. Test on the real stack: the reproduction above -> 2 provider effects with 2 different operation ids, both intents succeeded; AC-M8-08 retries still share one provider key"
+    },
+    {
+      "id": 2,
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "SEC-17 (secrets never in Git), SEC-10, AS-28",
+      "where": "approval/deploy/compose.yaml:86; approval/README.md:39; .gitignore:11",
+      "problem": "The executor's private signing seeds moved from deploy/secrets/ (ignored by 'secrets/') to approval/deploy/exec-keys/signing-keys.json, which the README tells the operator to write on the host. That path is not ignored: in a checkout it is untracked and 'git add -A' commits it; the pinned gitleaks with both repository configs does not detect the file",
+      "reproduction": "git check-ignore -v approval/deploy/exec-keys/signing-keys.json -> exit 1 (not ignored); probe repo with a synthetic [{seed: 43 base64url chars, not_before}] at that path, scripts/ci/gitleaks.sh tree HEAD -> no leaks found",
+      "required_improvement": "add 'exec-keys/' to .gitignore; test_deploy.py asserts the executor key directory is ignored (git check-ignore)"
+    },
+    {
+      "id": 3,
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "DoD-1 (ci_local, owner decision 2026-11-21), DoD-3, DoD-4 «отчёт mutmut прикладывается», cycle-1 required_improvements #7",
+      "where": "reports/conformance/M8.json (commit a01c564, cycle 1, no ci_local); reports/mutmut/M8.txt (cycle-1 prose)",
+      "problem": "The cycle-2 evidence is not in the repository: no ci_local, no cycle-2 conformance run, no mutmut counts and survivor ids, no full SQL driver output, although the cycle-2 plan (N2, item 7) promises them",
+      "required_improvement": "commit reports/conformance/M8.json for the final commit (commit, ci_local: command and result of check-all, AC ids with statuses) and reports/mutmut/M8.txt with counts per package, survivor ids and the full driver output"
+    },
+    {
+      "id": 4,
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "DoD-4 (SQL driver), EFF-08",
+      "where": "scripts/ci/mutate_m7_sql.py:182-183 (row in M8_MUTATIONS, run with M8_TESTS = test_executor.py, test_roles.py)",
+      "problem": "The 0003 row 'idempotency unique per tenant, not per requester' runs only test_executor.py and test_roles.py; the tests that pin the constraint are in test_propose.py. The row survives, the driver exits 1, so scripts/ci/mutmut.sh (last step of check-all) is red",
+      "reproduction": "uv run python scripts/ci/mutate_m7_sql.py 'not per requester' 'shared across requesters' -> SURVIVED 0003 row, '1 not as expected'; the same mutant by hand -> 2 failed in test_propose.py",
+      "required_improvement": "move the row to MUTATIONS (full tests_db) or add test_propose.py to M8_TESTS; re-run the full driver: 0 not as expected"
+    },
+    {
+      "id": 10,
+      "severity": "major",
+      "origin": "new_regression",
+      "ref": "DoD-4, EFF-08, AS-11a (tenant isolation)",
+      "where": "approval/src/gxg_approval/intents.py:56-58 (_SQL_BY_KEY); approval/tests_db/test_propose.py:149-161",
+      "problem": "After _SQL_BY_KEY gained requester_principal, the driver row 'idempotency key shared across tenants' (tenant_id = %s OR true) survives: test_same_key_in_another_tenant_is_another_intent uses different principals in the two tenants, so the requester condition alone separates them. One principal ID can be registered in two tenants (fixture agent:shared, AP-05 test); with the mutant its propose in t-beta with the same key returns the t-alpha intent (status_doc with tenant_id t-alpha) and creates nothing. The code is right; the tenant condition is no longer tested",
+      "reproduction": "uv run python scripts/ci/mutate_m7_sql.py (full): 'SURVIVED intents.py: idempotency key shared across tenants'",
+      "required_improvement": "test: agent:shared proposes with one key in t-alpha and in t-beta -> two 201, two intent ids, each tenant sees only its own; the driver row is then killed"
+    },
+    {
+      "id": 5,
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "plan «Отчёт критика»: minor items go to docs/backlog.md",
+      "where": "docs/backlog.md (commit 67d61b6: copied from 643ea3e)",
+      "problem": "Ten backlog rows were deleted without being done or moved: M5 F11, F12, F13, F6 and six M7 rows (sweeper/mcp probes, api body limit, generated OpenAPI 422, ValueError in mcp.call, signing_key()/mcp in compose, _responses(ok=...)). The new M8 row #8 refers to the deleted sweeper/mcp row",
+      "required_improvement": "restore the ten rows from 3c2f0b0:docs/backlog.md"
+    },
+    {
+      "id": 6,
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "EFF-08, cycle-1 finding 1",
+      "where": "connectors/demo/schemas/message-propose.output.json:16-29",
+      "problem": "The 11 statuses are a copy of intent-status.schema.json with no test tying them: a new status there brings back cycle-1 finding 1 silently",
+      "required_improvement": "assert in connectors/demo/tests/test_effects.py that the enum equals the kit's intent-status.schema.json enum"
+    },
+    {
+      "id": 7,
+      "severity": "minor",
+      "origin": "new_regression",
+      "ref": "AS-10, approval-service «Алерты»",
+      "where": "approval/src/gxg_approval/executor.py:137-139",
+      "problem": "Deferral for a missing signing key logs and counts nothing: after removing the only key, approved intents wait up to the execution window (≤ 1 h) and expire with no signal",
+      "required_improvement": "log.warning (or a counter) on that deferral; readyz stays in the backlog item #8"
+    },
+    {
+      "id": 8,
+      "severity": "major",
+      "origin": "missed_earlier",
+      "ref": "DoD-1 (check-all green), AC-M0.1-01",
+      "where": ".gitleaksignore; tests/ci/test_check_secrets.py:23 in base commits c10fd9b, 8128dee",
+      "problem": "check-all's 'gitleaks.sh range 0000..HEAD' and tests/secrets::test_this_repository_is_clean are red on two generic-api-key findings (test fixture KEY_BODY) in base commits; earlier runs passed only in shallower clones. Not M8 code: backlog, does not lower the score (rule 3), but check-all cannot be green until fixed",
+      "required_improvement": "backlog (or fix now, 2 lines): add the two fingerprints c10fd9b...:tests/ci/test_check_secrets.py:generic-api-key:23 and 8128dee...:tests/ci/test_check_secrets.py:generic-api-key:23 to .gitleaksignore"
+    },
+    {
+      "id": 9,
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "ref": "AC-M5-01/04 (stand), DoD-1",
+      "where": "stand/tests/standlib.py:153 (Stand.rpc)",
+      "problem": "Stand.rpc has no timeout: when ContextForge's session registry fails (logged ForeignKeyViolation fk_mcp_messages_session_id in its cleanup task) a test waits forever and check-all never ends (my run: > 40 min in test_sc03, then test_sc01)",
+      "required_improvement": "backlog M10/M14: a timeout in Stand.rpc so a stuck ContextForge session fails the test instead of hanging check-all"
+    }
+  ],
+  "existing_solutions": [
+    {
+      "component": "executor outbox loop (FOR UPDATE SKIP LOCKED over the M7 outbox)",
+      "alternative": "PgQueuer, procrastinate, Celery/RQ",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "no-key deferral (cycle 2)",
+      "alternative": "the existing kill-switch deferral _SQL_DEFER (reused)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "release_reserved() shared by Executor and 'keys release' (cycle 2)",
+      "alternative": "M7/M8 definer gxg_release_reserved (reused)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "keys._write private temp file (cycle 2)",
+      "alternative": "stdlib os.open with mode + os.replace; tempfile.mkstemp would also do (0600) but needs the same replace",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "idempotency per requester (cycle 2)",
+      "alternative": "PostgreSQL UNIQUE constraint (used)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "canonical args to the provider (cycle 2)",
+      "alternative": "kit canonical.normalize (reused)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "execution token signing",
+      "alternative": "kit exec_token.sign over PyJWT (reused)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "config.JsonFile (re-read on mtime)",
+      "alternative": "watchfiles/watchdog; recorded in DoD-6 (cycle-2 plan)",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "SigningKeys (newest active key by not_before)",
+      "alternative": "jwcrypto/PyJWKSet have no not_before choice; recorded in DoD-6",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "Effects._dispatched (dispatched-jti memory)",
+      "alternative": "kit JtiCache answers 'seen', not 'dispatched'; recorded in DoD-6",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "keys rotate/remove/release CLI",
+      "alternative": "step/jose CLIs produce no not_before key file",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "reconcile backoff",
+      "alternative": "tenacity/backoff (in-process, does not fit a DB row)",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "fake provider journal",
+      "alternative": "stdlib sqlite3 (used)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "SQL mutation driver rows",
+      "alternative": "no maintained mutation tool for PL/pgSQL (accepted at M7)",
+      "verdict": "justified_custom"
+    }
+  ],
+  "threat_model": [
+    {
+      "path": "repeated execution (same intent executed twice)",
+      "status": "closed",
+      "evidence": "AC-M8-02/04/09 re-run green; reserve/dispatch CAS unchanged"
+    },
+    {
+      "path": "args substitution",
+      "status": "closed",
+      "evidence": "AC-M8-05 green; cycle-1 finding 7 closed: the provider now gets the canonical args (test_the_provider_gets_the_canonical_args)"
+    },
+    {
+      "path": "foreign token or kid",
+      "status": "closed",
+      "evidence": "AC-M8-03 green"
+    },
+    {
+      "path": "token for another target",
+      "status": "closed",
+      "evidence": "unchanged, tests green"
+    },
+    {
+      "path": "executor races",
+      "status": "closed",
+      "evidence": "AC-M8-02 green; new deterministic test of the CONTINUE WHEN guard in gxg_release_reserved"
+    },
+    {
+      "path": "kill switch bypass",
+      "status": "closed",
+      "evidence": "AC-M8-10 green"
+    },
+    {
+      "path": "agent calls execute",
+      "status": "closed",
+      "evidence": "AC-M8-13 stand/tests/test_ex.py 4 passed through ContextForge"
+    },
+    {
+      "path": "grant revoked between approve and execute",
+      "status": "closed",
+      "evidence": "AC-M8-11 green"
+    },
+    {
+      "path": "Approval Service down at execute",
+      "status": "closed",
+      "evidence": "AC-M8-12 green"
+    },
+    {
+      "path": "token/args leakage into logs",
+      "status": "closed",
+      "evidence": "unchanged"
+    },
+    {
+      "path": "compromised executor signing key: removal and release (AS-10)",
+      "status": "open",
+      "evidence": "rotation and release now work in the reference deployment (directory mount, keys release, no-key deferral, 0600 temp file), but the seed file now sits in a path Git does not ignore (finding 2)"
+    },
+    {
+      "path": "replay of execute to another connector replica",
+      "status": "closed",
+      "evidence": "unchanged (dispatch CAS)"
+    },
+    {
+      "path": "idempotency key of another requester in the same tenant",
+      "status": "open",
+      "evidence": "Approval Service side closed by 0003 (own key space, no data of the other's intent); effect side open: provider dedupe per (tenant, key) suppresses the other requester's approved effect and records succeeded (finding 1)"
+    },
+    {
+      "path": "forged token with a stolen signing key and the executor's service JWT key (full executor compromise)",
+      "status": "out_of_scope",
+      "evidence": "as cycle 1"
+    },
+    {
+      "path": "connector lies about the outcome",
+      "status": "out_of_scope",
+      "evidence": "as cycle 1"
+    }
+  ],
+  "required_improvements": [
+    "1. Finding 1: provider idempotency key unique per (tenant, requester, key), derived by the connector from the token and used for send and reconcile; EFF-18 п.5 sentence; real-stack test: two requesters of t-alpha, same key, different text/recipient -> two provider effects, two operation ids, both succeeded; AC-M8-01/08 unchanged",
+    "2. Finding 2: 'exec-keys/' in .gitignore + test_deploy.py assertion via git check-ignore",
+    "3. Finding 4: the 0003 driver row runs test_propose.py (move to MUTATIONS or extend M8_TESTS); full driver re-run with 0 not as expected",
+    "3b. Finding 10: test that one principal registered in two tenants with one key gets two intents (agent:shared, t-alpha and t-beta); the driver row 'idempotency key shared across tenants' killed",
+    "4. Finding 3: commit reports/conformance/M8.json for the final commit with ci_local (check-all command and result) and reports/mutmut/M8.txt with per-package counts, survivor ids and the full driver output; for check-all to be green add the two .gitleaksignore lines of finding 8 (base history, 2 lines)",
+    "5. Minors 5 (restore the ten backlog rows), 6 (enum equality test), 7 (log on no-key deferral) fixed or moved to docs/backlog.md; 9 to docs/backlog.md"
+  ],
+  "ponytail_review": "reports/critic/M8-cycle-2.review.md",
+  "lean_lines": 0
+}

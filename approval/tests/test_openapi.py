@@ -24,7 +24,7 @@ REFS = {
 
 def _app(tmp_path: Path) -> Any:
     store = BundleStore({}, state_file=tmp_path / "state.json")
-    return create_app(Deps("approval-api", cast(Any, None), store, Encryptor({}), {"keys": []}))
+    return create_app(Deps("approval-api", cast(Any, None), store, Encryptor({}), lambda: {"keys": []}))
 
 
 @pytest.fixture  # per test, not per module: mutmut attributes a module fixture's calls to one test only

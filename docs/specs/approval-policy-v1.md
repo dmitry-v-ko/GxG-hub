@@ -30,7 +30,7 @@ rules:
     description: "Короткие ответы в чат партнёров без согласования"
     match:
       tools: [telegram.message.propose]
-      resources: [telegram:tg-main/chat/-1001234567890]
+      resources: [telegram:tg-main/chat/c-sales-team]
       requesters: [agent:t-alpha:signals-actions]
     decision: auto_approve
     limits: { max_per_hour: 10, max_per_day: 50 }

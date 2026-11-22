@@ -8,7 +8,7 @@
 Каждый критерий (`AC-Mx-NN`) объективен: это команда или сценарий с наблюдаемым результатом, который либо выполнен, либо нет. Формулировки вида «работает корректно» не используются.
 
 **Общие условия закрытия любой вехи (DoD)** — их, вместе с AC, проверяет критик (см. «Процесс исполнения вех»):
-1. Код в `main` через PR, CI зелёный.
+1. Код в `main` через PR, CI зелёный. **Пока у GitHub Actions исчерпаны минуты** (решение владельца 2026-11-21): для закрытия вехи достаточно зелёного `scripts/ci/check-all.sh` на проверяемом commit, запущенного локально исполнителем и повторно критиком, с выводом в отчёте (`ci_local`: commit, команда, итог). Перед мержем в `main` CI на GitHub должен быть зелёным.
 2. Все критерии вехи выполнены автоматическими тестами, кроме явно помеченных **[ручная проверка]**.
 3. Отчёт о прогоне закоммичен в `reports/conformance/<веха>.json`: commit, digest ContextForge (если участвует), версии SDK, `bundle_version`, ID тестов со статусами `passed`/`failed`, время. Формат — раздел «Фиксация результатов» Conformance Matrix.
 4. Тест, упомянутый в критерии, существует в репозитории и падает, если сломать проверяемое поведение. Для Python это проверяется **mutmut** по модулям с ключевыми условиями вехи: выжившие неэквивалентные мутанты в этих модулях недопустимы, отчёт mutmut прикладывается. Самописные скрипты мутаций не используются. Для не-Python артефактов (JSON Schema, workflow) собственная проверка допустима только если критик подтвердил, что готового инструмента нет.
@@ -422,14 +422,14 @@ flowchart TD
 
 | ID | Критерий |
 | --- | --- |
-| AC-M8-01 | Сквозной сценарий с авто-одобрением: `propose` → через ≤ 10 с `effects.status` = `succeeded`, журнал fake provider содержит ровно 1 запись с тем же `idempotency_key` и `text_hash` |
-| AC-M8-02 | **Гонка:** 50 одобренных intents, 10 экземпляров executor'а, режим `no_dedupe`, задержка провайдера 200 мс → в журнале провайдера ровно 50 записей, по одной на `idempotency_key` (EX-10) |
+| AC-M8-01 | Сквозной сценарий с авто-одобрением: `propose` → через ≤ 10 с `effects.status` = `succeeded`, журнал fake provider содержит ровно 1 запись с ключом провайдера `intent_id` (EFF-18 п.5) и тем же `text_hash` |
+| AC-M8-02 | **Гонка:** 50 одобренных intents, 10 экземпляров executor'а, режим `no_dedupe`, задержка провайдера 200 мс → в журнале провайдера ровно 50 записей, по одной на ключ провайдера `intent_id` (EX-10) |
 | AC-M8-03 | 9 случаев невалидного токена из AC-M1-03 на `execute` → коннектор отвечает 401, счётчик провайдера = 0, `dispatch` не вызывался (EX-03) |
 | AC-M8-04 | Повтор `execute` с тем же токеном после успеха → 409, счётчик провайдера не изменился (EX-04) |
 | AC-M8-05 | `execute` с args, где изменён один символ текста или получатель, → 422, счётчик = 0 (EX-05) |
 | AC-M8-06 | Режим `commit_then_drop`: статус → `outcome_unknown`, затем reconcile → `reconciled_succeeded`; счётчик провайдера = 1 (EX-11) |
 | AC-M8-07 | Kill процесса коннектора после `dispatch`, до ответа: через `dispatch_timeout_s + 30 с` статус `outcome_unknown`; новых вызовов провайдера нет (T14) |
-| AC-M8-08 | Режим `timeout_before_start` ×2, затем `ok`: итог `succeeded`, `attempts` = 3, записи журнала с одним `idempotency_key`; при `max_attempts` = 2 итог `failed` (EX-12, EX-23) |
+| AC-M8-08 | Режим `timeout_before_start` ×2, затем `ok`: итог `succeeded`, `attempts` = 3, записи журнала с одним ключом провайдера `intent_id`; при `max_attempts` = 2 итог `failed` (EX-12, EX-23) |
 | AC-M8-09 | Executor, падающий между reserve и dispatch: через 60 с execution `released`, intent снова `approved`, затем исполнен; `attempts` учитывает только dispatch (T10) |
 | AC-M8-10 | Kill switch (`tenant:t-alpha`), включённый после reserve, но до dispatch → `dispatch` 423, провайдер не вызван; intents `t-beta` исполняются (EX-13) |
 | AC-M8-11 | Отзыв grant'а `propose` у requester'а (новый bundle) между approve и execute → отказ коннектора, провайдер не вызван (EX-14) |
@@ -458,7 +458,7 @@ flowchart TD
 
 ### M10 — webhooks и эксплуатация
 
-**Делаем:** доставка webhooks из outbox; задание очистки payload; метрики Prometheus и правила alert'ов; admin API и CLI (`switch`, `keys rotate`); runbook'и.
+**Делаем:** процесс `decider` и подпись каждого решения человека (AS-30, решение владельца 2026-11-21); доставка webhooks из outbox; задание очистки payload; метрики Prometheus и правила alert'ов; admin API и CLI (`switch`, `keys rotate`); runbook'и.
 
 | ID | Критерий |
 | --- | --- |
@@ -469,6 +469,7 @@ flowchart TD
 | AC-M10-05 | Все метрики из таблицы approval-service-v1 доступны на `/metrics`; правила alert'ов загружаются в Prometheus без ошибок; искусственный `outcome_unknown` старше 1 ч поднимает alert |
 | AC-M10-06 | MC-05: повтор SC- и EX-тестов на следующей минорной версии ContextForge и FastMCP проходит (или зафиксированы регрессии и pin не меняется) |
 | AC-M10-07 | **Выход этапа C:** отчёт `reports/conformance/stage-C.json` — EX-01…EX-24 и MC-05 в статусе `passed` |
+| AC-M10-08 | AS-30: решение без валидного WebAuthn-assertion, с assertion для другого `intent_id`/`args_hash`/`version`/`decision`, повтор assertion, assertion ключа, зарегистрированного не через `decider` → отказ, строка в `decisions` не создана; роль `gxg_ui` не может вызвать `gxg_decide` (ошибка прав) |
 
 ---
 
@@ -521,14 +522,16 @@ flowchart TD
 
 ### M14 — hardening и эксплуатационная готовность
 
-**Делаем:** production-конфигурация (HTTPS, secret store, PostgreSQL с PITR, сетевые политики, egress allowlist), бэкапы, runbook'и (kill switch, ротация ключей, компрометация агента, `outcome_unknown`, восстановление), политика хранения аудита, процедура изменений.
+**Делаем:** production-конфигурация (Tailscale по ADR-0003: теги узлов, ACL в Git с тестами и GitOps, `tailscale serve` HTTPS, Funnel выключен; secret store, PostgreSQL с PITR, сетевые политики, egress allowlist), бэкапы, runbook'и (kill switch, ротация ключей, компрометация агента, `outcome_unknown`, восстановление), политика хранения аудита, процедура изменений.
 
 | ID | Критерий |
 | --- | --- |
 | AC-M14-01 | OPS-03: восстановление Approval Service из бэкапа на чистый стенд → состояния intents совпадают с моментом бэкапа, executor после старта не создаёт повторных вызовов провайдера |
 | AC-M14-02 | OPS-04: бэкапов старше 35 дней нет (проверка хранилища); восстановленный старый бэкап не содержит payload, очищенного по RET-01 |
 | AC-M14-03 | SC-07 (SSRF): попытки зарегистрировать или вызвать URL на `169.254.169.254`, `127.0.0.1`, RFC1918, через DNS-редирект → отклонены egress-политикой |
-| AC-M14-04 | Внешний порт-скан production-адресов: открыты только HTTPS ContextForge и HTTPS UI |
+| AC-M14-04 | Внешний порт-скан production-адресов из интернета: открытых портов нет (ADR-0003, SEC-13); `tailscale funnel status` пуст на всех узлах Hub |
+| AC-M14-08 | OPS-06: с адреса вне tailnet и между неразрешёнными тегами (`tag:agent` → Web UI, admin, коннектор; approver → админка ContextForge) соединения нет; ACL `tests` в `policies/network/tailscale-acl.hujson` зелёные в CI и покрывают каждое разрешение и минимум один запрет на тег (SEC-26) |
+| AC-M14-09 | OPS-07: запрос из tailnet без токена агента / OIDC-сессии и с поддельным `Tailscale-User-Login` → 401/403, как вне tailnet (SEC-25) |
 | AC-M14-05 | Учебная тревога по каждому runbook'у выполнена по шагам дежурным, не автором runbook'а, время до блокировки эффектов ≤ 5 мин **[ручная проверка, протокол в `reports/drills/`]** |
 | AC-M14-06 | Полный прогон Conformance Matrix (все SC, EX, MC, SI, OPS) — `passed`, отчёт `reports/conformance/stage-F.json` |
 | AC-M14-07 | Решение go/no-go на подключение первого внешнего клиента принято оператором и записано в Roadmap |

@@ -1,4 +1,4 @@
-"""Execution token verification in the connector (EFF-18 п.1, AS-09…AS-11).
+"""Execution tokens: verification in the connector (EFF-18 п.1, AS-09…AS-11), signing in the executor.
 
 Token: compact JWS, `alg: EdDSA`, `typ: gxg-exec+jwt`, claims validated by
 schemas/execution-token.schema.json (`sub`, `jti` are UUIDs). Keys come only from the executor JWKS
@@ -16,7 +16,7 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any, TypedDict, cast
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from . import _jwt, _schema
 from ._jwt import Clock, JtiCache, TokenError
@@ -43,6 +43,23 @@ class ExecutionClaims(TypedDict):
     idk: str
     iat: int
     exp: int
+
+
+def public_jwk(key: Ed25519PublicKey) -> dict[str, str]:
+    """JWKS entry of an executor key (RFC 8037); `kid` = RFC 7638 thumbprint, as the executor signs with."""
+    x = _jwt.b64url_encode(_jwt.raw_public_key(key))
+    return {"kty": "OKP", "crv": "Ed25519", "x": x, "kid": _jwt.thumbprint(key), "use": "sig", "alg": "EdDSA"}
+
+
+def sign(private_key: Ed25519PrivateKey, claims: Mapping[str, Any], *, ttl_s: int = 60, now: Clock = time.time) -> str:
+    """Execution token for one attempt. `claims`: every claim but `iss`, `iat`, `exp` (EFF «Execution token»)."""
+    if not 0 < ttl_s <= _jwt.MAX_TTL_S:
+        raise ValueError("ttl_s must be in (0, 60]")
+    iat = int(now())
+    doc = {**claims, "iss": ISSUER, "iat": iat, "exp": iat + ttl_s}
+    if not _schema.validator("execution-token").is_valid(doc):
+        raise ValueError("execution token claims do not match execution-token.schema.json")
+    return _jwt.sign(private_key, doc, typ=TYP, kid=_jwt.thumbprint(private_key.public_key()))
 
 
 def parse_jwks(data: bytes) -> dict[str, Ed25519PublicKey]:

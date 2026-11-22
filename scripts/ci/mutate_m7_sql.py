@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DoD-4 for M7, SQL part: each mutation of a key SQL condition must turn `approval/tests_db` red.
+"""DoD-4 for M7 and M8, SQL part: each mutation of a key SQL condition must turn `approval/tests_db` red.
 
 mutmut mutates Python only: it leaves the PL/pgSQL of the migration and the SQL string constants of `intents.py`
 alone, and no maintained mutation tool exists for application SQL (reports/plans/M7-cycle-2.md, DoD-6; the
@@ -19,7 +19,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MIG = "approval/src/gxg_approval/migrations/versions/0001_core.py"
 INT = "approval/src/gxg_approval/intents.py"
+MIG2 = "approval/src/gxg_approval/migrations/versions/0002_executor.py"
+MIG3 = "approval/src/gxg_approval/migrations/versions/0003_idempotency_per_requester.py"
+EXE = "approval/src/gxg_approval/executor.py"
 TESTS = ["approval/tests_db"]
+M8_TESTS = ["approval/tests_db/test_executor.py", "approval/tests_db/test_roles.py"]  # M8 rows: their tests only
 EQUIVALENT = "equivalent: "  # prefix of `what` for a mutant that cannot change behaviour (reason follows)
 
 # (file, exact text, replacement, what the mutation breaks)
@@ -83,6 +87,8 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG, "WHEN approvals >= r.required_approvals THEN", "WHEN approvals >= 1 THEN", "quorum of one"),
     (MIG, "execution_deadline = now() + make_interval(secs => r.execution_window_s)", "execution_deadline = now()",
      "no execution window after approval"),
+    (MIG, "execution_deadline = now() + make_interval(secs => r.execution_window_s)",
+     "execution_deadline = now() + interval '1 hour'", "T2 deadline from 1 h, not the window frozen at T1"),
     (MIG, "    PERFORM _gxg_outbox('execute', r);\n    PERFORM _gxg_outbox('webhook', r);\n",
      "    PERFORM _gxg_outbox('webhook', r);\n", "approved intent never queued for execution"),
     # T18 manual resolution
@@ -132,8 +138,12 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (INT, "WHERE intent_id = %s AND tenant_id = %s AND", "WHERE intent_id = %s AND (tenant_id = %s OR true) AND",
      "read another tenant's intent (same principal ID)"),
     (INT, "AND requester_principal = %s\"", "AND (requester_principal = %s OR true)\"", "read another requester's"),
-    (INT, "WHERE tenant_id = %s AND idempotency_key = %s", "WHERE (tenant_id = %s OR true) AND idempotency_key = %s",
+    (INT, "WHERE tenant_id = %s AND requester_principal = %s AND idempotency_key",
+     "WHERE (tenant_id = %s OR true) AND requester_principal = %s AND idempotency_key",
      "idempotency key shared across tenants"),
+    (INT, "AND requester_principal = %s AND idempotency_key = %s",
+     "AND (requester_principal = %s OR true) AND idempotency_key = %s",
+     "idempotency key shared across requesters (EFF-08)"),
     (INT, "FROM switches WHERE blocked AND scope", "FROM switches WHERE scope", "a cleared switch blocks T1"),
     (INT, "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", "SELECT %s", "T1 without the tenant lock"),
     (INT, "WHERE tenant_id = %(t)s AND requester_principal = %(r)s AND created_at",
@@ -157,11 +167,37 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      "auto hour limit counts the day"),
     (INT, "AND approval_mode = 'auto' AND %s", "AND %s", "auto limit counts human intents of the rule"),
     (INT, "AND %s = ANY(rule_ids)", "AND (%s = ANY(rule_ids) OR true)", "auto limit counts other rules"),
+    # migration 0003 (M8, EFF-08 per requester): pinned by test_propose.py, so it runs with every DB test
+    (MIG3, "UNIQUE (tenant_id, requester_principal, idempotency_key)", "UNIQUE (tenant_id, idempotency_key)",
+     "idempotency unique per tenant, not per requester (EFF-08)"),
+]  # fmt: skip
+# M8: AS-10 release (migration 0002) and the executor's SQL (outbox claim, delivery, reconcile backoff).
+M8_MUTATIONS: list[tuple[str, str, str, str]] = [
+    (MIG2, "    UPDATE executions SET state = 'released', completed_at = now() WHERE execution_id = id;\n", "",
+     "AS-10 release leaves the execution reserved"),
+    (MIG2, "PERFORM _gxg_outbox('execute', _gxg_move(", "PERFORM (_gxg_move(", "released intent never re-queued"),
+    (MIG2, "GRANT EXECUTE ON FUNCTION gxg_release_reserved(text) TO gxg_executor;", "",
+     "executor cannot release after a key removal"),
+    (MIG2, "WHERE state = 'reserved' ORDER BY reserved_at", "WHERE true ORDER BY reserved_at",
+     EQUIVALENT + "the CONTINUE WHEN after the row lock skips every execution that is not reserved"),
+    (MIG2, "    CONTINUE WHEN (x.e).state <> 'reserved';  -- dispatched or released meanwhile\n", "",
+     "release aborts on an execution dispatched between the loop's SELECT and the lock"),
+    (EXE, "WHERE o.delivered_at IS NULL AND o.topic", "WHERE o.topic", "delivered outbox rows handled again"),
+    (EXE, "o.topic IN ('execute', 'reconcile')", "o.topic IN ('execute')", "outcome_unknown never reconciled"),
+    (EXE, "o.topic IN ('execute', 'reconcile')", "o.topic IN ('execute', 'reconcile', 'notify', 'webhook')",
+     "executor eats the notifier's rows"),
+    (EXE, "make_interval(secs => least(5 * 2 ^ (o.attempts - 1), 300))", "interval '0'",
+     "a kill-switched row is retried without backoff"),
+    (EXE, "UPDATE outbox SET delivered_at = now() WHERE", "UPDATE outbox SET delivered_at = NULL WHERE",
+     "rows are never delivered"),
+    (EXE, "SET attempts = attempts + 1 WHERE", "SET attempts = attempts WHERE",
+     "kill-switched row without backoff count"),
+    (EXE, "extract(epoch FROM now() - e.dispatched_at)", "0", "reconcile backoff ignores the time waited"),
 ]  # fmt: skip
 
 
-def run_tests() -> bool:
-    cmd = [sys.executable, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", *TESTS]
+def run_tests(tests: list[str] = TESTS) -> bool:
+    cmd = [sys.executable, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", *tests]
     return subprocess.run(cmd, cwd=ROOT, capture_output=True, check=False).returncode == 0
 
 
@@ -171,7 +207,8 @@ def main() -> int:
         print("baseline: tests are red, nothing to measure")
         return 2
     bad = 0
-    for file, old, new, what in MUTATIONS:
+    listed = [(m, TESTS) for m in MUTATIONS] + [(m, M8_TESTS) for m in M8_MUTATIONS]
+    for (file, old, new, what), tests in listed:
         if only and not any(o in what for o in only):
             continue
         path = ROOT / file
@@ -182,7 +219,7 @@ def main() -> int:
             continue
         try:
             path.write_text(text.replace(old, new), encoding="utf-8")
-            green = run_tests()
+            green = run_tests(tests)
         finally:
             path.write_text(text, encoding="utf-8")
         equivalent = what.startswith(EQUIVALENT)
@@ -190,7 +227,7 @@ def main() -> int:
             "SURVIVED" if green else "killed")  # fmt: skip
         bad += green != equivalent
         print(f"{verdict:<10}  {Path(file).name}: {what}")
-    print(f"{len(MUTATIONS)} mutations listed: {bad} not as expected (survivor, stale text, killed 'equivalent')")
+    print(f"{len(listed)} mutations listed: {bad} not as expected (survivor, stale text, killed 'equivalent')")
     return 1 if bad else 0
 
 

@@ -1,4 +1,5 @@
-# Production image of the reference connector `demo` (stage B, read-only).
+# Production image of the reference connector `demo`: MCP on 8080; with DEMO_APPROVAL_URL also the internal
+# execute/reconcile port 8081, which only the executor may reach (SEC-14).
 # Build from the repository root: docker build -f connectors/demo/Dockerfile .
 # The kit comes in by path source (connectors/demo/pyproject.toml); versions from connectors/demo/uv.lock.
 FROM ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c AS uv
@@ -25,6 +26,6 @@ COPY --from=build /app /app
 RUN useradd --system --uid 10001 demo && mkdir -p /var/lib/demo && chown demo /var/lib/demo
 USER demo
 ENV PATH=/app/connectors/demo/.venv/bin:$PATH PYTHONUNBUFFERED=1
-EXPOSE 8080
+EXPOSE 8080 8081
 VOLUME ["/var/lib/demo"]
 CMD ["python", "-m", "demo_connector"]
