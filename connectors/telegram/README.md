@@ -46,5 +46,5 @@ cd connectors/telegram && uv run mutmut run    # DoD-4: tools.py, server.py, arc
 | `startup_refused`, `TELEGRAM_ARCHIVE_DSN` | Не задан или не `postgresql://`. Значение в лог не пишется |
 | `/readyz` = 503, `not_ready`: `telegram archive is not available` | База архива недоступна или роль не входит; проверить сеть и пароль роли |
 | Вызовы `collect` → `rate_limited` | Flood-wait у сервиса: повторять не раньше `retry_after_s` |
-| Вызовы → `not_found` для нужного чата | Нет grant'а (`policies/tenants/<tenant>.yaml`, RID с `chat_ref`), grant истёк , чат вне scope Connection или ещё не синхронизирован archive-sync (его нет в архиве) |
+| Вызовы → `not_found` для нужного чата | Нет grant'а (`policies/tenants/<tenant>.yaml`, RID с `chat_ref`), grant истёк, чат вне scope Connection или ещё не синхронизирован archive-sync (его нет в архиве) |
 | Обновление gxg_agents_v2 | Поднять commit в `archive/SOURCE.md`, скопировать миграции, обновить хеши, прогнать тесты коннектора |

@@ -937,6 +937,8 @@ def test_vendored_schema_is_the_pinned_upstream() -> None:
     [
         ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;", True),
         ("ALTER TABLE capability_hub.connections ADD COLUMN x int;", True),
+        ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;\n" + "-- padding\n" * 20000, True),
+        ("SET search_path = capability_hub;\nALTER TABLE connections DROP COLUMN scope;", True),
         ("CREATE TABLE public.unrelated (id int);", False),
     ],
 )

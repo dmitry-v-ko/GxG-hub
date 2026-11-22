@@ -26,7 +26,7 @@ uv run python scripts/ci/check_coverage.py coverage-kit.json
 # Needs a clone (GXG_AGENTS_V2, default ../gxg_agents_v2); UPSTREAM_DRIFT=skip only where no clone can exist.
 if [ "${UPSTREAM_DRIFT:-}" != skip ]; then
   upstream="${GXG_AGENTS_V2:-../gxg_agents_v2}"
-  [ -d "$upstream/.git" ] || { echo "check-all: no gxg_agents_v2 clone at $upstream (GXG_AGENTS_V2)" >&2; exit 1; }
+  git -C "$upstream" rev-parse --git-dir >/dev/null 2>&1 || { echo "check-all: no gxg_agents_v2 clone at $upstream (GXG_AGENTS_V2)" >&2; exit 1; }
   connectors/telegram/archive/check_upstream.sh "$upstream"
   connectors/telegram/archive/check_upstream.sh --drift "$upstream"
 fi
