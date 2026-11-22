@@ -40,3 +40,7 @@ only_mutate = ["*/tools.py", "*/server.py", "*/archive.py"]
 also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml", "archive/"]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
+# The tests run a real PostgreSQL (initdb per run): mutmut's CPU-time limit from the clean run is too tight under
+# load and turned killable mutants into timeouts.
+timeout_constant = 60
+timeout_multiplier = 3
