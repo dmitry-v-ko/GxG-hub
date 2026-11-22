@@ -1,0 +1,24 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index 2df5c86..6ce7999 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -53,7 +53,18 @@ class Connector:
+         self._cursor = mcp.Cursor()
+ 
+     def tools(self, verifier: IdentityVerifier, refresh: Callable[[], None]) -> list[mcp.GxgTool]:
+-        return mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)
++        backend = self.backend
++
++        class Prefetch:
++            """BROKEN: looks the named note up (every tenant) before the identity is verified."""
++
++            def verify(self, headers: Any, *, tool: str | None = None, arguments: Any = None) -> Any:
++                if arguments and "note_id" in arguments:
++                    for tenant in backend.boards:
++                        backend.get_note(tenant, arguments["note_id"])
++                return verifier.verify(headers, tool=tool, arguments=arguments)
++
++        return mcp.tools(self, MANIFEST, self.grants, Prefetch(), refresh, logs, ROOT)
+ 
+     def handlers(self) -> Mapping[str, Handler]:
+         return {

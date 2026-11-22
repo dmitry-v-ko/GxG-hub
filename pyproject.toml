@@ -67,6 +67,7 @@ testpaths = [
     "packages/gxg-connector-kit/tests",
     "approval/tests",
     "tools/gxg-policy/tests",
+    "tools/gxg-connector-check/tests",
     "connectors/demo/tests",
     "spikes/m4-contextforge/tests",
     "spikes/m4.1-gateways/tests",
