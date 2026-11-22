@@ -1,0 +1,13 @@
+# Full mutmut at integration (DoD-1), code e869b14, kernel.pid_max=4194304; status 2026-11-22T23:19:48Z
+# run: scripts/ci/check-all.sh (no MUTMUT_PACKAGES); per package: not killed vs scripts/ci/mutmut-equivalent.txt
+== tools/gxg-policy: {"killed":2555,"survived":35,"total":2590,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== connectors/demo: {"killed":1859,"survived":42,"total":1903,"no_tests":2,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== connectors/telegram: {"killed":1258,"survived":18,"total":1279,"no_tests":2,"skipped":0,"suspicious":0,"timeout":1,"check_was_interrupted_by_user":0,"segfault":0}
+== gateway/contextforge: {"killed":132,"survived":1,"total":133,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== packages/gxg-connector-kit: {"killed":1204,"survived":11,"total":1215,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== approval: {"killed":2290,"survived":24,"total":2314,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== approval/ui: running or pending
+== approval/notifier: running or pending
+== .: running or pending
+checked against the list so far: connectors/demo, connectors/telegram, approval: unexplained 0, stale 0
+connectors/demo server.x_build__mutmut_9 (M9 backlog): killed; approval transitions.x_rules: no timeout (pid_max)
