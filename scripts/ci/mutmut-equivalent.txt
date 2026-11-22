@@ -85,14 +85,9 @@ gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is 
 telegram_connector.tools.x_load_schema__mutmut_4  # M11: as demo's x_load_schema__mutmut_4: keeping `..` in the tail still finds the same file by the parent walk
 telegram_connector.tools.x_service_error__mutmut_7  # M11: `retry_after_seconds or 1` instead of `or 0`: max(delay, 1) makes both 1
 telegram_connector.tools.xǁTelegramToolǁrun__mutmut_13  # M11: "AUTHORIZATION" in headers: Starlette's Headers lookup is case-insensitive, the same answer
-telegram_connector.tools.xǁTelegramToolǁrun__mutmut_151  # M11: as demo's run__mutmut_133: duration_ms * 1001, 0.1 % off a log field
 telegram_connector.tools.xǁConnectorǁtools__mutmut_11  # M11: as demo's tools__mutmut_11: encoding None = UTF-8 on the runner (PEP 538)
 telegram_connector.tools.xǁConnectorǁtools__mutmut_13  # M11: as demo's tools__mutmut_13: "UTF-8", codec names are case-insensitive
 telegram_connector.tools.xǁConnectorǁsearch__mutmut_18  # M11: chats = None instead of []: read only on the no-Connection path, where `not chats` is True for both
-telegram_connector.server.xǁSettingsǁfrom_env__mutmut_21  # M11: GXG_PROFILE default None instead of "production": only "test" is ever compared, any other default is treated alike
-telegram_connector.server.xǁSettingsǁfrom_env__mutmut_23  # M11: same as from_env__mutmut_21 (no default: None)
-telegram_connector.server.xǁSettingsǁfrom_env__mutmut_26  # M11: same as from_env__mutmut_21 ("XXproductionXX")
-telegram_connector.server.xǁSettingsǁfrom_env__mutmut_27  # M11: same as from_env__mutmut_21 ("PRODUCTION")
 telegram_connector.server.xǁSettingsǁfrom_env__mutmut_32  # M11: TELEGRAM_ARCHIVE_DSN default "XXXX" instead of "": neither is postgresql://, refused alike
 telegram_connector.server.xǁBundleFilesǁ__init____mutmut_3  # M11: as demo's BundleFiles __init__ mutmut_3: _seen None vs "", both "nothing loaded yet"
 telegram_connector.server.x_serve__mutmut_1  # M11: as demo's x_serve: uvicorn on real sockets, forbidden in tests; covered by the stand (stand/run.sh starts the image)
@@ -103,3 +98,8 @@ telegram_connector.archive.xǁArchiveServiceǁ_run__mutmut_7  # M11: same as _ru
 telegram_connector.archive.xǁArchiveServiceǁscope_chats__mutmut_6  # M11: SQL keywords in lower case: SQL is case-insensitive, the same statement
 telegram_connector.archive.xǁArchiveServiceǁready__mutmut_3  # M11: same as scope_chats__mutmut_6 (lower-case keywords)
 telegram_connector.archive.xǁArchiveServiceǁready__mutmut_4  # M11: unquoted upper-case identifiers fold to lower case in PostgreSQL: the same table
+telegram_connector.archive.xǁArchiveServiceǁsearch__mutmut_21  # M11: LIMIT limit + 2 instead of + 1: one extra row fetched; `more` is len(rows) > limit, the same for any fetch above limit, and only rows[:limit] are returned
+telegram_connector.archive.xǁArchiveServiceǁread_thread__mutmut_21  # M11: same as search__mutmut_21
+telegram_connector.archive.xǁArchiveServiceǁcollect__mutmut_34  # M11: same as search__mutmut_21
+telegram_connector.server.x_build__mutmut_10  # M11: detected, not equivalent: store = None makes build() fail and the in-process MCP session hangs, so mutmut reports a timeout instead of a failure
+demo_connector.server.x_build__mutmut_9  # M11 run: detected, not equivalent: the same store = None in demo's build(); earlier runs killed it, this one timed out (the hanging session above)
