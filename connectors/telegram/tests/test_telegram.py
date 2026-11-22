@@ -937,6 +937,8 @@ def test_vendored_schema_is_the_pinned_upstream() -> None:
     [
         ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;", True),
         ("ALTER TABLE capability_hub.connections ADD COLUMN x int;", True),
+        ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;\n" + "-- padding\n" * 20000, True),
+        ("SET search_path = capability_hub;\nALTER TABLE connections DROP COLUMN scope;", True),
         ("CREATE TABLE public.unrelated (id int);", False),
     ],
 )
@@ -1288,6 +1290,15 @@ async def test_duration_is_in_milliseconds(tg: Tg, db: Db, caplog: pytest.LogCap
     with psycopg.connect(db.pg.dsn(db.name)) as locker:
         locker.execute("LOCK TABLE telegram_archive.messages IN ACCESS EXCLUSIVE MODE")
         task = asyncio.create_task(tg.ok(THREAD, {"chat_ref": REF["a-sales"]}))
+        for _ in range(600):  # under load the call may reach the table late: wait until it waits on the lock
+            await asyncio.sleep(0.05)
+            waiting = db.sql(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname = %s AND application_name = 'gxg-telegram'"
+                " AND wait_event_type = 'Lock'",
+                (db.name,),
+            )
+            if waiting[0][0]:
+                break
         await asyncio.sleep(0.3)
     await task  # the lock is released when the block closes the locker's transaction
     assert 300 <= audit_lines(caplog)[0]["duration_ms"] < 5000

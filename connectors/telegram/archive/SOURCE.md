@@ -11,7 +11,7 @@
 Сверка с upstream (нужен клон gxg_agents_v2):
 
 - `check_upstream.sh <клон>` — копии здесь равны миграциям на закреплённом commit. Хеши ниже проверяет и тест `test_vendored_schema_is_the_pinned_upstream` (по файлам здесь).
-- `check_upstream.sh --drift <клон> [<ref>]` — **уведомление об обновлении (ADR-0004):** падает, если в `supabase/migrations` после закреплённого commit (до `origin/HEAD` после `git fetch`) появилась миграция, затрагивающая `telegram_archive` или `capability_hub.connections`. На неё опирается граница scope: архив держит только чаты scope благодаря триггеру очистки сервиса (CON-TG-06).
+- `check_upstream.sh --drift <клон> [<ref>]` — **уведомление об обновлении (ADR-0004):** падает, если в `supabase/migrations` после закреплённого commit (до `origin/HEAD` после `git fetch`) появилась миграция, затрагивающая `telegram_archive`, `capability_hub.connections` или меняющая `search_path` (имена без схемы — проверить вручную). На неё опирается граница scope: архив держит только чаты scope благодаря триггеру очистки сервиса (CON-TG-06).
 
 Обе проверки запускают `scripts/ci/check-all.sh` (клон — `GXG_AGENTS_V2`, по умолчанию `../gxg_agents_v2`; без клона check-all падает, пропуск только явный: `UPSTREAM_DRIFT=skip`) и job `telegram-upstream` в `.github/workflows/ci.yml`, в том числе по расписанию раз в 6 ч. Job нужен секрет `GXG_AGENTS_V2_TOKEN` (токен только на чтение `contents` репозитория gxg_agents_v2); без него job красный.
 

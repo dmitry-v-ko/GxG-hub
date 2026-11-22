@@ -21,7 +21,9 @@ if [ "$drift" = 1 ]; then
   changed=$(git -C "$upstream" diff --name-only "$commit" "$ref" -- supabase/migrations)
   hits=""
   for f in $changed; do
-    if git -C "$upstream" diff "$commit" "$ref" -- "$f" | grep -qE 'telegram_archive|capability_hub\.connections'; then
+    # grep reads the whole diff (no -q): with pipefail an early exit would SIGPIPE git diff on a big file and hide it.
+    # search_path: a migration may name the archive tables unqualified after SET search_path (reviewed by hand).
+    if git -C "$upstream" diff "$commit" "$ref" -- "$f" | grep -E 'telegram_archive|capability_hub\.connections|search_path' >/dev/null; then
       hits="$hits $f"
     fi
   done
