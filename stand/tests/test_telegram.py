@@ -438,14 +438,15 @@ def test_mc02_thread_and_collect_page_to_the_end(stand: Stand) -> None:
 def test_ac_m11_04_flood_wait_is_rate_limited_with_telegrams_delay(stand: Stand, seconds: int) -> None:
     """The service's sync records Telegram's flood wait (connection_state.retry_after): collect is rate_limited with
     the remaining delay (± 1 s; a call through ContextForge takes well under a second); reads are flagged."""
-    defer("svc-alpha", seconds)
     try:
         for path in ("/rpc", paths(stand, ALPHA_READER)["virtual_server"]):
+            defer("svc-alpha", seconds)  # re-armed before every call: a 1 s window must not end mid-loop
             err = gxg_error(call(stand, ALPHA_READER, COLLECT, {"chat_ref": REF["a-partners"]}, path=path))
             assert err and (err["code"], err["retryable"]) == ("rate_limited", True), (path, err)
             assert seconds - 1 <= err["retry_after_s"] <= seconds, err
             jsonschema.validate(err, ERROR)
             for upstream, args in ((SEARCH, {"query": "status"}), (THREAD, {"chat_ref": REF["a-partners"]})):
+                defer("svc-alpha", 3600)  # reads only flag the deferral; the delay value is checked on collect
                 page = ok(call(stand, ALPHA_READER, upstream, args, path=path))
                 assert "rate_limited" in page["partial_reasons"] and page["complete"] is False, (upstream, page)
     finally:
