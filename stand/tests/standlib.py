@@ -38,6 +38,7 @@ from init import KID_ADAPTER, env_values  # noqa: E402
 
 CF = "http://127.0.0.1:4444"
 PROTO = "2025-06-18"
+SSE_TIMEOUT_S = 60
 PROBE_IMAGE = "python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b"
 NET_EDGE, NET_CONNECTORS = "gxg-stand_edge", "gxg-stand_connectors"
 DEMO_URL = "http://demo:8080/mcp"
@@ -150,7 +151,10 @@ class Stand:
         """One JSON-RPC request; on an MCP endpoint (`.../mcp/`) after initialize in the same session; on an SSE
         endpoint (`.../sse`) through the official SDK client."""
         if path.endswith("/sse"):
-            return 200, asyncio.run(self._sse(path, method, params or {}, token, extra))
+            # bounded: an SSE session to ContextForge once stalled for 38 min after a restart (M6 cycle 4)
+            return 200, asyncio.run(
+                asyncio.wait_for(self._sse(path, method, params or {}, token, extra), SSE_TIMEOUT_S)
+            )
         h = self.headers(token, extra)
         if path.endswith("/mcp/"):
             init = {"protocolVersion": PROTO, "capabilities": {}, "clientInfo": {"name": "m5", "version": "0"}}
