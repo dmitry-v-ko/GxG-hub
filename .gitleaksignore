@@ -32,10 +32,12 @@ e7d245f8e2ef7d2a6bf52828e13b970a91cad980:tests/ci/test_check_secrets.py:generic-
 43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:252
 
 # M1.1 (claude/m1.1-toolkit, pushed): typed fields of Ed25519 signing keys generated in tests
-# (`bundle_key: Ed25519PrivateKey = field(default_factory=Ed25519PrivateKey.generate)`); renamed to *_signer since.
+# (dataclass fields named *_key holding generated private keys); renamed to *_signer since; the first
+# version of this comment quoted such a line, hence the .gitleaksignore entry.
 a3e13a0852e4e37a00705cb50fdfb4bfa4dbf940:packages/gxg-connector-kit/tests/test_effects.py:generic-api-key:76
 a3e13a0852e4e37a00705cb50fdfb4bfa4dbf940:packages/gxg-connector-kit/tests/test_mcp.py:generic-api-key:138
 ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/checks.py:generic-api-key:334
 ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/plugin.py:generic-api-key:132
 ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/plugin.py:generic-api-key:80
 ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/plugin.py:generic-api-key:83
+cd932b20fb7e695a52a3539d0f1a70b06276a358:.gitleaksignore:generic-api-key:35
