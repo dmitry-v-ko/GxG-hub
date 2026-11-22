@@ -1288,6 +1288,15 @@ async def test_duration_is_in_milliseconds(tg: Tg, db: Db, caplog: pytest.LogCap
     with psycopg.connect(db.pg.dsn(db.name)) as locker:
         locker.execute("LOCK TABLE telegram_archive.messages IN ACCESS EXCLUSIVE MODE")
         task = asyncio.create_task(tg.ok(THREAD, {"chat_ref": REF["a-sales"]}))
+        for _ in range(600):  # under load the call may reach the table late: wait until it waits on the lock
+            await asyncio.sleep(0.05)
+            waiting = db.sql(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname = %s AND application_name = 'gxg-telegram'"
+                " AND wait_event_type = 'Lock'",
+                (db.name,),
+            )
+            if waiting[0][0]:
+                break
         await asyncio.sleep(0.3)
     await task  # the lock is released when the block closes the locker's transaction
     assert 300 <= audit_lines(caplog)[0]["duration_ms"] < 5000
