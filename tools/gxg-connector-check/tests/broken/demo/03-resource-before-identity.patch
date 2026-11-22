@@ -1,8 +1,8 @@
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 2df5c86..6ce7999 100644
+index 34549d6..117dc63 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
-@@ -53,7 +53,18 @@ class Connector:
+@@ -48,7 +48,18 @@ class Connector:
          self._cursor = mcp.Cursor()
  
      def tools(self, verifier: IdentityVerifier, refresh: Callable[[], None]) -> list[mcp.GxgTool]:

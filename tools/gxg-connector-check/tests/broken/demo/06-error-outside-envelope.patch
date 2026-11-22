@@ -1,5 +1,5 @@
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 2df5c86..e7d3e2f 100644
+index 34549d6..fc9cb29 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
 @@ -15,6 +15,9 @@ from collections.abc import Callable, Mapping
@@ -12,7 +12,7 @@ index 2df5c86..e7d3e2f 100644
  from gxg_connector_kit import mcp
  from gxg_connector_kit.errors import GxgError
  from gxg_connector_kit.grants import GrantResolver
-@@ -41,6 +44,17 @@ def rid(connection: str, board: str) -> str:
+@@ -36,6 +39,17 @@ def rid(connection: str, board: str) -> str:
      return f"{DOMAIN}:{connection}/{RTYPE}/{board}"
  
  
@@ -30,7 +30,7 @@ index 2df5c86..e7d3e2f 100644
  class Connector:
      """`gxg_connector_kit.mcp.Domain` of `demo`."""
  
-@@ -53,7 +67,7 @@ class Connector:
+@@ -48,7 +62,7 @@ class Connector:
          self._cursor = mcp.Cursor()
  
      def tools(self, verifier: IdentityVerifier, refresh: Callable[[], None]) -> list[mcp.GxgTool]:

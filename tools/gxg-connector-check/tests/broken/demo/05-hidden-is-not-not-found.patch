@@ -1,8 +1,8 @@
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 2df5c86..c856c78 100644
+index 34549d6..759d1cd 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
-@@ -68,6 +68,8 @@ class Connector:
+@@ -63,6 +63,8 @@ class Connector:
      async def resolve(self, tool: str, access: Access, args: dict[str, Any]) -> tuple[str, Any] | None:
          """`demo.note.get`: the board from the backend, not from an argument (GR-01, GR-03)."""
          note = self.backend.get_note(access.ident.tenant_id, args["note_id"])

@@ -1,8 +1,8 @@
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 2df5c86..1284345 100644
+index 34549d6..3dd3ab3 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
-@@ -72,7 +72,7 @@ class Connector:
+@@ -67,7 +67,7 @@ class Connector:
  
      def _readable(self, access: Access) -> dict[str, tuple[str, str]]:
          """{board id: (RID, grant id)} the caller may read. Nothing granted: no backend call (GR-16)."""

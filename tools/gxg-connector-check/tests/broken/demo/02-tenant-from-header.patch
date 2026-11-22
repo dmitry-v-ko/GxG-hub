@@ -1,5 +1,5 @@
 diff --git a/src/demo_connector/server.py b/src/demo_connector/server.py
-index 03bab2a..31003be 100644
+index 71f3a0d..bd1fb28 100644
 --- a/src/demo_connector/server.py
 +++ b/src/demo_connector/server.py
 @@ -9,7 +9,8 @@ from __future__ import annotations
@@ -40,6 +40,6 @@ index 03bab2a..31003be 100644
      connector = Connector(backend or Backend(), store)
 -    tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)
 +    tools = connector.tools(TenantHeader(mcp.verifier(settings, CONNECTOR_ID)), files.refresh)
-     # Read-only connector: backend (in-process fixtures) + valid bundle; no Approval Service (MCC-09).
+     # Read-only connector: backend + valid bundle; no Approval Service (MCC-09).
      return mcp.create_app(CONNECTOR_ID, tools, files.refresh, store.readiness, logs.startup), connector
  

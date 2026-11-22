@@ -1,5 +1,5 @@
 diff --git a/src/demo_connector/server.py b/src/demo_connector/server.py
-index 03bab2a..a23dce6 100644
+index 71f3a0d..68bf716 100644
 --- a/src/demo_connector/server.py
 +++ b/src/demo_connector/server.py
 @@ -16,6 +16,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -13,7 +13,7 @@ index 03bab2a..a23dce6 100644
 @@ -38,7 +39,8 @@ def build(settings: mcp.Settings, backend: Backend | None = None) -> tuple[Starl
      connector = Connector(backend or Backend(), store)
      tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)
-     # Read-only connector: backend (in-process fixtures) + valid bundle; no Approval Service (MCC-09).
+     # Read-only connector: backend + valid bundle; no Approval Service (MCC-09).
 -    return mcp.create_app(CONNECTOR_ID, tools, files.refresh, store.readiness, logs.startup), connector
 +    always = lambda: Readiness(True)  # noqa: E731 - BROKEN: ready without a valid bundle
 +    return mcp.create_app(CONNECTOR_ID, tools, files.refresh, always, logs.startup), connector

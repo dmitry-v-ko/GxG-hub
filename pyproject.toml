@@ -103,6 +103,7 @@ ignore = [
 "conftest.py" = ["S101"]
 # the conformance checks are pytest tests shipped as a package (check-connectors)
 "tools/gxg-connector-check/src/gxg_connector_check/checks.py" = ["S101"]
+"tools/gxg-connector-check/tests/broken/make_demo_patches.py" = ["E501"]  # the broken code is quoted verbatim
 "scripts/ci/**" = ["S603", "S607"]
 "scripts/new_connector.py" = ["S603", "S607"]  # runs git and uv
 "stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
