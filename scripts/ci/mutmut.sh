@@ -12,20 +12,27 @@
 # listed in scripts/ci/mutmut-equivalent.txt (each with a reason; the list has no M0.1 mutant, so every
 # M0.1 mutant must be killed), and on any listed mutant that is killed now (stale list).
 # REPORT_FILE: summary (default stdout). ALL_RESULTS_FILE: every mutant with its status, sorted.
+# MUTMUT_DIRS (space-separated, default: all of them): only these directories, e.g. the packages of one milestone
+# (DoD-1); without `approval` there is no PostgreSQL and no M7 SQL step. M1.1 adds tools/gxg-connector-check.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 report="${1:-/dev/stdout}"
 all="${2:-/dev/null}"
 equivalent=scripts/ci/mutmut-equivalent.txt
 tmp=$(mktemp -d)
-pgsock=$(mktemp -d)
-chmod 777 "$pgsock"
-pg=$(docker run -d --rm --network none -e POSTGRES_USER=test -e POSTGRES_HOST_AUTH_METHOD=trust \
-  -v "$pgsock:/var/run/postgresql" postgres:16.6-alpine)
-trap 'docker stop "$pg" > /dev/null 2>&1 || true' EXIT
-for _ in $(seq 240); do docker logs "$pg" 2>&1 | grep -q "PostgreSQL init process complete" && break; sleep 0.5; done
-export GXG_TEST_PG_SOCKET_DIR="$pgsock"
-for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit approval .; do
+dirs="${MUTMUT_DIRS:-tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-connector-kit tools/gxg-connector-check approval .}"
+with_sql=false
+case " $dirs " in *" approval "*) with_sql=true ;; esac
+if $with_sql; then
+  pgsock=$(mktemp -d)
+  chmod 777 "$pgsock"
+  pg=$(docker run -d --rm --network none -e POSTGRES_USER=test -e POSTGRES_HOST_AUTH_METHOD=trust \
+    -v "$pgsock:/var/run/postgresql" postgres:16.6-alpine)
+  trap 'docker stop "$pg" > /dev/null 2>&1 || true' EXIT
+  for _ in $(seq 240); do docker logs "$pg" 2>&1 | grep -q "PostgreSQL init process complete" && break; sleep 0.5; done
+  export GXG_TEST_PG_SOCKET_DIR="$pgsock"
+fi
+for dir in $dirs; do
   (
     cd "$dir"
     rm -rf mutants  # no stale results from an earlier run
@@ -38,10 +45,16 @@ for dir in tools/gxg-policy connectors/demo gateway/contextforge packages/gxg-co
 done
 # M7 SQL (migration PL/pgSQL, SQL constants of intents.py): mutmut does not mutate SQL text.
 sql_ok=true
-uv run --quiet python scripts/ci/mutate_m7_sql.py > "$tmp/sql.txt" 2>&1 || sql_ok=false
+if $with_sql; then
+  uv run --quiet python scripts/ci/mutate_m7_sql.py > "$tmp/sql.txt" 2>&1 || sql_ok=false
+else
+  echo "skipped: approval is not in MUTMUT_DIRS" > "$tmp/sql.txt"
+fi
 sort "$tmp/all.txt" > "$all"
 grep -E '^\s+\S+: ' "$tmp/results.txt" | sed -E 's/^\s+//; s/: .*//' | sort > "$tmp/left.txt" || true
-{ grep -oE "^[^ #]+" "$equivalent" || true; } | sort > "$tmp/allowed.txt"
+# only the listed mutants of the directories run now (a subset run must not call the others stale)
+sed -E 's/: .*//' "$all" | sort > "$tmp/ran.txt"
+{ grep -oE "^[^ #]+" "$equivalent" || true; } | sort | comm -12 - "$tmp/ran.txt" > "$tmp/allowed.txt"
 unexplained=$(comm -23 "$tmp/left.txt" "$tmp/allowed.txt")
 stale=$(comm -13 "$tmp/left.txt" "$tmp/allowed.txt")
 {

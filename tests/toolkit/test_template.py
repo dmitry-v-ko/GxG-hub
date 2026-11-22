@@ -103,11 +103,11 @@ def test_new_service_in_its_own_repository_passes_its_gate(effects: bool, tmp_pa
     proc = subprocess.run(["scripts/check-all.sh"], cwd=dest, capture_output=True, text=True, timeout=900, check=False)
     assert proc.returncode == 0, proc.stdout[-4000:] + proc.stderr[-4000:]
     assert "check-all: OK" in proc.stdout
-    status = proc.stdout[proc.stdout.rindex("EX-01") :].splitlines()
+    checks = proc.stdout[proc.stdout.rindex("EX-01") :].splitlines()
     assert all(line.split()[1] == ("passed" if effects or not line.startswith("EX") else "not_applicable")
-               for line in status if line[:2] in ("EX", "MC", "SC"))  # fmt: skip
-    subprocess.run(["git", "status", "--porcelain"], cwd=dest, check=True, timeout=60)
-    assert subprocess.run(["git", "status", "--porcelain"], cwd=dest, capture_output=True, text=True).stdout == ""
+               for line in checks if line[:2] in ("EX", "MC", "SC"))  # fmt: skip
+    status = subprocess.run(["git", "status", "--porcelain"], cwd=dest, capture_output=True, text=True, check=True)
+    assert status.stdout == "", "the gate changed files of the service"
 
 
 SAMPLE_BROKEN = {  # AC-M1.1-02 for the effect checks: broken copies of the generated `sample --with-effects`

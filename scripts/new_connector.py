@@ -48,9 +48,12 @@ def main(argv: list[str] | None = None) -> int:
             p.error("--kit-source path needs a destination inside this repository")
         data["repo"] = Path(*[".."] * len(dest.relative_to(REPO).parts)).as_posix()
     else:
-        rev = a.kit_rev or subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True
-        ).stdout.strip()
+        rev = (
+            a.kit_rev
+            or subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True
+            ).stdout.strip()
+        )
         if not SHA.fullmatch(rev):
             p.error("--kit-rev: a full 40-hex commit (a branch or tag would not be pinned)")
         data |= {"kit_url": a.kit_url, "kit_rev": rev}

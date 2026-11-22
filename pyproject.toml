@@ -104,6 +104,7 @@ ignore = [
 # the conformance checks are pytest tests shipped as a package (check-connectors)
 "tools/gxg-connector-check/src/gxg_connector_check/checks.py" = ["S101"]
 "scripts/ci/**" = ["S603", "S607"]
+"scripts/new_connector.py" = ["S603", "S607"]  # runs git and uv
 "stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
 "approval/src/gxg_approval/cli.py" = ["PLC0415"]  # each process imports only what it runs
 "approval/src/gxg_approval/migrations/**" = ["S101", "S608", "E501"]  # static DDL from code constants
