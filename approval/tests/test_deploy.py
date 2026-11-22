@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 REPO = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())  # also from mutmut's copy
@@ -92,6 +93,8 @@ def test_executor_signing_keys_come_from_a_directory_only_it_mounts() -> None:
 
 def test_host_secret_files_are_ignored_by_git() -> None:
     """The operator writes the seeds and secrets next to compose.yaml (README): `git add -A` must not take them."""
+    if not (REPO / ".git").exists():
+        pytest.skip("not a git checkout (export or build context): nothing to commit by mistake")
     for path in ("approval/deploy/exec-keys/signing-keys.json", "approval/deploy/secrets/svc_key_executor"):
         r = subprocess.run(["git", "-C", str(REPO), "check-ignore", "-q", path], check=False)
         assert r.returncode == 0, path
