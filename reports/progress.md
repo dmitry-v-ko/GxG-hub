@@ -188,3 +188,4 @@
 | — | — | решение владельца | — | — | — | CI без GitHub Actions: закрытие вех — локальный check-all; мерж в main — локальный гейт мержа с отчётом reports/merge-gate/<sha>.md | 2026-11-22 |
 | M11.1 | — | решение владельца | dmitry-v-ko/gxg-telegram-service | — | — | новая веха: отдельный Telegram-сервис (чтение + отправка), перенос кода с обновлением фреймворка, обёртка по контрактам GxG-hub; ADR-0005 (MCP или HTTP) заменяет ADR-0004; ждём название фреймворка от треда M11 | 2026-11-22 |
 | M11.1 | 1 | владелец вехи | gxg-telegram-service: claude/m11.1-telegram-service | — | — | запущен: фреймворк Pyrofork 2.3.69 (Python 3.13); ADR-0005 по умолчанию — сервис сам MCP-коннектор по MCC на ките | 2026-11-22 |
+| — | — | решение владельца | — | — | — | ADR-0005 Accepted: gxg-telegram-service сам MCP-сервер по MCC за ContextForge; ADR-0004 Superseded; Mastra ходит в Telegram только через Hub | 2026-11-22 |

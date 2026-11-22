@@ -16,10 +16,12 @@
 
 Существующий [Telegram connector](https://github.com/dmitry-v-ko/gxg_agents_v2/blob/main/docs/current/telegram-ingestion.md) владеет пользовательской сессией, блокировками, archive-sync, per-chat scope, flood-wait и секретами. Второго session-owner'а не создаём.
 
-**Решение владельца 2026-11-21 ([ADR-0004](../adr/0004-telegram-connector-service.md)).** Telegram-коннектор — **отдельный сервис** (`connectors/telegram` в этом репозитории, свой образ и deployable). С Hub он связан только стандартным контрактом ([MCP Connector Contract](mcp-connector-contract-v1.md): MCP за ContextForge, `X-GxG-Identity`, grants, ошибки, readiness). В процесс и код `gxg_agents_v2` он не встраивается, и код `gxg_agents_v2` для этого не меняется.
+**Решение владельца 2026-11-22 ([ADR-0005](../adr/0005-telegram-service-mcp.md), заменяет ADR-0004).** Telegram-коннектор — отдельный сервис `gxg-telegram-service`. Он единственный владеет сессией и архивом и сам является MCP-сервером по [MCC](mcp-connector-contract-v1.md) за ContextForge. Права устроены так:
+- видимость tools — RBAC и `unified_pdp` ContextForge;
+- чаты — grants;
+- запись — `propose`, затем политика или approver, затем Executor.
 
-- **Чтение (этапы B и D)** — из архива `telegram_archive` существующего сервиса, который наполняет archive-sync. Коннектор подключается к базе архива отдельной ролью PostgreSQL только на `SELECT` нужных таблиц, по проверенной схеме. Telegram-сессию коннектор не открывает и `MTProto` не использует.
-- **Live-операции** (live fallback поиска, `telegram.message.propose` на этапе E) требуют сессии, а она остаётся у существующего сервиса. До отдельного решения владельца (не позже M13) коннектор их не публикует.
+Mastra из `gxg_agents_v2` ходит в Telegram только через Hub. Прямого чтения базы архива из Hub нет.
 
 Tools Telegram-коннектора:
 
