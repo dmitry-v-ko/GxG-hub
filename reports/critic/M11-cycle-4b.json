@@ -1,0 +1,65 @@
+{
+ "milestone": "M11",
+ "role": "independent critic, cycle 4 (second, parallel to d355517)",
+ "branch": "claude/m11-telegram-read",
+ "commit": "a484ec2 (code = 31772e8; a484ec2 changes only reports/conformance/M11.json)",
+ "base": "7c5a53e",
+ "reviewed_diff": "7dd0c7c..a484ec2 (cycle 4, incl. merged da3e25f, b5f5b00)",
+ "threshold": 9,
+ "score": 9.0,
+ "caps_applied": [],
+ "dimensions": {"spec": 2.5, "tests": 2.0, "security": 2.0, "code": 1.0, "ops": 1.0, "evidence": 0.5},
+ "checklist_cycle_3": [
+  {"item": "1 drift check false clean under pipefail + test", "status": "closed", "evidence": "check_upstream.sh: grep -E ... >/dev/null reads the whole diff; test case match + 20000 padding lines (~220 KB > 64 KiB) and search_path case; on the 4ebe3ec script both fail (2 failed, 3 passed), on head 5 passed"},
+  {"item": "2 stand test_ac_m11_04[1] independent of call timing", "status": "closed", "evidence": "defer(seconds) before every collect, defer(3600) before every read; critic: 8/8 + 10/10 under mutmut load + 3/3 stand suites green (cycle 3: 2/8 failed). Remaining assumption: one call < 1 s (nit, review 1)"},
+  {"item": "3 full check-all on final commit with the gxg_agents_v2 clone; M11.json regenerated", "status": "closed", "evidence": "M11.json commit 31772e8 (= head code), commit_dirty false, ci_local: one run, no UPSTREAM_DRIFT=skip, EXIT 0, 73m58s; counts match the critic's run (root 908, kit 360, demo 64, telegram 110, stand 3 x 50, mutmut telegram 1279). Critic could not repeat the drift step (no clone)"},
+  {"item": "4 minors F4-F6 to backlog", "status": "closed", "evidence": "docs/backlog.md three M11 lines from M11-cycle-3.json (F4, F5 done in da3e25f, F6 open)"}
+ ],
+ "acceptance": [
+  {"id": "AC-M11-01", "status": "passed", "evidence": "critic stand runs: every telegram test green in fresh / after-restart / after-recreate; in-process 110 passed"},
+  {"id": "AC-M11-02", "status": "passed", "evidence": "stand test_ac_m11_02_* green 3x; in-process write-refusal tests pass"},
+  {"id": "AC-M11-03", "status": "passed", "evidence": "stand test_sc05_and_ac_m11_03_* green 3x"},
+  {"id": "AC-M11-04", "status": "passed", "evidence": "stand [1], [7], [3600] green in 21 runs, 10 of them under mutmut load"},
+  {"id": "AC-M11-05", "status": "passed", "evidence": "stand test_sc09_and_ac_m11_05 green 3x"}
+ ],
+ "dod": {
+  "1_ci_green": "met by the executor's full check-all on 31772e8 (EXIT 0, with the clone). Critic's run (UPSTREAM_DRIFT=skip, full history): every step green except one M5 stand test in the fresh suite (docker run exit 125 during the first image pull of a fresh daemon; 3 reruns green), environment, not in the diff",
+  "2_ac_automated": "met",
+  "3_report": "met: M11.json regenerated from one run on 31772e8; one stale count in AC-M11-01 evidence (105 vs 110, nit)",
+  "4_mutmut": "met: executor mutmut.sh exit 0; critic: 1257/1279 killed, one extra timeout (tools.run__mutmut_3) under parallel stand load, killed when run alone (backlog F6)",
+  "5_no_skip": "met: 0 skipped",
+  "6_existing_solutions": "no new components in cycle 4"
+ },
+ "commands": {
+  "connector_tests": "cd connectors/telegram && uv run pytest -q -> 110 passed",
+  "drift_mutation": "check_upstream.sh from 4ebe3ec -> 2 failed (padding, search_path); head -> 5 passed",
+  "check_all": "UPSTREAM_DRIFT=skip KEEP=1 DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,...' scripts/ci/check-all.sh after git fetch --unshallow -> EXIT=1 only at stand/run.sh (fresh 49/50: M5 test_mc02_search_schema_pagination_and_limits, docker run 125), after-restart 50/50, after-recreate 50/50",
+  "ac_m11_04_reruns": "18 x pytest stand/tests/test_telegram.py -k ac_m11_04 on the kept stand: 18 x 3 passed (10 under mutmut load)",
+  "mc02_reruns": "3 x test_mc02_search_schema_pagination_and_limits: 3 passed",
+  "mutmut": "scripts/ci/mutmut.sh -> not killed 102, listed 101 (tools.run__mutmut_3 timeout under load); mutmut run of that mutant alone -> killed"
+ },
+ "findings": [
+  {"severity": "nit", "origin": "new_regression", "ref": "Рубрика 'нет зависимости от времени'", "where": "stand/tests/test_telegram.py:443-445",
+   "problem": "For seconds=1 the collect check still needs one call through ContextForge to finish within 1 s (stated in the docstring); 21/21 green, incl. under load",
+   "required_improvement": "none now; if it flakes, use 2 s as the shortest case"},
+  {"severity": "nit", "origin": "new_regression", "ref": "DoD-3", "where": "reports/conformance/M11.json acceptance[AC-M11-01].evidence",
+   "problem": "says 'in-process twins (105 passed)'; ci_local and self_check say 110",
+   "required_improvement": "fix on the next regeneration"},
+  {"severity": "minor", "origin": "missed_earlier", "ref": "DoD-1, ops", "where": "stand tests that use docker run with python:3.12-slim",
+   "problem": "On a fresh Docker daemon the first parallel pull of the client image can fail (exit 125, layer locked) and fail an unrelated stand test",
+   "required_improvement": "backlog: pull the pinned client image once in stand/run.sh before the suites"}
+ ],
+ "required_improvements": [],
+ "ponytail_review": "reports/critic/M11-cycle-4b.review.md",
+ "existing_solutions": [
+  {"component": "drift check", "alternative": "git submodule + Dependabot/Renovate", "verdict": "justified_custom (reason in cycle-3 plan)"}
+ ],
+ "threat_model": [
+  {"path": "all cycle-2 threat paths", "status": "closed", "evidence": "code paths unchanged in cycle 4; stand SC suites green 3x"},
+  {"path": "upstream schema change breaks the scope boundary (purge trigger)", "status": "closed", "evidence": "drift check now reads whole diffs and flags search_path; tested incl. > 64 KiB; runs in check-all (executor run with the clone: equal, no drift) and CI job telegram-upstream"}
+ ],
+ "backlog": ["M11 cycle 4: pull the stand client image before the suites (docker run 125 on a fresh daemon)"],
+ "lean_lines": 0,
+ "verdict": "ready: checklist items 1-4 closed, no new_regression above nit, all AC pass on the critic's stand",
+ "not_checked": "drift step against the real gxg_agents_v2 (no clone in this session; UPSTREAM_DRIFT=skip; relied on the executor's ci_local); GitHub Actions job telegram-upstream (Actions off: billing); real Supabase archive"
+}
