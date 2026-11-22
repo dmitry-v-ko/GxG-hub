@@ -828,14 +828,14 @@ version = "0.1.0"
 source = { editable = "connectors/demo" }
 dependencies = [
     { name = "fastmcp" },
-    { name = "gxg-connector-kit" },
+    { name = "gxg-connector-kit", extra = ["mcp"] },
     { name = "pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = "==4.1.8" },
-    { name = "gxg-connector-kit", editable = "packages/gxg-connector-kit" },
+    { name = "gxg-connector-kit", extras = ["mcp"], editable = "packages/gxg-connector-kit" },
     { name = "pyyaml", specifier = ">=6,<7" },
 ]
 
@@ -856,12 +856,21 @@ dependencies = [
     { name = "pyjwt", extra = ["crypto"] },
 ]
 
+[package.optional-dependencies]
+mcp = [
+    { name = "fastmcp" },
+    { name = "pyyaml" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=46,<51" },
+    { name = "fastmcp", marker = "extra == 'mcp'", specifier = "==4.1.8" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10,<3" },
+    { name = "pyyaml", marker = "extra == 'mcp'", specifier = ">=6,<7" },
 ]
+provides-extras = ["mcp"]
 
 [[package]]
 name = "gxg-hub"
@@ -870,7 +879,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "gxg-approval" },
     { name = "gxg-connector-demo" },
-    { name = "gxg-connector-kit" },
+    { name = "gxg-connector-kit", extra = ["mcp"] },
     { name = "gxg-policy" },
 ]
 
@@ -898,7 +907,7 @@ dev = [
 requires-dist = [
     { name = "gxg-approval", editable = "approval" },
     { name = "gxg-connector-demo", editable = "connectors/demo" },
-    { name = "gxg-connector-kit", editable = "packages/gxg-connector-kit" },
+    { name = "gxg-connector-kit", extras = ["mcp"], editable = "packages/gxg-connector-kit" },
     { name = "gxg-policy", editable = "tools/gxg-policy" },
 ]
 

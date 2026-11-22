@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Reference connector `demo`: read-only tools over synthetic boards and notes (M3)."
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn
-    "gxg-connector-kit",
+    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn; the same pin as the kit `mcp` extra
+    "gxg-connector-kit[mcp]",
     "pyyaml>=6,<7",  # gxg-manifest.yaml is read at start; already installed by fastmcp
 ]
 

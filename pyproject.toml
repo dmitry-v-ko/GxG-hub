@@ -5,7 +5,7 @@ version = "0.0.0"
 description = "GxG Hub monorepo root: dev tooling, contract tests, unit tests of all packages."
 requires-python = ">=3.12"
 dependencies = [
-    "gxg-connector-kit",
+    "gxg-connector-kit[mcp]",
     "gxg-approval",
     "gxg-policy",
     "gxg-connector-demo",
