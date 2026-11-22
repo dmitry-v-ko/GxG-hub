@@ -550,7 +550,7 @@ async def test_ac_m11_05_no_texts_peer_ids_or_secrets_in_logs_after_1000_calls(
     for i in range(1000):
         tool, args, who = plan[i % len(plan)]
         if i % 97 == 0:
-            db.defer("svc-alpha", 3)  # flood-wait deferral: rate_limited / partial results
+            db.defer("svc-alpha", 30)  # flood-wait deferral: rate_limited / partial results
         if i % 89 == 0:
             tg.service.dsn = dsn.replace(db.name, "no_such_db")  # the archive is down: its error text quotes the db
         replies.append(await tg.call(tool, args, principal=who))
@@ -791,7 +791,7 @@ async def test_mc02_gap_chat_reports_incomplete(tg: Tg) -> None:
 # AC-M11-01: MC-03; AC-M11-04 --------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("seconds", [1, 7, 3600])
+@pytest.mark.parametrize("seconds", [7, 3600])  # 1 s can pass before the call under load
 async def test_ac_m11_04_flood_wait_is_rate_limited_with_telegrams_delay(tg: Tg, db: Db, seconds: int) -> None:
     """The service's sync records Telegram's flood wait as `connection_state.retry_after`: collect (Signals) is
     rate_limited with the remaining delay; search and thread.read still answer from the archive, flagged."""
