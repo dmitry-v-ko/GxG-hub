@@ -157,7 +157,7 @@ def test_copier_update_brings_template_changes_and_keeps_the_domain(tmp_path: Pa
            f"file://{hub}", "--kit-rev", old]  # fmt: skip
     subprocess.run(cmd, check=True, timeout=600)
     answers = yaml.safe_load((svc / ".copier-answers.yml").read_text(encoding="utf-8"))
-    assert answers["_src_path"] == f"file://{hub}" and answers["kit_rev"] == old and answers["_commit"]
+    assert answers["_src_path"] == f"git+file://{hub}" and answers["kit_rev"] == old and answers["_commit"]
     for step in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "generated"]):
         subprocess.run([*git, *step], cwd=svc, check=True, timeout=60)
     src = hub / "templates" / "python-fastmcp" / "template" / "src" / "{{ name }}_connector"

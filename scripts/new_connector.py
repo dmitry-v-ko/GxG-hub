@@ -60,7 +60,8 @@ def main(argv: list[str] | None = None) -> int:
     if source == "path":
         copier.run_copy(str(REPO), dest, data=data, defaults=True, quiet=True)
     else:  # from git at the pinned commit: the answers record _src_path and _commit, so `copier update` works
-        copier.run_copy(a.kit_url, dest, data=data, defaults=True, quiet=True, vcs_ref=str(data["kit_rev"]))
+        src = a.kit_url if a.kit_url.endswith(".git") else f"git+{a.kit_url}"  # copier: file:// needs git+
+        copier.run_copy(src, dest, data=data, defaults=True, quiet=True, vcs_ref=str(data["kit_rev"]))
     for d in sorted(dest.rglob("*"), reverse=True):  # directories of files the variant does not have
         if d.is_dir() and not any(d.iterdir()):
             d.rmdir()
