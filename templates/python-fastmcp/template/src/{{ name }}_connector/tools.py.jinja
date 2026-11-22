@@ -13,10 +13,10 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-{%- if with_effects %}
+{% if with_effects -%}
 from starlette.applications import Starlette
-{%- endif %}
 
+{% endif -%}
 from gxg_connector_kit import {% if with_effects %}effects, {% endif %}mcp
 {%- if with_effects %}
 from gxg_connector_kit.exec_token import ExecutorJwks

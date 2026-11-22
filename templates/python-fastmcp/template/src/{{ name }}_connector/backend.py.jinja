@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, get_args
 
-{%- if with_effects %}
+{% if with_effects -%}
 from gxg_connector_kit.effects import Dropped, Sent
-{%- endif %}
+{% endif -%}
 from gxg_connector_kit.errors import GxgError
 {%- if with_effects %}
 from gxg_connector_kit.exec_token import ExecutionClaims
