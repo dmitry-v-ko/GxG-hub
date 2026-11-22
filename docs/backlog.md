@@ -27,3 +27,7 @@
 | M9 | reports/critic/M9-cycle-1.json | F11: `oidc-egress` — реле на один хост; IdP с discovery/token/JWKS на разных хостах не войдут | Реле на хост или egress-прокси после выбора IdP; Tailscale-модель — M14 |
 | M9 | reports/critic/M9-cycle-1.json | F12: у `notifier` нет сигнала живости (спека: `/healthz` у каждого процесса vs AS-29 «входящих нет») | Heartbeat-файл + Docker HEALTHCHECK (exec) или решение владельца |
 | M9 | reports/critic/M9-cycle-1.json | Скомпрометированный `notifier` может пометить доставленной любую строку outbox, в т.ч. `execute` (права AS-27 на все topics с M7) | Ограничение по topic (функция или RLS) — решение по матрице AS-27, вместе с M8/M10 |
+| M9 | reports/critic/M9-cycle-2.json | N1: при отсутствии `GXG_BUNDLE_*` ui падает с `KeyError` (общий загрузчик kit), а не с «missing configuration» | Читать три имени через `env()` в `cli.main` или `SystemExit` в загрузчике kit; добавить в `REQUIRED` |
+| M9 | reports/critic/M9-cycle-2.json | N2: тесты оставляют поток перезагрузки bundle (50 мс) и открытые пулы psycopg до конца сессии | Stop-событие для загрузчика в тестах; закрывать/подменять `ConnectionPool` в фикстуре cli |
+| M9 | reports/critic/M9-cycle-2.json | N3: цикл уровней httpx/httpx2/httpcore в `ui/app.py` без теста | Одна проверка уровней, как `test_bot_module_sets_the_httpx_level` |
+| M9 | reports/critic/M9-cycle-2.json | N4: `approval/config.bundle_store` — однострочная обёртка | Звать `bundle_store_from_env` напрямую, обёртку удалить |
