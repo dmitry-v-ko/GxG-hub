@@ -37,3 +37,4 @@
 | M9 | reports/critic/M9-final.json | F-5: двойной префикс в логе `getUpdates: getUpdates: …` | Убрать префикс в `cli.updates` |
 | M9 | reports/critic/M9-final.json | F-6: строка AC-M10-08 стоит после таблицы M10 под «Этап D» | Переставить в плане (оркестратор, docs) |
 | M9 | reports/critic/M9-final.json | F-7: на shallow-клоне gitleaks ругается на граничные коммиты и `check-all` падает | В README/`check-all`: `git fetch --unshallow` перед проверкой |
+| M3/M9 | reports/M9-READY.md | mutmut-мутант `demo_connector.server.x_build__mutmut_9` (`store = None`) то убит, то зависает под mutmut (тесты при ручной мутации падают за 1 с); `timeout_constant = 60` не помог | Найти, какой тест держит процесс (вероятно, `test_real_process_*` с дочерним сервером) |
