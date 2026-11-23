@@ -1,6 +1,6 @@
 # INTEGRATION READY: M1.1 (MCP Toolkit) on top of M3, M4.1, M5, M7, M8, M9, M11
 
-- Branch: `claude/integration`; code under test: `bc712f5` (later commits change only `reports/`).
+- Branch: `claude/integration`; code under test: `bc712f5` (later commits change only `reports/` and the docs taken from the plan branch).
 - Merged: `claude/m1.1-toolkit@bffcbd4` (services pin `7e7ce56` is in the history); `docs/specs`, `docs/adr`, `docs/implementation-plan-v1.md`, `reports/GOAL.md`, `reports/progress.md` from `claude/admiring-planck-vzys0x@f559284`.
 - `git diff origin/claude/admiring-planck-vzys0x -- docs/specs docs/adr docs/implementation-plan-v1.md` is empty.
 - demo M8 vs `gxg_connector_kit.effects`: orchestrator's decision, option 1. demo keeps its own `effects.py`. The M8 tests are unchanged and green (81/81, demo 146/146). demo is the template render `with_effects: true` up to `DEMO_DRIFT`: six replacements in `server.py`, each with a reason. The broken copies were regenerated. Moving demo onto the kit is a `docs/backlog.md` row. Critic of the M1.1 test changes: accept with minor, 8/10; the minors are fixed or in the backlog. Details: `reports/integration-2026-11-23-m1.1.md`.

@@ -60,7 +60,7 @@ Verdict **accept with minor, 8/10**, no blocker or major. Checked: 44/44 toolkit
 
 ## Gate
 
-Code under test: `bc712f5` (later commits change only `reports/`). Run: `bash -x scripts/ci/check-all.sh` as written, `DOCKER_BUILD_FLAGS` as below, `MUTMUT_PACKAGES=packages/gxg-connector-kit`.
+Code under test: `bc712f5` (later commits change only `reports/` and the docs taken from the plan branch). Run: `bash -x scripts/ci/check-all.sh` as written, `DOCKER_BUILD_FLAGS` as below, `MUTMUT_PACKAGES=packages/gxg-connector-kit`.
 
 | Step | Result |
 |---|---|
