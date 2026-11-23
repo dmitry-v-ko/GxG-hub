@@ -1,42 +1,12 @@
-== approval/notifier: {"killed":398,"survived":35,"total":433,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
-not killed: 35, listed as equivalent: 0
+== approval/notifier: {"killed":428,"survived":5,"total":433,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+not killed: 5, listed as equivalent: 2
+gxg_approval_notifier.webhooks.x_allowed_url__mutmut_9  # rstrip("XX.XX") on a lower-cased host: no "X" to strip, only the dots as before
+gxg_approval_notifier.webhooks.x_body_of__mutmut_4  # ensure_ascii=None is falsy like False: the same bytes
 == M7 SQL mutations (scripts/ci/mutate_m7_sql.py)
 SQL driver: run separately (reports/mutmut/M10-sql.txt) and in the gate
 SURVIVED, not equivalent:
-gxg_approval_notifier.webhooks.x_allowed_url__mutmut_9
-gxg_approval_notifier.webhooks.x_body_of__mutmut_4
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_13
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_14
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_15
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_16
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_17
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_29
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_30
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_34
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_35
-gxg_approval_notifier.webhooks.xǁWebhooksǁ_send__mutmut_36
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_14
 gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_15
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_16
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_17
 gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_29
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_3
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_31
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_37
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_39
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_40
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_41
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_46
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_48
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_49
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_50
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_52
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_53
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_54
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_59
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_61
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_62
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_63
 gxg_approval_notifier.webhooks.xǁWebhooksǁfan_out__mutmut_14
 SQL mutations: OK
 exit 1

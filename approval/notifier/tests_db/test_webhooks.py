@@ -245,6 +245,7 @@ def test_fan_out_by_tenant_and_prefix_and_gone_subscribers(
     world.reload("c" * 40)
     propose(business_task_id="sig-1")
     propose(args={"text": "b", "n": 2}, business_task_id="other")
+    propose(args={"text": "c", "n": 3})  # t-alpha, no business_task_id: matches no prefix
     propose(tenant="t-beta", requester="agent:t-beta:bot", connection="demo-b", resource="demo:demo-b/board/b1")
     hooks.fan_out()
     rows = owner.execute(
@@ -391,3 +392,15 @@ def test_every_due_head_is_tried_in_one_pass(
         "SELECT subscriber_id, delivered_at IS NOT NULL, last_status FROM webhook_deliveries ORDER BY subscriber_id"
     ).fetchall()
     assert rows == [("a-first", False, None), ("b-gone", False, "not in the bundle"), ("c-due", True, "204")]
+
+
+def test_two_due_subscribers_in_one_pass(
+    hooks: Webhooks, receiver: Receiver, world: Any, propose: Any, owner: Any
+) -> None:
+    """deliver() returns the number of tries and goes on after a delivered head."""
+    world.webhooks = [SUBSCRIBER | {"id": "one"}, SUBSCRIBER | {"id": "two"}]
+    world.reload("1" * 40)
+    propose()
+    hooks.fan_out()
+    assert hooks.deliver() == 2
+    assert [r[2] for r in deliveries(owner)] == [True, True] and len(receiver.events) == 1 and receiver.repeats == 1
