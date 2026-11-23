@@ -322,7 +322,7 @@ M10_MUTATIONS: list[tuple[str, str, str, str]] = [
      "a process role forges a webhook event"),
     # T12b (0006)
     (MIG6, "  PERFORM _gxg_check((x.r).status, 'complete_rate_limited', (x.e).state, 'approved');\n", "",
-     "T12b from any status or execution state"),
+     EQUIVALENT + "_gxg_move repeats _gxg_check in the same transaction, which rolls back the execution update"),
     (MIG6, "error_code = 'rate_limited'\n", "error_code = 'released'\n", "deferral without its reason"),
     (MIG6, "greatest({MIN_DELAY_S}, p_retry_after_s)", "p_retry_after_s", "retry sooner than 5 s"),
     (MIG6, "  IF now() + make_interval(secs => delay) < r.execution_deadline THEN\n"

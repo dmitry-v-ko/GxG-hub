@@ -1317,6 +1317,17 @@ def test_ex25_reserve_needs_a_due_task(stack: Stack, pg: Any) -> None:
     created = stack.propose(idempotency_key="quota-task")
     i = created["intent_id"]
     stack.owner.execute("UPDATE outbox SET available_at = now() + interval '1 minute' WHERE intent_id = %s", (i,))
-    with pg.connect("gxg_executor") as ex, pytest.raises(psycopg.Error) as err:
-        ex.execute("SELECT gxg_reserve(%s, 'x')", (i,))
-    assert err.value.sqlstate == "GX409"
+    with pg.connect("gxg_executor") as ex:
+        with pytest.raises(psycopg.Error) as err:
+            ex.execute("SELECT gxg_reserve(%s, 'x')", (i,))
+        assert err.value.sqlstate == "GX409"  # not due yet
+        stack.owner.execute("UPDATE outbox SET available_at = now(), delivered_at = now() WHERE intent_id = %s", (i,))
+        with pytest.raises(psycopg.Error) as err:
+            ex.execute("SELECT gxg_reserve(%s, 'x')", (i,))
+        assert err.value.sqlstate == "GX409"  # due, but already handled
+        stack.owner.execute("UPDATE outbox SET delivered_at = NULL WHERE intent_id = %s", (i,))
+        execution = (ex.execute("SELECT gxg_reserve(%s, 'x')", (i,)).fetchone() or (None,))[0]
+        for bad in (0, -5, None):  # T12b needs retry_after_s >= 1
+            with pytest.raises(psycopg.Error) as err:
+                ex.execute("SELECT gxg_defer(%s, 'x', %s)", (execution, bad))
+            assert err.value.sqlstate == "GX400", bad

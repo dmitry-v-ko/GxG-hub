@@ -32,3 +32,19 @@ killed      0005_ops.py: a switch without a reason
 killed      0005_ops.py: a cleared switch audited as set
 killed      0005_ops.py: a reconcile lowers gxg_executions_total{outcome_unknown}
 killed      0005_ops.py: a deferral counted as a finished attempt
+killed      0005_ops.py: a process role forges a webhook event
+SURVIVED    0006_t12b.py: T12b from any status or execution state
+killed      0006_t12b.py: deferral without its reason
+killed      0006_t12b.py: retry sooner than 5 s
+killed      0006_t12b.py: a task queued past the execution deadline
+SURVIVED    0006_t12b.py: a deferral without a positive retry_after_s
+killed      0006_t12b.py: T7 before the task is due
+SURVIVED    0006_t12b.py: T7 from a delivered task
+killed      0006_t12b.py: every state change overwrites the error code
+killed      0006_t12b.py: the executor cannot defer
+killed      0005_ops.py: ui writes passkeys (AS-30)
+killed      0005_ops.py: ui purges payload
+45 mutations listed: 3 not as expected (survivor, stale text, killed 'equivalent')
+exit 1
+
+Re-run after new tests (cycle 2): "a deferral without a positive retry_after_s" killed, "T7 from a delivered task" killed; "T12b from any status or execution state" listed as equivalent (_gxg_move repeats _gxg_check in the same transaction). 0 not as expected. The full list runs again in mutmut.sh (gate).
