@@ -63,6 +63,14 @@ Signals — отдельный бизнес-сервис и оркестрато
 4. ActionCandidate и его версии неизменяемы. При переключении со старого пути на Hub для каждого кандидата есть ровно один авторитетный dispatcher. Параллельное исполнение старым и новым путём запрещено.
 5. Hub не решает, «достаточно ли хорош» сигнал. Он решает только, разрешено ли действие и согласовано ли оно.
 6. Если другим агентам нужен доступ к данным Signals, отдельно добавляется read-only фасад `signals.search/get`.
+7. **Подсказка о новых данных.** Сервис-источник MAY отправлять в Signals webhook «появились новые данные», чтобы сбор начался раньше расписания. Первый такой источник — `telegram.message.created` у `gxg-telegram-service` (M11.1). Тест — строка SI-03 [матрицы](conformance-matrix-v1.md).
+   - **Тело.** По [`source-event.schema.json`](../../schemas/source-event.schema.json). В нём только идентификаторы: `tenant_id`, `source_ref`, позиция и время элемента. Текста и peer ID нет (ADR-0005; SEC-18 по аналогии).
+   - **Только по grants.** Сервис ставит событие в outbox, только если у principal'а Signals этого tenant'а есть grant `collect` на RID `source_ref` (GR). Сам факт и время нового сообщения — уже данные, поэтому scope Connection недостаточно.
+   - **Подпись и доставка.** По правилам webhooks Approval Service (AS-22, AS-23): `GxG-Signature`, допуск 300 с, backoff, `dead` через 24 ч. URL получателя — по SEC-15.
+   - **Секрет.** Один на пару «сервис-источник, tenant». Хранится и ротируется как остальные секреты (SEC-16, SEC-17).
+   - **Приём.** Signals отвергает событие с неверной подписью или с `|now − t| > 300 с`. Tenant он определяет по секрету, которым проверена подпись. Если `tenant_id` в теле с ним не совпадает, событие тоже отвергается. Повтор `event_id` подтверждается ответом 2xx и игнорируется: dedupe хранится не меньше окна доставки, 24 ч. `event_id` детерминирован по источнику и позиции.
+   - **Webhook — только подсказка.** Signals не создаёт `SourceInboxItem` из тела события. Он запускает обычный `CollectSource` через Hub (`<source>.collect`) от своего principal'а для `source_ref` из события. Права проверяют grants при этом вызове.
+   - **Потеря webhook'а.** Данные не теряются: следующий плановый `collect` по cursor подхватит всё.
 
 Целевая модель [Scoring Workflows](https://github.com/dmitry-v-ko/gxg_agents_v2/blob/main/docs/specs/domains/signal-intelligence/scoring-workflows.md) помечена implementation:none. Это не текущий production.
 

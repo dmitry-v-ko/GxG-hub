@@ -75,6 +75,7 @@ python -m unittest discover -s tests/contract -p 'test_*.py' -v
 | --- | --- | --- | --- |
 | SI-01 | D | Сбор через Hub → SourceInbox, оценка, кандидат в Signals | Без потерь и дублей; состояние вне Hub |
 | SI-02 | D | ActionCandidate → propose → approve → fake provider → Outcome | Один dispatcher; повторный propose не дублирует |
+| SI-03 | D | Webhook-подсказка о новых данных (`telegram.message.created`): неверная подпись, `t` старше 300 с, чужой `tenant_id`, повтор `event_id`; чат без grant `collect` у Signals; потерянный webhook | Отказ или 2xx без эффекта; события по чату без grant нет; элементы только через `collect` через Hub; без потерь |
 | OPS-01 | E | Рестарт всех сервисов с intents в `pending_approval`, `reserved`, `dispatching` | Восстановление или reconcile без повторной отправки |
 | OPS-02 | E | Изменение политики, отзыв агента, ротация ключа подписи | Действует немедленно; изменение в аудите; alert на ослабление |
 | OPS-03 | F | Backup/restore Approval Service | Состояния intents восстановлены; повторных исполнений нет |
