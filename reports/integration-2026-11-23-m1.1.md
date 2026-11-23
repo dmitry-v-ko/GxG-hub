@@ -1,7 +1,71 @@
 # Integration 2026-11-23: M1.1 (MCP Toolkit) into `claude/integration`
 
-Status: in progress. Merge `22346df` pushed; gate `scripts/ci/check-all.sh` running on `22346df`.
+Starting point: `claude/integration@40cec84` (M3, M4.1, M5, M7, M8, M9, M11). Full clone (`git fetch --unshallow`, `is-shallow-repository` = `false`). Only merge commits and new commits on top, no force push. `claude/m10-ops` not touched.
 
-Heartbeat: first gate run red in root pytest (check-connectors on demo with M8 effects, template drift), see `INTEGRATION-ESCALATION.md`; harness fixed in `16d6d85`. Docker Hub answered 429 to this container: dockerd uses `registry-mirrors: mirror.gcr.io` (digest-pinned images unchanged). Remaining gate steps restarted.
+## What was merged
 
-Heartbeat: orchestrator chose option 1 of the escalation; implemented in `8d9fe32` (demo on the `with_effects: true` render up to `DEMO_DRIFT`, broken copies regenerated, 44/44 in toolkit + check-connectors tests). Critic review of the test changes running; stand running.
+| # | Source | Commit | What it brings |
+|---|---|---|---|
+| 1 | `origin/claude/m1.1-toolkit` | `bffcbd4` (pin for the services: `7e7ce56`, an ancestor of HEAD) | kit `gxg_connector_kit.{mcp,effects}`, template `templates/python-fastmcp` + `copier.yml`, `scripts/new-connector`, `tools/gxg-connector-check`, demo on the template, `reports/{critic,conformance,mutmut,plans}/M1.1*`, `reports/M1.1-READY.md` |
+| 2 | `origin/claude/admiring-planck-vzys0x` | branch head at merge time | `docs/specs`, `docs/adr`, `docs/implementation-plan-v1.md`, `reports/GOAL.md`, `reports/progress.md` (checkout of those paths) |
+
+```
+$ git diff origin/claude/admiring-planck-vzys0x -- docs/specs docs/adr docs/implementation-plan-v1.md | wc -l
+0
+```
+
+Integration commits: `22346df` merge; `16d6d85` demo harness with effects + escalation; `8d9fe32` option 1 (drift list, regenerated broken copies); `ccb0ee2` critic minors; heartbeats and this report (`reports/` only).
+
+## Conflicts and how they were resolved
+
+M1.1 branched from `15213ee` (before M8, M9, M11).
+
+| File | Resolution |
+|---|---|
+| `connectors/demo/src/demo_connector/tools.py` | M1.1's version (read tools on the kit's pipeline) + M8's `demo.message.propose`: `Connector.enable_effects` builds demo's own `Effects`; the propose tool gets a pass-through hook (`_propose_access`), so `effects.py` keeps M8's order, GR-17 checks and refusal texts ("no propose right on this board") |
+| `connectors/demo/src/demo_connector/server.py` | the template render `with_effects: true` up to `DEMO_DRIFT` (below); M8 wiring moved to the new demo-owned `stage_c.py` (`Settings` with `provider_db`, `Wiring(clock)`, `connect`, `provider`) |
+| `connectors/demo/Dockerfile` | the template render (`EXPOSE 8080 8081`) |
+| `connectors/demo/.copier-answers.yml` | `with_effects: true` |
+| `connectors/demo/src/demo_connector/conformance.py` (M1.1, no text conflict) | harness of an effects connector: `actor`, `propose`, `internal=connector.internal`; `calls()` adds the fake provider's sends; `fail("commit_then_drop")` sets the provider mode |
+| `pyproject.toml` | union: M9/M11 packages and paths + `gxg-connector-check`, `copier`, `pytest-timeout`, test paths, ruff ignores, `known-first-party` (one key) |
+| `scripts/ci/check-all.sh` | union: M11 telegram/upstream steps + `check-connectors` on demo, mypy of `tools/gxg-connector-check`, `tests/toolkit` |
+| `scripts/ci/mutmut.sh` | integration's `MUTMUT_PACKAGES` (M1.1's `MUTMUT_DIRS` accepted as the same), `tools/gxg-connector-check` in the default set, `MUTMUT_REPORT`; PostgreSQL and the M7 SQL driver only when an `approval` package runs (M1.1's rule) |
+| `scripts/ci/mutmut-equivalent.txt`, `.gitleaksignore` | union |
+| `docs/backlog.md` | union of rows (M1.1's duplicate M9-final row dropped, M1.1's summary row of M11 cycle 4 kept) + M1.1 integration rows |
+| `uv.lock`, `approval/ui/uv.lock`, `connectors/telegram/uv.lock` | relocked (kit metadata) |
+
+Nothing lost: every file of `40cec84` and of `m1.1-toolkit` is in HEAD; every `def test_*` of every `test_*.py` of both is in HEAD; every `|` row of both backlogs is in HEAD (the `M5 | final` row in M11's updated wording); every line of both `mutmut-equivalent.txt` and `.gitleaksignore` is in HEAD. `reports/critic|conformance|mutmut|plans/*` of both branches are unchanged.
+
+## demo M8 vs `gxg_connector_kit.effects` (AC-M1.1-04)
+
+The two halves of AC-M1.1-04 ("M8 tests green", "demo on the template") could not both hold without changing tests: with demo's own module `server.py` drifts from the template; on the kit's module the M8 tests have to be rewritten (`connector.effects`, `Effects._checked`, `Provider.send`, `Settings` types, `Wiring.clock`, the hook's refusal text, `caller.serves`). Escalated (`INTEGRATION-ESCALATION.md`, removed now); **orchestrator's decision: option 1**:
+
+1. demo keeps its own `effects.py`; **M8 tests unchanged** (`git diff 40cec84 -- connectors/demo/tests/test_effects.py` is empty; 81/81, demo 146/146).
+2. `tests/toolkit/test_template.py::test_demo_is_on_the_template` compares demo with the `with_effects: true` render; the allowed difference is `DEMO_DRIFT`, six replacements in `server.py`, each with its reason (docstring; no kit `effects` import; `stage_c as effects` + `server.Wiring`; `Settings` base; provider for `enable_effects`; provider for test controls). Each must occur exactly once in the render, then the files are compared byte for byte.
+3. Broken copies regenerated by `make_patches.py` from the merged demo (anchors in `server.py`/`tools.py`/`conformance.py` updated). Exact failure sets widened where demo's effects are hit too: 06 (+EX-16), 11 (+EX-04, EX-11). `test_broken::test_demo_passes` expects the EX checks passed; `test_cli_on_demo_and_usage` expects EX-03 passed (the `not_applicable` path stays in `test_template.py:172`, read-only sample).
+4. Moving demo onto `gxg_connector_kit.effects` is a `docs/backlog.md` row (M1.1).
+
+`check-connectors --connector connectors/demo`: 19/19 passed, EX-01…EX-16 included.
+
+### Critic review of the M1.1 test changes (independent subagent)
+
+Verdict **accept with minor, 8/10**, no blocker or major. Checked: 44/44 toolkit + check-connectors tests; render vs demo `server.py` diff = exactly the six `DEMO_DRIFT` hunks; `make_patches.py` rerun gives no diff; mutant "harness `calls()` without provider sends" fails exactly EX-04, EX-11. Findings (all minor):
+
+- F1: no SC/EX check calls `propose` without the right; mutant "grant check in `Effects.propose` off" passes `check-connectors` (the M8 tests catch it) → backlog.
+- F2: no demo broken copy against demo's own `effects.py` → backlog.
+- F3: harness built a second internal app → **fixed** (`ccb0ee2`: `internal=connector.internal`).
+- F4: entry 3 aliases `effects` to `stage_c`, so new `effects.X` calls in the template are not visible in the list → backlog.
+- F5: `not_applicable` covered only by an e2e test → backlog.
+- F6: template docstring names kit Settings; `stage_c.Settings.from_env` copies the kit's; `mypy --strict connectors/demo/src` 1 error (gate runs demo mypy without `--strict`); backlog row text → row **updated**, rest backlog.
+
+## Gate
+
+GATE_PLACEHOLDER
+
+## Environment notes
+
+- `dockerd` started by hand (Docker 29.10.0); `kernel.pid_max` = 4194304 before mutmut. The worker was restarted once (before the gate); dockerd and `pid_max` were set again.
+- Docker Hub answered `429 Too Many Requests` to this container. dockerd runs with `registry-mirrors: ["https://mirror.gcr.io"]` (`/etc/docker/daemon.json`, container only). Image references and digests in the repository are unchanged; digest-pinned images are verified on pull.
+- `DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt'`.
+- `postgresql-16-pgvector` from apt (telegram connector tests).
+- `gxg_agents_v2`: the `add_repo` request was approved after the worker restart, before the orchestrator's message not to call it arrived. Cloned read-only to `../gxg_agents_v2` (depth 1, HEAD = pinned `f1c4d6d`) for `check_upstream.sh`; nothing written there or to Supabase.
