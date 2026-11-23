@@ -29,6 +29,7 @@ if "approval_db_fixtures" not in sys.modules:  # one copy per session (the notif
     _spec.loader.exec_module(_base)
 from approval_db_fixtures import *  # type: ignore[import-not-found]  # noqa: E402, F403  (pg, owner, world, propose, …)
 from approval_db_fixtures import Pg, World  # noqa: E402
+from webauthn_soft import SoftAuthenticator  # noqa: E402 (approval/tests_db, on sys.path from its conftest)
 
 from gxg_approval_ui.app import SESSION_COOKIE, Deps, create_app  # noqa: E402 (after the *: it has another Deps)
 
@@ -45,11 +46,16 @@ class Clock:
 
 @dataclass
 class Browser:
-    """A signed-in human: TestClient with the `__Host-` session cookie (HTTPS base URL, Secure cookies)."""
+    """A signed-in human: TestClient with the `__Host-` session cookie (HTTPS base URL, Secure cookies).
+
+    `decide` signs every decision (AS-30) with the human's soft passkey, enrolling one through an operator invite
+    on first use; `sign=False` sends the form as it is."""
 
     client: TestClient
     key: str
     clock: Clock
+    invite: Any  # human → one-time invite token (gxg_passkey_invite as gxg_admin)
+    passkeys: dict[str, Any]  # human → SoftAuthenticator, shared by the browsers of one test
     session: dict[str, Any] = field(default_factory=dict)
 
     def login(self, human: str) -> Browser:
@@ -66,9 +72,38 @@ class Browser:
     def csrf(self) -> str:
         return str(self.session["csrf"])
 
-    def decide(self, intent: dict[str, Any], decision: str = "approve", **form: Any) -> Any:
+    @property
+    def human(self) -> str:
+        return str(self.session["sub"])
+
+    def enroll(self, authenticator: Any = None) -> Any:
+        """Register a soft passkey for the signed-in human through an operator invite (AS-30)."""
+        key = authenticator or SoftAuthenticator()
+        invite = self.invite(self.human)
+        headers = {"X-CSRF-Token": self.csrf}
+        options = self.client.post("/passkeys/options", json={"invite": invite}, headers=headers)
+        assert options.status_code == 200, options.text
+        credential = json.loads(key.register(options.text))
+        r = self.client.post("/passkeys", json={"invite": invite, "credential": credential}, headers=headers)
+        assert r.json() == {"registered": True}, r.text
+        self.passkeys[self.human] = key
+        return key
+
+    def challenge(self, intent: dict[str, Any], decision: str = "approve", **form: Any) -> Any:
+        body = {"version": intent["version"], "args_hash": intent["canonical_args_hash"], "decision": decision} | form
+        return self.client.post(
+            f"/intents/{intent['intent_id']}/challenge", data=body, headers={"X-CSRF-Token": self.csrf}
+        )
+
+    def decide(self, intent: dict[str, Any], decision: str = "approve", sign: bool = True, **form: Any) -> Any:
         body = {"csrf": self.csrf, "version": intent["version"], "args_hash": intent["canonical_args_hash"],
                 "decision": decision} | form  # fmt: skip
+        if sign and "assertion" not in form:
+            key = self.passkeys.get(self.human) or self.enroll()
+            options = self.challenge(intent, decision, version=body["version"], args_hash=body["args_hash"])
+            if options.status_code != 200:
+                return options  # the refusal of the challenge (stale screen, not an approver, …)
+            body["assertion"] = key.assertion(options.text)
         return self.client.post(f"/intents/{intent['intent_id']}/decision", data=body, follow_redirects=False)
 
 
@@ -86,23 +121,58 @@ def ui_pool(pg: Pg) -> Iterator[ConnectionPool[Any]]:
 
 
 @pytest.fixture
-def ui_deps(world: World, ui_pool: ConnectionPool[Any], clock: Clock) -> Deps:
+def decider_client(pg: Pg) -> Iterator[TestClient]:
+    """The decider process (AS-30) in-process, with its own role; the ui's `GXG_DECIDER_URL` in tests."""
+    from gxg_approval import decider
+
+    with ConnectionPool(pg.dsn("gxg_decider"), min_size=1, max_size=3, kwargs={"autocommit": True}) as pool:
+        app = decider.create_app(decider.Deps(pool, rp_id="ui.example.test", origin=PUBLIC_URL))
+        with TestClient(app, base_url="http://decider.internal", raise_server_exceptions=False) as client:
+            yield client
+
+
+@pytest.fixture
+def ui_deps(world: World, ui_pool: ConnectionPool[Any], clock: Clock, decider_client: TestClient) -> Deps:
     keys = {t: SealedBox(PrivateKey(base64.b64decode(k["preview"]))) for t, k in world.payload_private.items()}
     return Deps(
         pool=ui_pool, bundles=world.store, preview_keys=keys, session_key=secrets.token_urlsafe(32),
         public_url=PUBLIC_URL, oidc_issuer="https://idp.example.invalid", oidc_client_id="ui",
-        oidc_client_secret="test-only", clock=clock,
+        oidc_client_secret="test-only", decider=decider_client, clock=clock,
     )  # fmt: skip
 
 
 @pytest.fixture
-def browser(ui_deps: Deps, owner: psycopg.Connection[Any], clock: Clock) -> Iterator[Browser]:
-    with TestClient(create_app(ui_deps), base_url="https://testserver", raise_server_exceptions=False) as client:
-        yield Browser(client, ui_deps.session_key, clock)
+def invite(pg: Pg) -> Any:
+    """`invite(human)`: a one-time passkey invite, as the admin process issues it (AS-30)."""
+    from gxg_approval.decider import invite_hash
+
+    def make(human: str) -> str:
+        token = secrets.token_urlsafe(24)
+        with pg.connect("gxg_admin") as admin:
+            admin.execute(
+                "SELECT gxg_passkey_invite(%s, %s, 'oidc:https://idp.example.invalid:operator', 600)",
+                (human, invite_hash(token)),
+            )
+        return token
+
+    return make
 
 
 @pytest.fixture
-def make_browser(ui_deps: Deps, clock: Clock) -> Iterator[Any]:
+def passkeys() -> dict[str, Any]:
+    return {}
+
+
+@pytest.fixture
+def browser(
+    ui_deps: Deps, owner: psycopg.Connection[Any], clock: Clock, invite: Any, passkeys: dict[str, Any]
+) -> Iterator[Browser]:
+    with TestClient(create_app(ui_deps), base_url="https://testserver", raise_server_exceptions=False) as client:
+        yield Browser(client, ui_deps.session_key, clock, invite, passkeys)
+
+
+@pytest.fixture
+def make_browser(ui_deps: Deps, clock: Clock, invite: Any, passkeys: dict[str, Any]) -> Iterator[Any]:
     """Another browser (another session) on the same app."""
     app = create_app(ui_deps)
     opened: list[TestClient] = []
@@ -110,7 +180,7 @@ def make_browser(ui_deps: Deps, clock: Clock) -> Iterator[Any]:
     def make() -> Browser:
         c = TestClient(app, base_url="https://testserver", raise_server_exceptions=False)
         opened.append(c.__enter__())
-        return Browser(c, ui_deps.session_key, clock)
+        return Browser(c, ui_deps.session_key, clock, invite, passkeys)
 
     yield make
     for c in opened:
@@ -143,67 +213,6 @@ def run_execution(pg: Pg, intent_id: str, outcome: str = "succeeded") -> None:
         ex.execute("SELECT gxg_complete(%s, 'test-executor', %s, 'op-1', 'receipt-1', null)", (execution[0], outcome))
 
 
-def _b64(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode().rstrip("=")
-
-
-class SoftAuthenticator:
-    """A software passkey (ES256, attestation `none`) producing the JSON the browser's `toJSON()` sends."""
-
-    def __init__(
-        self, rp_id: str = "ui.example.test", origin: str = PUBLIC_URL, user_verified: bool = True,
-        zero_counter: bool = False,
-    ) -> None:  # fmt: skip
-        import os
-
-        from cryptography.hazmat.primitives.asymmetric import ec
-
-        self.rp_id, self.origin, self.user_verified, self.zero_counter = rp_id, origin, user_verified, zero_counter
-        self.key = ec.generate_private_key(ec.SECP256R1())
-        self.credential_id = os.urandom(16)
-        self.count = 0
-
-    def _client_data(self, kind: str, options_json: str, origin: str | None) -> bytes:
-        challenge = json.loads(options_json)["challenge"]
-        return json.dumps({"type": kind, "challenge": challenge, "origin": origin or self.origin}).encode()
-
-    def register(self, options_json: str) -> str:
-        import hashlib
-
-        import cbor2
-
-        numbers = self.key.public_key().public_numbers()
-        cose = {1: 2, 3: -7, -1: 1, -2: numbers.x.to_bytes(32, "big"), -3: numbers.y.to_bytes(32, "big")}
-        flags = 0x45 if self.user_verified else 0x41  # UP | UV | AT
-        auth = (
-            hashlib.sha256(self.rp_id.encode()).digest() + bytes([flags]) + self.count.to_bytes(4, "big")
-            + bytes(16) + len(self.credential_id).to_bytes(2, "big") + self.credential_id + cbor2.dumps(cose)
-        )  # fmt: skip
-        attestation = cbor2.dumps({"fmt": "none", "attStmt": {}, "authData": auth})
-        client = self._client_data("webauthn.create", options_json, None)
-        response = {"clientDataJSON": _b64(client), "attestationObject": _b64(attestation)}
-        cid = _b64(self.credential_id)
-        return json.dumps({"id": cid, "rawId": cid, "type": "public-key", "response": response})
-
-    def assertion(self, options_json: str, origin: str | None = None) -> str:
-        import hashlib
-
-        from cryptography.hazmat.primitives import hashes
-        from cryptography.hazmat.primitives.asymmetric import ec
-
-        self.count += 0 if self.zero_counter else 1
-        auth = (
-            hashlib.sha256(self.rp_id.encode()).digest()
-            + bytes([0x05 if self.user_verified else 0x01])
-            + self.count.to_bytes(4, "big")
-        )
-        client = self._client_data("webauthn.get", options_json, origin)
-        signature = self.key.sign(auth + hashlib.sha256(client).digest(), ec.ECDSA(hashes.SHA256()))
-        return json.dumps({"id": _b64(self.credential_id), "rawId": _b64(self.credential_id), "type": "public-key",
-                           "response": {"clientDataJSON": _b64(client), "authenticatorData": _b64(auth),
-                                        "signature": _b64(signature)}})  # fmt: skip
-
-
 @pytest.fixture
 def soft_authenticator() -> type[SoftAuthenticator]:
     return SoftAuthenticator
@@ -214,10 +223,6 @@ def passkey() -> Any:
     """`passkey(browser)`: register a soft passkey for the signed-in human; returns the authenticator."""
 
     def make(b: Browser) -> SoftAuthenticator:
-        authenticator = SoftAuthenticator()
-        options = b.client.get("/passkeys/options").text
-        r = b.client.post("/passkeys", content=authenticator.register(options), headers={"X-CSRF-Token": b.csrf})
-        assert r.json() == {"registered": True}, r.text
-        return authenticator
+        return b.enroll()  # type: ignore[no-any-return]
 
     return make

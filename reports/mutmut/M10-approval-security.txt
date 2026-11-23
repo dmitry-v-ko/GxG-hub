@@ -1,0 +1,27 @@
+run exit 0
+== approval (decider, admin, executor): 735 killed of 758
+gxg_approval.executor.xǁExecutorǁtake__mutmut_6: survived
+gxg_approval.executor.xǁExecutorǁtake__mutmut_15: survived
+gxg_approval.executor.xǁExecutorǁtake__mutmut_36: survived
+gxg_approval.executor.xǁExecutorǁrun__mutmut_6: survived
+gxg_approval.executor.xǁExecutorǁexecute__mutmut_2: survived
+gxg_approval.executor.xǁExecutorǁ_settle__mutmut_2: survived
+gxg_approval.executor.xǁExecutorǁ_defer__mutmut_2: survived
+gxg_approval.executor.xǁExecutorǁ_post__mutmut_18: survived
+gxg_approval.executor.xǁExecutorǁ_post__mutmut_19: survived
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_2: survived
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_27: survived
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_52: survived
+gxg_approval.executor.x_release_reserved__mutmut_1: survived
+gxg_approval.admin.x_create_app__mutmut_2: survived
+gxg_approval.admin.x_create_app__mutmut_3: survived
+gxg_approval.admin.x_create_app__mutmut_12: survived
+gxg_approval.admin.x_create_app__mutmut_13: survived
+gxg_approval.admin.x_create_app__mutmut_48: survived
+gxg_approval.admin.x_create_app__mutmut_49: survived
+gxg_approval.admin.x_create_app__mutmut_55: survived
+gxg_approval.admin.x_create_app__mutmut_56: survived
+gxg_approval.decider.x_create_app__mutmut_2: survived
+gxg_approval.decider.x_create_app__mutmut_3: survived
+
+After run 2: 735/758 killed; 9 not listed: 8 added to the equivalent list with reasons; admin mutmut_48 (no leeway) killed by the new skew test (checked by applying the mutation by hand: the test fails). Open: 0.

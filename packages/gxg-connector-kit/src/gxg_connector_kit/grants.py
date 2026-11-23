@@ -89,12 +89,24 @@ class TenantGrants:
 
 
 @dataclass(frozen=True)
+class Webhook:
+    """A webhook subscriber of the platform registry (AS-21)."""
+
+    id: str
+    tenant: str
+    url: str
+    secret_ref: str
+    business_task_prefix: str | None = None
+
+
+@dataclass(frozen=True)
 class Bundle:
     version: str
     built_at: datetime
     tenants: Mapping[str, TenantGrants]
     approval_policies: Mapping[str, Mapping[str, Any] | None]
     platform: Mapping[str, Service]
+    webhooks: tuple[Webhook, ...] = ()
 
 
 def _parse_time(value: str) -> datetime:
@@ -192,11 +204,16 @@ def load_bundle(data: bytes, sig: bytes, keys: Mapping[str, Ed25519PublicKey], *
         if tenant is not None and tenant not in tenants:
             raise BundleError(f"bundle: no slice for tenant {tenant!r}")
         platform = parse_registry(doc["platform"])
+        webhooks = tuple(
+            Webhook(w["id"], w["tenant"], w["url"], w["secret_ref"], w.get("business_task_prefix"))
+            for w in doc["platform"].get("webhooks", [])
+            if tenant is None or w["tenant"] == tenant  # GR-12: a tenant slice sees only its own subscribers
+        )
     except BundleError:
         raise
     except (ValueError, KeyError, TypeError, AttributeError) as exc:
         raise BundleError(f"bundle: malformed ({type(exc).__name__})") from None
-    return Bundle(doc["bundle_version"], built_at, tenants, policies, platform)
+    return Bundle(doc["bundle_version"], built_at, tenants, policies, platform, webhooks)
 
 
 class BundleStore:

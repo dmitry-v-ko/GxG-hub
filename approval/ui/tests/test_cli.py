@@ -47,6 +47,7 @@ def environ(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
         "GXG_BUNDLE_DIR": str(tmp_path / "b"),
         "GXG_BUNDLE_KEYS": json.dumps({BUNDLE_KID: format_public_key(kit.ci_key.public_key())}),
         "GXG_BUNDLE_STATE_FILE": str(tmp_path / "state.json"),
+        "GXG_DECIDER_URL": "http://decider.internal:8093",
     }
     for k, v in env.items():
         monkeypatch.setenv(k, v)
@@ -73,6 +74,7 @@ def test_tls_listener_with_every_setting(environ: dict[str, str], started: dict[
     )  # fmt: skip
     assert (deps.session_key, deps.oidc_client_secret) == ("session-key", "client-secret")
     assert set(deps.preview_keys) == {"t-alpha"} and deps.bundles.readiness().ready
+    assert str(deps.decider.base_url) == "http://decider.internal:8093"
     assert deps.pool.kwargs == {"autocommit": True} and deps.pool.min_size == 1 and not deps.pool.closed
     deps.pool.close()
 
@@ -115,7 +117,7 @@ def test_plain_http_urls_are_refused(
 
 
 REQUIRED = ["GXG_UI_PUBLIC_URL", "GXG_OIDC_ISSUER", "GXG_OIDC_CLIENT_ID", "GXG_DB_DSN_FILE", "GXG_PREVIEW_KEYS_FILE",
-            "GXG_UI_SESSION_KEY_FILE", "GXG_OIDC_CLIENT_SECRET_FILE"]  # fmt: skip
+            "GXG_UI_SESSION_KEY_FILE", "GXG_OIDC_CLIENT_SECRET_FILE", "GXG_DECIDER_URL"]  # fmt: skip
 
 
 @pytest.mark.parametrize("name", REQUIRED)
@@ -137,3 +139,25 @@ def test_logging_is_info_with_the_shared_format(
     cli.main()
     assert seen == {"level": logging.INFO, "format": "%(asctime)s %(levelname)s %(name)s %(message)s"}
     started["deps"].pool.close()
+
+
+def test_access_log_has_no_query_string(environ: dict[str, str], started: dict[str, Any]) -> None:
+    """SEC-17 (M9-final F-1): `GET /auth/callback?code=…` reaches the access log as the path only."""
+    import logging
+
+    access = logging.getLogger("uvicorn.access")
+    for f in list(access.filters):  # other tests ran main() too
+        access.removeFilter(f)
+    cli.main()
+    started["deps"].pool.close()
+    assert [type(f) for f in access.filters] == [cli.NoQuery]
+    record = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d', None, None)
+    record.args = ("10.0.0.9:5000", "GET", "/auth/callback?code=SECRET-CODE&state=s", "1.1", 200)
+    assert cli.NoQuery().filter(record) is True
+    assert record.getMessage() == '10.0.0.9:5000 - "GET /auth/callback HTTP/1.1" 200'
+    twice = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d', None, None)
+    twice.args = ("c", "GET", "/a?code=1?x", "1.1", 200)
+    cli.NoQuery().filter(twice)
+    assert twice.getMessage() == 'c - "GET /a HTTP/1.1" 200'
+    other = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, "plain %s", ("x?y",), None)
+    assert cli.NoQuery().filter(other) is True and other.getMessage() == "plain x?y"  # not an access line

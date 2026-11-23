@@ -202,3 +202,25 @@ def test_match(match: dict[str, Any], request_: Request, hit: bool) -> None:
 
 def test_duration() -> None:
     assert [duration_s(v) for v in ("1m", "30m", "4h", "2d")] == [60, 1800, 14400, 172800]
+
+
+def test_max_attempts_default_defaults_and_rules() -> None:
+    """M8 pending_owner_decision (M10): optional `max_attempts`, default 3, the smallest of defaults and matched
+    rules, in every mode; the schema allows 1…3 only."""
+    from gxg_connector_kit import _schema
+
+    assert run([]).max_attempts == 3 and run([AUTO]).max_attempts == 3
+    assert run([], defaults={"max_attempts": 2}).max_attempts == 2
+    assert run([rule("one", "require_approval", max_attempts=1)], defaults={"max_attempts": 2}).max_attempts == 1
+    assert run([rule("two", "require_approval", max_attempts=2)]).max_attempts == 2
+    assert run([], req(NOTE, "write_reversible"), defaults={"max_attempts": 1}).max_attempts == 1
+    assert run([{**AUTO, "max_attempts": 2}]).max_attempts == 2
+    other = rule("other", "require_approval", max_attempts=1, match={"tools": ["demo.other.propose"]})
+    assert run([other]).max_attempts == 3  # a rule that does not match does not count
+    validate = _schema.validator("approval-policy")
+    base = {"tenant": "t-alpha", "schema_version": 1, "rules": []}
+    assert validate.is_valid(base | {"defaults": {"max_attempts": 3}})
+    assert validate.is_valid(base | {"rules": [rule("r", "require_approval", max_attempts=1)]})
+    for bad in (0, 4, "3"):
+        assert not validate.is_valid(base | {"defaults": {"max_attempts": bad}}), bad
+        assert not validate.is_valid(base | {"rules": [rule("r", "require_approval", max_attempts=bad)]}), bad

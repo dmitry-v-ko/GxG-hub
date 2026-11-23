@@ -22,9 +22,10 @@ import anyio
 import httpx2
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from jsonschema import Draft202012Validator, FormatChecker
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from gxg_connector_kit import TokenError, _schema, canonical, svc_jwt
@@ -38,6 +39,8 @@ from .backend import Backend
 from .provider import Dropped, Provider
 
 PROPOSE, EXECUTE = "demo.message.propose", "demo.message.execute"
+# approval-service-v1 «Наблюдаемость»: alert > 0 (connector side). Reasons from the kit (kid, exp, replay…).
+TOKEN_VERIFY_FAILURES = Counter("gxg_token_verify_failures_total", "execution tokens refused", ["reason"])
 DOMAIN, RTYPE = "demo", "board"
 HTTP = {
     "invalid_input": 422,  # AS-12: args (hash or shape) do not match
@@ -45,6 +48,7 @@ HTTP = {
     "permission_denied": 403,
     "conflict": 409,
     "effect_disabled": 423,
+    "rate_limited": 429,  # AS-12a: the connector's own send limit, before dispatch (T12b)
     "temporarily_unavailable": 503,
 }
 NOT_FOUND = "not found"
@@ -162,11 +166,15 @@ class Effects:
         async def healthz(_: Request) -> JSONResponse:
             return JSONResponse({"status": "ok"})
 
+        async def metrics(_: Request) -> Response:  # the internal network only (SEC-14), no payload in labels
+            return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
         return Starlette(
             routes=[
                 Route(f"/internal/v1/execute/{EXECUTE}", self._endpoint(self.execute), methods=["POST"]),
                 Route(f"/internal/v1/reconcile/{EXECUTE}", self._endpoint(self.reconcile), methods=["POST"]),
                 Route("/healthz", healthz),
+                Route("/metrics", metrics),
             ]
         )
 
@@ -208,6 +216,9 @@ class Effects:
 
     async def execute(self, body: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
         claims, args = await self._checked(body, entry)  # args: the canonical form whose hash was approved
+        wait = self.provider.quota_wait_s()  # EFF-18 п.3a: own send limit before dispatch, the provider is not asked
+        if wait is not None:
+            raise GxgError("rate_limited", "send quota of the connector is used up", retry_after_s=wait)
         token = body["execution_token"]
         resp = await self.approval.post(f"/v1/executions/{claims['jti']}/dispatch", {"execution_token": token})
         if resp.status_code == 423:
@@ -242,11 +253,13 @@ class Effects:
         try:  # the JWKS fetch may block: off the event loop
             claims = await anyio.to_thread.run_sync(self.tokens.verify, body["execution_token"])
         except TokenError as exc:
+            TOKEN_VERIFY_FAILURES.labels(exc.reason).inc()
             # AC-M8-04: a replay of a dispatched token is «already used» (409); any other replay stays 401 (AC-M8-03)
             if exc.reason == "replay" and body["execution_id"] in self._dispatched:
                 raise GxgError("conflict", "execution token already used") from None
             raise
         if (claims["sub"], claims["jti"]) != (body["intent_id"], body["execution_id"]):
+            TOKEN_VERIFY_FAILURES.labels("binding").inc()
             raise TokenError("binding")
         tenant, principal, resource = claims["ten"], claims["req"], claims["res"]
         entry |= {"tenant": tenant, "principal": principal, "intent_id": claims["sub"], "execution_id": claims["jti"]}

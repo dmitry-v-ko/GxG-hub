@@ -179,3 +179,24 @@ gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_47  # M1.1: keeping a dis
 gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_50  # M1.1: same as _47 (exp+6)
 gxg_connector_kit.mcp.xǁBundleFilesǁ__init____mutmut_4  # M1.1: _seen = "" instead of None: neither equals a (mtime, mtime) tuple, so the first refresh loads either way
 gxg_connector_kit.mcp.xǁGxgToolǁrun__mutmut_140  # M1.1: same as effects _endpoint__mutmut_136 (duration * 1001)
+gxg_approval_notifier.webhooks.x_allowed_url__mutmut_9  # rstrip("XX.XX") on a lower-cased host: no "X" to strip, only the dots as before
+gxg_approval_notifier.webhooks.x_body_of__mutmut_4  # ensure_ascii=None is falsy like False: the same bytes
+gxg_approval_ui.app.x_create_app__mutmut_306  # Starlette headers are case-insensitive: "X-CSRF-TOKEN" finds the same header
+gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_12  # split("?")[0] == split("?", 1)[0]: only the part before the first "?" is used
+gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_16  # split("?", 2)[0] == split("?", 1)[0]: only the part before the first "?" is used
+gxg_approval.admin.x_create_app__mutmut_12  # Starlette headers are case-insensitive: "AUTHORIZATION" finds the same header
+gxg_approval.admin.x_create_app__mutmut_13  # a missing header as "XXXX" instead of "": neither starts with "Bearer ", the same 401
+gxg_approval.executor.xǁExecutorǁ_defer__mutmut_2  # cast(None, …): typing.cast is a no-op at runtime
+gxg_approval.admin.x_create_app__mutmut_2  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: docs_url=None is redundant
+gxg_approval.admin.x_create_app__mutmut_3  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: redoc_url=None is redundant
+gxg_approval.admin.x_create_app__mutmut_49  # getattr(None, "key", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.admin.x_create_app__mutmut_55  # getattr(key, "XXkeyXX", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.admin.x_create_app__mutmut_56  # getattr(key, "KEY", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.decider.x_create_app__mutmut_2  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: docs_url=None is redundant
+gxg_approval.decider.x_create_app__mutmut_3  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: redoc_url=None is redundant
+gxg_approval.executor.xǁExecutorǁtake__mutmut_15  # "or" lets a stale row call gxg_reserve, which the database refuses (status ≠ approved, or no due execute task: 0006 guard); the conflict is counted and the row delivered as before
+gxg_approval.metrics.xǁDatabaseCollectorǁcollect__mutmut_6  # "select … from" lower-case: SQL keywords are case-insensitive
+gxg_approval.metrics.xǁDatabaseCollectorǁcollect__mutmut_7  # NAME, LABELS, GXG_METRICS() upper-case: unquoted identifiers fold to lower case
+gxg_approval.metrics.x_registry__mutmut_2  # auto_describe=None is falsy like False: the same registry
+gxg_approval.sweeper.x_sweep_once__mutmut_10  # "select gxg_sweep" lower-case: SQL keywords are case-insensitive
+gxg_approval.sweeper.x_purge_once__mutmut_10  # "select gxg_purge" lower-case: SQL keywords are case-insensitive

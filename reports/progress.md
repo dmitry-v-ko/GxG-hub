@@ -10,9 +10,9 @@
 | --- | --- | --- |
 | AC-M0-03, AC-M2-04: защита `main`, метка `widening-approved`, проверка на PR | ждёт владельца (ручные действия в GitHub) | — |
 | Мерж `claude/integration` в `main` | ждёт владельца | — |
-| Approver для пилота M13 | ждёт владельца | только M13 |
+| Approver для пилота M13 | решено владельцем 2026-11-23: approver — владелец; Telegram-аккаунт — тот же, что уже работает в Telegram-коннекторе | M13 |
 | CI без раннеров (минуты GitHub Actions исчерпаны) | веха закрывается по зелёному локальному `check-all.sh` у исполнителя и критика; GitHub CI — перед мержем в `main` | DoD-1 |
-| Доступ к `gxg_agents_v2` | владелец: «кажется открыт»; M6 повторяет `add_repo` | M6 |
+| Код M12 в `gxg_agents_v2` (Signals → Hub) | решено владельцем 2026-11-23: оркестратор пишет промпт, владелец запускает его в Codex | M12 |
 | Как Hub читает Telegram | отдельный сервис-коннектор по MCC; чтение из архива ролью только `SELECT`; live — до M13 отдельно | ADR-0004 |
 | M11: тестовый аккаунт; RID чата | реальный аккаунт не нужен (коннектор не говорит с Telegram); RID = `chat_ref` | ADR-0004, GR |
 | EFF-08 идемпотентность | UNIQUE (tenant, requester, key) | EFF-08, DDL |
@@ -222,3 +222,10 @@
 | — | — | решение владельца | — | — | — | AC-M12-06 (SI-03) добавлен; AC-M10-07 расширен до EX-25; KB: одна роль базы на все tenant'ы, пока tenant один (отступление от MCC-03) | 2026-11-23 |
 | M11.1 | 3 (follow-up) | оркестратор (закрытие по гейту) | gxg-telegram-service: claude/m11.1-telegram-service | 2115cd6 | 9.1 (ц2) | follow-up **закрыт**: F1, F2, 2a (SI-03), переход на кит 7e7ce56, F3–F6; MAJOR-1 решён в Hub (T12b), сервис отвечает 429 до dispatch и flood-wait после dispatch как failed_before_effect (код после гейта — только комментарий и тесты; check-all OK, 478 тестов); остаётся F7 в backlog | 2026-11-23 |
 | — | — | решение владельца | — | — | — | Облегчённый процесс (7 пунктов, подтверждено владельцем в AskUserQuestion): mutmut только по изменённым файлам модулей безопасности, полный — перед main; один критик на цикл; порог 8, 9 для M7/M8/M10/M13, ≤ 3 цикла; ponytail-review и тройной стенд — при интеграции (тройной также у вех с постоянным состоянием); без доработок после закрытия; исполнители на Sonnet, ≤ 2–3 треда; меньше статусных коммитов | 2026-11-23 |
+| интеграция | — | тред интеграции | claude/integration | bc712f5 (+a5e2cc1 READY) | — | M1.1 влита: demo на своём effects.py (вариант 1, DEMO_DRIFT 6 замен с причинами), тесты M8 81/81, check-connectors demo 19/19; check-all до mutmut зелёный одним прогоном; стенд 54/0 ×3; mutmut не гонялся (облегчённый процесс) | 2026-11-23 |
+| — | — | решение владельца | — | — | — | M13: approver — владелец, Telegram-аккаунт — тот же, что в Telegram-коннекторе; M12: код Signals в gxg_agents_v2 пишет Codex по промпту оркестратора | 2026-11-23 |
+| M12 | 1 | исполнитель (Codex, владелец) | gxg_agents_v2: codex/m12-signals-gxg-hub | — | — | запущен владельцем по промпту reports/prompts/M12-codex.md | 2026-11-23 |
+| M10 | 2 | критик | claude/m10-ops | 1043549 (+47b7643) | **5.0** | потолок: AC-M10-05 failed — /metrics 500 на новой строке expired-after-429, deferred-счётчик теряется; alert GxgExpiredAfterRateLimit не гаснет; N3 https у jwks_uri, N4 mutmut изменённых security-файлов, N5 проверка тела 429 по error.schema → цикл 3 (последний, ≤ 3 цикла) | 2026-11-23 |
+| M12 | 1 | исполнитель (Codex) | gxg_agents_v2: codex/m12-signals-gxg-hub | 1487186 | — | готово по отчёту docs/plans/m12-signals-gxg-hub.md: пп. 1–7, AC-M12-01…06 PASS офлайн, typecheck и полный vitest (2005 passed); 3 аддитивные миграции; новое действие notify_telegram@1; критик запущен | 2026-11-23 |
+| M12 | 1 | критик (субагент оркестратора) | gxg_agents_v2: codex/m12-signals-gxg-hub | 1487186 | **7.5** | < 8: AC-M12-01…06 passed; 2 major — ошибка effects.status после propose терминально фейлит кандидата (EFF-28); gxg-переключатель необратимо фейлит очередь request_human_review; minor → backlog; промпт цикла 2 для Codex — reports/prompts/M12-codex-cycle-2.md | 2026-11-23 |
+| M10 | 3 | критик | claude/m10-ops | 3e5541c (+d75ab91) | **9.0** | ≥ 9 — **веха закрыта** (ц2 5.0 → ц3 9.0); AC-M10-01…08 passed; stage-C.json 26/26 (EX-01…EX-25, MC-05); стенд 54/0 ×3; mutmut изменённых security-файлов — 0 неэквивалентных | 2026-11-23 |

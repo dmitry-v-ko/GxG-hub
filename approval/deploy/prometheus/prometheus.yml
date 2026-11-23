@@ -1,0 +1,11 @@
+# Minimal Prometheus configuration of the deployment: the rules, and the scrape targets of approval-service-v1
+# «Наблюдаемость» (api: database figures; executor: reserve conflicts; demo connector: token verify failures).
+global: {scrape_interval: 30s, evaluation_interval: 30s}
+rule_files: [rules.yaml]
+scrape_configs:
+  - job_name: approval-api
+    static_configs: [{targets: ["api:8090"]}]
+  - job_name: executor
+    static_configs: [{targets: ["executor:9101"]}]
+  - job_name: connectors
+    static_configs: [{targets: ["demo:8081"]}]

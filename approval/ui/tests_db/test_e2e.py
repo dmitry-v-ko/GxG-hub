@@ -1,4 +1,5 @@
-"""AC-M9-01 end to end: Chromium (Playwright, preinstalled), the real `gxg-approval-ui` process, the test OIDC issuer
+"""AC-M9-01 end to end: Chromium (Playwright, preinstalled), the real `gxg-approval-ui` and `gxg-approval decider`
+(AS-30, M10) processes, the test OIDC issuer
 (oidc-provider-mock, a dev dependency used only here and in the compose test profile) and PostgreSQL.
 
 The pytest process itself opens no TCP socket (AC-M0-01): servers and the browser are child processes.
@@ -36,7 +37,7 @@ def _start(cmd: list[str], env: dict[str, str], log: Path) -> subprocess.Popen[b
 
 @pytest.fixture
 def stack(tmp_path: Path, pg: Any, world: Any, monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
-    oidc_port, ui_port = _port(), _port()
+    oidc_port, ui_port, decider_port = _port(), _port(), _port()
     issuer = f"http://localhost:{oidc_port}"
     alice, bob = f"oidc:{issuer}:alice", f"oidc:{issuer}:bob"
     names = type(world).reload.__globals__
@@ -56,6 +57,7 @@ def stack(tmp_path: Path, pg: Any, world: Any, monkeypatch: pytest.MonkeyPatch) 
     (bundle / "grants-bundle.json.sig").write_bytes(world.signed[1])
     secret_files = {
         "dsn": pg.dsn("gxg_ui"),
+        "decider_dsn": pg.dsn("gxg_decider"),
         "session": secrets.token_urlsafe(32),
         "client": "e2e-client-secret",
         "preview": json.dumps({t: k["preview"] for t, k in world.payload_private.items()}),
@@ -74,20 +76,28 @@ def stack(tmp_path: Path, pg: Any, world: Any, monkeypatch: pytest.MonkeyPatch) 
         "GXG_BUNDLE_DIR": str(bundle),
         "GXG_BUNDLE_KEYS": world.bundle_keys(),
         "GXG_BUNDLE_STATE_FILE": str(tmp_path / "bundle-state.json"),
+        "GXG_DECIDER_URL": f"http://127.0.0.1:{decider_port}",
     }
+    decider_env = env | {"GXG_DB_DSN_FILE": str(tmp_path / "decider_dsn"), "GXG_LISTEN": f"127.0.0.1:{decider_port}"}
     bin_dir = Path(sys.executable).parent
     oidc = _start([str(bin_dir / "oidc-provider-mock"), "--port", str(oidc_port)], env, tmp_path / "oidc.log")
     ui = _start([str(bin_dir / "gxg-approval-ui")], env, tmp_path / "ui.log")
+    decider = _start([str(bin_dir / "gxg-approval"), "decider"], decider_env, tmp_path / "decider.log")
     try:
-        yield {"ui": f"http://localhost:{ui_port}", "issuer": issuer, "alice": alice, "bob": bob, "dir": tmp_path}
+        yield {"ui": f"http://localhost:{ui_port}", "issuer": issuer, "alice": alice, "bob": bob, "dir": tmp_path,
+               "decider": f"http://127.0.0.1:{decider_port}"}  # fmt: skip
     finally:
-        for p in (ui, oidc):
+        for p in (decider, ui, oidc):
             p.terminate()
             p.wait(timeout=10)
 
 
-def browser(stack: dict[str, Any], step: str, intents: dict[str, str], sub: str = "alice") -> dict[str, Any]:
+def browser(
+    stack: dict[str, Any], step: str, intents: dict[str, str], sub: str = "alice", invite: str = ""
+) -> dict[str, Any]:
     env = os.environ | {
+        "E2E_DECIDER_URL": stack["decider"],
+        "E2E_INVITE": invite,
         "E2E_UI_URL": stack["ui"],
         "E2E_ISSUER": stack["issuer"],
         "E2E_STATE_FILE": str(stack["dir"] / "state.json"),
@@ -101,7 +111,20 @@ def browser(stack: dict[str, Any], step: str, intents: dict[str, str], sub: str 
     return result
 
 
-def test_approver_signs_in_and_approves(stack: dict[str, Any], propose: Any, execute: Any, owner: Any) -> None:
+def operator_invite(pg: Any, human: str) -> str:
+    """A one-time passkey invite as `gxg-approval passkeys invite` issues it (AS-30)."""
+    from gxg_approval.decider import invite_hash
+
+    token = secrets.token_urlsafe(24)
+    with pg.connect("gxg_admin") as admin:
+        admin.execute(
+            "SELECT gxg_passkey_invite(%s, %s, 'oidc:https://idp.example.invalid:operator', 600)",
+            (human, invite_hash(token)),
+        )
+    return token
+
+
+def test_approver_signs_in_and_approves(stack: dict[str, Any], propose: Any, execute: Any, owner: Any, pg: Any) -> None:
     hostile = [
         "<script>window.__alerted = true</script>",
         "**md**",
@@ -118,7 +141,7 @@ def test_approver_signs_in_and_approves(stack: dict[str, Any], propose: Any, exe
         "hostile": propose(args={"text": "hostile", "n": 2}, preview=preview).json()["intent_id"],
         "wire": propose(tool="demo.wire.propose", args={"text": "wire", "n": 3}).json()["intent_id"],
     }
-    out = browser(stack, "approve", ids)
+    out = browser(stack, "approve", ids, invite=operator_invite(pg, stack["alice"]))
     assert out["listed"] == 1
     assert out["cookies"] == [{"name": "__Host-gxg", "httpOnly": True, "secure": True, "sameSite": "Strict",
                                "path": "/", "domain": "localhost"}]  # fmt: skip
@@ -130,15 +153,20 @@ def test_approver_signs_in_and_approves(stack: dict[str, Any], propose: Any, exe
     assert out["noPasskeyShown"] == 1 and out["registered"] == "Passkey зарегистрирован"
     assert (out["wireBefore"], out["wireDecisionStatus"], out["wireAfter"]) == ("pending_approval", 303, "approved")
     assert "(step-up)" in out["wireDecisions"]
-    row = owner.execute("SELECT decided_by, step_up FROM decisions WHERE intent_id = %s", (ids["wire"],)).fetchall()
-    assert row == [(stack["alice"], True)]
+    for intent in (ids["plain"], ids["wire"]):  # AS-30: every decision carries the real browser's assertion
+        row = owner.execute(
+            "SELECT decided_by, step_up, webauthn_assertion ?& ARRAY['authenticator_data', 'signature'] "
+            "FROM decisions WHERE intent_id = %s",
+            (intent,),
+        ).fetchall()
+        assert row == [(stack["alice"], True, True)]
 
     execute(ids["plain"])  # M8's executor is not on this branch: T7, T9, T11 through the real role functions
     assert browser(stack, "status", ids)["final"] == "succeeded"
 
 
-def test_requester_is_refused_in_the_browser(stack: dict[str, Any], propose: Any, owner: Any) -> None:
+def test_requester_is_refused_in_the_browser(stack: dict[str, Any], propose: Any, owner: Any, pg: Any) -> None:
     own = propose(requester=stack["alice"]).json()["intent_id"]
-    out = browser(stack, "requester", {"own": own})
+    out = browser(stack, "requester", {"own": own}, invite=operator_invite(pg, stack["alice"]))
     assert (out["ownStatus"], out["ownAfter"]) == (403, "pending_approval")
     assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)

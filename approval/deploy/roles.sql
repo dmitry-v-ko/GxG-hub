@@ -5,7 +5,7 @@ DO $$
 DECLARE r text;
 BEGIN
   FOREACH r IN ARRAY ARRAY['gxg_owner', 'gxg_api', 'gxg_mcp', 'gxg_ui', 'gxg_executor', 'gxg_sweeper',
-                           'gxg_notifier', 'gxg_admin'] LOOP
+                           'gxg_notifier', 'gxg_admin', 'gxg_decider'] LOOP
     BEGIN
       EXECUTE format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS', r);
     EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;  -- exists, or created concurrently

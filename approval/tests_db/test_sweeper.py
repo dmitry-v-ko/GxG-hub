@@ -29,7 +29,10 @@ def test_expired_intent_leaves_pending_within_60_s(
     owner.execute("UPDATE intents SET expires_at = now() - interval '1 second' WHERE intent_id = %s", (due,))
     stop = threading.Event()
     worker = threading.Thread(
-        target=sweeper.run, args=(pg.dsn("gxg_sweeper"),), kwargs={"interval_s": 0.2, "stop": stop}
+        target=sweeper.run,
+        args=(pg.dsn("gxg_sweeper"),),
+        kwargs={"interval_s": 0.2, "stop": stop},
+        daemon=True,  # a broken stop check fails the test instead of holding the process
     )
     started = time.monotonic()
     worker.start()
@@ -45,6 +48,7 @@ def test_expired_intent_leaves_pending_within_60_s(
     audit = owner.execute("SELECT actor, from_status, to_status FROM audit_events WHERE action = 'expire_approval'")
     assert audit.fetchall() == [("sweeper", "pending_approval", "expired")]
     assert owner.execute("SELECT topic FROM outbox WHERE intent_id = %s ORDER BY id", (due,)).fetchall() == [
+        ("webhook",),  # M10: T1 event (trigger)
         ("notify",),
         ("webhook",),
     ]
@@ -91,9 +95,12 @@ def test_batches_until_done(
 
 
 def test_interval_is_bounded() -> None:
-    for bad in (0, -1, 31):
+    stopped = threading.Event()
+    stopped.set()  # a wrong check returns at once instead of looping
+    for bad in (0, -1, 30.001, 31):
         with pytest.raises(ValueError, match="interval_s"):
-            sweeper.run("host=/nonexistent", interval_s=bad)
+            sweeper.run("host=/nonexistent", interval_s=bad, stop=stopped)
+    sweeper.run("host=/nonexistent", interval_s=sweeper.MAX_INTERVAL_S, stop=stopped)  # the bound itself is allowed
 
 
 def test_reconnects_after_a_database_error(
@@ -101,11 +108,14 @@ def test_reconnects_after_a_database_error(
 ) -> None:
     stop = threading.Event()
     worker = threading.Thread(
-        target=sweeper.run, args=("host=/nonexistent dbname=x",), kwargs={"interval_s": 0.05, "stop": stop}
+        target=sweeper.run,
+        args=("host=/nonexistent dbname=x",),
+        kwargs={"interval_s": 0.05, "stop": stop},
+        daemon=True,
     )
     worker.start()
     time.sleep(0.3)
     stop.set()
     worker.join(5)
     assert not worker.is_alive()
-    assert "sweeper: database error" in caplog.text
+    assert "sweeper: database error" in [r.getMessage() for r in caplog.records]

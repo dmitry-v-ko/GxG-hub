@@ -22,7 +22,7 @@ from gxg_connector_kit.grants import BundleStore
 from gxg_connector_kit.readiness import all_ready
 from gxg_connector_kit.svc_jwt import Service, SvcJwtVerifier
 
-from . import intents
+from . import intents, metrics
 from .crypto import Encryptor
 
 log = logging.getLogger("gxg_approval.api")
@@ -239,5 +239,11 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (route table)
         ready = db_ready and state.ready
         reasons = list(state.reasons) + ([] if db_ready else ["database is unreachable"])
         return JSONResponse({"ready": ready, "reasons": reasons}, status_code=200 if ready else 503)
+
+    scrape = metrics.registry(deps.pool, deps.store)
+
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus() -> Response:  # «Наблюдаемость»: internal network, aggregates only
+        return Response(metrics.exposition(scrape), media_type="text/plain; version=0.0.4")
 
     return app

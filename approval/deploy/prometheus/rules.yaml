@@ -1,0 +1,77 @@
+# Alert rules of approval-service-v1 «Наблюдаемость» (AC-M10-05), AS-23 (webhook dead), AS-24 (admin action),
+# AS-11 (clock skew: node exporter's timex, where the host runs one). Loaded by Prometheus; the receiver of
+# Alertmanager is the operator's channel. Checked by `promtool check rules` and `promtool test rules rules.test.yaml`
+# (approval/deploy/tests/test_alert_rules.py).
+groups:
+  - name: gxg-approval
+    rules:
+      - alert: GxgPendingNearTenantLimit
+        expr: gxg_intents_pending > on (tenant) 0.8 * gxg_intents_pending_limit
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "tenant {{ $labels.tenant }}: pending intents above 80 % of pending_per_tenant_max"
+      - alert: GxgOutcomeUnknownGrowing
+        expr: increase(gxg_executions_total{outcome="outcome_unknown"}[1h]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.tenant }}/{{ $labels.tool }}: new outcome_unknown executions"
+      - alert: GxgOutcomeUnknownOverAnHour
+        expr: gxg_intents_outcome_unknown > 0
+        for: 1h
+        labels: {severity: critical}
+        annotations:
+          summary: "tenant {{ $labels.tenant }}: intents in outcome_unknown for more than 1 h (runbook: outcome_unknown)"
+      - alert: GxgReserveConflictsSpike
+        expr: rate(gxg_reserve_conflicts_total[5m]) > 1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "executor: reservations refused faster than 1/s"
+      - alert: GxgTokenVerifyFailures
+        expr: increase(gxg_token_verify_failures_total[5m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: "connector: execution token refused ({{ $labels.reason }})"
+      - alert: GxgQuotaRepeated
+        expr: increase(gxg_quota_rejections_total[1h]) > 3
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.requester }}: more than 3 quota rejections in an hour (AP-07: a loop or prompt injection?)"
+      - alert: GxgSwitchChanged
+        expr: changes(gxg_switch_blocked[10m]) > 0 or (gxg_switch_blocked == 1 unless gxg_switch_blocked offset 10m)
+        labels: {severity: critical}
+        annotations:
+          summary: "kill switch {{ $labels.scope }} changed"
+      - alert: GxgAdminAction
+        expr: increase(gxg_admin_actions_total[10m]) > 0 or (gxg_admin_actions_total unless gxg_admin_actions_total offset 10m)
+        labels: {severity: warning}
+        annotations:
+          summary: "admin action {{ $labels.action }} (audit_events)"
+      - alert: GxgBundleStale
+        expr: gxg_bundle_age_seconds > 13 * 3600 or absent(gxg_bundle_age_seconds)
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "grants bundle older than 13 h or not loaded (missed re-signing)"
+      - alert: GxgWebhookDead
+        expr: gxg_webhook_dead > (gxg_webhook_dead offset 10m or gxg_webhook_dead * 0)
+        labels: {severity: warning}
+        annotations:
+          summary: "webhook {{ $labels.subscriber }}: an event was given up after 24 h (AS-23)"
+      - alert: GxgExecuteDeferred
+        expr: increase(gxg_execute_deferred_total[1h]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.tenant }}/{{ $labels.tool }}: execute deferred by 429 rate_limited (T12b, AS-12a)"
+      - alert: GxgExpiredAfterRateLimit
+        expr: gxg_intents_expired_after_rate_limit > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "tenant {{ $labels.tenant }}: approved intents expired while the connector answered 429"
+      - alert: GxgClockSkew
+        expr: abs(node_timex_offset_seconds) > 2
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }}: clock off by more than 2 s (AS-11)"

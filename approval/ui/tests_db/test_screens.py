@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from html.parser import HTMLParser
 from typing import Any
 
@@ -268,9 +269,11 @@ def test_args_not_matching_the_hash_cannot_be_approved(
         "UPDATE intents SET preview_ciphertext = %s WHERE intent_id = %s",
         (world.encryptor.seal("t-alpha", "preview", canonical.dumps(forged)), intent["intent_id"]),
     )
-    page = browser.login(HUMAN1).client.get(f"/intents/{intent['intent_id']}").text
+    browser.login(HUMAN1).enroll()
+    page = browser.client.get(f"/intents/{intent['intent_id']}").text
     assert 'id="hash-warning"' in page and 'id="approve"' not in page and 'id="reject"' in page
     assert browser.decide(intent).status_code == 409
+    assert browser.challenge(intent).status_code == 409  # no approve challenge to smuggle as «reject» (critic M10-1)
     assert row_of(intent["intent_id"])["status"] == "pending_approval"
     assert browser.decide(intent, "reject").status_code == 303
 
@@ -287,26 +290,30 @@ def test_purged_payload(browser: Any, propose: Any, row_of: Any, owner: Any) -> 
     assert "—" in browser.client.get("/").text
 
 
-def test_passkey_registration_is_checked(browser: Any, soft_authenticator: Any, clock: Any, owner: Any) -> None:
-    """AS-17: a passkey is stored only from a fresh, matching attestation of the signed-in human."""
+def test_passkey_registration_is_checked(browser: Any, soft_authenticator: Any, invite: Any, owner: Any) -> None:
+    """AS-17, AS-30: a passkey is stored only through the decider, from a fresh, matching attestation of the
+    signed-in human holding an operator invite."""
     browser.login(HUMAN1)
-    key = soft_authenticator()
+    key, token = soft_authenticator(), invite(HUMAN1)
 
-    def post(body: str, csrf: str | None = None) -> Any:
-        return browser.client.post("/passkeys", content=body, headers={"X-CSRF-Token": csrf or browser.csrf})
+    def post(path: str, doc: dict[str, Any], csrf: str | None = None) -> Any:
+        return browser.client.post(path, json=doc, headers={"X-CSRF-Token": csrf or browser.csrf})
 
-    assert post(key.register('{"challenge": "AAAA"}')).status_code == 400  # no options were issued
-    options = browser.client.get("/passkeys/options").text
-    assert post(key.register(options), csrf="wrong").status_code == 403  # refused before the challenge is used
-    wrong_origin = soft_authenticator(origin="https://evil.example")
-    assert post(wrong_origin.register(options)).status_code == 400
-    assert post(key.register(options)).status_code == 400  # one challenge, one attempt
-    options = browser.client.get("/passkeys/options").text
-    clock.now += 301
-    assert post(key.register(options)).status_code == 400
+    def register(options: str, who: Any = key) -> Any:
+        return post("/passkeys", {"invite": token, "credential": json.loads(who.register(options))})
+
+    assert register('{"challenge": "AAAA"}').status_code == 400  # no options were issued
+    assert post("/passkeys/options", {"invite": token}, csrf="wrong").status_code == 403
+    assert post("/passkeys/options", {}).status_code == 400
+    options = post("/passkeys/options", {"invite": token}).text
+    assert post("/passkeys", {"invite": token, "credential": {}}, csrf="wrong").status_code == 403
+    assert register(options, soft_authenticator(origin="https://evil.example")).status_code == 400
+    owner.execute("UPDATE decider_challenges SET created_at = created_at - interval '301 seconds'")
+    assert register(options).status_code == 400  # older than 5 minutes
     assert owner.execute("SELECT count(*) FROM webauthn_credentials").fetchone() == (0,)
-    options = browser.client.get("/passkeys/options").text
-    assert post(key.register(options)).json() == {"registered": True}
+    options = post("/passkeys/options", {"invite": token}).text
+    assert register(options).json() == {"registered": True}
+    assert register(options).status_code == 400  # the challenge and the invite are used once
     assert owner.execute("SELECT human_principal FROM webauthn_credentials").fetchall() == [(HUMAN1,)]
     assert "Passkey зарегистрирован" in browser.client.get("/passkeys").text
 

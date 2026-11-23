@@ -62,13 +62,13 @@ INSERT INTO intents (intent_id, tenant_id, requester_principal, business_task_id
     connector_id, execute_tool, connection_id, resource_id, effect_class, canonical_args_hash,
     args_ciphertext, preview_ciphertext, idempotency_key, policy_version, rule_ids, approval_mode,
     required_approvals, step_up_required, allowed_approvers, status, created_at, expires_at,
-    approved_at, execution_deadline, execution_window_s)
+    approved_at, execution_deadline, execution_window_s, max_attempts)
 VALUES (%(id)s, %(tenant)s, %(requester)s, %(task)s, %(tool)s, %(version)s, %(connector)s, %(execute)s,
     %(connection)s, %(resource)s, %(class)s, %(hash)s, %(args)s, %(preview)s, %(key)s, %(policy)s,
     %(rules)s, %(mode)s, %(approvals)s, %(step_up)s, %(approvers)s, %(status)s, now(),
     now() + make_interval(secs => %(ttl)s),
     CASE WHEN %(approved)s THEN now() END,
-    CASE WHEN %(approved)s THEN now() + make_interval(secs => %(window)s) END, %(window)s)
+    CASE WHEN %(approved)s THEN now() + make_interval(secs => %(window)s) END, %(window)s, %(attempts)s)
 RETURNING {STATUS_COLUMNS}"""  # noqa: S608 (constant column list)
 _SQL_AUTO_DECISION = "SELECT gxg_record_auto_decision(%s)"
 _SQL_OUTBOX = (
@@ -305,6 +305,7 @@ def _insert(
                 "ttl": decision.approval_ttl_s,
                 "approved": approved,
                 "window": decision.execution_window_s,
+                "attempts": decision.max_attempts,
             },
         ).fetchone()
         or {}

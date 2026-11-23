@@ -23,7 +23,10 @@ AS28 = {
     "executor": {"db_dsn_executor", "svc_key_executor", "payload_args_keys"},
     # M9: OIDC client secret, session key, preview key (decrypt) and its TLS key — only the ui
     "ui": {"db_dsn_ui", "ui_session_key", "oidc_client_secret_ui", "preview_keys_ui", "ui_tls_key"},
-    "notifier": {"db_dsn_notifier", "telegram_bot_token"},  # bot token only here (webhook secrets: M10)
+    "notifier": {"db_dsn_notifier", "telegram_bot_token"},  # bot token only here; webhook secrets: a directory
+    "decider": {"db_dsn_decider"},  # M10: its role only; it holds no key (the passkeys' public keys are rows)
+    "admin": {"db_dsn_admin"},  # M10: its role; the operator's token comes per request
+    "admin-ingress": set(),
     "ingress": set(),
     "oidc-egress": set(),
     "telegram-egress": set(),
@@ -38,10 +41,13 @@ NETWORKS = {
     "mcp": {"internal"},
     "sweeper": {"internal"},
     "executor": {"internal", "connectors"},  # only the executor reaches the connectors (SEC-14)
-    "ui": {"ui_ingress", "ui_db", "ui_oidc"},
+    "ui": {"ui_ingress", "ui_db", "ui_oidc", "ui_decider"},
+    "decider": {"internal", "ui_decider"},  # AS-30: reached by the ui only, no tailnet
+    "admin": {"internal", "admin_ingress", "admin_oidc"},
+    "admin-ingress": {"edge", "admin_ingress"},
     "ingress": {"edge", "ui_ingress"},
     "notifier": {"notifier_db", "notifier_telegram", "notifier_webhooks"},
-    "oidc-egress": {"egress", "ui_oidc"},
+    "oidc-egress": {"egress", "ui_oidc", "admin_oidc"},
     "telegram-egress": {"egress", "notifier_telegram"},
     "oidc": {"ui_oidc"},
     "fake-telegram": {"notifier_telegram"},
@@ -74,15 +80,21 @@ def test_no_secret_value_in_environment() -> None:
         for key, value in (s.get("environment") or {}).items():
             if key == "<<":
                 continue
-            if SECRETISH.search(key):
-                assert key.endswith("_FILE") and str(value).startswith("/run/secrets/"), (name, key)
+            if SECRETISH.search(key):  # a secret file, or a directory of them (GXG_WEBHOOK_SECRETS_DIR)
+                assert key.endswith(("_FILE", "_DIR")) and str(value).startswith("/run/secrets/"), (name, key)
             assert not re.search(r"password=|://[^/@\s]+:[^/@\s]+@|-----BEGIN", str(value)), (name, key)
 
 
 def test_secret_files_are_mounted_where_the_process_reads_them() -> None:
     for name, s in load()["services"].items():
-        files = {v for k, v in (s.get("environment") or {}).items() if k != "<<" and str(v).startswith("/run/secrets/")}
+        env = s.get("environment") or {}
+        files = {
+            v for k, v in env.items() if k != "<<" and not k.endswith("_DIR") and str(v).startswith("/run/secrets/")
+        }
         assert files == {f"/run/secrets/{x}" for x in s.get("secrets", [])}, name
+        for k, v in env.items():  # a secret directory is a read-only mount of its own
+            if k.endswith("_DIR") and str(v).startswith("/run/secrets/"):
+                assert any(str(m).endswith(f":{v}:ro") for m in s.get("volumes", [])), (name, k)
 
 
 def test_internal_processes_have_no_egress() -> None:
@@ -92,7 +104,9 @@ def test_internal_processes_have_no_egress() -> None:
         n: n not in ("edge", "egress") for n in doc["networks"]
     }
     assert {name: set(s["networks"]) for name, s in doc["services"].items()} == NETWORKS
-    assert {name for name, s in doc["services"].items() if "ports" in s} == {"ingress"}  # only the ui's HTTPS
+    # the ui's HTTPS; the admin API on the host loopback only (tailscale serve, SEC-13)
+    assert {name for name, s in doc["services"].items() if "ports" in s} == {"ingress", "admin-ingress"}
+    assert doc["services"]["admin-ingress"]["ports"] == ["127.0.0.1:${GXG_ADMIN_PUBLISH:-8092}:8092"]
     assert doc["services"]["ingress"]["command"] == ["TCP-LISTEN:8443,fork,reuseaddr", "TCP:ui:8443"]
     assert doc["services"]["telegram-egress"]["command"][-1] == "TCP:api.telegram.org:443"
     for name in ("oidc", "fake-telegram", "oidc-egress", "telegram-egress"):

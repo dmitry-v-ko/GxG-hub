@@ -1,4 +1,4 @@
-"""The transition table T1-T18 + T12a (docs/specs/approval-service-v1.md (intent statuses and transitions)).
+"""The transition table T1-T18 + T12a, T12b (docs/specs/approval-service-v1.md (intent statuses and transitions)).
 
 `rules()` is the single source of truth: `install_sql()` puts it into `transition_rules`, and every
 transition function in the database refuses a move that is not a row of it (AS-03). A status without
@@ -33,6 +33,7 @@ def rules() -> tuple[Rule, ...]:
         ("T12", "complete_failed_before_effect", "executing", "dispatching", "failed"),
         ("T12a", "complete_refused_before_dispatch", "executing", "reserved", "approved"),
         ("T12a", "complete_refused_before_dispatch", "executing", "reserved", "failed"),
+        ("T12b", "complete_rate_limited", "executing", "reserved", "approved"),  # AS-12a (M10)
         ("T13", "complete_outcome_unknown", "executing", "dispatching", "outcome_unknown"),
         ("T14", "dispatch_lease_expired", "executing", "dispatching", "outcome_unknown"),
         ("T15", "reconcile_executed", "outcome_unknown", "", "reconciled_succeeded"),

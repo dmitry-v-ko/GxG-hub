@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn; the same pin as the kit `mcp` extra
     "gxg-connector-kit[mcp]",
+    "prometheus-client>=0.21,<1",  # M10: gxg_token_verify_failures_total on the internal port
     "pyyaml>=6,<7",  # gxg-manifest.yaml is read at start; already installed by fastmcp
 ]
 

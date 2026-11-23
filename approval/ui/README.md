@@ -52,3 +52,13 @@ Approval Web UI ([approval-service-v1 «Web UI»](../../docs/specs/approval-serv
 - `uv run pytest approval/ui/tests_db` — PostgreSQL в Docker (через Unix-сокет) и E2E: Playwright (Node, Chromium),
   процесс `gxg-approval-ui`, тестовый OIDC issuer `oidc-provider-mock` (только в тестах и профиле `test` compose).
 - Мутации: `[tool.mutmut]` в `pyproject.toml`, `scripts/ci/mutmut.sh`.
+
+## M10: решения через decider (AS-30)
+
+ui больше не проверяет WebAuthn и не пишет решения. Как идёт решение:
+1. Кнопка «Одобрить» или «Отклонить» запрашивает challenge: `POST /intents/<id>/challenge`.
+2. ui пересылает запрос в decider (`GXG_DECIDER_URL`), тот выдаёт challenge с привязкой к intent, версии, хешу и решению.
+3. Браузер подписывает challenge passkey.
+4. ui пересылает сырой assertion в `decider`, который проверяет его и вызывает `gxg_decide`. У роли `gxg_ui` этой функции нет.
+
+Passkey регистрируется только по одноразовому приглашению оператора (`gxg-approval passkeys invite`). Access log uvicorn пишется без query string, поэтому `?code=` OIDC callback в лог не попадает (SEC-17).

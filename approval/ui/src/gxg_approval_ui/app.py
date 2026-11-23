@@ -3,6 +3,7 @@
 Server-rendered, no inline script. A human is `oidc:<iss>:<sub>` from a verified ID token (SEC-01); roles come
 from the current grants bundle. Every write goes through a SECURITY DEFINER function of the `gxg_ui` role, which
 re-checks the intent state, version, args hash, deadline, requester ≠ approver and the approver set frozen at T1.
+Decisions and passkey enrollment are relayed to the decider (AS-30, M10): the ui cannot record a decision itself.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlsplit
 
 import psycopg
 from authlib.integrations.starlette_client import OAuth
@@ -57,7 +57,8 @@ LOGIN_FAILED = (403, "Вход не удался")
 NOT_APPROVER = (403, "Нет роли approver в этом tenant'е")
 NO_VERSION = (400, "Нет версии заявки")
 HASH_MISMATCH = (409, "Параметры не совпадают с хешем: заявку нужно отклонить (EFF-33)")
-STEP_UP = (403, "Нужно подтверждение passkey (step-up) для этой заявки")
+STEP_UP = (403, "Нужно подтверждение решения passkey (AS-30)")
+BAD_DECISION = (400, "Решение: approve или reject")
 NOT_RESOLVER = (403, "Нужна роль approver или tenant_admin")
 TELEGRAM_APPROVERS = (403, "Привязка Telegram — только для approver'ов")
 NO_CODE = (503, "Не удалось выдать код, попробуйте ещё раз")
@@ -102,7 +103,6 @@ _SQL_DECISIONS = (
 _SQL_RECEIVED = (
     "SELECT count(*) FROM decisions WHERE intent_id = %s AND decision = 'approve' AND decided_by NOT LIKE 'policy:%%'"
 )
-_SQL_DECIDE = "SELECT gxg_decide(%s, %s, %s, %s, %s, %s, %s)"
 _SQL_RESOLVE = "SELECT gxg_resolve_manual(%s, %s, %s, %s, %s)"
 _SQL_LINK_CODE = "SELECT gxg_link_code(%s, %s, %s)"
 _SQL_LINKS = "SELECT tenant_id, linked_at FROM approver_links WHERE human_principal = %s ORDER BY tenant_id"
@@ -119,6 +119,7 @@ class Deps:
     oidc_issuer: str
     oidc_client_id: str
     oidc_client_secret: str
+    decider: stepup.Decider  # AS-30: decisions and passkeys
     clock: Callable[[], float] = time.time
     oidc_client_kwargs: dict[str, Any] = field(default_factory=dict)
 
@@ -148,8 +149,6 @@ def _field(form: Mapping[str, Any], name: str) -> str:
 def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     app = FastAPI(**NO_DOC_PAGES)  # type: ignore[arg-type]
     templates = TEMPLATES
-    split = urlsplit(deps.public_url)
-    rp = stepup.RelyingParty(rp_id=str(split.hostname), origin=f"{split.scheme}://{split.netloc}")
     oauth = OAuth()
     oauth.register(
         "oidc",
@@ -173,6 +172,10 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
     @app.exception_handler(Refused)
     def refused(request: Request, exc: Refused) -> Response:
         return page(request, "error.html", {"message": exc.message}, status=exc.status)
+
+    @app.exception_handler(stepup.Unavailable)
+    def no_decider(request: Request, exc: stepup.Unavailable) -> Response:
+        return page(request, "error.html", {"message": UNAVAILABLE[1]}, status=UNAVAILABLE[0])
 
     @app.exception_handler(GxgError)
     def unavailable(request: Request, exc: GxgError) -> Response:  # bundle not ready, no payload key
@@ -383,18 +386,33 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             }
             return page(request, "card.html", ctx)
 
-    @app.get("/intents/{intent_id}/step-up")
-    def step_up_options(request: Request, intent_id: str) -> Response:
+    @app.post("/intents/{intent_id}/challenge")
+    async def challenge(request: Request, intent_id: str) -> Response:
+        """WebAuthn options for one decision on the screen's version and args hash, issued by the decider."""
         who = human(request)
-        with deps.pool.connection() as conn:
-            row = load(conn, intent_id)
+        check_csrf(request, request.headers.get("x-csrf-token"))
+        form = await request.form()
+        decision, version = _field(form, "decision"), _version(form)
+        if decision not in ("approve", "reject"):
+            raise Refused(*BAD_DECISION)
+
+        def work() -> Response:
+            with deps.pool.connection() as conn:
+                row = load(conn, intent_id)
             if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
                 raise Refused(*NOT_APPROVER)
-            options = stepup.authentication_options(
-                rp, conn, request.session, human=who, intent_id=str(row["intent_id"]),
-                args_hash=row["canonical_args_hash"], now=deps.clock(),
-            )  # fmt: skip
-            return Response(options, media_type="application/json")
+            if decision == "approve":  # EFF-33: the signed challenge decides what is recorded, so check it here
+                opened = envelope(row)
+                if opened is None or not opened[2]:
+                    raise Refused(*HASH_MISMATCH)
+            body = {"human": who, "intent_id": str(row["intent_id"]), "decision": decision, "version": version,
+                    "args_hash": _field(form, "args_hash")}  # fmt: skip
+            status, text = stepup.relay(deps.decider, "/v1/decisions/options", body)
+            if status != 200:
+                raise Refused(status, stepup.message(text))
+            return Response(text, media_type="application/json")
+
+        return await run_in_threadpool(work)
 
     @app.post("/intents/{intent_id}/decision")
     async def decide(request: Request, intent_id: str) -> Response:
@@ -404,27 +422,22 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         return await run_in_threadpool(lambda: _decide(request, who, intent_id, form))
 
     def _decide(request: Request, who: str, intent_id: str, form: Mapping[str, Any]) -> Response:
-        decision, args_hash, comment = _field(form, "decision"), _field(form, "args_hash"), _field(form, "comment")
-        version = _version(form)
+        """The decision, its version and args hash are inside the signed challenge (AS-30); the decider checks it, and
+        an approve challenge is issued only for args that match the hash (EFF-33, `challenge` above). Here: the
+        current bundle still makes the human an approver (T2), the comment, and an assertion at all."""
+        comment, assertion = _field(form, "comment"), _field(form, "assertion")
         if len(comment) > COMMENT_MAX:
             raise Refused(*LONG_COMMENT)
         with deps.pool.connection() as conn:
             row = load(conn, intent_id)  # EFF-15: re-read before the decision
-            if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
-                raise Refused(*NOT_APPROVER)  # current bundle (T2)
-            step_up = False
-            if decision == "approve":
-                opened = envelope(row)
-                if opened is None or not opened[2]:
-                    raise Refused(*HASH_MISMATCH)
-                if row["step_up_required"]:
-                    step_up = stepup.verify(
-                        rp, conn, request.session, human=who, intent_id=str(row["intent_id"]), args_hash=args_hash,
-                        assertion_json=_field(form, "assertion"), now=deps.clock(),
-                    )  # fmt: skip
-                    if not step_up:
-                        raise Refused(*STEP_UP)
-            call(conn, _SQL_DECIDE, (row["intent_id"], who, decision, version, args_hash, step_up, comment or None))
+        if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
+            raise Refused(*NOT_APPROVER)  # current bundle (T2)
+        if not assertion:
+            raise Refused(*STEP_UP)
+        body = {"human": who, "intent_id": str(row["intent_id"]), "assertion": assertion, "comment": comment or None}
+        status, text = stepup.relay(deps.decider, "/v1/decisions", body)
+        if status != 200:
+            raise Refused(status, stepup.message(text))
         return RedirectResponse(f"/intents/{row['intent_id']}", status_code=303)
 
     @app.post("/intents/{intent_id}/resolve")
@@ -454,21 +467,31 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         with deps.pool.connection() as conn:
             return page(request, "passkeys.html", {"has_passkey": stepup.has_passkey(conn, who)})
 
-    @app.get("/passkeys/options")
-    def passkey_options(request: Request) -> Response:
+    def passkey_body(request: Request, raw: bytes) -> dict[str, Any]:
         who = human(request)
-        with deps.pool.connection() as conn:
-            options = stepup.registration_options(rp, conn, request.session, human=who, now=deps.clock())
-        return Response(options, media_type="application/json")
+        check_csrf(request, request.headers.get("x-csrf-token"))
+        try:
+            doc = json.loads(raw)
+            body = {"human": who, "invite": str(doc["invite"])}
+            if "credential" in doc:
+                body["credential"] = json.dumps(doc["credential"])
+        except (ValueError, KeyError, TypeError):
+            raise Refused(400, "invite и credential") from None
+        return body
+
+    @app.post("/passkeys/options")
+    async def passkey_options(request: Request) -> Response:
+        body = passkey_body(request, await request.body())
+        status, text = await run_in_threadpool(stepup.relay, deps.decider, "/v1/passkeys/options", body)
+        if status != 200:
+            return JSONResponse({"message": stepup.message(text)}, status_code=status)
+        return Response(text, media_type="application/json")
 
     @app.post("/passkeys")
     async def add_passkey(request: Request) -> Response:
-        who = human(request)
-        check_csrf(request, request.headers.get("x-csrf-token"))
-        body = (await request.body()).decode("utf-8", "replace")
-        with deps.pool.connection() as conn:
-            ok = stepup.register(rp, conn, request.session, human=who, credential_json=body, now=deps.clock())
-        return JSONResponse({"registered": ok}, status_code=200 if ok else 400)
+        body = passkey_body(request, await request.body())
+        status, _ = await run_in_threadpool(stepup.relay, deps.decider, "/v1/passkeys", body)
+        return JSONResponse({"registered": status == 200}, status_code=200 if status == 200 else 400)
 
     @app.get("/telegram")
     def telegram(request: Request) -> Response:
