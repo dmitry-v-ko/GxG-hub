@@ -1,5 +1,5 @@
 diff --git a/gxg-manifest.yaml b/gxg-manifest.yaml
-index 28eae04..41abf17 100644
+index b1b5c74..eeb8d09 100644
 --- a/gxg-manifest.yaml
 +++ b/gxg-manifest.yaml
 @@ -21,7 +21,7 @@ tools:

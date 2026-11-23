@@ -52,14 +52,68 @@ def test_template_owns_exactly_the_plumbing(tmp_path: Path) -> None:
     assert {f for f in files(out) if owned(f)} == DEMO_OWNED
 
 
+# demo keeps its own stage C (M8 effects.py, stage_c.py) instead of gxg_connector_kit.effects (docs/backlog.md, M1.1):
+# the only allowed differences from the `with_effects: true` render, each (file, template text, demo text, why).
+DEMO_DRIFT = [
+    (
+        "src/demo_connector/server.py",
+        "port 8081 (gxg_connector_kit.effects).",
+        "port 8081 (demo's own effects.py, M8).",
+        "the docstring names where demo's effects live",
+    ),
+    (
+        "src/demo_connector/server.py",
+        "from gxg_connector_kit import effects, mcp\n",
+        "from gxg_connector_kit import mcp\n",
+        "the kit's effects module is not used by demo",
+    ),
+    (
+        "src/demo_connector/server.py",
+        "from .backend import Backend\n",
+        "from . import stage_c as effects\nfrom .backend import Backend\n"
+        "from .stage_c import Wiring  # noqa: F401 - M8 tests use server.Wiring\n",
+        "stage_c supplies connect/Wiring/Settings in place of the kit's effects; M8 tests use server.Wiring",
+    ),
+    (
+        "src/demo_connector/server.py",
+        "class Settings(mcp.Settings):",
+        "class Settings(effects.Settings):",
+        "M8 settings: DEMO_PROVIDER_DB, approval_url/svc_key_file None when unset",
+    ),
+    (
+        "src/demo_connector/server.py",
+        "connector.enable_effects(approval, jwks, files.refresh)",
+        "connector.enable_effects(approval, jwks, files.refresh, effects.provider(settings))",
+        "M8 fake provider, a separate journal from the read backend",
+    ),
+    (
+        "src/demo_connector/server.py",
+        "test_app(connector.backend)",
+        "test_app(connector.backend, connector.provider)",
+        "M8 test controls of the fake provider (stand: provider modes)",
+    ),
+]
+
+
+def demo_render(out: Path, rel: str) -> bytes:
+    text = (out / rel).read_text(encoding="utf-8")
+    for f, template, demo, _why in DEMO_DRIFT:
+        if f == rel:
+            assert text.count(template) == 1, (rel, template)  # an allowed difference the template no longer has
+            text = text.replace(template, demo)
+    return text.encode()
+
+
 def test_demo_is_on_the_template(tmp_path: Path) -> None:
-    """AC-M1.1-04: demo's template-owned files are the render of its own .copier-answers.yml."""
+    """AC-M1.1-04: demo's template-owned files are the render of its own .copier-answers.yml, up to DEMO_DRIFT."""
     answers = yaml.safe_load((DEMO / ".copier-answers.yml").read_text(encoding="utf-8"))
     assert answers["_src_path"] == "../.."  # the repository: copier.yml at its root
+    assert answers["with_effects"] is True  # demo has demo.message.propose since M8
     data = {k: v for k, v in answers.items() if not k.startswith("_")}
     out = render(tmp_path / "demo", **data)
+    assert {f for f, *_ in DEMO_DRIFT} <= DEMO_OWNED
     for rel in sorted(DEMO_OWNED - {".copier-answers.yml"}):
-        assert (DEMO / rel).read_bytes() == (out / rel).read_bytes(), f"connectors/demo/{rel} drifted from the template"
+        assert (DEMO / rel).read_bytes() == demo_render(out, rel), f"connectors/demo/{rel} drifted from the template"
 
 
 @pytest.mark.parametrize("source", ["path", "git"])

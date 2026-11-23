@@ -1,13 +1,13 @@
 diff --git a/src/demo_connector/conformance.py b/src/demo_connector/conformance.py
-index 968319a..8e40b3b 100644
+index a35879b..d407956 100644
 --- a/src/demo_connector/conformance.py
 +++ b/src/demo_connector/conformance.py
-@@ -34,7 +34,7 @@ def start(settings: KitSettings, wiring: Wiring) -> Running:
-         backend.failure = mode if mode in BACKEND_FAILURES else None  # type: ignore[assignment]
-         backend._enter = crash if mode == "crash" else enter  # type: ignore[method-assign]
+@@ -46,7 +46,7 @@ def start(settings: KitSettings, wiring: Wiring) -> Running:
+         return sum(backend.calls.values()) + (len(provider.calls()) if provider is not None else 0)
  
--    return Running(app=app, calls=lambda: sum(backend.calls.values()), fail=fail)
-+    return Running(app=app, calls=lambda: 0, fail=fail)
+     internal = connector.effects.internal_app() if connector.effects is not None else None
+-    return Running(app=app, calls=calls, fail=fail, internal=internal)
++    return Running(app=app, calls=lambda: 0, fail=fail, internal=internal)
  
  
  def rids(tool: str, result: dict[str, Any]) -> set[str]:

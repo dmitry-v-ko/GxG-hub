@@ -1,8 +1,8 @@
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 34549d6..a8a4130 100644
+index d05d143..55ef120 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
-@@ -91,7 +91,7 @@ class Connector:
+@@ -129,7 +129,7 @@ class Connector:
          if requested is not None and any(b not in readable for b in requested):
              raise GxgError("not_found", NOT_FOUND)  # GR-17: a named board without a grant
          boards = sorted(set(requested) if requested is not None else readable)

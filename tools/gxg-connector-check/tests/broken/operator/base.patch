@@ -18,10 +18,10 @@ index 8aa6830..8b89f0c 100644
      subjects: [agent:t-alpha:reader]
      actions: [read]
 diff --git a/src/demo_connector/conformance.py b/src/demo_connector/conformance.py
-index 968319a..b17a210 100644
+index a35879b..8ebd048 100644
 --- a/src/demo_connector/conformance.py
 +++ b/src/demo_connector/conformance.py
-@@ -55,7 +55,7 @@ def harness() -> Harness:
+@@ -67,7 +67,7 @@ def harness() -> Harness:
          nobody="agent:t-alpha:nobody",
          stranger="agent:t-beta:reader",
          calls=[
@@ -30,18 +30,19 @@ index 968319a..b17a210 100644
              Call(
                  "demo.notes.search",
                  {"query": "status"},
-@@ -72,5 +72,6 @@ def harness() -> Harness:
+@@ -84,6 +84,7 @@ def harness() -> Harness:
          ],
          secret_env=SECRET_ENV,
          rids=rids,
 +        operator="agent:t-alpha:operator",
          failures=(*BACKEND_FAILURES, "crash"),
-     )
+         actor="agent:t-alpha:actor",  # read and propose on a-public (fixtures/grants)
+         propose=Call("demo.message.propose", {"board_id": "a-public", "recipient": "partner_1", "text": "hello"}),
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 34549d6..5356ff1 100644
+index d05d143..1423ab8 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
-@@ -77,6 +77,8 @@ class Connector:
+@@ -115,6 +115,8 @@ class Connector:
          return out
  
      async def boards_list(self, access: Access, args: dict[str, Any]) -> Result:

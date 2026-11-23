@@ -33,7 +33,18 @@ CASES = {  # patch -> (the check that catches it, every check that fails: an exa
     # errors as plain text without the envelope: every check that reads an error code fails too
     "06-error-outside-envelope": (
         "MCC-05",
-        {"MCC-05", "MC-02", "MC-03", "MCC-09", "SC-02", "SC-03", "SC-04", "SC-05", "SC-10"},
+        {
+            "MCC-05",
+            "MC-02",
+            "MC-03",
+            "MCC-09",
+            "SC-02",
+            "SC-03",
+            "SC-04",
+            "SC-05",
+            "SC-10",
+            "EX-16",
+        },  # EX-16: propose too
     ),
     # a search without max_results, `limit` up to 100000
     "07-unbounded-output": ("MC-02", {"MC-02"}),
@@ -44,7 +55,8 @@ CASES = {  # patch -> (the check that catches it, every check that fails: an exa
     # /readyz is 200 without a valid bundle
     "10-always-ready": ("MCC-09", {"MCC-09"}),
     # cycle 2 (critic M1.1-cycle-1): the harness itself, lists, logs, readiness
-    "11-calls-always-zero": ("SC-10", {"SC-10"}),  # the harness counts no provider call: positive control
+    # the harness counts no provider call: positive control (SC-10; EX-04, EX-11 count the provider sends of demo M8)
+    "11-calls-always-zero": ("SC-10", {"SC-10", "EX-04", "EX-11"}),
     "12-failures-only-crash": ("MC-03", {"MC-03"}),  # the harness hides the provider's failure modes
     "13-hidden-board-dropped": ("SC-05", {"SC-05"}),  # a named board without a grant is silently dropped
     "14-empty-is-not-found": ("MC-02", {"MC-02"}),  # an empty search is an error

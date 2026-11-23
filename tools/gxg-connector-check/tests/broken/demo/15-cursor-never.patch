@@ -1,8 +1,8 @@
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 34549d6..db46914 100644
+index d05d143..bb96dc9 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
-@@ -118,7 +118,7 @@ class Connector:
+@@ -156,7 +156,7 @@ class Connector:
          partial = ["source_timeout"] if timed_out else []
          content = {
              "items": items,

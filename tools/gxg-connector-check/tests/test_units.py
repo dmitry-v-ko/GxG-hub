@@ -135,7 +135,8 @@ def test_cli_on_demo_and_usage(tmp_path: Path, capsys: pytest.CaptureFixture[str
     report = tmp_path / "r.json"
     assert cli.main(["--connector", str(DEMO), "--report", str(report)]) == 0
     results = json.loads(report.read_text(encoding="utf-8"))
-    assert results["SC-02"]["status"] == "passed" and results["EX-03"]["status"] == "not_applicable"
+    # demo has effects since M8: EX-03 applies (a read-only connector: tests/toolkit, sample without effects)
+    assert results["SC-02"]["status"] == "passed" and results["EX-03"]["status"] == "passed"
     assert "SC-02    passed" in capsys.readouterr().out
     with pytest.raises(SystemExit) as exc:
         cli.main(["--connector", str(tmp_path)])

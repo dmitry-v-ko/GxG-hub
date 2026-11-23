@@ -44,7 +44,7 @@ case(
         ),
         (
             SV,
-            '''class Settings(mcp.Settings):''',
+            '''class Settings(effects.Settings):''',
             '''class Lenient:
     """BROKEN: a call without an identity header runs as the default reader."""
 
@@ -58,7 +58,7 @@ case(
         return self.real.verify(headers, **kw)  # type: ignore[no-any-return]
 
 
-class Settings(mcp.Settings):''',
+class Settings(effects.Settings):''',
         ),
         (SV, "from typing import ClassVar\n", "from datetime import UTC, datetime\nfrom typing import Any, ClassVar\n"),
         (
@@ -79,7 +79,7 @@ case(
         ),
         (
             SV,
-            '''class Settings(mcp.Settings):''',
+            '''class Settings(effects.Settings):''',
             '''class TenantHeader:
     """BROKEN: `X-Tenant-Id` from the caller overrides the verified tenant."""
 
@@ -95,7 +95,7 @@ case(
         return ident
 
 
-class Settings(mcp.Settings):''',
+class Settings(effects.Settings):''',
         ),
         (SV, "from typing import ClassVar\n", "import dataclasses\nfrom typing import Any, ClassVar\n"),
     ],
@@ -106,7 +106,10 @@ case(
     [
         (
             T,
-            '''        return mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)''',
+            '''        return [
+            t.model_copy(update={"hook": self._propose_access}) if t.name == "demo.message.propose" else t
+            for t in mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)
+        ]''',
             '''        backend = self.backend
 
         class Prefetch:
@@ -118,7 +121,10 @@ case(
                         backend.get_note(tenant, arguments["note_id"])
                 return verifier.verify(headers, tool=tool, arguments=arguments)
 
-        return mcp.tools(self, MANIFEST, self.grants, Prefetch(), refresh, logs, ROOT)''',
+        return [
+            t.model_copy(update={"hook": self._propose_access}) if t.name == "demo.message.propose" else t
+            for t in mcp.tools(self, MANIFEST, self.grants, Prefetch(), refresh, logs, ROOT)
+        ]''',
         )
     ],
 )
@@ -154,8 +160,8 @@ case(
     [
         (
             T,
-            '''        return mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)''',
-            '''        return [PlainErrors(**dict(t)) for t in mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)]''',
+            '''            for t in mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)''',
+            '''            for t in [PlainErrors(**dict(x)) for x in mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)]''',
         ),
         (
             T,
@@ -223,7 +229,7 @@ case(
     [
         (
             SV,
-            '''    ready = mcp.readiness_of(store.readiness, connector.backend.readiness)''',
+            '''    ready = mcp.readiness_of(*readiness)''',
             '''    ready = lambda: Readiness(True)  # noqa: E731 - BROKEN: ready without a valid bundle''',
         ),
         (
@@ -236,7 +242,8 @@ case(
 
 # --- cycle 2: positive controls of the harness, lists, logs, readiness ------------------------------------------
 case(
-    "11-calls-always-zero", [(C, "calls=lambda: sum(backend.calls.values())", "calls=lambda: 0")]
+    "11-calls-always-zero",
+    [(C, "    return Running(app=app, calls=calls,", "    return Running(app=app, calls=lambda: 0,")],
 )  # BROKEN: counts nothing
 case("12-failures-only-crash", [(C, "failures=(*BACKEND_FAILURES, \"crash\"),", "failures=(\"crash\",),  # BROKEN")])
 case(

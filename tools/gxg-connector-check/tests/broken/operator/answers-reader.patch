@@ -1,8 +1,8 @@
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 5356ff1..34549d6 100644
+index 1423ab8..d05d143 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
-@@ -77,8 +77,6 @@ class Connector:
+@@ -115,8 +115,6 @@ class Connector:
          return out
  
      async def boards_list(self, access: Access, args: dict[str, Any]) -> Result:

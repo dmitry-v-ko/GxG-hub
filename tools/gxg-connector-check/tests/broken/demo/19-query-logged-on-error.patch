@@ -1,8 +1,8 @@
 diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
-index 34549d6..0b238bc 100644
+index d05d143..012b24c 100644
 --- a/src/demo_connector/tools.py
 +++ b/src/demo_connector/tools.py
-@@ -87,7 +87,11 @@ class Connector:
+@@ -125,7 +125,11 @@ class Connector:
          query: str = args["query"]
          requested: list[str] | None = args.get("board_ids")
          limit: int = args.get("limit", 20)

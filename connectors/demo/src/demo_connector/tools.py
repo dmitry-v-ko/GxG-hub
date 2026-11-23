@@ -16,17 +16,25 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import yaml
+
 from gxg_connector_kit import mcp
 from gxg_connector_kit.errors import GxgError
-from gxg_connector_kit.grants import GrantResolver
+from gxg_connector_kit.grants import BundleStore, GrantResolver
 from gxg_connector_kit.identity import IdentityVerifier, VerifiedIdentity
 from gxg_connector_kit.mcp import NOT_FOUND, Access, Handler, Result
 
 from .backend import Backend
 from .data import Note
+from .effects import PROPOSE, Effects
 
 if TYPE_CHECKING:
-    from .effects import Effects
+    from starlette.applications import Starlette
+
+    from gxg_connector_kit.exec_token import ExecutorJwks
+
+    from .effects import Approval
+    from .provider import Provider
 
 ROOT = Path(__file__).resolve().parents[2]  # connectors/demo
 MANIFEST = ROOT / "gxg-manifest.yaml"  # the one source of tool names, schemas and timeouts
@@ -50,7 +58,21 @@ class Connector:
         self.grants = grants
         self.search_budget_s = search_budget_s
         self._cursor = mcp.Cursor()
-        self.effects: Effects | None = None  # stage C, set by server.build when configured; else no propose tool
+        self.effects: Effects | None = None  # stage C, set by enable_effects(); without it no propose tool
+        self.internal: Starlette | None = None  # internal execute/reconcile app (port 8081)
+        self.provider: Provider | None = None  # stage C fake provider (M8), served by testctl.py
+
+    def enable_effects(
+        self, approval: Approval, jwks: ExecutorJwks, refresh: Callable[[], None], provider: Provider
+    ) -> None:
+        """Stage C (M8) by demo's own effects.py; the template's hook of this name uses gxg_connector_kit.effects."""
+        if not isinstance(self.grants, BundleStore):
+            raise TypeError("effects need the bundle store (platform registry, AS-06)")
+        tool = next(t for t in yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["tools"] if t["name"] == PROPOSE)
+        self.effects = Effects(self.backend, self.grants, approval, provider=provider, jwks=jwks, tool=tool,
+                               refresh=refresh)  # fmt: skip
+        self.internal = self.effects.internal_app()
+        self.provider = provider
 
     def tools(self, verifier: IdentityVerifier, refresh: Callable[[], None]) -> list[mcp.GxgTool]:
         # `demo.message.propose` keeps the M8 order: effects.py resolves the board and checks `propose` itself

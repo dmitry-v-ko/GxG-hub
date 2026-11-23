@@ -3,4 +3,4 @@ _src_path: ../..
 kit_source: path
 name: demo
 repo: ../..
-with_effects: false
+with_effects: true
