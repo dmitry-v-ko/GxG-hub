@@ -23,7 +23,8 @@ from gxg_policy import cli as policy_cli
 
 REPO = next(p for p in Path(__file__).resolve().parents if (p / "connectors" / "demo").is_dir())
 DEMO = REPO / "connectors" / "demo"
-BUILT_AT = datetime(2026, 11, 22, 10, 0, 0, tzinfo=UTC)
+BUILT_AT = datetime.now(UTC).replace(microsecond=0)  # fresh: GR-13 refuses a bundle older than 24 h
+BUILT_AT_Z = BUILT_AT.isoformat().replace("+00:00", "Z")
 
 
 def test_bundle_is_byte_identical_to_gxg_policy_build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -43,7 +44,7 @@ def test_bundle_is_byte_identical_to_gxg_policy_build(tmp_path: Path, monkeypatc
     (pol / "platform" / "registry.yaml").write_text(yaml.safe_dump(registry), encoding="utf-8")
     monkeypatch.setenv(policy_cli.KEY_ENV, base64.urlsafe_b64encode(key.private_bytes_raw()).rstrip(b"=").decode())
     args = ["build", str(pol), "--out", str(tmp_path / "theirs"), "--bundle-version", "0" * 40, "--kid", bundle.KID,
-            "--manifest", str(DEMO / "gxg-manifest.yaml"), "--built-at", "2026-11-22T10:00:00Z"]  # fmt: skip
+            "--manifest", str(DEMO / "gxg-manifest.yaml"), "--built-at", BUILT_AT_Z]  # fmt: skip
     assert policy_cli.main(args) == 0
     for f in (mcp.BUNDLE_FILE, mcp.SIG_FILE):
         assert (tmp_path / "ours" / f).read_bytes() == (tmp_path / "theirs" / f).read_bytes(), f
@@ -73,7 +74,7 @@ def test_bundle_write_makes_its_directory(tmp_path: Path) -> None:
     for _ in range(2):  # a second write over the first is fine
         bundle.write(tmp_path / "a" / "b", docs, platform, key, built_at=BUILT_AT)
     doc = json.loads((tmp_path / "a" / "b" / mcp.BUNDLE_FILE).read_bytes())
-    assert doc["built_at"] == "2026-11-22T10:00:00Z" and list(doc["tenants"]) == ["t-alpha"]
+    assert doc["built_at"] == BUILT_AT_Z and list(doc["tenants"]) == ["t-alpha"]
 
 
 def test_jwks_and_keys_setting() -> None:

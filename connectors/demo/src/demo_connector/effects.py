@@ -22,7 +22,7 @@ import anyio
 import httpx2
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from jsonschema import Draft202012Validator, FormatChecker
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, generate_latest
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -40,7 +40,11 @@ from .provider import Dropped, Provider
 
 PROPOSE, EXECUTE = "demo.message.propose", "demo.message.execute"
 # approval-service-v1 «Наблюдаемость»: alert > 0 (connector side). Reasons from the kit (kid, exp, replay…).
-TOKEN_VERIFY_FAILURES = Counter("gxg_token_verify_failures_total", "execution tokens refused", ["reason"])
+# Own registry: check-connectors imports several copies of this module in one process (the default refuses duplicates).
+METRICS = CollectorRegistry()
+TOKEN_VERIFY_FAILURES = Counter(
+    "gxg_token_verify_failures_total", "execution tokens refused", ["reason"], registry=METRICS
+)
 DOMAIN, RTYPE = "demo", "board"
 HTTP = {
     "invalid_input": 422,  # AS-12: args (hash or shape) do not match
@@ -167,7 +171,7 @@ class Effects:
             return JSONResponse({"status": "ok"})
 
         async def metrics(_: Request) -> Response:  # the internal network only (SEC-14), no payload in labels
-            return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+            return Response(generate_latest(METRICS), media_type=CONTENT_TYPE_LATEST)
 
         return Starlette(
             routes=[
