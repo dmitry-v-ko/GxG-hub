@@ -42,6 +42,7 @@ def test_valid_delivery_once() -> None:
         (webhooks.sign(SECRET, BODY, T).replace(f"t={T}", f"t={T + 1}"), BODY, T, "signature"),  # t is signed
         (webhooks.sign(SECRET, BODY, T), BODY, T + 301, "stale"),
         (webhooks.sign(SECRET, BODY, T), BODY, T - 301, "stale"),
+        (webhooks.sign(SECRET, BODY, T) + "=x", BODY, T, "signature"),  # only the first "=" splits a part
         ("t=x,v1=00", BODY, T, "malformed"),
         ("v1=00", BODY, T, "malformed"),
         ("garbage", BODY, T, "malformed"),
