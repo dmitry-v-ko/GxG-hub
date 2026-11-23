@@ -62,6 +62,8 @@ Verdict **accept with minor, 8/10**, no blocker or major. Checked: 44/44 toolkit
 
 GATE_PLACEHOLDER
 
+(heartbeat: final check-all on `bc712f5` green through docker_smoke; stand running)
+
 ## Environment notes
 
 - `dockerd` started by hand (Docker 29.10.0); `kernel.pid_max` = 4194304 before mutmut. The worker was restarted once (before the gate); dockerd and `pid_max` were set again.
