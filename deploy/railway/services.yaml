@@ -181,6 +181,23 @@ services:
     secrets:
       GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_decider", as28: db_dsn}
     internal_urls: [GXG_SECRET__GXG_DB_DSN]
+  admin:  # entry: tag:approval-admin (operators only): kill switch, passkey invites (AS-24). Operator OIDC = the ui's IdP
+    kind: app
+    source: {dockerfile: deploy/railway/approval.Dockerfile}
+    start: gxg-approval admin
+    port: 8092
+    env:
+      GXG_LISTEN: 127.0.0.1:8092
+      GXG_ADMIN_OIDC_ISSUER: ${{ui.GXG_OIDC_ISSUER}}
+      GXG_ADMIN_OIDC_AUDIENCE: ${{ui.GXG_OIDC_CLIENT_ID}}
+      TS_HOSTNAME: gxg-approval-admin
+      TS_TAGS: tag:approval-admin
+      GXG_TS_SERVE: "443 - http://127.0.0.1:8092"
+    owner_env: [GXG_ADMIN_OPERATORS]  # oidc:<issuer>:<sub>,… (platform_admin)
+    secrets:
+      GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_admin", as28: db_dsn}
+      TS_AUTHKEY: {gen: owner, as28: tailscale}  # its own key, tagged tag:approval-admin
+    internal_urls: [GXG_SECRET__GXG_DB_DSN]
   ui:  # entry: tag:approval-ui, tailscale serve terminates TLS, the process listens on loopback only
     kind: app
     source: {dockerfile: deploy/railway/ui.Dockerfile}

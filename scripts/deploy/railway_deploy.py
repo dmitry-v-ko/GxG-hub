@@ -54,11 +54,11 @@ AS28: dict[str, frozenset[str]] = {
     "ui_secrets": frozenset({"ui"}),
     "telegram_bot_token": frozenset({"notifier"}),
     "webhook_secrets": frozenset({"notifier"}),
-    "tailscale": frozenset({"ui"}),  # tag:approval-ui entry (ADR-0003)
+    "tailscale": frozenset({"ui", "admin"}),  # tag:approval-ui and tag:approval-admin entries (ADR-0003)
     "bootstrap": frozenset({"db-init"}),  # transient job, removed by --finalize
 }
 ROLE_OF = {  # AS-27: one role per process
-    "migrate": "gxg_owner", "api": "gxg_api", "sweeper": "gxg_sweeper", "executor": "gxg_executor",
+    "migrate": "gxg_owner", "admin": "gxg_admin", "api": "gxg_api", "sweeper": "gxg_sweeper", "executor": "gxg_executor",
     "ui": "gxg_ui", "notifier": "gxg_notifier", "decider": "gxg_decider",
 }  # fmt: skip
 SECRET_PREFIX = "GXG_SECRET__"  # noqa: S105 (a naming prefix)

@@ -6,12 +6,12 @@
 
 | Файл | Что |
 | --- | --- |
-| `deploy/railway/services.yaml` | 13 сервисов: `contextforge`, `contextforge-db`, `approval-db`, Approval `api`, `mcp`, `executor`, `decider`, `ui`, `notifier`, `sweeper`, jobs `migrate` и `db-init` (временный), `telegram`. Для каждого: образ или Dockerfile, команда, порт, volume, переменные (литералы / владелец / сгенерированные), секреты с привязкой к строке AS-28, private-хост `<имя>.railway.internal` |
+| `deploy/railway/services.yaml` | 15 сервисов: `contextforge`, `contextforge-db`, `approval-db`, `telegram-db`, Approval `api`, `mcp`, `executor`, `decider`, `ui`, `admin`, `notifier`, `sweeper`, jobs `migrate` и `db-init` (временный), `telegram`. Для каждого: образ или Dockerfile, команда, порт, volume, переменные (литералы / владелец / сгенерированные), секреты с привязкой к строке AS-28, private-хост `<имя>.railway.internal` |
 | `deploy/railway/entrypoint.sh` | обёртка контейнера: `GXG_SECRET__X` / `GXG_CONFIG__X` → файлы в `/dev/shm` и `X_FILE` (процессы Approval читают секреты только файлами), переменные снимаются до старта процесса; при `TS_HOSTNAME`: `tailscaled --tun=userspace-networking`, `tailscale up` (ключ из `TS_AUTHKEY` через временный файл), `tailscale serve --https`, отказ от старта при включённом Funnel |
 | `deploy/railway/{contextforge,approval,ui,notifier}.Dockerfile` | образы Railway. ContextForge: тот же digest, что в `compose.yaml`, плагин `gxg_identity`, tailscale. `ui`/`notifier`: оригинальная сборка + обёртка (тест следит за дрейфом) |
 | `deploy/railway/db_init.py`, `contextforge/*` | job ролей БД (AS-27); начальные `plugins.yaml` и deny-правила ContextForge |
 | `scripts/deploy/railway_deploy.py` | `--dry-run`, применение, `--verify` (AC-M14-11), `--finalize` (удалить `db-init`) |
-| `tests/deploy/` | 25 тестов без сети: мок-GraphQL, entrypoint со stub-бинарниками tailscale, дрейф Dockerfile |
+| `tests/deploy/` | 27 тестов без сети: мок-GraphQL, entrypoint со stub-бинарниками tailscale, дрейф Dockerfile |
 | `scripts/ci/check-all.sh`, `pyproject.toml` | `tests/deploy` в pytest и mypy `--strict`, `--dry-run` в check-all |
 | `docs/runbooks/m13-pilot-deploy.md` | порядок, руки владельца, проверки |
 
@@ -29,7 +29,6 @@
 ## `--dry-run`
 
 ```text
-warning: The `UV_NATIVE_TLS` environment variable is deprecated and will be removed in a future release. Use `UV_SYSTEM_CERTS` instead.
 project gxg-hub-pilot, environment production, tenant t-pilot
 public exposure: none (no Railway domain, no custom domain, no TCP proxy); Funnel off
 - contextforge-db [postgres] ghcr.io/railwayapp-templates/postgres-ssl:16
@@ -39,6 +38,11 @@ public exposure: none (no Railway domain, no custom domain, no TCP proxy); Funne
     secret POSTGRES_PASSWORD: generated (random)
 - approval-db [postgres] ghcr.io/railwayapp-templates/postgres-ssl:16
     host: approval-db.railway.internal
+    volume: /var/lib/postgresql/data
+    literals: PGDATA, POSTGRES_DB, POSTGRES_USER
+    secret POSTGRES_PASSWORD: generated (random)
+- telegram-db [postgres] pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
+    host: telegram-db.railway.internal
     volume: /var/lib/postgresql/data
     literals: PGDATA, POSTGRES_DB, POSTGRES_USER
     secret POSTGRES_PASSWORD: generated (random)
@@ -55,7 +59,6 @@ public exposure: none (no Railway domain, no custom domain, no TCP proxy); Funne
     secret GXG_SECRET__ADAPTER_KEY: generated (ed25519_pem)
     secret TS_AUTHKEY: owner sets it in Railway
     owner variable APP_DOMAIN
-    owner variable CF_START
     generated/seeded once GXG_CONFIG__PLUGINS_YAML
     generated/seeded once GXG_CONFIG__UNIFIED_PDP_RULES
     generated/seeded once GXG_IDENTITY_KEYS
@@ -78,8 +81,8 @@ public exposure: none (no Railway domain, no custom domain, no TCP proxy); Funne
     generated/seeded once GXG_CONFIG__GXG_EXEC_JWKS
     generated/seeded once GXG_CONFIG__GXG_PAYLOAD_PUBLIC_KEYS
 - mcp [app] dmitry-v-ko/GxG-hub deploy/railway/approval.Dockerfile
-    host: mcp.railway.internal, start: gxg-approval mcp
-    literals: GXG_API_AUDIENCE, GXG_API_URL, GXG_SERVICE_ID
+    host: mcp.railway.internal:8091, start: gxg-approval mcp
+    literals: GXG_API_AUDIENCE, GXG_API_URL, GXG_IDENTITY_KEYS, GXG_LISTEN, GXG_SERVICE_ID
     secret GXG_SECRET__GXG_SVC_KEY: generated (ed25519_seed), AS-28 svc_key
     generated/seeded once GXG_SVC_PUBLIC_KEY
 - executor [app] dmitry-v-ko/GxG-hub deploy/railway/approval.Dockerfile
@@ -101,6 +104,12 @@ public exposure: none (no Railway domain, no custom domain, no TCP proxy); Funne
     host: decider.railway.internal:8093, start: gxg-approval decider
     literals: GXG_LISTEN, GXG_UI_PUBLIC_URL
     secret GXG_SECRET__GXG_DB_DSN: generated (db_dsn), AS-28 db_dsn
+- admin [app] dmitry-v-ko/GxG-hub deploy/railway/approval.Dockerfile
+    host: admin.railway.internal:8092, start: gxg-approval admin
+    literals: GXG_ADMIN_OIDC_AUDIENCE, GXG_ADMIN_OIDC_ISSUER, GXG_LISTEN, GXG_TS_SERVE, TS_HOSTNAME, TS_TAGS
+    secret GXG_SECRET__GXG_DB_DSN: generated (db_dsn), AS-28 db_dsn
+    secret TS_AUTHKEY: owner sets it in Railway, AS-28 tailscale
+    owner variable GXG_ADMIN_OPERATORS
 - ui [app] dmitry-v-ko/GxG-hub deploy/railway/ui.Dockerfile
     host: ui.railway.internal:8443
     volume: /var/lib/gxg
@@ -130,7 +139,7 @@ public exposure: none (no Railway domain, no custom domain, no TCP proxy); Funne
     literals: TELEGRAM_IDENTITY_KEYS
     secret TELEGRAM_API_ID: owner sets it in Railway
     secret TELEGRAM_API_HASH: owner sets it in Railway
-    secret TELEGRAM_ARCHIVE_DSN: owner sets it in Railway
+    secret TELEGRAM_ARCHIVE_DSN: generated (tpl)
     secret TELEGRAM_WEBHOOK_HMAC: generated (hmac)
     owner variable TELEGRAM_CONNECTIONS
     owner variable TELEGRAM_BUNDLE_KEYS
@@ -150,7 +159,7 @@ dry-run: no API calls made
 4. **Tailscale.** Образ `tailscale/tailscale:v1.84.2` закреплён тегом, не digest (SEC-22). Нужна поддержка `--auth-key=file:`. `policies/network/tailscale-acl.hujson` в репозитории нет (M14): теги `tag:gateway`, `tag:approval-ui`, группы и запрет `funnel` в `nodeAttrs` владелец задаёт в tailnet.
 5. **Railway private networking слабее AS-29.** Compose разводил процессы по парам сетей; в Railway любой сервис проекта достижим для любого. `decider`, `api`, `telegram` защищены только своей аутентификацией (service JWT, passkey, identity). Egress-allowlist (SEC-15, AS-29) Railway не даёт. Внутренний трафик — http поверх сети Railway, AS-07 просит TLS. `SSRF_ALLOWED_NETWORKS=["fd12::/16"]` у ContextForge — гипотеза про адреса private network, проверить при первой регистрации gateway и в AC-M14-03.
 6. **Закрыто: `mcp`.** Подключён `ContextForgeVerifier` кита (вариант C): ключи `GXG_IDENTITY_KEYS` (ссылка на `contextforge.GXG_IDENTITY_KEYS`), проверка привязана к вызову (`tool`, хеш аргументов). Gateway в ContextForge регистрируется на `http://mcp.railway.internal:8091/mcp`, audience в `connectors` плагина — `approval-mcp`. Тесты: `approval/tests/test_mcp_identity.py`.
-7. **`admin` и приглашения passkey.** `admin` Approval (`tag:approval-admin`) не входит в список задания, в наборе его нет. `gxg-approval passkeys invite` ходит через admin API: для шага 7 runbook'а `admin` нужен, либо приглашение выдаёт другой способ.
+7. **Закрыто: `admin`.** Сервис в наборе: вход `tag:approval-admin`, свой `TS_AUTHKEY`, роль `gxg_admin`, issuer и audience (client id) — ссылками на переменные `ui`, client secret остаётся у `ui`. `--verify` покрывает его наравне с остальными. Образ `approval` теперь содержит tailscale (запускается только при `TS_HOSTNAME`).
 8. **Bundle.** Доставляется переменной `GXG_BUNDLE_B64` (tar.gz, base64); лимит размера переменной не проверен. Освежать нужно раз в ≤ 12 ч (GR-13): автоматики с токеном Railway в наборе нет.
 9. **Ротация ключей Approval.** `gxg-approval keys rotate` — файловая операция хоста. На Railway ключи — переменные, ротации там нет; процедура нужна к M14. Скрипт ключи не ротирует и отклоняет частично заданную пару.
 10. **Секрет вебхука Signals.** `GXG_SECRET__WEBHOOK__signals` создаётся скриптом; значение Signals владелец переносит из Railway UI, имя должно совпасть с `secret://signals` подписки.

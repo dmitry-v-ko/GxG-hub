@@ -220,9 +220,33 @@ def test_spec_is_valid_and_rejects_as28_violations() -> None:
 def test_spec_matches_the_compose_layout_of_the_approval_processes() -> None:
     spec = rd.load_spec()
     compose = yaml.safe_load((ROOT / "approval/deploy/compose.yaml").read_text("utf-8"))["services"]
-    for proc in ("api", "mcp", "executor", "sweeper", "decider", "ui", "notifier"):
+    for proc in ("api", "mcp", "executor", "sweeper", "decider", "ui", "notifier", "admin"):
         assert proc in spec["services"] and proc in compose
     # nothing in the spec publishes anything: no ports mapping, no public host
     text = (ROOT / "deploy/railway/services.yaml").read_text("utf-8")
     assert "up.railway.app" not in text and "TCP_PROXY" not in text
     assert "TS_AUTHKEY: {gen: owner" in text and "authkey=" not in text.lower()  # the key is the owner's, never in Git
+
+
+def test_admin_is_a_tailnet_entry_with_its_own_key_and_role(deployed: MockRailway) -> None:
+    admin = deployed.by_name("admin")["vars"]
+    assert admin["TS_TAGS"] == "tag:approval-admin" and admin["GXG_LISTEN"].startswith(
+        "127.0.0.1:"
+    )  # not on the private net
+    assert admin["GXG_SECRET__GXG_DB_DSN"].startswith("postgresql://gxg_admin:")
+    assert admin["GXG_ADMIN_OIDC_ISSUER"] == "${{ui.GXG_OIDC_ISSUER}}"  # the ui's IdP, by reference
+    assert "GXG_SECRET__GXG_OIDC_CLIENT_SECRET" not in admin  # the client secret stays with the ui (AS-28)
+    assert "gxg_admin" in json.loads(deployed.by_name("db-init")["vars"]["GXG_SECRET__GXG_ROLE_PASSWORDS"])
+
+
+def test_verify_covers_admin(deployed: MockRailway, capsys: pytest.CaptureFixture[str]) -> None:
+    set_owner_values(deployed)
+    run(deployed, "--finalize")
+    deployed.by_name("admin")["vars"]["GXG_SECRET__GXG_OIDC_CLIENT_SECRET"] = "leaked-client-secret"  # noqa: S105
+    deployed.service_domains[deployed.sid("admin")] = [{"id": "d2", "domain": "admin.up.railway.app"}]
+    capsys.readouterr()
+    assert run(deployed, "--verify") == 1
+    out = capsys.readouterr().out
+    assert "FAIL admin: secret variables equal the declared set (AS-28)" in out
+    assert "FAIL admin: no Railway public domain" in out
+    assert "leaked-client-secret" not in out
