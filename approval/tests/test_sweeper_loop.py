@@ -91,3 +91,11 @@ def test_database_error_waits_one_interval(monkeypatch: pytest.MonkeyPatch, capl
     sweeper.run("dsn", interval_s=0.5, stop=stop)  # type: ignore[arg-type]
     assert stop.args == [0.5, 0.5]
     assert [r.getMessage() for r in caplog.records] == ["sweeper: database error"] * 2
+
+
+def test_the_given_stop_ends_the_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    conn = Conn({"SELECT GXG_SWEEP": [(0,)], "SELECT GXG_PURGE": [(0,)]})
+    connected(monkeypatch, conn)
+    stop = Stop(1)
+    sweeper.run("dsn", interval_s=0.01, stop=stop)  # type: ignore[arg-type]
+    assert stop.args == [0.01] and len(conn.calls) == 2  # one sweep, one purge, then the caller's stop
