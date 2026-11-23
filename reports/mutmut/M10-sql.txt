@@ -30,3 +30,5 @@ killed      0005_ops.py: undelivered outbox rows deleted
 killed      0005_ops.py: finished deliveries deleted at once
 killed      0005_ops.py: a switch without a reason
 killed      0005_ops.py: a cleared switch audited as set
+killed      0005_ops.py: a reconcile lowers gxg_executions_total{outcome_unknown}
+killed      0005_ops.py: a deferral counted as a finished attempt
