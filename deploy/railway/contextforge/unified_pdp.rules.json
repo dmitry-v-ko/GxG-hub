@@ -1,0 +1,10 @@
+[
+  {
+    "id": "deny:agents-never-execute",
+    "roles": ["*"],
+    "actions": ["tools.invoke.*execute*", "tools.invoke.*reconcile*"],
+    "resource_types": ["*"],
+    "resource_ids": ["*"],
+    "reason": "EFF-02, security-v1 step 2: execute and reconcile are never callable through ContextForge"
+  }
+]
