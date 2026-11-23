@@ -36,7 +36,7 @@ def test_refusals_carry_their_text(browser: Any, propose: Any, row_of: Any) -> N
     assert error_text(browser.decide(row, version="")) == ui.NO_VERSION[1]
     assert error_text(browser.decide(row, comment="c" * 501)) == ui.LONG_COMMENT[1]
     assert "already decided" not in error_text(browser.decide(row, args_hash="0" * 64))  # the DB's own message
-    assert error_text(browser.decide(row, args_hash="0" * 64)) == "stale decision: version, args hash or deadline"
+    assert error_text(browser.decide(row, args_hash="0" * 64)) == "stale decision: version, args hash or status"
     browser.login("oidc:https://idp.example.invalid:beta")
     assert error_text(browser.decide(row)) == ui.NOT_APPROVER[1]
 
@@ -89,8 +89,9 @@ def test_session_without_csrf_token(browser: Any, propose: Any, row_of: Any, own
     browser.client.cookies.clear()
     signed = TimestampSigner(browser.key).sign(base64.b64encode(json.dumps(session).encode())).decode()
     browser.client.cookies.set(ui.SESSION_COOKIE, signed, domain="testserver.local")
-    assert browser.decide(row, csrf="").status_code == 403
-    assert browser.decide(row, csrf="anything").status_code == 403
+    assert browser.decide(row, csrf="", sign=False).status_code == 403
+    assert browser.decide(row, csrf="anything", sign=False).status_code == 403
+    assert browser.challenge(row).status_code == 403
     assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)
 
 
@@ -116,13 +117,19 @@ def test_comment_limit(browser: Any, propose: Any, row_of: Any, owner: Any) -> N
 def test_missing_fields(browser: Any, propose: Any, row_of: Any, owner: Any) -> None:
     row = intent(propose, row_of)
     browser.login(HUMAN1)
-    url = f"/intents/{row['intent_id']}/decision"
-    base = {"csrf": browser.csrf, "version": 1, "args_hash": row["canonical_args_hash"], "decision": "approve"}
+    url = f"/intents/{row['intent_id']}/challenge"
+    base = {"version": 1, "args_hash": row["canonical_args_hash"], "decision": "approve"}
+    headers = {"X-CSRF-Token": browser.csrf}
     for drop, status in (("version", 400), ("args_hash", 409), ("decision", 400)):
-        assert browser.client.post(url, data={k: v for k, v in base.items() if k != drop}).status_code == status, drop
+        r = browser.client.post(url, data={k: v for k, v in base.items() if k != drop}, headers=headers)
+        assert r.status_code == status, drop
     files = {"decision": ("d.txt", b"approve")}
     data = {k: v for k, v in base.items() if k != "decision"}
-    assert browser.client.post(url, data=data, files=files).status_code == 400  # a file is not a field
+    assert browser.client.post(url, data=data, files=files, headers=headers).status_code == 400  # a file is no field
+    assert browser.client.post(url, data=base).status_code == 403  # no CSRF header
+    decision = {"csrf": browser.csrf, "decision": "approve"}  # no assertion: refused before the decider
+    assert browser.client.post(f"/intents/{row['intent_id']}/decision", data=decision).status_code == 403
+    assert owner.execute("SELECT count(*) FROM decider_challenges").fetchone() == (0,)  # none for a broken form
     assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)
 
 
@@ -197,32 +204,33 @@ def test_same_preview_other_args_are_grouped(browser: Any, propose: Any) -> None
     assert page.count('class="group"') == 2 and "2 одинаковых заявки" in page
 
 
-def test_step_up_needs_the_hash_it_was_issued_for(browser: Any, passkey: Any, propose: Any, row_of: Any) -> None:
-    """The challenge's args hash must equal the form's: otherwise 403 before the database is asked."""
-    row = intent(propose, row_of, tool=WIRE)
-    key = passkey(browser.login(HUMAN1))
-    options = browser.client.get(f"/intents/{row['intent_id']}/step-up").text
-    assert browser.decide(row, args_hash="0" * 64, assertion=key.assertion(options)).status_code == 403
-
-
-def test_step_up_options_name_the_registered_passkeys(
+def test_decision_options_name_the_enrolled_passkeys(
     browser: Any, passkey: Any, propose: Any, row_of: Any, make_browser: Any
 ) -> None:
     row = intent(propose, row_of, tool=WIRE)
     key = passkey(browser.login(HUMAN1))
     passkey(make_browser().login(HUMAN2))
-    options = json.loads(browser.client.get(f"/intents/{row['intent_id']}/step-up").text)
+    options = json.loads(browser.challenge(row).text)
     cid = base64.urlsafe_b64encode(key.credential_id).decode().rstrip("=")
     assert options["allowCredentials"] == [{"id": cid, "type": "public-key"}]
     assert options["userVerification"] == "required" and options["rpId"] == "ui.example.test"
-    assert browser.login(HUMAN1).client.get("/intents/x/step-up").status_code == 404
+    assert browser.login(HUMAN1).challenge({**row, "intent_id": "x"}).status_code == 404
     browser.login("oidc:https://idp.example.invalid:viewer")
-    assert browser.client.get(f"/intents/{row['intent_id']}/step-up").status_code == 403
+    assert browser.challenge(row).status_code == 403
 
 
-def test_registration_options(browser: Any, passkey: Any) -> None:
+def _options(browser: Any, invite: str) -> Any:
+    return browser.client.post("/passkeys/options", json={"invite": invite}, headers={"X-CSRF-Token": browser.csrf})
+
+
+def _register(browser: Any, invite: str, credential_json: str) -> Any:
+    doc = {"invite": invite, "credential": json.loads(credential_json)}
+    return browser.client.post("/passkeys", json=doc, headers={"X-CSRF-Token": browser.csrf})
+
+
+def test_registration_options(browser: Any, passkey: Any, invite: Any) -> None:
     browser.login(HUMAN1)
-    first = json.loads(browser.client.get("/passkeys/options").text)
+    first = json.loads(_options(browser, invite(HUMAN1)).text)
     assert first["rp"] == {"name": "GxG Approval", "id": "ui.example.test"}
     user_id = base64.urlsafe_b64encode(hashlib.sha256(HUMAN1.encode()).digest()).decode().rstrip("=")
     assert first["user"] == {"id": user_id, "name": HUMAN1, "displayName": HUMAN1}
@@ -231,37 +239,58 @@ def test_registration_options(browser: Any, passkey: Any) -> None:
                                                "userVerification": "required"}  # fmt: skip
     assert first["excludeCredentials"] == []
     key = passkey(browser)
-    again = json.loads(browser.client.get("/passkeys/options").text)
+    again = json.loads(_options(browser, invite(HUMAN1)).text)
     cid = base64.urlsafe_b64encode(key.credential_id).decode().rstrip("=")
     assert again["excludeCredentials"] == [{"id": cid, "type": "public-key"}]
 
 
-def test_user_verification_is_required(
-    browser: Any, soft_authenticator: Any, propose: Any, row_of: Any, owner: Any
+def test_registration_needs_this_humans_unused_invite(
+    browser: Any, soft_authenticator: Any, invite: Any, owner: Any
 ) -> None:
-    """AS-16: a passkey touch without biometrics/PIN (UV flag off) neither registers nor steps up."""
+    """AS-30: no invite, another human's invite, a used or an expired invite → no passkey."""
+    browser.login(HUMAN1)
+    assert _options(browser, "no-such-invite-0000").status_code == 403
+    assert _options(browser, invite(HUMAN2)).status_code == 403
+    token = invite(HUMAN1)
+    key = soft_authenticator()
+    assert _register(browser, token, key.register(_options(browser, token).text)).json() == {"registered": True}
+    assert _options(browser, token).status_code == 403  # used
+    late = invite(HUMAN1)
+    owner.execute("UPDATE passkey_invites SET expires_at = now() WHERE used_at IS NULL")
+    assert _options(browser, late).status_code == 403
+    rows = owner.execute("SELECT human_principal, enrolled_by FROM webauthn_credentials").fetchall()
+    assert rows == [(HUMAN1, "oidc:https://idp.example.invalid:operator")]
+
+
+def test_user_verification_is_required(
+    browser: Any, soft_authenticator: Any, propose: Any, row_of: Any, owner: Any, invite: Any
+) -> None:
+    """AS-16: a passkey touch without biometrics/PIN (UV flag off) neither registers nor signs a decision."""
     browser.login(HUMAN1)
     weak = soft_authenticator(user_verified=False)
-    options = browser.client.get("/passkeys/options").text
-    r = browser.client.post("/passkeys", content=weak.register(options), headers={"X-CSRF-Token": browser.csrf})
-    assert r.status_code == 400
-    strong = soft_authenticator()
-    options = browser.client.get("/passkeys/options").text
-    browser.client.post("/passkeys", content=strong.register(options), headers={"X-CSRF-Token": browser.csrf})
+    token = invite(HUMAN1)
+    assert _register(browser, token, weak.register(_options(browser, token).text)).status_code == 400
+    strong = browser.enroll(soft_authenticator())
     row = intent(propose, row_of, tool=WIRE)
-    options = browser.client.get(f"/intents/{row['intent_id']}/step-up").text
+    options = browser.challenge(row).text
     strong.user_verified = False
     assert browser.decide(row, assertion=strong.assertion(options)).status_code == 403
     assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)
 
 
-def test_registration_at_five_minutes(browser: Any, soft_authenticator: Any, clock: Any) -> None:
+def test_registration_challenge_lives_five_minutes(
+    browser: Any, soft_authenticator: Any, owner: Any, invite: Any
+) -> None:
     browser.login(HUMAN1)
-    key = soft_authenticator()
-    options = browser.client.get("/passkeys/options").text
-    clock.now += 300
-    r = browser.client.post("/passkeys", content=key.register(options), headers={"X-CSRF-Token": browser.csrf})
-    assert r.json() == {"registered": True}
+    key, token = soft_authenticator(), invite(HUMAN1)
+    options = _options(browser, token).text
+    owner.execute("UPDATE decider_challenges SET created_at = created_at - interval '301 seconds'")
+    assert _register(browser, token, key.register(options)).status_code == 400
+    options = _options(browser, token).text  # the invite is still unused
+    owner.execute(
+        "UPDATE decider_challenges SET created_at = created_at - interval '290 seconds' WHERE used_at IS NULL"
+    )
+    assert _register(browser, token, key.register(options)).json() == {"registered": True}
 
 
 def test_render_card_args_json() -> None:
@@ -304,24 +333,22 @@ def test_version_out_of_range(browser: Any, propose: Any, row_of: Any, execute: 
     assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)
 
 
-def test_step_up_replay_with_a_zero_counter(
+def test_assertion_replay_with_a_zero_counter(
     browser: Any, make_browser: Any, soft_authenticator: Any, world: Any, propose: Any, row_of: Any, owner: Any
 ) -> None:
-    """Critic M9-1 F5: a synced passkey (counter always 0) replayed from an old cookie gives no second decision."""
+    """Critic M9-1 F5, AC-M10-08: a synced passkey (counter always 0) replayed from an old cookie: the decider's
+    challenge row is used once, so the replay is refused before the one-vote rule is even asked."""
     world.set_policy("t-alpha", [{"id": "two", "match": {"tools": [WIRE]}, "decision": "require_approval",
                                   "approvals": 2}])  # fmt: skip
     row = intent(propose, row_of, tool=WIRE)
     browser.login(HUMAN1)
-    key = soft_authenticator(zero_counter=True)
-    options = browser.client.get("/passkeys/options").text
-    browser.client.post("/passkeys", content=key.register(options), headers={"X-CSRF-Token": browser.csrf})
-    options = browser.client.get(f"/intents/{row['intent_id']}/step-up").text
-    assertion = key.assertion(options)
+    key = browser.enroll(soft_authenticator(zero_counter=True))
+    assertion = key.assertion(browser.challenge(row).text)
     old_cookie = [c for c in browser.client.cookies.jar]
     assert browser.decide(row, assertion=assertion).status_code == 303
     replay = make_browser()
     for c in old_cookie:
         replay.client.cookies.jar.set_cookie(c)
     replay.session = browser.session
-    assert replay.decide(row_of(row["intent_id"]), assertion=assertion).status_code == 409  # the DB's one vote
+    assert replay.decide(row_of(row["intent_id"]), assertion=assertion).status_code == 403
     assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (1,)

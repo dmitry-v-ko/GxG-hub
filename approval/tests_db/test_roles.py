@@ -60,7 +60,9 @@ MATRIX: dict[str, dict[str, dict[str, set[str] | str]]] = {
         "approver_links": {"SELECT": ALL},
         # M10 (AS-23): one row per (event, subscriber), a table AS-27 does not list (pending_owner_decision)
         "webhook_deliveries": {
-            "SELECT": ALL, "INSERT": ALL, "UPDATE": {"next_at", "attempts", "last_status", "delivered_at", "dead_at"}
+            "SELECT": ALL,
+            "INSERT": ALL,
+            "UPDATE": {"next_at", "attempts", "last_status", "delivered_at", "dead_at"},
         },
     },
     "gxg_admin": {
@@ -275,14 +277,31 @@ ALLOWED = {
         "call_reserve",
     },
     "gxg_sweeper": {
-        "read_intents", "read_executions", "insert_audit", "insert_outbox", "read_switches", "call_sweep", "call_purge",
+        "read_intents",
+        "read_executions",
+        "insert_audit",
+        "insert_outbox",
+        "read_switches",
+        "call_sweep",
+        "call_purge",
     },
     "gxg_notifier": {
-        "insert_audit", "read_outbox", "deliver_outbox", "read_links", "call_link_claim", "read_deliveries",
+        "insert_audit",
+        "read_outbox",
+        "deliver_outbox",
+        "read_links",
+        "call_link_claim",
+        "read_deliveries",
         "add_delivery",
     },
     "gxg_admin": {
-        "insert_audit", "insert_outbox", "read_switches", "set_switch", "clear_switch", "call_switch", "call_invite",
+        "insert_audit",
+        "insert_outbox",
+        "read_switches",
+        "set_switch",
+        "clear_switch",
+        "call_switch",
+        "call_invite",
     },
     "gxg_decider": {"call_decide", "call_challenge", "read_passkeys", "read_challenges", "call_enroll"},
 }

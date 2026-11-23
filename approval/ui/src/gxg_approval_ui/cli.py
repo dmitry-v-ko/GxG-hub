@@ -17,6 +17,16 @@ LOGGING: dict[str, Any] = {"level": logging.INFO, "format": "%(asctime)s %(level
 POOL: dict[str, Any] = {"kwargs": {"autocommit": True}, "open": True, "min_size": 1}  # opens in the background
 
 
+class NoQuery(logging.Filter):
+    """SEC-17: uvicorn's access log line without the query string (`/auth/callback?code=…&state=…` → path only)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):  # client, method, path, http, code
+            record.args = (args[0], args[1], args[2].split("?", 1)[0], args[3], args[4])
+        return True
+
+
 def env(name: str, environ: Mapping[str, str] = os.environ) -> str:
     value = environ.get(name)
     if not value:
@@ -29,12 +39,14 @@ def secret(name: str, environ: Mapping[str, str] = os.environ) -> str:
 
 
 def main() -> None:
+    import httpx2
     import uvicorn
     from psycopg_pool import ConnectionPool
 
     from .app import Deps, create_app
 
     logging.basicConfig(**LOGGING)
+    logging.getLogger("uvicorn.access").addFilter(NoQuery())
     public_url, issuer = env("GXG_UI_PUBLIC_URL"), env("GXG_OIDC_ISSUER")
     require_tls(public_url, "GXG_UI_PUBLIC_URL")
     require_tls(issuer, "GXG_OIDC_ISSUER")
@@ -53,5 +65,6 @@ def main() -> None:
         oidc_issuer=issuer,
         oidc_client_id=env("GXG_OIDC_CLIENT_ID"),
         oidc_client_secret=secret("GXG_OIDC_CLIENT_SECRET"),
+        decider=httpx2.Client(base_url=env("GXG_DECIDER_URL")),  # internal network only (AS-30)
     )
     uvicorn.run(create_app(deps), host=host, port=int(port), **tls)  # type: ignore[arg-type]

@@ -380,9 +380,8 @@ def make_jwks() -> Callable[..., dict[str, Any]]:
 
 
 TEST_OPERATOR = "oidc:https://idp.example.invalid:operator"
-DUMMY_ASSERTION = (
-    '{"credential_id": "t", "authenticator_data": "t", "client_data_json": "t", "signature": "t"}'
-)  # gxg_decide stores it; the decider (not the database) checks the signature (AS-30)
+# gxg_decide stores it; the decider (not the database) checks the signature (AS-30)
+DUMMY_ASSERTION = '{"credential_id": "t", "authenticator_data": "t", "client_data_json": "t", "signature": "t"}'
 
 
 def _decide_db(

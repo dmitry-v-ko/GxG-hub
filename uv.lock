@@ -862,6 +862,7 @@ dependencies = [
     { name = "psycopg-pool" },
     { name = "pynacl" },
     { name = "uvicorn" },
+    { name = "webauthn" },
 ]
 
 [package.metadata]
@@ -876,6 +877,7 @@ requires-dist = [
     { name = "psycopg-pool", specifier = ">=3.2,<4" },
     { name = "pynacl", specifier = ">=1.5,<2" },
     { name = "uvicorn", specifier = ">=0.32,<1" },
+    { name = "webauthn", specifier = ">=2.7,<3" },
 ]
 
 [[package]]
@@ -909,7 +911,6 @@ dependencies = [
     { name = "pynacl" },
     { name = "python-multipart" },
     { name = "uvicorn" },
-    { name = "webauthn" },
 ]
 
 [package.metadata]
@@ -925,7 +926,6 @@ requires-dist = [
     { name = "pynacl", specifier = ">=1.5,<2" },
     { name = "python-multipart", specifier = ">=0.0.18" },
     { name = "uvicorn", specifier = ">=0.32,<1" },
-    { name = "webauthn", specifier = ">=2.7,<3" },
 ]
 
 [[package]]

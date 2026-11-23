@@ -6,6 +6,7 @@
 | `GXG_PREVIEW_KEYS_FILE`: `{"<tenant>": "<base64 X25519 private key>"}` (preview only) | yes |
 | `GXG_UI_TLS_CERT_FILE`, `GXG_UI_TLS_KEY_FILE` (key: secret); not required on a loopback listener only | key |
 | `GXG_UI_PUBLIC_URL`, `GXG_OIDC_ISSUER`, `GXG_OIDC_CLIENT_ID`, `GXG_LISTEN` (default `0.0.0.0:8443`) | no |
+| `GXG_DECIDER_URL`: the decider's internal URL (AS-30) | no |
 | `GXG_BUNDLE_DIR`, `GXG_BUNDLE_KEYS`, `GXG_BUNDLE_STATE_FILE` | no |
 """
 

@@ -12,11 +12,20 @@ from pathlib import Path
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="gxg-approval")
-    parser.add_argument("process", choices=["migrate", "api", "mcp", "sweeper", "executor", "keys"])
     parser.add_argument(
-        "action", nargs="?", choices=["rotate", "remove", "release"], help="keys: rotate|remove|release"
+        "process",
+        choices=["migrate", "api", "mcp", "sweeper", "executor", "decider", "admin", "keys", "switch", "passkeys"],
+    )
+    parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["rotate", "remove", "release", "set", "clear", "invite"],
+        help="keys: rotate|remove|release; switch: set|clear; passkeys: invite",
     )
     parser.add_argument("--kid", help="keys remove: the key to remove")
+    parser.add_argument("--scope", help="switch: global | tenant:<id> | tool:<tenant>:<tool_key>")
+    parser.add_argument("--reason", help="switch: why (audited)")
+    parser.add_argument("--human", help="passkeys invite: oidc:<iss>:<sub> of the approver")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     from . import config
@@ -28,7 +37,11 @@ def main(argv: list[str] | None = None) -> None:
     elif args.process == "sweeper":
         from .sweeper import run
 
-        run(config.secret("GXG_DB_DSN"), interval_s=float(config.env("GXG_SWEEP_INTERVAL_S", "5")))
+        run(
+            config.secret("GXG_DB_DSN"),
+            interval_s=float(config.env("GXG_SWEEP_INTERVAL_S", "5")),
+            retention_days=int(config.env("GXG_RETENTION_DAYS", "30")),
+        )
     elif args.process == "api":
         import uvicorn
         from psycopg_pool import ConnectionPool
@@ -50,6 +63,12 @@ def main(argv: list[str] | None = None) -> None:
         _executor()
     elif args.process == "keys":
         _keys(args)
+    elif args.process == "decider":
+        _decider()
+    elif args.process == "admin":
+        _admin()
+    elif args.process in ("switch", "passkeys"):
+        _operator(args)
     else:
         raise SystemExit(
             "mcp: no production IdentityVerifier yet (ADR-0001 variant C lands with M5); refusing to start (SEC-03)"
@@ -113,3 +132,71 @@ def _keys(args: argparse.Namespace) -> None:
         keys.remove(keys_file, jwks_file, args.kid)
     else:
         raise SystemExit("keys: rotate | remove --kid <kid> | release")
+
+
+def _serve(app: object, default_listen: str) -> None:
+    import uvicorn
+
+    from . import config as c
+
+    host, _, port = c.env("GXG_LISTEN", default_listen).rpartition(":")
+    uvicorn.run(app, host=host, port=int(port))  # type: ignore[arg-type]
+
+
+def _decider() -> None:
+    from urllib.parse import urlsplit
+
+    from psycopg_pool import ConnectionPool
+
+    from . import config as c
+    from .decider import Deps, create_app
+
+    public = urlsplit(c.env("GXG_UI_PUBLIC_URL"))  # the WebAuthn RP is the ui's public origin
+    pool = ConnectionPool(c.secret("GXG_DB_DSN"), kwargs={"autocommit": True})
+    _serve(create_app(Deps(pool, str(public.hostname), f"{public.scheme}://{public.netloc}")), "0.0.0.0:8093")
+
+
+def _admin() -> None:
+    import json
+    import urllib.request
+
+    import jwt
+    from psycopg_pool import ConnectionPool
+
+    from . import config as c
+    from .admin import Deps, create_app
+
+    issuer = c.env("GXG_ADMIN_OIDC_ISSUER")
+    with urllib.request.urlopen(issuer.removesuffix("/") + "/.well-known/openid-configuration", timeout=10) as r:  # noqa: S310 (configured https issuer)
+        jwks_uri = json.load(r)["jwks_uri"]
+    operators = frozenset(o.strip() for o in c.env("GXG_ADMIN_OPERATORS").split(",") if o.strip())
+    if not operators:
+        raise SystemExit("GXG_ADMIN_OPERATORS: no platform_admin configured")
+    deps = Deps(
+        ConnectionPool(c.secret("GXG_DB_DSN"), kwargs={"autocommit": True}),
+        issuer=issuer,
+        audience=c.env("GXG_ADMIN_OIDC_AUDIENCE"),
+        operators=operators,
+        signing_key=jwt.PyJWKClient(jwks_uri, cache_keys=True).get_signing_key_from_jwt,
+    )
+    _serve(create_app(deps), "0.0.0.0:8092")
+
+
+def _operator(args: argparse.Namespace) -> None:
+    """`switch set|clear`, `passkeys invite`: the operator's CLI over the admin API (AS-24)."""
+    import httpx
+
+    from . import config as c
+
+    if args.process == "switch" and args.action in ("set", "clear") and args.scope and args.reason:
+        path, body = "/v1/switches", {"scope": args.scope, "blocked": args.action == "set", "reason": args.reason}
+    elif args.process == "passkeys" and args.action == "invite" and args.human:
+        path, body = "/v1/passkey-invites", {"human": args.human}
+    else:
+        raise SystemExit("switch set|clear --scope <scope> --reason <text> | passkeys invite --human <oidc:…>")
+    token = c.secret("GXG_OPERATOR_TOKEN")
+    r = httpx.post(c.env("GXG_ADMIN_URL").removesuffix("/") + path, json=body,
+                   headers={"Authorization": f"Bearer {token}"}, timeout=30)  # fmt: skip
+    print(r.text)
+    if r.status_code != 200:
+        raise SystemExit(f"admin: HTTP {r.status_code}")

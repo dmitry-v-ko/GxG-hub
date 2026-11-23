@@ -16,7 +16,6 @@ dependencies = [
     "pynacl>=1.5,<2",
     "python-multipart>=0.0.18",
     "uvicorn>=0.32,<1",
-    "webauthn>=2.7,<3",  # 3.x needs cryptography >= 49; the root lock has 46
 ]
 
 [project.scripts]
@@ -36,7 +35,7 @@ gxg-connector-kit = { path = "../../packages/gxg-connector-kit", editable = true
 
 # DoD-4: from this directory with the root environment and a PostgreSQL (scripts/ci/mutmut.sh starts one):
 #   GXG_TEST_PG_SOCKET_DIR=<dir> uv run --project ../.. mutmut run
-# Key conditions of M9: session, CSRF, roles, step-up, decision and reconcile handlers, preview rendering.
+# Key conditions of M9: session, CSRF, roles, decision relay (decider, M10), reconcile handlers, preview rendering.
 [tool.mutmut]
 source_paths = ["src"]
 only_mutate = ["src/gxg_approval_ui/app.py", "src/gxg_approval_ui/stepup.py", "src/gxg_approval_ui/render.py",

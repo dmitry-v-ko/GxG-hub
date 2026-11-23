@@ -1,5 +1,5 @@
-// Playwright E2E of the Approval Web UI (AC-M9-01, AC-M9-05 in the DOM, AC-M9-06 cookie in the browser, step-up
-// with a virtual WebAuthn authenticator). Driven by test_e2e.py, which owns the database, the ui process and the
+// Playwright E2E of the Approval Web UI (AC-M9-01, AC-M9-05 in the DOM, AC-M9-06 cookie in the browser, every
+// decision signed with a virtual WebAuthn authenticator and checked by the decider, AS-30). Driven by test_e2e.py, which owns the database, the ui process and the
 // test OIDC issuer. `node e2e.mjs <step>`; input in E2E_* variables; one JSON object of results on stdout.
 import { createRequire } from "node:module";
 
@@ -33,8 +33,35 @@ async function login(page, sub) {
   await page.waitForURL(`${ui}/`);
 }
 
+async function authenticator(context, page) {
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true,
+               isUserVerified: true, automaticPresenceSimulation: true },
+  });
+}
+
+async function enroll(page) {
+  await page.goto(`${ui}/passkeys`);
+  await page.fill("#invite", process.env.E2E_INVITE);
+  await page.click("#register");
+  await page.waitForFunction(() => document.getElementById("register-result").textContent !== "");
+  return page.textContent("#register-result");
+}
+
+// the click asks the decider for a challenge, runs navigator.credentials.get, then submits: wait for that POST
+async function decide(page, button) {
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith("/decision") && r.request().method() === "POST"),
+    page.click(button),
+  ]);
+  return response.status();
+}
+
 async function main(step) {
   await waitFor(`${ui}/healthz`);
+  await waitFor(`${process.env.E2E_DECIDER_URL}/healthz`);
   await waitFor(`${process.env.E2E_ISSUER}/.well-known/openid-configuration`);
   const browser = await chromium.launch();
   const out = {};
@@ -42,12 +69,7 @@ async function main(step) {
     if (step === "approve") {
       const context = await browser.newContext();
       const page = await context.newPage();
-      const cdp = await context.newCDPSession(page);
-      await cdp.send("WebAuthn.enable");
-      await cdp.send("WebAuthn.addVirtualAuthenticator", {
-        options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true,
-                   isUserVerified: true, automaticPresenceSimulation: true },
-      });
+      await authenticator(context, page);
       await login(page, process.env.E2E_SUB);
       out.cookies = (await context.cookies()).map((c) => ({ name: c.name, httpOnly: c.httpOnly, secure: c.secure,
                                                           sameSite: c.sameSite, path: c.path, domain: c.domain }));
@@ -64,26 +86,19 @@ async function main(step) {
                  alerted: window.__alerted === true };
       });
 
+      // no passkey → no decision buttons; register one with the operator's invite (AS-30)
+      await page.goto(`${ui}/intents/${ids.wire}`);
+      out.noPasskeyShown = await page.locator("#no-passkey").count();
+      out.registered = await enroll(page);
+
       // AC-M9-01: approve → approved
       out.before = await status(page, ids.plain);
-      await page.click("#approve");
+      await decide(page, "#approve");
       await page.waitForURL(`${ui}/intents/${ids.plain}`);
       out.after = (await page.textContent("#status")).trim();
 
-      // step-up: no passkey → no approve button; register a passkey; approve with the authenticator
-      await page.goto(`${ui}/intents/${ids.wire}`);
-      out.noPasskeyShown = await page.locator("#no-passkey").count();
-      await page.goto(`${ui}/passkeys`);
-      await page.click("#register");
-      await page.waitForFunction(() => document.getElementById("register-result").textContent !== "");
-      out.registered = await page.textContent("#register-result");
       out.wireBefore = await status(page, ids.wire);
-      // the click runs navigator.credentials.get first, then submits: wait for the decision POST itself
-      const [decision] = await Promise.all([
-        page.waitForResponse((r) => r.url().endsWith("/decision") && r.request().method() === "POST"),
-        page.click("#approve"),
-      ]);
-      out.wireDecisionStatus = decision.status();
+      out.wireDecisionStatus = await decide(page, "#approve");
       await page.waitForURL(`${ui}/intents/${ids.wire}`);
       out.wireAfter = (await page.textContent("#status")).trim();
       out.wireDecisions = await page.textContent("#decisions");
@@ -96,12 +111,13 @@ async function main(step) {
       // SEC-07 in the browser: the requester (same OIDC subject) is refused by the server
       const context = await browser.newContext();
       const page = await context.newPage();
+      await authenticator(context, page);
       await login(page, process.env.E2E_SUB);
+      await enroll(page);
       await page.goto(`${ui}/intents/${ids.own}`);
-      const [response] = await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"),
-                                            page.click("#approve")]);
-      out.ownStatus = response.status();
-      out.ownAfter = await status(page, ids.own);
+      out.ownStatus = await decide(page, "#approve");
+      out.ownAfter = await status(await context.newPage(), ids.own); // the refusal page may still be loading
+
     }
   } finally {
     await browser.close();
