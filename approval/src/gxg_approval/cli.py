@@ -8,6 +8,10 @@ import os
 import socket
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from prometheus_client import CollectorRegistry
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -108,14 +112,10 @@ def _executor() -> None:
         svc_key=c.signing_key("GXG_SVC_KEY"),
         http=http,
     )
-    from prometheus_client import CollectorRegistry, start_http_server
+    from prometheus_client import start_http_server
 
-    from .executor import RESERVE_CONFLICTS
-
-    scrape = CollectorRegistry(auto_describe=False)
-    scrape.register(RESERVE_CONFLICTS)  # the database figures are on api /metrics
     host, _, port = c.env("GXG_METRICS_LISTEN", "0.0.0.0:9101").rpartition(":")
-    start_http_server(int(port), addr=host, registry=scrape)
+    start_http_server(int(port), addr=host, registry=executor_metrics())
     executor.run(threading.Event(), poll_s=float(c.env("GXG_POLL_S", "1")))
 
 
@@ -151,6 +151,29 @@ def _serve(app: object, default_listen: str) -> None:
     uvicorn.run(app, host=host, port=int(port))  # type: ignore[arg-type]
 
 
+LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def require_https(url: str, what: str) -> None:
+    """HTTPS outside a loopback test (as the ui's config.require_tls)."""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    if parts.scheme != "https" and parts.hostname not in LOOPBACK:
+        raise SystemExit(f"{what} must be https: {url}")
+
+
+def executor_metrics() -> CollectorRegistry:
+    """The executor's own /metrics (its port): reserve conflicts; the database figures are on api /metrics."""
+    from prometheus_client import CollectorRegistry
+
+    from .executor import RESERVE_CONFLICTS
+
+    scrape = CollectorRegistry(auto_describe=False)
+    scrape.register(RESERVE_CONFLICTS)
+    return scrape
+
+
 def _decider() -> None:
     from urllib.parse import urlsplit
 
@@ -175,6 +198,7 @@ def _admin() -> None:
     from .admin import Deps, create_app
 
     issuer = c.env("GXG_ADMIN_OIDC_ISSUER")
+    require_https(issuer, "GXG_ADMIN_OIDC_ISSUER")  # discovery and JWKS decide who an operator is
     with urllib.request.urlopen(issuer.removesuffix("/") + "/.well-known/openid-configuration", timeout=10) as r:  # noqa: S310 (configured https issuer)
         jwks_uri = json.load(r)["jwks_uri"]
     operators = frozenset(o.strip() for o in c.env("GXG_ADMIN_OPERATORS").split(",") if o.strip())

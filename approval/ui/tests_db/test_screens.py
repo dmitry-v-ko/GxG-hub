@@ -273,6 +273,7 @@ def test_args_not_matching_the_hash_cannot_be_approved(
     page = browser.client.get(f"/intents/{intent['intent_id']}").text
     assert 'id="hash-warning"' in page and 'id="approve"' not in page and 'id="reject"' in page
     assert browser.decide(intent).status_code == 409
+    assert browser.challenge(intent).status_code == 409  # no approve challenge to smuggle as «reject» (critic M10-1)
     assert row_of(intent["intent_id"])["status"] == "pending_approval"
     assert browser.decide(intent, "reject").status_code == 303
 

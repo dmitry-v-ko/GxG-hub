@@ -15,6 +15,7 @@ shortcut: one notifier instance (as the Telegram long poll); several would need 
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import time
@@ -22,6 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 import psycopg
@@ -57,6 +59,21 @@ _SQL_FAILED = (
     "dead_at = CASE WHEN now() - created_at >= interval '24 hours' THEN now() END WHERE id = %s RETURNING dead_at"
 )
 _SQL_GONE = "UPDATE webhook_deliveries SET dead_at = now(), last_status = 'not in the bundle' WHERE id = %s"
+
+
+def allowed_url(url: str) -> bool:
+    """SEC-15 on the configured URL: https only, no localhost and no IP literal of a private, loopback, link-local
+    (metadata), multicast or reserved range. Names are resolved by the egress relays of `notifier_webhooks`, the
+    network allowlist; redirects are never followed."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").rstrip(".").lower()
+    if parts.scheme != "https" or not host or host == "localhost" or host.endswith(".localhost"):
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return True  # a name
+    return ip.is_global and not ip.is_multicast
 
 
 def body_of(event: dict[str, Any]) -> bytes:
@@ -115,12 +132,17 @@ class Webhooks:
     def _secret(self, ref: str) -> bytes | None:
         root = self.secrets_dir.resolve()
         path = (root / ref.removeprefix("secret://")).resolve()
-        if not path.is_relative_to(root) or not path.is_file():
+        if not path.is_relative_to(root):
             return None
-        return path.read_bytes().strip()
+        try:
+            return path.read_bytes().strip()
+        except OSError:  # missing or unreadable (mode, owner): a failed try, never a crash of the bot loop
+            return None
 
     def _send(self, w: Webhook, event: dict[str, Any]) -> str:
         """The HTTP status as text, or why nothing was sent."""
+        if not allowed_url(w.url):
+            return "url not allowed"
         secret = self._secret(w.secret_ref)
         if not secret:
             return "no secret"

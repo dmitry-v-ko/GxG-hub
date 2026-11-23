@@ -46,7 +46,7 @@ gxg-approval passkeys invite --human 'oidc:https://idp.example.com:<sub>'
 1. Передать код из ответа (`invite`) человеку по отдельному каналу. Код действует 24 часа и только один раз.
 2. Человек открывает страницу «Passkey» в UI, вводит код и регистрирует ключ.
 
-**Потерян или скомпрометирован passkey.** Удалить строку из `webauthn_credentials` ролью владельца (DBA), затем выдать новое приглашение. Passkey, записанные до M10 (`enrolled_by IS NULL`), не принимаются: такому approver'у нужно новое приглашение.
+**Потерян или скомпрометирован passkey.** Ролью владельца (DBA) выполнить `UPDATE webauthn_credentials SET enrolled_by = NULL WHERE credential_id = …`, затем выдать новое приглашение. Строку **не удалять**: по её публичному ключу проверяются прошлые решения (AS-30, assertion в `decisions`). Decider не принимает ключ без `enrolled_by`, поэтому отозванный ключ решать больше не может. Passkey, записанные до M10 (`enrolled_by IS NULL`), тоже не принимаются: такому approver'у нужно новое приглашение.
 
 ## 4. `outcome_unknown` дольше часа (алерт `GxgOutcomeUnknownOverAnHour`)
 

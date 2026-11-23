@@ -401,6 +401,10 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
                 row = load(conn, intent_id)
             if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
                 raise Refused(*NOT_APPROVER)
+            if decision == "approve":  # EFF-33: the signed challenge decides what is recorded, so check it here
+                opened = envelope(row)
+                if opened is None or not opened[2]:
+                    raise Refused(*HASH_MISMATCH)
             body = {"human": who, "intent_id": str(row["intent_id"]), "decision": decision, "version": version,
                     "args_hash": _field(form, "args_hash")}  # fmt: skip
             status, text = stepup.relay(deps.decider, "/v1/decisions/options", body)

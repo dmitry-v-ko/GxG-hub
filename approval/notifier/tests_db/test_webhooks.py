@@ -37,6 +37,7 @@ class Receiver:
     seen: set[str] = field(default_factory=set)
     events: list[dict[str, Any]] = field(default_factory=list)
     refused: list[str] = field(default_factory=list)
+    repeats: int = 0
     requests: list[httpx.Request] = field(default_factory=list)
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -50,6 +51,9 @@ class Receiver:
         except webhooks.WebhookError as exc:
             self.refused.append(exc.reason)
             return httpx.Response(401)
+        if event is None:  # a repeat of a handled event: acknowledged, not handled twice
+            self.repeats += 1
+            return httpx.Response(200)
         self.events.append(event)
         return httpx.Response(204)
 
@@ -136,8 +140,35 @@ def test_receiver_refuses_a_bad_signature_an_old_t_and_a_replay(
     ]
     for h, b in attempts:
         receiver(httpx.Request("POST", SUBSCRIBER["url"], headers={webhooks.HEADER: h}, content=b))
-    assert receiver.refused == ["signature", "signature", "stale", "replay"]
-    assert len(receiver.events) == 1
+    assert receiver.refused == ["signature", "signature", "stale"]  # the repeat of a handled event is no refusal
+    assert len(receiver.events) == 1 and receiver.repeats == 1
+
+
+def test_a_lost_reply_does_not_block_the_subscriber(
+    hooks: Webhooks, receiver: Receiver, propose: Any, owner: Any, decide_db: Any
+) -> None:
+    """Critic M10-1 #2: the receiver handled the event but its 2xx was lost; the resend of the same event_id is
+    acknowledged, the row is delivered, and the next event follows."""
+    intent = propose().json()["intent_id"]
+    approve(owner, decide_db, intent)
+    hooks.fan_out()
+    lost = {"done": False}
+    real = receiver.__call__
+
+    def lose_first_reply(request: httpx.Request) -> httpx.Response:
+        answer = real(request)
+        if not lost["done"]:
+            lost["done"] = True
+            raise httpx.ReadTimeout("reply lost", request=request)
+        return answer
+
+    hooks.http = httpx.Client(transport=httpx.MockTransport(lose_first_reply))
+    hooks.deliver()
+    owner.execute("UPDATE webhook_deliveries SET next_at = now()")
+    hooks.deliver()
+    hooks.deliver()
+    assert [e["status"] for e in receiver.events] == ["pending_approval", "approved"] and receiver.repeats == 1
+    assert [r[2] for r in deliveries(owner)] == [True, True]
 
 
 def test_unavailable_subscriber_backoff_then_dead_and_alert(
@@ -236,6 +267,49 @@ def test_no_secret_no_unsigned_delivery(
     assert receiver.requests == [] and deliveries(owner)[0][4] == "no secret"
     # a ref is resolved inside secrets_dir only
     assert hooks._secret("secret://../../etc/passwd") is None
+
+
+def test_unreadable_secret_is_a_failed_try(
+    hooks: Webhooks, receiver: Receiver, propose: Any, owner: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Critic M10-1 #6: a secret the notifier cannot read (mode, owner) fails the try; nothing crashes."""
+
+    def denied(self: Path) -> bytes:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "read_bytes", denied)
+    propose()
+    run(hooks)
+    assert receiver.requests == [] and deliveries(owner)[0][4] == "no secret"
+
+
+@pytest.mark.parametrize(
+    ("url", "ok"),
+    [
+        ("https://signals.internal/hooks", True),
+        ("https://8.8.8.8/h", True),
+        ("http://signals.internal/hooks", False),
+        ("https://localhost/h", False),
+        ("https://a.localhost./h", False),
+        ("https://127.0.0.1/h", False),
+        ("https://169.254.169.254/latest/meta-data", False),
+        ("https://10.0.0.5/h", False),
+        ("https://[::1]/h", False),
+        ("https://[fd00::1]/h", False),
+        ("https://224.0.0.1/h", False),
+        ("https:///nohost", False),
+    ],
+)
+def test_webhook_urls_sec15(url: str, ok: bool) -> None:
+    assert hooks_mod.allowed_url(url) is ok
+
+
+def test_refused_url_is_not_called(hooks: Webhooks, receiver: Receiver, world: Any, propose: Any, owner: Any) -> None:
+    world.webhooks = [SUBSCRIBER | {"url": "https://169.254.169.254/latest"}]
+    world.reload("e" * 40)
+    propose()
+    run(hooks)
+    assert receiver.requests == [] and deliveries(owner)[0][4] == "url not allowed"
 
 
 def test_body_is_compact_sorted_json() -> None:

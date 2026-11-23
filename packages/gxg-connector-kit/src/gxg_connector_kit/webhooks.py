@@ -1,6 +1,7 @@
 """Webhook signature of AS-22, for the sender (notifier) and for every receiver (Signals, M12):
 `GxG-Signature: t=<unix>,v1=<hex(HMAC-SHA256(secret, t + "." + body))>`. A receiver refuses a bad signature,
-`|now - t| > 300 s` and a repeated `event_id` (EX-20).
+`|now - t| > 300 s` and a repeated `event_id` (EX-20). A repeat is acknowledged, not refused: the sender retries
+an event whose 2xx was lost, and a refusal would block every later event of that subscriber (head of line).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ TOLERANCE_S = 300
 
 
 class WebhookError(ValueError):
-    """The delivery is refused: `reason` is signature, stale, replay or malformed."""
+    """The delivery is refused: `reason` is signature, stale or malformed."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
@@ -32,8 +33,9 @@ def sign(secret: bytes, body: bytes, t: int) -> str:
     return f"t={t},v1={_mac(secret, t, body)}"
 
 
-def verify(secret: bytes, header: str, body: bytes, *, now: float, seen: MutableSet[str]) -> dict[str, Any]:
-    """The event of a valid delivery; its `event_id` is added to `seen` (the receiver's store of handled ids)."""
+def verify(secret: bytes, header: str, body: bytes, *, now: float, seen: MutableSet[str]) -> dict[str, Any] | None:
+    """The event of a valid new delivery, its `event_id` added to `seen` (the receiver's store of handled ids).
+    None for a valid repeat of a handled `event_id`: answer 2xx and do not handle it again."""
     try:
         parts = dict(p.split("=", 1) for p in header.split(","))
         t, mac = int(parts["t"]), parts["v1"]
@@ -49,6 +51,6 @@ def verify(secret: bytes, header: str, body: bytes, *, now: float, seen: Mutable
     except (ValueError, KeyError, TypeError):
         raise WebhookError("malformed") from None
     if event_id in seen:
-        raise WebhookError("replay")
+        return None
     seen.add(event_id)
     return dict(event)

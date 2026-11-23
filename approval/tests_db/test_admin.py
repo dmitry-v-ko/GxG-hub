@@ -171,3 +171,23 @@ def test_cli_switch_and_invite_call_the_admin_api(tmp_path: Any, monkeypatch: py
     Reply.status_code = 403
     with pytest.raises(SystemExit, match="HTTP 403"):
         cli.main(["switch", "set", "--scope", "global", "--reason", "drill"])
+
+
+def test_admin_refuses_a_plain_http_issuer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Critic M10-1 #7: discovery and JWKS decide who is an operator — https only (loopback for tests)."""
+    monkeypatch.setenv("GXG_ADMIN_OIDC_ISSUER", "http://idp.example.com")
+    with pytest.raises(SystemExit, match="GXG_ADMIN_OIDC_ISSUER must be https"):
+        cli.main(["admin"])
+    cli.require_https("https://idp.example.com", "x")
+    cli.require_https("http://127.0.0.1:9400", "x")
+
+
+def test_executor_metrics_registry_has_reserve_conflicts() -> None:
+    """Critic M10-1 #4: the executor's port exposes gxg_reserve_conflicts_total (and not the database figures)."""
+    from prometheus_client import generate_latest
+
+    from gxg_approval.executor import RESERVE_CONFLICTS
+
+    RESERVE_CONFLICTS.inc(0)
+    text = generate_latest(cli.executor_metrics()).decode()
+    assert "gxg_reserve_conflicts_total" in text and "gxg_intents_pending" not in text

@@ -28,9 +28,10 @@ def test_valid_delivery_once() -> None:
     header = webhooks.sign(SECRET, BODY, T)
     assert webhooks.verify(SECRET, header, BODY, now=T + 300, seen=seen) == {"event_id": "e-1", "status": "approved"}
     assert seen == {"e-1"}
-    with pytest.raises(webhooks.WebhookError) as err:
-        webhooks.verify(SECRET, header, BODY, now=T, seen=seen)
-    assert err.value.reason == "replay"
+    assert webhooks.verify(SECRET, header, BODY, now=T, seen=seen) is None  # a repeat: acknowledged, not handled
+    with pytest.raises(webhooks.WebhookError) as err:  # a repeat is still checked first
+        webhooks.verify(SECRET, header, BODY, now=T + 301, seen=seen)
+    assert err.value.reason == "stale"
 
 
 @pytest.mark.parametrize(
