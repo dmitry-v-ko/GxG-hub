@@ -60,9 +60,7 @@ Railway-проект: `gxg-hub-pilot`, окружение `production`. Серв
    - `GXG_SECRET__GXG_OIDC_CLIENT_SECRET` — Client secret;
    - `GXG_OIDC_ISSUER` = `https://accounts.google.com`;
    - `GXG_UI_PUBLIC_URL` = `https://gxg-approval-ui.<tailnet>.ts.net`.
-5. Сервис `admin`:
-   - `GXG_ADMIN_OPERATORS` — Google-адрес владельца;
-   - `GXG_ADMIN_OIDC_AUDIENCE` — тот же Client ID, если Railway показывает эту переменную пустой.
+5. Сервис `admin`: `GXG_ADMIN_OPERATORS` — Google-адрес владельца. Issuer и Client ID `admin` берёт у `ui` сам.
 
 ## 6. ContextForge
 
