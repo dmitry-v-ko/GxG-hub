@@ -148,13 +148,14 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 | T4 | `pending_approval` | reject | `rejected` | Человек | Как T2, кроме step-up | Webhook |
 | T5 | `pending_approval` | срок | `expired` | Sweeper | `now ≥ expires_at` | Webhook |
 | T6 | `pending_approval`, `approved` | cancel | `cancelled` | Requester (MCP) или approver | Нет живого исполнения | Webhook |
-| T7 | `approved` | reserve | `executing` | Executor | `now < execution_deadline`; нет kill switch; `attempts < max_attempts`; вставка в `executions` (`attempt` = max + 1) прошла уникальный индекс | execution `reserved`, `reserve_lease_until = now + 60 с` |
+| T7 | `approved` | reserve | `executing` | Executor | `now < execution_deadline`; нет kill switch; `attempts < max_attempts`; запуск только из задачи outbox с `available_at ≤ now`; вставка в `executions` (`attempt` = max + 1) прошла уникальный индекс | execution `reserved`, `reserve_lease_until = now + 60 с` |
 | T8 | `approved` | срок исполнения | `expired` | Sweeper | `now ≥ execution_deadline` | Webhook |
 | T9 | `executing` (exec `reserved`) | dispatch | `executing` (exec `dispatching`) | Коннектор | Service JWT коннектора = `aud` токена; токен валиден; `jti` = execution `reserved`; lease не истёк; нет kill switch | `attempts++`; `dispatch_lease_until = now + dispatch_timeout_s + 30 с` |
-| T10 | `executing` (exec `reserved`) | lease истёк без dispatch | `approved` | Sweeper | `now ≥ reserve_lease_until` | exec → `released`; `attempts` не меняется (провайдер не вызывался) |
+| T10 | `executing` (exec `reserved`) | lease истёк без dispatch | `approved` | Sweeper | `now ≥ reserve_lease_until` | exec → `released`, `error_code = reserve_lease_expired`; `attempts` не меняется (провайдер не вызывался) |
 | T11 | `executing` (exec `dispatching`) | complete: succeeded | `succeeded` | Executor | Ответ коннектора по effect-result | Webhook |
 | T12 | `executing` (exec `dispatching`) | complete: failed_before_effect | `approved` / `failed` | Executor | `approved`, если `attempts < max_attempts` и до deadline, иначе `failed` | Webhook при `failed` |
-| T12a | `executing` (exec `reserved`) | complete: отказ `execute` до dispatch (401/409/422/423, AS-12) | `approved` / `failed` | Executor | Как T12; попытка **засчитывается** (`attempts++`), exec → `failed_before_effect` | Webhook при `failed` |
+| T12a | `executing` (exec `reserved`) | complete: отказ `execute` до dispatch (401/409/422/423, AS-12) | `approved` / `failed` | Executor | Exec с этим `execution_id` в `reserved` (CAS по `execution_id`, иначе ответ игнорируется с записью в аудит). Как T12; попытка **засчитывается** (`attempts++`), exec → `failed_before_effect` | Webhook при `failed` |
+| T12b | `executing` (exec `reserved`) | complete: `rate_limited` до dispatch (429 с телом по error.schema, `code = rate_limited`, `retry_after_s ≥ 1`; AS-12a) | `approved` | Executor | Exec с этим `execution_id` в `reserved` (CAS `UPDATE executions … WHERE execution_id = $1 AND state = 'reserved'`; иначе ответ игнорируется с записью в аудит) | exec → `released`, `error_code = rate_limited`; `attempts` **не меняется** (провайдер не вызывался); задача executor'у в outbox с `available_at = now + clamp(retry_after_s, 5 с, 3600 с)` плюс jitter 0–20 %; если это время ≥ `execution_deadline`, задача не ставится (закроет T8) |
 | T13 | `executing` (exec `dispatching`) | complete: outcome_unknown, обрыв, таймаут HTTP | `outcome_unknown` | Executor | — | Outbox: reconcile |
 | T14 | `executing` (exec `dispatching`) | dispatch lease истёк | `outcome_unknown` | Sweeper | `now ≥ dispatch_lease_until` | Outbox: reconcile |
 | T15 | `outcome_unknown` | reconcile: executed | `reconciled_succeeded` | Executor | — | Webhook |
@@ -221,8 +222,9 @@ CREATE TABLE audit_events (                   -- только INSERT; UPDATE/DEL
 
 - **AS-11a.** Для вызывающего вида `approval_mcp` `on_behalf_of` = `{principal, tenant_id}` **обязателен** на чтении и отмене (берётся из проверенной identity агента, SEC-03). Сервис фильтрует `WHERE tenant_id = $t AND requester_principal = $p`; чужой или несуществующий intent → 404, ответы побайтно одинаковы. UI работает в процессе сервиса и в этот API не ходит.
 - **AS-12.** Ответы `execute` до `dispatch`: 401 (токен), 409 (`dispatch` отклонён), 422 (хеш args не совпал), 423 (kill switch). Это `failed_before_effect` без вызова провайдера, переход T12a: попытка засчитывается, поэтому повторяющийся отказ упирается в `max_attempts` и даёт `failed`, а не цикл до `expired`. Любая ошибка **после** успешного `dispatch`, включая исключение коннектора, — `outcome_unknown`.
+- **AS-12a.** Ответ `execute` 429 до `dispatch` с телом по [error.schema](../../schemas/error.schema.json) (`code = rate_limited`, `retry_after_s ≥ 1`) означает лимит, известный коннектору до `dispatch`: его собственная квота отправки или ещё действующий flood-wait, полученный ранее. Это ещё не отказ. Переход T12b: попытка не засчитывается, повтор откладывается на `retry_after_s` (не меньше 5 с, не больше 3600 с). Любой другой 429 до `dispatch` (без тела, другой `code`, без `retry_after_s`) — T12a. Повторы ограничены `execution_deadline`, после него T8 даёт `expired`; постоянный 429 виден по `gxg_execute_deferred_total`. Явный отказ провайдера по лимиту **после** `dispatch` коннектор возвращает как effect-result `failed_before_effect` (T12, EFF-23), а не HTTP 429: любая HTTP-ошибка после `dispatch` по AS-12 — `outcome_unknown`. Запись в `outbox` в T11–T13 и T12b делает функция перехода Approval Service, как и для остальных переходов executor'а.
 - **AS-13.** HTTP-таймаут executor'а на `execute` = `dispatch_timeout_s` tool'а (по умолчанию 60 с). По таймауту — T13.
-- **AS-14.** Executor не повторяет `execute` с тем же `execution_id`. Повтор после `failed_before_effect` — это новая попытка (T12 → T7).
+- **AS-14.** Executor не повторяет `execute` с тем же `execution_id`. Повтор после `failed_before_effect` или `rate_limited` (T12b) — новая попытка с новым `execution_id` (T12/T12a/T12b → T7).
 
 ## MCP-фасад
 
@@ -292,6 +294,7 @@ Identity проверяется так же, как в любом коннект
 | `gxg_intents_pending{tenant}` | > 80 % `pending_per_tenant_max` |
 | `gxg_approval_latency_seconds{tenant,tool}` | — |
 | `gxg_executions_total{tenant,tool,outcome}` | Рост `outcome_unknown` |
+| `gxg_execute_deferred_total{tenant,tool}` (T12b; в `gxg_executions_total` не входит) | Рост; > 0 intents `expired` с последним exec `error_code = rate_limited` |
 | `gxg_intents_outcome_unknown{tenant}` | > 0 дольше 1 ч |
 | `gxg_reserve_conflicts_total` | Резкий рост |
 | `gxg_token_verify_failures_total{reason}` | > 0 (на стороне коннекторов) |

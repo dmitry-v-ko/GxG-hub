@@ -56,8 +56,9 @@ python -m unittest discover -s tests/contract -p 'test_*.py' -v
 | EX-20 | C | Webhook: неверная подпись, старый `t`, повтор `event_id`; недоступный получатель | Отклонено получателем; повторная доставка с backoff, затем `dead` и alert | AS-21…AS-23 |
 | EX-21 | C | Service JWT: чужой ключ, чужой `aud`, коннектор не из реестра для tenant'а | 401/403; intent не создан, `dispatch` не разрешён | AS-06, AS-25, SEC-24 |
 | EX-22 | C | Канонизация: тестовые векторы в Python и в каждой другой реализации; float, большие целые | Совпадение байт и хеша; `invalid_input` для запрещённых значений | EFF-05 |
-| EX-23 | C | Lease без `dispatch`, просроченный dispatch lease, исчерпание `max_attempts` | T10, T14, T12 → `failed`; попытки считаются только после `dispatch` | AS-03, T7…T14 |
+| EX-23 | C | Lease без `dispatch`, просроченный dispatch lease, исчерпание `max_attempts` | T10, T14, T12 → `failed`; попытки считаются при `dispatch` и при отказе T12a; T10 и T12b попытку не тратят | AS-03, T7…T14 |
 | EX-24 | C | Ротация ключа executor'а; удаление скомпрометированного `kid`; расхождение часов 4 с и 10 с | Плавная ротация; старые токены отклоняются; 4 с проходит, 10 с — нет | AS-09…AS-11 |
+| EX-25 | C | Коннектор отвечает 429 `rate_limited` до `dispatch`, затем `ok`; 429 всегда; 429 после `dispatch`; 429 без `retry_after_s`; поздний 429 после T10 | `attempts` не меняется, exec `released` с `error_code = rate_limited`, следующий reserve не раньше clamp(`retry_after_s`), итог `succeeded`; при постоянном 429 — `expired` в `execution_deadline`, 0 вызовов провайдера; после `dispatch` → `outcome_unknown`; без `retry_after_s` → T12a; поздний ответ игнорируется | AS-12a, T12b, EFF-23 |
 
 ### Контракт
 
