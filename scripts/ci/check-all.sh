@@ -12,7 +12,7 @@ uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/tests \
-  approval/src approval/tests scripts tests/secrets \
+  approval/src approval/tests scripts tests/secrets tests/deploy \
   tools/gxg-connector-check/src tools/gxg-connector-check/tests tests/toolkit
 # separate run: two conftest.py modules clash in one mypy run; tests/ci imports the root conftest
 uv run mypy --strict conftest.py tests/ci
@@ -23,7 +23,7 @@ uv run mypy --strict approval/notifier/tests_db
 uv run mypy tools/gxg-policy/src tools/gxg-policy/tests connectors/demo/src connectors/demo/tests \
   connectors/telegram/src connectors/telegram/tests tests/contract
 MYPYPATH=stand/tests:stand:gateway/contextforge:connectors/telegram/archive uv run mypy --exclude mutants stand gateway/contextforge
-uv run pytest
+uv run pytest  # includes tests/deploy: the M13 Railway kit against a mock GraphQL API (no network, no token)
 uv run pytest approval/tests_db  # needs Docker (M7)
 uv run pytest approval/ui/tests_db approval/notifier/tests_db  # M9; Docker, node + Playwright Chromium (E2E)
 uv run pytest approval/deploy/tests  # AC-M9-12: images and networks; extra build flags: DOCKER_BUILD_FLAGS
@@ -41,6 +41,7 @@ if [ "${UPSTREAM_DRIFT:-}" != skip ]; then
   connectors/telegram/archive/check_upstream.sh --drift "$upstream"
 fi
 uv run python scripts/ci/prove_schema_guard.py
+uv run python scripts/deploy/railway_deploy.py --dry-run >/dev/null  # M13: the deploy plan is valid (AS-28, no public exposure)
 scripts/ci/gitleaks.sh tree HEAD
 scripts/ci/gitleaks.sh range "0000000000000000000000000000000000000000..HEAD"
 uv run pytest tests/secrets

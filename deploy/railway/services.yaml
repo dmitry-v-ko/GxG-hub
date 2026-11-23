@@ -1,0 +1,226 @@
+# Services of the M13 pilot on Railway (SEC-28, ADR-0003, target-platform-v1 «Развёртывание»). Read by
+# scripts/deploy/railway_deploy.py (--dry-run prints the plan, --verify checks AC-M14-11). No values live here:
+#   env        non-secret literals the script enforces (may hold Railway references `${{service.VAR}}`)
+#   owner_env  non-secret names the owner sets in Railway (the script does not touch them)
+#   secrets    NAME: {gen: <generator>, as28: <row of the AS-28 table>}. `gen: owner` = the owner sets the value in
+#              Railway; any other generator creates it inside the script, once (never overwritten), straight into the
+#              variables of this service only. Nothing is printed or written to disk.
+#   seed       non-secret values written once (the owner edits them later); `file:` = read from this repository
+#   config     non-secret values the script generates once, with or from a secret (public keys, JWKS)
+#   internal_urls  variables whose host must be *.railway.internal (AC-M14-11)
+# No service has a public domain, a custom domain or a TCP Proxy. Funnel is off.
+
+project: gxg-hub-pilot
+environment: production
+tenant: t-pilot  # pilot tenant: names the payload keys of Approval (crypto.py) and the gateway tenant
+repo: {name: dmitry-v-ko/GxG-hub, branch: claude/m13-deploy}
+
+services:
+  # ---------------------------------------------------------------- databases (private networking only)
+  # Railway Postgres image (the one the Postgres template deploys), pinned to the major version of the stand
+  # (approval/deploy/compose.yaml: 16). Two databases, two services: ContextForge and Approval (target-platform).
+  contextforge-db:
+    kind: postgres
+    image: ghcr.io/railwayapp-templates/postgres-ssl:16
+    volume: /var/lib/postgresql/data
+    env: {POSTGRES_USER: contextforge, POSTGRES_DB: contextforge, PGDATA: /var/lib/postgresql/data/pgdata}
+    secrets: {POSTGRES_PASSWORD: {gen: random:24}}
+  approval-db:
+    kind: postgres
+    image: ghcr.io/railwayapp-templates/postgres-ssl:16
+    volume: /var/lib/postgresql/data
+    env: {POSTGRES_USER: postgres, POSTGRES_DB: gxg_approval, PGDATA: /var/lib/postgresql/data/pgdata}
+    secrets: {POSTGRES_PASSWORD: {gen: random:24}}
+
+  # ---------------------------------------------------------------- ContextForge (entry: tag:gateway)
+  contextforge:
+    kind: app
+    source: {dockerfile: deploy/railway/contextforge.Dockerfile}
+    build_args: {CF_START: owner}  # upstream start command, see the header of contextforge.Dockerfile
+    port: 4444
+    healthcheck: /health
+    env:
+      HOST: 0.0.0.0
+      PORT: "4444"
+      JWT_AUDIENCE: mcpgateway-api
+      JWT_ISSUER: mcpgateway
+      PLATFORM_ADMIN_FULL_NAME: GxG Hub Operator
+      EMAIL_AUTH_ENABLED: "true"
+      AUTH_REQUIRED: "true"
+      MCPGATEWAY_UI_ENABLED: "false"
+      MCPGATEWAY_ADMIN_API_ENABLED: "true"
+      IDENTITY_PROPAGATION_ENABLED: "false"  # ADR-0001
+      ENABLE_HEADER_PASSTHROUGH: "false"
+      PLUGINS_ENABLED: "true"
+      PLUGINS_CONFIG_FILE: /dev/shm/gxg-files/PLUGINS_YAML
+      PLUGINS_FAIL_ON_PLUGIN_ERROR: "true"  # fail closed
+      MCPGATEWAY_DIRECT_PROXY_ENABLED: "false"  # direct_proxy skips all plugins
+      SSRF_PROTECTION_ENABLED: "true"  # SEC-15
+      SSRF_ALLOW_PRIVATE_NETWORKS: "false"
+      SSRF_ALLOW_LOCALHOST: "false"
+      SSRF_ALLOWED_NETWORKS: '["fd12::/16"]'  # Railway private network (IPv6), for the connectors only: see the report
+      TOOL_TIMEOUT: "25"
+      AUTH_CACHE_REVOCATION_TTL: "5"  # AC-M13-03: a revoked agent stops within a minute
+      LOG_LEVEL: INFO
+      TS_HOSTNAME: gxg-gateway
+      TS_TAGS: tag:gateway
+      GXG_TS_SERVE: |
+        443 /servers http://127.0.0.1:4444/servers
+        443 /mcp http://127.0.0.1:4444/mcp
+        443 /health http://127.0.0.1:4444/health
+        8443 - http://127.0.0.1:4444
+    owner_env: [APP_DOMAIN]  # https://gxg-gateway.<tailnet>.ts.net
+    secrets:
+      DATABASE_URL: {gen: "tpl:postgresql+psycopg://${{contextforge-db.POSTGRES_USER}}:${{contextforge-db.POSTGRES_PASSWORD}}@${{contextforge-db.RAILWAY_PRIVATE_DOMAIN}}:5432/${{contextforge-db.POSTGRES_DB}}"}
+      JWT_SECRET_KEY: {gen: random:48}
+      AUTH_ENCRYPTION_SECRET: {gen: random:48}
+      PLATFORM_ADMIN_EMAIL: {gen: owner}
+      PLATFORM_ADMIN_PASSWORD: {gen: random:24}
+      DEFAULT_USER_PASSWORD: {gen: random:24}
+      BASIC_AUTH_PASSWORD: {gen: random:24}
+      GXG_SECRET__ADAPTER_KEY: {gen: ed25519_pem}  # identity adapter key (variant C), a file for the plugin
+      TS_AUTHKEY: {gen: owner}  # tagged, pre-authorized, ephemeral key; the owner sets it in Railway
+    seed:
+      GXG_CONFIG__PLUGINS_YAML: {file: deploy/railway/contextforge/plugins.yaml}
+      GXG_CONFIG__UNIFIED_PDP_RULES: {file: deploy/railway/contextforge/unified_pdp.rules.json}
+    config: {GXG_IDENTITY_KEYS: "ed25519_identity_keys:GXG_SECRET__ADAPTER_KEY:pilot-adapter-1"}
+    internal_urls: [DATABASE_URL]
+
+  # ---------------------------------------------------------------- Approval Service
+  migrate:  # job: schema migrations as gxg_owner (AS-27); re-run on every release
+    kind: job
+    source: {dockerfile: deploy/railway/approval.Dockerfile}
+    start: gxg-approval migrate
+    secrets:
+      GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_owner", as28: db_dsn}
+    internal_urls: [GXG_SECRET__GXG_DB_DSN]
+  db-init:  # job: roles and passwords (AS-27); removed by `railway_deploy.py --finalize` once the roles exist
+    kind: job
+    transient: true
+    source: {dockerfile: deploy/railway/approval.Dockerfile}
+    start: python /opt/gxg/db_init.py
+    secrets:
+      GXG_SECRET__GXG_SUPERUSER_DSN: {gen: "superuser_dsn:approval-db", as28: bootstrap}
+      GXG_SECRET__GXG_ROLE_PASSWORDS: {gen: role_passwords, as28: bootstrap}
+    internal_urls: [GXG_SECRET__GXG_SUPERUSER_DSN]
+  api:
+    kind: app
+    source: {dockerfile: deploy/railway/approval.Dockerfile}
+    start: gxg-approval api
+    port: 8090
+    healthcheck: /healthz
+    volume: /var/lib/gxg
+    env:
+      GXG_SERVICE_ID: approval-api
+      GXG_LISTEN: 0.0.0.0:8090
+      GXG_BUNDLE_STATE_FILE: /var/lib/gxg/bundle-state.json
+    owner_env: [GXG_BUNDLE_KEYS, GXG_BUNDLE_B64]  # public keys of the bundle signer; the signed bundle (build + sign: owner/CI)
+    secrets:
+      GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_api", as28: db_dsn}
+    config:
+      GXG_CONFIG__GXG_EXEC_JWKS: "keyset:exec-signing.public"
+      GXG_CONFIG__GXG_PAYLOAD_PUBLIC_KEYS: "keyset:payload.public"
+    internal_urls: [GXG_SECRET__GXG_DB_DSN]
+  mcp:
+    kind: app
+    source: {dockerfile: deploy/railway/approval.Dockerfile}
+    start: gxg-approval mcp  # NB: cli.py at the integration head refuses to start `mcp` (no production IdentityVerifier)
+    env:
+      GXG_SERVICE_ID: approval-mcp
+      GXG_API_URL: http://${{api.RAILWAY_PRIVATE_DOMAIN}}:8090
+      GXG_API_AUDIENCE: approval-api
+    secrets:
+      GXG_SECRET__GXG_SVC_KEY: {gen: ed25519_seed, as28: svc_key}
+    config: {GXG_SVC_PUBLIC_KEY: "ed25519_pub:GXG_SECRET__GXG_SVC_KEY"}
+    internal_urls: [GXG_API_URL]
+  executor:
+    kind: app
+    source: {dockerfile: deploy/railway/approval.Dockerfile}
+    start: gxg-approval executor
+    port: 9101  # metrics
+    volume: /var/lib/gxg
+    env:
+      GXG_SERVICE_ID: executor
+      GXG_METRICS_LISTEN: 0.0.0.0:9101
+      GXG_BUNDLE_STATE_FILE: /var/lib/gxg/bundle-state.json
+    owner_env: [GXG_BUNDLE_KEYS, GXG_BUNDLE_B64]
+    secrets:
+      GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_executor", as28: db_dsn}
+      GXG_SECRET__GXG_SVC_KEY: {gen: ed25519_seed, as28: svc_key}
+      GXG_SECRET__GXG_EXEC_SIGNING_KEYS: {gen: "keyset:exec-signing.private", as28: exec_signing}
+      GXG_SECRET__GXG_PAYLOAD_PRIVATE_KEYS: {gen: "keyset:payload.args_private", as28: payload_args}
+    config: {GXG_SVC_PUBLIC_KEY: "ed25519_pub:GXG_SECRET__GXG_SVC_KEY"}
+    internal_urls: [GXG_SECRET__GXG_DB_DSN]
+  sweeper:
+    kind: app
+    source: {dockerfile: deploy/railway/approval.Dockerfile}
+    start: gxg-approval sweeper
+    env: {GXG_SWEEP_INTERVAL_S: "5", GXG_RETENTION_DAYS: "30"}
+    secrets:
+      GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_sweeper", as28: db_dsn}
+    internal_urls: [GXG_SECRET__GXG_DB_DSN]
+  decider:  # AS-30: no tailnet entry, only ui reaches it
+    kind: app
+    source: {dockerfile: deploy/railway/approval.Dockerfile}
+    start: gxg-approval decider
+    port: 8093
+    healthcheck: /healthz
+    env:
+      GXG_LISTEN: 0.0.0.0:8093
+      GXG_UI_PUBLIC_URL: ${{ui.GXG_UI_PUBLIC_URL}}  # WebAuthn RP id and origin
+    secrets:
+      GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_decider", as28: db_dsn}
+    internal_urls: [GXG_SECRET__GXG_DB_DSN]
+  ui:  # entry: tag:approval-ui, tailscale serve terminates TLS, the process listens on loopback only
+    kind: app
+    source: {dockerfile: deploy/railway/ui.Dockerfile}
+    port: 8443
+    volume: /var/lib/gxg
+    env:
+      GXG_LISTEN: 127.0.0.1:8443
+      GXG_DECIDER_URL: http://${{decider.RAILWAY_PRIVATE_DOMAIN}}:8093
+      GXG_BUNDLE_STATE_FILE: /var/lib/gxg/bundle-state.json
+      TS_HOSTNAME: gxg-approval-ui
+      TS_TAGS: tag:approval-ui
+      GXG_TS_SERVE: "443 - http://127.0.0.1:8443"
+    owner_env: [GXG_UI_PUBLIC_URL, GXG_OIDC_ISSUER, GXG_OIDC_CLIENT_ID, GXG_BUNDLE_KEYS, GXG_BUNDLE_B64]
+    secrets:
+      GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_ui", as28: db_dsn}
+      GXG_SECRET__GXG_UI_SESSION_KEY: {gen: random:32, as28: ui_secrets}
+      GXG_SECRET__GXG_OIDC_CLIENT_SECRET: {gen: owner, as28: ui_secrets}
+      GXG_SECRET__GXG_PREVIEW_KEYS: {gen: "keyset:payload.preview_private", as28: payload_preview}
+      TS_AUTHKEY: {gen: owner, as28: tailscale}
+    internal_urls: [GXG_SECRET__GXG_DB_DSN, GXG_DECIDER_URL]
+  notifier:
+    kind: app
+    source: {dockerfile: deploy/railway/notifier.Dockerfile}
+    volume: /var/lib/gxg
+    env:
+      GXG_UI_PUBLIC_URL: ${{ui.GXG_UI_PUBLIC_URL}}
+      GXG_TELEGRAM_API_URL: https://api.telegram.org
+      GXG_BUNDLE_STATE_FILE: /var/lib/gxg/bundle-state.json
+    owner_env: [GXG_BUNDLE_KEYS, GXG_BUNDLE_B64]
+    secrets:
+      GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_notifier", as28: db_dsn}
+      GXG_SECRET__GXG_TELEGRAM_TOKEN: {gen: owner, as28: telegram_bot_token}  # the notify bot, not the user session
+      GXG_SECRET__WEBHOOK__signals: {gen: hmac:32, as28: webhook_secrets}  # HMAC of Signals webhooks (AS-21)
+    internal_urls: [GXG_SECRET__GXG_DB_DSN]
+
+  # ---------------------------------------------------------------- gxg-telegram-service (ADR-0005)
+  # Described from ADR-0005, service-integration-v1 and connectors/telegram/README (the repository is not attached to
+  # this session): the variable names below are UNVERIFIED against its README and must be checked before the first deploy.
+  telegram:
+    kind: app
+    source: {repo: dmitry-v-ko/gxg-telegram-service, branch: claude/m11.1-telegram-service, dockerfile: Dockerfile}
+    port: 8080
+    healthcheck: /readyz
+    volume: /var/lib/telegram  # the Telegram session (written by `gxg-telegram-admin login`), never in Git
+    env:
+      TELEGRAM_IDENTITY_KEYS: ${{contextforge.GXG_IDENTITY_KEYS}}
+    owner_env: [TELEGRAM_CONNECTIONS, TELEGRAM_BUNDLE_KEYS, GXG_BUNDLE_B64]
+    secrets:
+      TELEGRAM_API_ID: {gen: owner}
+      TELEGRAM_API_HASH: {gen: owner}
+      TELEGRAM_ARCHIVE_DSN: {gen: owner}  # the archive database is outside Railway (the service owns it, ADR-0005)
+      TELEGRAM_WEBHOOK_HMAC: {gen: hmac:32}  # signs `telegram.message.created` to Signals (SI-03)
+    internal_urls: []

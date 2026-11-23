@@ -1,8 +1,8 @@
 """One-shot bootstrap of the Approval database on Railway (AS-27): roles of `approval/deploy/roles.sql`, LOGIN and a
 password per role, ownership of the database for `gxg_owner`. Idempotent. Runs inside the private network (the database
-has no public address), as the `db-init` job; `railway_deploy.py --finalize` removes that job and its secrets afterwards.
+has no public address), as the `db-init` job; `railway_deploy.py --finalize` removes the job and its secrets afterwards.
 
-Environment (the entrypoint turns the GXG_SECRET__ variables into files): `GXG_SUPERUSER_DSN_FILE`,
+Environment (the entrypoint turns GXG_SECRET__ variables into files): `GXG_SUPERUSER_DSN_FILE`,
 `GXG_ROLE_PASSWORDS_FILE` (JSON {"gxg_api": "<password>", ...}), `GXG_ROLES_SQL` (default /opt/gxg/roles.sql).
 Nothing is printed except role names.
 """
@@ -27,7 +27,8 @@ def main() -> None:
             conn.execute(sql.SQL("ALTER ROLE {} LOGIN PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)))
             print(f"db-init: role {role} ready")
         db = conn.execute("SELECT current_database()").fetchone()
-        assert db is not None
+        if db is None:
+            raise SystemExit("db-init: no current database")
         conn.execute(sql.SQL("ALTER DATABASE {} OWNER TO gxg_owner").format(sql.Identifier(db[0])))
         conn.execute("ALTER SCHEMA public OWNER TO gxg_owner")
         print("db-init: done")

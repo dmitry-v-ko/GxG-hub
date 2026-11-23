@@ -85,6 +85,7 @@ testpaths = [
     "spikes/m4-contextforge/tests",
     "spikes/m4.1-gateways/tests",
     "gateway/contextforge/tests",
+    "tests/deploy",  # M13: Railway deploy kit, offline
 ]
 # DoD-5: a skipped or xfailed test is a failure, not a pass.
 xfail_strict = true
@@ -119,6 +120,7 @@ ignore = [
 "tools/gxg-connector-check/tests/broken/make_patches.py" = ["E501"]  # the broken code is quoted verbatim
 "scripts/ci/**" = ["S603", "S607"]
 "scripts/new_connector.py" = ["S603", "S607"]  # runs git and uv
+"scripts/deploy/**" = ["E501"]  # GraphQL documents are single lines
 "stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
 "approval/src/gxg_approval/cli.py" = ["PLC0415"]  # each process imports only what it runs
 "approval/ui/src/gxg_approval_ui/cli.py" = ["PLC0415"]
