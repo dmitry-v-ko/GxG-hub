@@ -6,8 +6,10 @@
 == gateway/contextforge: {"killed":132,"survived":1,"total":133,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
 == packages/gxg-connector-kit: {"killed":1204,"survived":11,"total":1215,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
 == approval: {"killed":2290,"survived":24,"total":2314,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
-== approval/ui: running or pending
-== approval/notifier: running or pending
-== .: running or pending
+== approval/ui: {"killed":687,"survived":2,"total":689,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== approval/notifier: {"killed":253,"survived":0,"total":253,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+== .: {"killed":1211,"survived":24,"total":1235,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
 checked against the list so far: connectors/demo, connectors/telegram, approval: unexplained 0, stale 0
 connectors/demo server.x_build__mutmut_9 (M9 backlog): killed; approval transitions.x_rules: no timeout (pid_max)
+status 2026-11-23T00:5xZ: all 9 packages finished in the check-all run; the container was lost while scripts/ci/mutate_m7_sql.py ran (last step of mutmut.sh).
+it left one SQL mutation in approval/.../0001_core.py (preview_ciphertext check removed); restored from git, never committed. Next: list check of ui/notifier/root, SQL driver again.
