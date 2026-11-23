@@ -529,7 +529,7 @@ flowchart TD
 | AC-M10-04 | `gxg-approval switch set --scope global` → следующий `dispatch` любого tenant'а 423 в пределах одной транзакции; запись в аудите и alert (EX-13) |
 | AC-M10-05 | Все метрики из таблицы approval-service-v1 доступны на `/metrics`; правила alert'ов загружаются в Prometheus без ошибок; искусственный `outcome_unknown` старше 1 ч поднимает alert |
 | AC-M10-06 | MC-05: повтор SC- и EX-тестов на следующей минорной версии ContextForge и FastMCP проходит (или зафиксированы регрессии и pin не меняется) |
-| AC-M10-07 | **Выход этапа C:** отчёт `reports/conformance/stage-C.json` — EX-01…EX-24 и MC-05 в статусе `passed` |
+| AC-M10-07 | **Выход этапа C:** отчёт `reports/conformance/stage-C.json` — EX-01…EX-25 и MC-05 в статусе `passed` (EX-25 — решение владельца 2026-11-23) |
 | AC-M10-08 | AS-30: решение без валидного WebAuthn-assertion, с assertion для другого `intent_id`/`args_hash`/`version`/`decision`, повтор assertion, assertion ключа, зарегистрированного не через `decider` → отказ, строка в `decisions` не создана; роль `gxg_ui` не может вызвать `gxg_decide` (ошибка прав) |
 
 ---
@@ -597,6 +597,7 @@ flowchart TD
 | AC-M12-03 | Повторный запуск Action worker'а по тем же 100 кандидатам → 0 новых intents и 0 новых записей провайдера (EFF-08) |
 | AC-M12-04 | Webhooks выключены → `Outcome` всё равно появляются через опрос `effects.status` не позже чем через 2 интервала опроса |
 | AC-M12-05 | При включённом новом пути старый dispatcher не исполняет кандидатов (счётчик старого пути = 0 за прогон) |
+| AC-M12-06 | SI-03: подписанный `telegram.message.created` запускает `telegram.messages.collect` через Hub для `source_ref` события; тело события не создаёт `SourceInboxItem`; неверная подпись, `t` старше 300 с, чужой `tenant_id`, повтор `event_id` и чат без grant `collect` у Signals → ноль новых элементов; с выключенными webhook'ами плановый collect даёт то же множество элементов (решение владельца 2026-11-23) |
 
 ---
 
