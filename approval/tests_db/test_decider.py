@@ -311,3 +311,11 @@ def test_enroll_function_refuses_on_its_own(pg: Any, owner: Any) -> None:
         assert err.value.sqlstate == "GX403"  # the invite is used
     row = owner.execute("SELECT human_principal, enrolled_by FROM webauthn_credentials").fetchone()
     assert row == (HUMAN1, OPERATOR)
+
+
+def test_database_refusal_text_and_no_doc_pages(api: TestClient, propose: Callable[..., Any], owner: Any) -> None:
+    i = intent(propose, owner)
+    r = options(api, {**i, "version": i["version"] + 1})
+    assert (r.status_code, r.json()) == (409, {"message": "stale decision: version, args hash or status"})
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert api.get(path).status_code == 404

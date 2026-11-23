@@ -170,3 +170,6 @@ gxg_approval_notifier.webhooks.x_body_of__mutmut_4  # ensure_ascii=None is falsy
 gxg_approval_ui.app.x_create_app__mutmut_306  # Starlette headers are case-insensitive: "X-CSRF-TOKEN" finds the same header
 gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_12  # split("?")[0] == split("?", 1)[0]: only the part before the first "?" is used
 gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_16  # split("?", 2)[0] == split("?", 1)[0]: only the part before the first "?" is used
+gxg_approval.admin.x_create_app__mutmut_12  # Starlette headers are case-insensitive: "AUTHORIZATION" finds the same header
+gxg_approval.admin.x_create_app__mutmut_13  # a missing header as "XXXX" instead of "": neither starts with "Bearer ", the same 401
+gxg_approval.executor.xǁExecutorǁ_defer__mutmut_2  # cast(None, …): typing.cast is a no-op at runtime

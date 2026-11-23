@@ -1308,8 +1308,10 @@ def test_ex25_defer_cas_race_is_ignored(stack: Stack, pg: Any) -> None:
     setattr(ex.conn, "execute", race)  # noqa: B010 (mypy: a bound method of psycopg)
     ex.execute(r)
     assert stack.executions(i) == [(1, "released", "reserve_lease_expired")]
-    audit = stack.owner.execute("SELECT details->>'outcome' FROM audit_events WHERE action = 'complete_ignored'")
-    assert audit.fetchall() == [("rate_limited",)]
+    audit = stack.owner.execute("SELECT details FROM audit_events WHERE action = 'complete_ignored'")
+    assert audit.fetchall() == [
+        ({"execution_id": str(r.execution_id), "outcome": "rate_limited", "error": "retry_after_s=30"},)
+    ]
 
 
 def test_ex25_reserve_needs_a_due_task(stack: Stack, pg: Any) -> None:
@@ -1331,3 +1333,81 @@ def test_ex25_reserve_needs_a_due_task(stack: Stack, pg: Any) -> None:
             with pytest.raises(psycopg.Error) as err:
                 ex.execute("SELECT gxg_defer(%s, 'x', %s)", (execution, bad))
             assert err.value.sqlstate == "GX400", bad
+
+
+def test_ex25_rate_limited_body_bounds() -> None:
+    from gxg_approval.executor import _rate_limited
+
+    def resp(retry: Any) -> httpx.Response:
+        return httpx.Response(429, json={"code": "rate_limited", "message": "m", "retry_after_s": retry})
+
+    assert _rate_limited(resp(1)) == 1 and _rate_limited(resp(86400)) == 86400
+    for bad in (0, 86401, True, 2.5, "5"):
+        assert _rate_limited(resp(bad)) is None, bad
+    assert _rate_limited(httpx.Response(429, content=b"not json")) is None
+
+
+def test_ex25_logs_and_audit_details(stack: Stack, pg: Any, caplog: pytest.LogCaptureFixture) -> None:
+    """The deferral is logged with its retry_after_s; a 429 after dispatch is recorded as http_429."""
+    caplog.set_level("INFO")
+    created = stack.propose(idempotency_key="quota-log")
+    ex = mock_executor(stack, limited(retry=30))
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    ex.execute(r)
+    events = [json.loads(x.getMessage()) for x in caplog.records if x.name == "gxg_approval.executor"]
+    assert events[-1] == {"event": "deferred", "intent_id": created["intent_id"], "execution_id": str(r.execution_id),
+                          "tenant": "t-alpha", "tool": "demo.message.propose", "retry_after_s": 30}  # fmt: skip
+
+
+def test_ex25_429_after_dispatch_records_http_429(stack: Stack, pg: Any) -> None:
+    created = stack.propose(idempotency_key="quota-after-2")
+    i = created["intent_id"]
+
+    def dispatched_then_429(_r: httpx.Request) -> httpx.Response:
+        e = stack.owner.execute("SELECT execution_id FROM executions WHERE intent_id = %s", (i,)).fetchone()
+        assert e is not None
+        with pg.connect("gxg_api") as api:
+            api.execute("SELECT gxg_dispatch(%s, %s, 'demo', 30)", (e[0], i))
+        return limited(retry=30)(_r)
+
+    ex = mock_executor(stack, dispatched_then_429)
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    ex.execute(r)
+    assert stack.executions(i) == [(1, "outcome_unknown", "http_429")]
+
+
+def test_t12a_cas_race_is_ignored_and_audited(stack: Stack, pg: Any) -> None:
+    """T12a CAS: released by the sweeper between the executor's read and gxg_complete → ignored, audited."""
+    created = stack.propose(idempotency_key="t12a-race")
+    i = created["intent_id"]
+    ex = mock_executor(stack, lambda _r: httpx.Response(409, json={"code": "conflict", "message": "m"}))
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    real = ex.conn.execute
+
+    def race(sql: Any, *a: Any, **kw: Any) -> Any:
+        if str(sql).startswith("SELECT gxg_complete"):
+            stack.owner.execute("UPDATE executions SET reserve_lease_until = now() - interval '1 second'")
+            with pg.connect("gxg_sweeper") as sweeper:
+                sweeper.execute("SELECT gxg_sweep(100)")
+        return real(sql, *a, **kw)
+
+    setattr(ex.conn, "execute", race)  # noqa: B010
+    ex.execute(r)
+    assert stack.executions(i) == [(1, "released", "reserve_lease_expired")] and stack.intent(i)["attempts"] == 0
+    audit = stack.owner.execute("SELECT intent_id::text, details FROM audit_events WHERE action = 'complete_ignored'")
+    assert audit.fetchall() == [
+        (i, {"execution_id": str(r.execution_id), "outcome": "refused_before_dispatch", "error": "http_409"})
+    ]
+
+
+def test_a_reconcile_row_never_reserves(stack: Stack) -> None:
+    """Only an `execute` row of an approved intent reserves (T7): a stale reconcile row of an approved one does not."""
+    created = stack.propose(idempotency_key="stale-reconcile")
+    i = created["intent_id"]
+    stack.owner.execute("UPDATE outbox SET topic = 'reconcile' WHERE intent_id = %s AND topic = 'execute'", (i,))
+    ex = stack.executor()
+    assert ex.run_once() is True  # the row is handled (stale) …
+    assert stack.executions(i) == [] and stack.status(i) == "approved"  # … and nothing was reserved

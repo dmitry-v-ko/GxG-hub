@@ -4,6 +4,7 @@ platform_admin, step-up for `clear`. Passkey invites (AS-30)."""
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -191,3 +192,57 @@ def test_executor_metrics_registry_has_reserve_conflicts() -> None:
     RESERVE_CONFLICTS.inc(0)
     text = generate_latest(cli.executor_metrics()).decode()
     assert "gxg_reserve_conflicts_total" in text and "gxg_intents_pending" not in text
+
+
+def test_refusal_texts_and_db_messages(admin_client: TestClient) -> None:
+    """Each refusal says why (the operator reads it in the CLI); a refusal of gxg_switch carries the database's text."""
+    body = {"scope": "global", "blocked": True, "reason": "drill"}
+    cases = [
+        ({}, 401, "operator token required"),
+        (auth("x.y.z"), 401, "operator token refused"),
+        (auth(token(sub="other")), 403, "platform_admin required"),
+    ]
+    for headers, status, message in cases:
+        r = admin_client.post("/v1/switches", json=body, headers=headers)
+        assert (r.status_code, r.json()) == (status, {"message": message})
+    r = admin_client.post("/v1/switches", json=body | {"blocked": False}, headers=auth(token()))
+    assert r.json() == {"message": "a fresh login (auth_time ≤ 5 min) is required to clear a switch"}
+    r = admin_client.post("/v1/switches", json=body | {"scope": "bad scope"}, headers=auth(token()))
+    assert r.status_code == 400 and r.json()["message"].startswith("scope global|tenant:<id>|tool:<tenant>:<tool>")
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert admin_client.get(path).status_code == 404
+
+
+def test_required_claims_and_leeway(admin_client: TestClient) -> None:
+    """iat and sub are required (not only exp); 5 s of clock skew (AS-11), not more."""
+    no_iat = jwt.encode({"iss": ISSUER, "aud": AUDIENCE, "sub": "op-1", "exp": int(time.time()) + 60}, KEY, "ES256")
+    assert admin_client.get("/v1/switches", headers=auth(no_iat)).status_code == 401
+    now = int(time.time())
+    late = token(exp=now - 5, iat=now - 60)  # 5 s plus the fraction of this second ago: past the leeway
+    assert admin_client.get("/v1/switches", headers=auth(late)).status_code == 401
+    assert admin_client.get("/v1/switches", headers=auth(token(exp=now + 2))).status_code == 200
+
+
+def test_pyjwk_signing_key_and_auth_time_boundary(pg: Any, owner: psycopg.Connection[Any]) -> None:
+    """Production passes PyJWKClient's PyJWK (its `.key` is used); the step-up limit is ≤ 300 s exactly."""
+    from jwt.algorithms import ECAlgorithm
+
+    jwk = jwt.PyJWK(json.loads(ECAlgorithm.to_jwk(KEY.public_key())), algorithm="ES256")
+    seen: list[str] = []
+    clock = [1_900_000_000.0]
+
+    def signing_key(t: str) -> Any:
+        seen.append(t)
+        return jwk
+
+    with ConnectionPool(pg.dsn("gxg_admin"), min_size=1, max_size=1, kwargs={"autocommit": True}) as pool:
+        deps = admin.Deps(
+            pool, ISSUER, AUDIENCE, frozenset({OPERATOR}), signing_key=signing_key, clock=lambda: clock[0]
+        )
+        with TestClient(admin.create_app(deps)) as client:
+            t = token(auth_time=int(clock[0]) - 300)
+            body = {"scope": "global", "blocked": False, "reason": "boundary"}
+            assert client.post("/v1/switches", json=body, headers=auth(t)).status_code == 200
+            assert seen == [t]
+            clock[0] += 1
+            assert client.post("/v1/switches", json=body, headers=auth(t)).status_code == 403
