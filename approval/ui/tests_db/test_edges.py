@@ -352,3 +352,48 @@ def test_assertion_replay_with_a_zero_counter(
     replay.session = browser.session
     assert replay.decide(row_of(row["intent_id"]), assertion=assertion).status_code == 403
     assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (1,)
+
+
+def test_decision_refusals_keep_their_text(
+    browser: Any, make_browser: Any, passkey: Any, propose: Any, row_of: Any, owner: Any, world: Any, monkeypatch: Any
+) -> None:
+    """The decider's refusal text reaches the page; the current bundle is re-checked at the POST itself (an approver
+    removed after the challenge); a broken passkey body says what is missing."""
+    row = intent(propose, row_of)
+    key = passkey(browser.login(HUMAN1))
+    assertion = key.assertion(browser.challenge(row, "reject").text)
+    assert browser.decide(row, "reject", assertion=assertion).status_code == 303
+    again = browser.decide(row, "reject", assertion=assertion)
+    assert again.status_code == 403 and error_text(again) == "assertion refused"  # the decider's own message
+    other = intent(propose, row_of, args={"text": "o", "n": 9})
+    late = key.assertion(browser.challenge(other, "reject").text)
+    beta = make_browser().login("oidc:https://idp.example.invalid:beta")
+    r = beta.decide(other, "reject", assertion=late)
+    assert r.status_code == 403 and error_text(r) == ui.NOT_APPROVER[1]  # checked before the decider is asked
+    r = browser.client.post("/passkeys/options", json={}, headers={"X-CSRF-Token": browser.csrf})
+    assert r.status_code == 400 and error_text(r) == "invite и credential"
+    unknown = intent(propose, row_of, args={"text": "u", "n": 8})
+    owner.execute("UPDATE intents SET status = 'outcome_unknown' WHERE intent_id = %s", (unknown["intent_id"],))
+    url = f"/intents/{unknown['intent_id']}/resolve"
+    data = {"csrf": browser.csrf, "outcome": "executed", "reason": "short", "version": unknown["version"]}
+    r = browser.client.post(url, data=data)
+    assert r.status_code == 400 and "reason of at least 10 characters" in error_text(r)  # the database's text
+
+
+def test_decider_message_and_timeout() -> None:
+    from gxg_approval_ui import stepup
+
+    assert stepup.message('{"message": "' + "m" * 400 + '"}') == "m" * 300
+    assert stepup.message("<html>bad gateway</html>") == "отказ" and stepup.message('{"x": 1}') == "отказ"
+    seen: dict[str, Any] = {}
+
+    class Spy:
+        def post(self, url: str, **kw: Any) -> Any:
+            seen.update(url=url, **kw)
+            return type("R", (), {"status_code": 200, "text": "{}"})()
+
+    assert stepup.relay(Spy(), "/v1/x", {"a": 1}) == (200, "{}")
+    assert (
+        seen == {"url": "/v1/x", "json": {"a": 1}, "timeout": stepup.DECIDER_TIMEOUT_S}
+        and stepup.DECIDER_TIMEOUT_S == 10
+    )

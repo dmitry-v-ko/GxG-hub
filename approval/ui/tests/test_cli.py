@@ -145,13 +145,19 @@ def test_access_log_has_no_query_string(environ: dict[str, str], started: dict[s
     """SEC-17 (M9-final F-1): `GET /auth/callback?code=…` reaches the access log as the path only."""
     import logging
 
+    access = logging.getLogger("uvicorn.access")
+    for f in list(access.filters):  # other tests ran main() too
+        access.removeFilter(f)
     cli.main()
     started["deps"].pool.close()
-    access = logging.getLogger("uvicorn.access")
-    assert any(isinstance(f, cli.NoQuery) for f in access.filters)
+    assert [type(f) for f in access.filters] == [cli.NoQuery]
     record = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d', None, None)
     record.args = ("10.0.0.9:5000", "GET", "/auth/callback?code=SECRET-CODE&state=s", "1.1", 200)
     assert cli.NoQuery().filter(record) is True
     assert record.getMessage() == '10.0.0.9:5000 - "GET /auth/callback HTTP/1.1" 200'
+    twice = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d', None, None)
+    twice.args = ("c", "GET", "/a?code=1?x", "1.1", 200)
+    cli.NoQuery().filter(twice)
+    assert twice.getMessage() == 'c - "GET /a HTTP/1.1" 200'
     other = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, "plain %s", ("x?y",), None)
     assert cli.NoQuery().filter(other) is True and other.getMessage() == "plain x?y"  # not an access line

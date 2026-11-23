@@ -422,18 +422,16 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         return await run_in_threadpool(lambda: _decide(request, who, intent_id, form))
 
     def _decide(request: Request, who: str, intent_id: str, form: Mapping[str, Any]) -> Response:
-        """The decision, its version and args hash are inside the signed challenge (AS-30); the decider checks it."""
-        decision, comment, assertion = _field(form, "decision"), _field(form, "comment"), _field(form, "assertion")
+        """The decision, its version and args hash are inside the signed challenge (AS-30); the decider checks it, and
+        an approve challenge is issued only for args that match the hash (EFF-33, `challenge` above). Here: the
+        current bundle still makes the human an approver (T2), the comment, and an assertion at all."""
+        comment, assertion = _field(form, "comment"), _field(form, "assertion")
         if len(comment) > COMMENT_MAX:
             raise Refused(*LONG_COMMENT)
         with deps.pool.connection() as conn:
             row = load(conn, intent_id)  # EFF-15: re-read before the decision
         if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
             raise Refused(*NOT_APPROVER)  # current bundle (T2)
-        if decision == "approve":
-            opened = envelope(row)
-            if opened is None or not opened[2]:
-                raise Refused(*HASH_MISMATCH)
         if not assertion:
             raise Refused(*STEP_UP)
         body = {"human": who, "intent_id": str(row["intent_id"]), "assertion": assertion, "comment": comment or None}
