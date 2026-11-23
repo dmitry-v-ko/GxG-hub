@@ -429,3 +429,74 @@ sample(
         )
     ],
 )
+
+# --- operator-only tools (M6, kb.collections.list): demo with an operator variant, then the broken one ----------
+OUT_OP = pathlib.Path("tools/gxg-connector-check/tests/broken/operator")
+OUT_OP.mkdir(exist_ok=True)
+G = "fixtures/grants/t-alpha.yaml"
+OPERATOR = [
+    (G, "    - id: agent:t-alpha:nobody\n", "    - id: agent:t-alpha:nobody\n    - id: agent:t-alpha:operator\n"),
+    (
+        G,
+        "grants:\n",
+        """grants:
+  - id: alpha-operator-all-boards   # a type mask: the operator reads every board of the connection
+    subjects: [agent:t-alpha:operator]
+    actions: [read]
+    resources:
+      - demo:demo-main/board/*
+""",
+    ),
+    (
+        T,
+        """    async def boards_list(self, access: Access, args: dict[str, Any]) -> Result:
+        readable = self._readable(access)""",
+        """    async def boards_list(self, access: Access, args: dict[str, Any]) -> Result:
+        if not access.allowed.all_of_type:  # operator-only: a grant on every board (a mask), not on some
+            raise GxgError("permission_denied", "operators only")
+        readable = self._readable(access)""",
+    ),
+    (
+        C,
+        """            Call("demo.boards.list", {}),""",
+        """            Call("demo.boards.list", {}, caller="operator"),""",
+    ),
+    (
+        C,
+        """        rids=rids,""",
+        """        rids=rids,
+        operator="agent:t-alpha:operator",""",
+    ),
+]
+
+
+def variant(base_edits: list[tuple[str, str, str]], edits: list[tuple[str, str, str]], name: str) -> None:
+    """A patch of `edits` on top of demo with `base_edits` applied."""
+    base, new = S / f"{name}-base", S / name
+    for d, todo in ((base, base_edits), (new, base_edits + edits)):
+        shutil.copytree(DEMO, d, ignore=IGNORE)
+        for rel, old, repl in todo:
+            text = (d / rel).read_text(encoding="utf-8")
+            assert text.count(old) == 1, (name, rel, old[:60])
+            (d / rel).write_text(text.replace(old, repl), encoding="utf-8")
+    cmd = ["git", "diff", "--no-index", "--src-prefix=a/", "--dst-prefix=b/", base.name, name]
+    diff = subprocess.run(cmd, cwd=S, capture_output=True, text=True, check=False).stdout
+    (OUT_OP / f"{name}.patch").write_text(
+        diff.replace(f"a/{base.name}/", "a/").replace(f"b/{name}/", "b/"), encoding="utf-8"
+    )
+
+
+variant([], OPERATOR, "base")  # a correct operator-only tool: check-connectors passes
+variant(
+    OPERATOR,
+    [
+        (
+            T,
+            """        if not access.allowed.all_of_type:  # operator-only: a grant on every board (a mask), not on some
+            raise GxgError("permission_denied", "operators only")
+""",
+            "",
+        )
+    ],  # BROKEN: the operator-only tool answers the reader with data
+    "answers-reader",
+)

@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -66,7 +67,7 @@ def copy_of(connector: Path, tmp: Path) -> Path:
     return dest
 
 
-def check(root: Path, tmp: Path) -> tuple[int, dict[str, dict[str, str]], str]:
+def check(root: Path, tmp: Path) -> tuple[int, dict[str, dict[str, Any]], str]:
     report = tmp / "report.json"
     cmd = [sys.executable, "-m", "gxg_connector_check.cli", "--connector", str(root), "--report", str(report)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False, cwd=tmp)
@@ -104,3 +105,23 @@ def test_broken_copy_fails_on_its_check(name: str, tmp_path: Path) -> None:
     assert failed == expected, (
         f"{name}: failed {sorted(failed)}, expected {sorted(expected)}\n{json.dumps(report, indent=1)}"
     )
+
+
+def test_operator_only_tool(tmp_path: Path) -> None:
+    """M6 (kb.collections.list): `Call.caller="operator"` runs the tool as Harness.operator; demo with an operator
+    variant of `demo.boards.list` passes, and the same tool answering the reader is red on SC-10 only."""
+    root = copy_of(DEMO, tmp_path)
+    subprocess.run(["git", "apply", str(BROKEN / "operator" / "base.patch")], cwd=root, check=True, timeout=60)
+    code, report, out = check(root, tmp_path)
+    assert code == 0, out
+    assert report["SC-10"]["checks"] == [
+        "test_grants_filter_and_no_provider_call_without_grants[asyncio]",
+        "test_operator_only_tools_answer_nobody_else[asyncio]",
+    ]
+    subprocess.run(
+        ["git", "apply", str(BROKEN / "operator" / "answers-reader.patch")], cwd=root, check=True, timeout=60
+    )
+    code, report, out = check(root, tmp_path)
+    failed = {k for k, v in report.items() if v["status"] == "failed"}
+    assert code == 1 and failed == {"SC-10"}, (failed, out[-3000:])
+    assert any("operator-only tool" in e for e in report["SC-10"]["errors"]), report["SC-10"]

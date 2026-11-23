@@ -125,6 +125,14 @@ class Env:
         transport = self.approval.transport()
         return self.harness.start(settings, Wiring(approval=transport, jwks=transport))
 
+    def caller(self, tool: str) -> str:
+        """The principal a tool answers: the operator for operator-only tools, else the reader."""
+        h = self.harness
+        operator_tools = {c.tool for c in h.calls if c.caller == "operator"}
+        if operator_tools and h.operator is None:
+            raise pytest.UsageError("Call.caller='operator' needs Harness.operator")
+        return h.operator if tool in operator_tools and h.operator is not None else h.reader
+
     def identity(self, principal: str, **kw: Any) -> dict[str, str]:
         return self.issuer.headers(
             tenant_id=principal.split(":")[1], principal=principal, audience=self.connector_id, **kw
@@ -166,7 +174,7 @@ class Client:
         meta: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """The tool result as JSON (`isError`, `structuredContent`, `content`)."""
-        ident = identity if identity is not None else self.env.identity(principal or self.env.harness.reader)
+        ident = identity if identity is not None else self.env.identity(principal or self.env.caller(tool))
         extra = {**ident, **(headers or {})}
         self.http.headers.update(extra)
         try:

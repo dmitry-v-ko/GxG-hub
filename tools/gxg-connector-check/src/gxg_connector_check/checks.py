@@ -73,11 +73,16 @@ def wrong_type(env: Env, call: Call) -> dict[str, Any]:
 
 
 def single(env: Env) -> list[Call]:
-    return [c for c in env.harness.calls if specs(env)[c.tool]["resource"].get("scope") != "list"]
+    return [c for c in readers(env) if specs(env)[c.tool]["resource"].get("scope") != "list"]
+
+
+def readers(env: Env) -> list[Call]:
+    """The calls a reader makes: every grants check (SC-05, SC-10) runs on these."""
+    return [c for c in env.harness.calls if c.caller == "reader"]
 
 
 def listing(env: Env) -> list[Call]:
-    return [c for c in env.harness.calls if specs(env)[c.tool]["resource"].get("scope") == "list"]
+    return [c for c in readers(env) if specs(env)[c.tool]["resource"].get("scope") == "list"]
 
 
 def input_props(env: Env, tool: str) -> dict[str, Any]:
@@ -265,7 +270,7 @@ async def test_identity_is_not_taken_from_arguments_headers_or_meta(env: Env) ->
             assert plain != mine, f"{call.tool}: another tenant's caller gets the reader's result"
             if call in single(env):
                 assert plain == await c.call(call.tool, call.missing or {}, principal=h.stranger), call.tool
-            else:
+            elif plain.get("isError") is not True:
                 assert not h.rids(call.tool, ok(plain)) & h.rids(call.tool, ok(mine)), call.tool
 
 
@@ -285,8 +290,8 @@ async def test_forged_or_replayed_identity_never_reaches_the_provider(env: Env) 
                 assert code(await c.call(call.tool, args, identity=forged)) == "unauthenticated"
                 assert code(await c.call(call.tool, args, identity={})) == "unauthenticated"
         assert running.calls() == 0, "the provider was called before the identity was verified"
-        replayed = env.identity(h.reader)
         call = h.calls[0]
+        replayed = env.identity(env.caller(call.tool))
         ok(await c.call(call.tool, call.args, identity=replayed))
         assert code(await c.call(call.tool, call.args, identity=replayed)) == "unauthenticated"
 
@@ -365,9 +370,10 @@ async def test_grants_filter_and_no_provider_call_without_grants(env: Env) -> No
     async with client as c:
         for call in h.calls:
             r = await c.call(call.tool, call.args, principal=h.nobody)
-            assert (code(r) == "not_found") if r.get("isError") else not h.rids(call.tool, ok(r)), call.tool
+            refusals = {"not_found", "permission_denied"} if call.caller == "operator" else {"not_found"}
+            assert (code(r) in refusals) if r.get("isError") else not h.rids(call.tool, ok(r)), call.tool
         assert running.calls() == 0, "the provider was called for a principal without any grant"
-        for call in h.calls:
+        for call in readers(env):
             before = running.calls()
             rids = h.rids(call.tool, ok(await c.call(call.tool, call.args)))
             assert running.calls() > before, f"{call.tool}: Running.calls() does not count provider calls"
@@ -375,6 +381,27 @@ async def test_grants_filter_and_no_provider_call_without_grants(env: Env) -> No
             assert all(store.check(tenant, h.reader, "read", rid).allowed for rid in rids), call.tool
             r = await c.call(call.tool, call.args, principal=h.stranger)
             assert r.get("isError") or not (h.rids(call.tool, ok(r)) & rids), call.tool
+
+
+@pytest.mark.check("SC-10")
+async def test_operator_only_tools_answer_nobody_else(env: Env) -> None:
+    """A tool for the operator (`Call.caller == "operator"`): the operator gets data; the reader and a principal
+    without grants of the same tenant get `permission_denied` or `not_found`, no data, and the provider is not
+    called. (Another tenant's principal may be that tenant's operator; tenants are kept apart by SC-03 and SC-10.)"""
+    h = env.harness
+    calls = [c for c in h.calls if c.caller == "operator"]
+    running, client = await started(env)
+    async with client as c:
+        for call in calls:
+            before = running.calls()
+            assert h.rids(call.tool, ok(await c.call(call.tool, call.args, principal=h.operator))), call.tool
+            assert running.calls() > before, f"{call.tool}: Running.calls() does not count provider calls"
+            for who in (h.reader, h.nobody):
+                before = running.calls()
+                r = await c.call(call.tool, call.args, principal=who)
+                assert r.get("isError") is True, f"{call.tool} answered {who}: an operator-only tool"
+                assert code(r) in ("permission_denied", "not_found"), r
+                assert running.calls() == before, f"{call.tool}: the provider was called for {who}"
 
 
 # --- EX: effects ------------------------------------------------------------------------------------------------

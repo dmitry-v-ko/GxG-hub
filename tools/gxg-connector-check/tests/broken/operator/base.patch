@@ -1,0 +1,52 @@
+diff --git a/fixtures/grants/t-alpha.yaml b/fixtures/grants/t-alpha.yaml
+index 8aa6830..8b89f0c 100644
+--- a/fixtures/grants/t-alpha.yaml
++++ b/fixtures/grants/t-alpha.yaml
+@@ -12,8 +12,14 @@ principals:
+     - id: agent:t-alpha:reader
+     - id: agent:t-alpha:actor
+     - id: agent:t-alpha:nobody
++    - id: agent:t-alpha:operator
+ 
+ grants:
++  - id: alpha-operator-all-boards   # a type mask: the operator reads every board of the connection
++    subjects: [agent:t-alpha:operator]
++    actions: [read]
++    resources:
++      - demo:demo-main/board/*
+   - id: alpha-reader-boards
+     subjects: [agent:t-alpha:reader]
+     actions: [read]
+diff --git a/src/demo_connector/conformance.py b/src/demo_connector/conformance.py
+index 968319a..b17a210 100644
+--- a/src/demo_connector/conformance.py
++++ b/src/demo_connector/conformance.py
+@@ -55,7 +55,7 @@ def harness() -> Harness:
+         nobody="agent:t-alpha:nobody",
+         stranger="agent:t-beta:reader",
+         calls=[
+-            Call("demo.boards.list", {}),
++            Call("demo.boards.list", {}, caller="operator"),
+             Call(
+                 "demo.notes.search",
+                 {"query": "status"},
+@@ -72,5 +72,6 @@ def harness() -> Harness:
+         ],
+         secret_env=SECRET_ENV,
+         rids=rids,
++        operator="agent:t-alpha:operator",
+         failures=(*BACKEND_FAILURES, "crash"),
+     )
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index 34549d6..5356ff1 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -77,6 +77,8 @@ class Connector:
+         return out
+ 
+     async def boards_list(self, access: Access, args: dict[str, Any]) -> Result:
++        if not access.allowed.all_of_type:  # operator-only: a grant on every board (a mask), not on some
++            raise GxgError("permission_denied", "operators only")
+         readable = self._readable(access)
+         titles = {b.id: b.title for b in self.backend.boards.get(access.ident.tenant_id, {}).values()}
+         boards = [{"id": b, "title": titles[b]} for b in sorted(readable)]
