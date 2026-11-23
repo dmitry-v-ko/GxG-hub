@@ -44,7 +44,6 @@ services:
   contextforge:
     kind: app
     source: {dockerfile: deploy/railway/contextforge.Dockerfile}
-    build_args: {CF_START: owner}  # upstream start command, see the header of contextforge.Dockerfile
     port: 4444
     healthcheck: /health
     env:

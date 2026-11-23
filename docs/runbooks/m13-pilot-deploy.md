@@ -9,7 +9,7 @@
 | 1 | Railway-токен (workspace token) в Network secrets сессии, хост `backboard.railway.com` | настройки среды сессии |
 | 2 | Подключить GitHub к Railway и дать доступ к `dmitry-v-ko/GxG-hub` и `dmitry-v-ko/gxg-telegram-service` | Railway → Account → GitHub |
 | 3 | Tailscale auth key: tagged (`tag:gateway`, `tag:approval-ui`), pre-authorized, ephemeral; записать как `TS_AUTHKEY` в сервисы `contextforge` и `ui` | Railway UI, переменная сервиса. Ни в Git, ни в чат |
-| 4 | Не секретные переменные из `owner_env` (список печатает скрипт в конце): `APP_DOMAIN`, `GXG_UI_PUBLIC_URL` (`https://<узел>.<tailnet>.ts.net`), `GXG_OIDC_ISSUER`, `GXG_OIDC_CLIENT_ID`, `GXG_BUNDLE_KEYS`, `GXG_BUNDLE_B64`, `CF_START`, переменные `telegram` | Railway UI |
+| 4 | Не секретные переменные из `owner_env` (список печатает скрипт в конце): `APP_DOMAIN`, `GXG_UI_PUBLIC_URL` (`https://<узел>.<tailnet>.ts.net`), `GXG_OIDC_ISSUER`, `GXG_OIDC_CLIENT_ID`, `GXG_BUNDLE_KEYS`, `GXG_BUNDLE_B64`, переменные `telegram` | Railway UI |
 | 5 | Секреты с `gen: owner`: `PLATFORM_ADMIN_EMAIL`, `GXG_SECRET__GXG_OIDC_CLIENT_SECRET`, `GXG_SECRET__GXG_TELEGRAM_TOKEN` (бот уведомлений, не пользовательская сессия), `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` | Railway UI |
 | 6 | Войти в Telegram-сессию: `gxg-telegram-admin login` в сервисе `telegram` (Railway CLI `railway ssh`). Код из Telegram и 2FA вводит владелец. Сессия ложится на volume `/var/lib/telegram` | терминал владельца |
 | 7 | Зарегистрировать WebAuthn-ключ approver'а через `decider`: оператор выдаёт приглашение (`gxg-approval passkeys invite`, [approval-ops §3](approval-ops.md)), approver открывает страницу «Passkey» в UI и вводит код | UI из tailnet |
