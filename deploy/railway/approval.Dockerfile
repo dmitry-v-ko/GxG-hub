@@ -27,6 +27,5 @@ COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscale /usr/lo
 RUN useradd --system --uid 10003 gxg && mkdir -p /var/lib/gxg && chown gxg /var/lib/gxg
 USER gxg
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1
-VOLUME ["/var/lib/gxg"]
 ENTRYPOINT ["/opt/gxg/entrypoint.sh"]
 CMD ["gxg-approval", "api"]

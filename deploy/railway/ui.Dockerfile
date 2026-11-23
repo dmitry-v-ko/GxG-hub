@@ -29,6 +29,5 @@ COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscale /usr/lo
 USER gxg
 ENV PATH=/app/approval/ui/.venv/bin:$PATH PYTHONUNBUFFERED=1
 EXPOSE 8443
-VOLUME ["/var/lib/gxg"]
 ENTRYPOINT ["/opt/gxg/entrypoint.sh"]
 CMD ["gxg-approval-ui"]
