@@ -51,6 +51,7 @@ CASES = {  # patch -> (the check that catches it, every check that fails: an exa
     "16-cursor-unbound": ("MC-02", {"MC-02"}),  # another principal can use the cursor
     "17-query-in-audit": ("SC-09", {"SC-09"}),  # the caller's query in the audit line
     "18-backend-always-ready": ("MCC-09", {"MCC-09"}),  # /readyz ignores the backend
+    "19-query-logged-on-error": ("SC-09", {"SC-09"}),  # the query in a log line on a provider error only
 }
 FIRST_TEN = sorted(CASES)[:10]
 pytestmark = pytest.mark.e2e  # child processes: mutmut's trampolines do not reach them
@@ -76,7 +77,7 @@ def test_demo_passes(tmp_path: Path) -> None:
     code, report, out = check(DEMO, tmp_path)
     assert code == 0, out
     assert {k for k, v in report.items() if v["status"] == "passed"} == {c for c, _ in CASES.values()} | {"MC-01"}
-    assert len(CASES) == 18
+    assert len(CASES) == 19
     assert all(v["status"] in ("passed", "not_applicable") for v in report.values()), report
 
 

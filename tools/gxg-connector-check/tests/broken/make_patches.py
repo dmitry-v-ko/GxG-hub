@@ -306,6 +306,23 @@ case(
     ],
 )
 
+case(
+    "19-query-logged-on-error",
+    [
+        (
+            T,
+            """        readable = self._readable(access)
+        if requested is not None""",
+            """        try:
+            readable = self._readable(access)
+        except GxgError:
+            logs.startup.warning("search failed for query %s", query)  # BROKEN: the caller's text in a log line
+            raise
+        if requested is not None""",
+        )
+    ],
+)
+
 # --- sample --with-effects (the template rendered here): EX checks -------------------------------------------
 SAMPLE = S / "sample-base"
 OUT_SAMPLE = pathlib.Path("tools/gxg-connector-check/tests/broken/sample")

@@ -1,5 +1,5 @@
 diff --git a/src/sample_connector/tools.py b/src/sample_connector/tools.py
-index 878dc59..11b1c42 100644
+index f9161b3..ddc52e2 100644
 --- a/src/sample_connector/tools.py
 +++ b/src/sample_connector/tools.py
 @@ -52,7 +52,7 @@ class Connector:

@@ -1,5 +1,5 @@
 diff --git a/src/sample_connector/tools.py b/src/sample_connector/tools.py
-index 878dc59..c8992b9 100644
+index f9161b3..39bc201 100644
 --- a/src/sample_connector/tools.py
 +++ b/src/sample_connector/tools.py
 @@ -9,6 +9,8 @@ Handlers narrow the provider query by `Access` and check() every item again (GR-

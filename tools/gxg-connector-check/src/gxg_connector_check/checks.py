@@ -314,12 +314,20 @@ async def test_hidden_and_foreign_resources_are_not_found_like_missing_ones(env:
 async def test_no_secret_token_or_payload_in_responses_and_logs(
     env: Env, caplog: pytest.LogCaptureFixture, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    """The provider credential and identity tokens appear in no response and no log line (SEC-17, SEC-18)."""
+    """The provider credential, identity tokens and the caller's free text (a query, a message) appear in no
+    response and no log line, on the success path and on every failure path (SEC-17, SEC-18)."""
     caplog.set_level(logging.INFO)  # the production level (gxg_connector_kit.mcp.setup_logging)
     running, client = await started(env)
     h = env.harness
     seen: list[Any] = []
     tokens: list[str] = []
+    marker = f"gxg-marker-{uuid.uuid4().hex}"
+    texts = [  # every free-text argument of every call, set to the marker
+        (call, {**call.args, prop: marker})
+        for call in [*h.calls, *([h.propose] if h.propose is not None else [])]
+        for prop, schema in input_props(env, call.tool).items()
+        if schema.get("type") == "string" and not {"format", "pattern", "enum", "const"} & set(schema)
+    ]
     async with client as c:
         for mode in (None, *h.failures):
             running.fail(mode)
@@ -328,13 +336,14 @@ async def test_no_secret_token_or_payload_in_responses_and_logs(
                     identity = env.identity(who)
                     tokens += identity.values()
                     seen.append(await c.call(call.tool, call.args, identity=identity))
+            for call, args in texts:
+                await c.call(call.tool, args, principal=h.actor if call is h.propose and h.actor else h.reader)
         running.fail(None)
-        marker = f"gxg-marker-{uuid.uuid4().hex}"  # free text of the caller: a query, a message
-        for call in [*h.calls, *([h.propose] if h.propose is not None else [])]:
-            for prop, schema in input_props(env, call.tool).items():
-                if schema.get("type") == "string" and not {"format", "pattern", "enum", "const"} & set(schema):
-                    who = h.actor if call is h.propose and h.actor else h.reader
-                    await c.call(call.tool, {**call.args, prop: marker}, principal=who)
+        env.approval.down = True  # the failure path of propose: the Approval Service is unreachable
+        for call, args in texts:
+            if call is h.propose:
+                await c.call(call.tool, args, principal=h.actor)
+        env.approval.down = False
     out, err = capfd.readouterr()
     blob = json.dumps(seen) + caplog.text + out + err
     assert env.secret not in blob, "the provider credential leaked"
