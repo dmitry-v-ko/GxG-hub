@@ -31,3 +31,12 @@ AS-18…AS-20, AP-08), веха M9. Отдельный образ и lockfile (A
 `uv run pytest approval/notifier/tests_db`: PostgreSQL и fake Bot API (`testing/fake_bot_api.py`, контракт Bot API для
 `getMe`, `getUpdates`, `sendMessage`; в тестах — `httpx.MockTransport`, в профиле `test` compose — HTTP-сервер).
 Настоящий Telegram в тестах не используется.
+
+## M10: webhooks (AS-21…AS-23, EX-20)
+
+Тот же процесс доставляет события `outbox` с темой `webhook` подписчикам tenant'а из bundle (`platform.webhooks`). Событие пишет триггер на каждую смену статуса.
+
+- **Подпись** — `GxG-Signature`, функция kit `webhooks.sign`. Получатель проверяет её `webhooks.verify`.
+- **Порядок** — head-of-line по подписчику.
+- **Повторы** — backoff от 5 с до 1 ч. Через 24 ч событие становится `dead` (алерт `GxgWebhookDead`).
+- **Секреты** — `GXG_WEBHOOK_SECRETS_DIR`. Bundle задаётся через `GXG_BUNDLE_*`.

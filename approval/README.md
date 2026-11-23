@@ -1,6 +1,6 @@
 # gxg-approval
 
-Approval Service ([спека](../docs/specs/approval-service-v1.md)). M7: модель данных, роли БД, переходы T1–T18 + T12a, движок политики и квоты, процессы `api`, `mcp`, `sweeper`, шифрование payload. M8: процесс `executor`, JWKS и ротация ключа. Web UI и бот (M9) — отдельные deployable со своими lockfile (AS-29): [`ui/`](ui/README.md), [`notifier/`](notifier/README.md).
+Approval Service ([спека](../docs/specs/approval-service-v1.md)). M7: модель данных, роли БД, переходы T1–T18 + T12a, движок политики и квоты, процессы `api`, `mcp`, `sweeper`, шифрование payload. M8: процесс `executor`, JWKS и ротация ключа. Web UI и бот (M9) — отдельные deployable со своими lockfile (AS-29): [`ui/`](ui/README.md), [`notifier/`](notifier/README.md). M10: процессы `decider` и `admin`, доставка webhooks, очистка payload, `/metrics` и правила alert'ов. Runbook — [`docs/runbooks/approval-ops.md`](../docs/runbooks/approval-ops.md).
 
 ## Как устроено
 
@@ -13,11 +13,15 @@ Approval Service ([спека](../docs/specs/approval-service-v1.md)). M7: мо�
 | Квоты | `quotas.py` | AP-05, AP-06. Алерт AP-07 — правило Prometheus на `gxg_quota_rejections_total` (ниже) |
 | `api` (8090) | `api.py` | `schemas/approval-service.openapi.yaml`. Service JWT по реестру bundle, допуск по `kind` (AS-06) |
 | `mcp` (8091) | `mcp.py` | `effects.status`, `effects.cancel` через `api` с `on_behalf_of` (AS-11a). Своей роли БД не использует |
-| `sweeper` | `sweeper.py` | `gxg_sweep()` раз в 5 с: T5, T8, T10, T14 (`SKIP LOCKED`) |
+| `sweeper` | `sweeper.py` | `gxg_sweep()` раз в 5 с: T5, T8, T10, T14 (`SKIP LOCKED`). Раз в час `gxg_purge(GXG_RETENTION_DAYS)` (RET-01, по умолчанию 30 дней) |
 | M9: БД для ui и бота | `migrations/versions/0004_ui_notifier.py` | Коды привязки Telegram и passkey (таблиц нет в AS-27, `pending_owner_decision`); `gxg_link_code` (ui), `gxg_link_claim` (notifier); `gxg_ui` без `INSERT outbox` и прямой записи `approver_links`. T1 замораживает набор approver'ов в `allowed_approvers`, кладёт канонические args в preview-конверт (EFF-33) и поля AS-19 в строку `notify` |
 | Шифрование | `crypto.py` | Sealed box (libsodium) на tenant: ключ `args` — только у executor, `preview` — только у ui, у `api` — открытые ключи (AS-28) |
 | `executor` (M8) | `executor.py` | Outbox (`execute`, `reconcile`) `FOR UPDATE SKIP LOCKED` → T7 `gxg_reserve` → execution token (kit `exec_token.sign`) → `POST /internal/v1/execute/<tool>` коннектора с service JWT, таймаут = `dispatch_timeout_s` (AS-13) → `gxg_complete`. Ответ не 200 или обрыв: execution ещё `reserved` → T12a (попытка засчитана), уже `dispatching` → T13. `outcome_unknown` → `reconcile` коннектора; `unknown` → повтор через время, уже прошедшее с dispatch (5 с … 1 ч), после 24 ч — `ALERT` и ручной разбор (T17, T18) |
 | Ключи executor'а (M8) | `keys.py`, `config.JsonFile` | `gxg-approval keys rotate` / `keys remove --kid K` / `keys release` (ниже). `api` перечитывает JWKS-файл при изменении; `dispatch` проверяет токен по текущему файлу |
+| M10: БД | `migrations/versions/0005_ops.py` | `gxg_decision_challenge` и `gxg_decide` (только `gxg_decider`, AS-30), приглашения и регистрация passkey, триггер событий webhook (по одному на смену статуса, T1 включительно), `webhook_deliveries`, `gxg_purge` (RET-01), `gxg_switch` (EX-13), `gxg_metrics()` (агрегаты для `/metrics`) |
+| `decider` (8093, M10) | `decider.py` | AS-30: challenge = SHA-256(intent_id ‖ args_hash ‖ version ‖ decision) ‖ 16 случайных байт (5 мин, один раз). Проверяет WebAuthn-assertion (py_webauthn) по ключу, зарегистрированному через приглашение, затем `gxg_decide`. Человек берётся из credential, а не со слов ui. Доступен только из сети `ui_decider` |
+| `admin` (8092, M10) | `admin.py` | AS-24: ID token оператора (PyJWT + JWKS IdP), `platform_admin` = `GXG_ADMIN_OPERATORS`. `POST /v1/switches` (для снятия — `auth_time` ≤ 5 мин), `POST /v1/passkey-invites`. CLI: `gxg-approval switch set\|clear`, `passkeys invite` (`GXG_ADMIN_URL`, `GXG_OPERATOR_TOKEN_FILE`) |
+| `/metrics` (M10) | `metrics.py` | На `api`: метрики из БД, `gxg_bundle_age_seconds`, `gxg_intents_pending_limit`, `gxg_quota_rejections_total`. На `executor` (`GXG_METRICS_LISTEN`, 9101): `gxg_reserve_conflicts_total`. Правила — `deploy/prometheus/rules.yaml` (+ `rules.test.yaml` для promtool) |
 | AS-10 | `migrations/versions/0002_executor.py` | `gxg_release_reserved()`: при удалении скомпрометированного ключа все `reserved` исполнения → `released`, intent → `approved` (ход T10 без ожидания lease) |
 
 ## Развёртывание
@@ -48,15 +52,17 @@ Kill switch, включённый после reserve, срабатывает н�
 
 ## Алерты
 
+Все правила — `deploy/prometheus/rules.yaml` (M10), проверка — `approval/deploy/tests/test_alert_rules.py`.
+
 | Условие | Правило |
 | --- | --- |
-| AP-07: зацикленный или обманутый агент | `increase(gxg_quota_rejections_total[1h]) > 3` по `{tenant, requester}` |
+| AP-07: зацикленный или обманутый агент | `GxgQuotaRepeated`: `increase(gxg_quota_rejections_total[1h]) > 3` по `{tenant, requester}` |
 | AP-02: `auto_approve` для `high_risk` проигнорировано, пустое пересечение approver'ов | лог `ALERT policy …` (WARNING) |
 | Sweeper не может работать | лог `sweeper: database error` |
 
 ## Kill switch
 
-`switches` пишет только `gxg_admin` (`admin` API — M10). Проверка — внутри транзакций T1, T7, T9 (AS-05): `global`, `tenant:<id>`, `tool:<tenant>:<tool_key>`. Строка с `blocked = false` снимает блокировку.
+`switches` пишет только `gxg_admin` через `gxg_switch` (`gxg-approval switch set|clear`, admin API, M10; аудит и alert). Проверка — внутри транзакций T1, T7, T9 (AS-05): `global`, `tenant:<id>`, `tool:<tenant>:<tool_key>`. Строка с `blocked = false` снимает блокировку.
 
 ## Тесты
 
