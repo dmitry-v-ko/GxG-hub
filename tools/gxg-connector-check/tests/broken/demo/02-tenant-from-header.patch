@@ -1,5 +1,5 @@
 diff --git a/src/demo_connector/server.py b/src/demo_connector/server.py
-index d29cff2..2e5062e 100644
+index d533826..e167007 100644
 --- a/src/demo_connector/server.py
 +++ b/src/demo_connector/server.py
 @@ -10,7 +10,8 @@ from __future__ import annotations

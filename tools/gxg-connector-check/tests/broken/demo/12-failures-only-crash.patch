@@ -1,8 +1,8 @@
 diff --git a/src/demo_connector/conformance.py b/src/demo_connector/conformance.py
-index a35879b..e7060d5 100644
+index c8ee482..784cd74 100644
 --- a/src/demo_connector/conformance.py
 +++ b/src/demo_connector/conformance.py
-@@ -84,7 +84,7 @@ def harness() -> Harness:
+@@ -83,7 +83,7 @@ def harness() -> Harness:
          ],
          secret_env=SECRET_ENV,
          rids=rids,

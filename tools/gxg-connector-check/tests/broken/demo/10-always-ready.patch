@@ -1,5 +1,5 @@
 diff --git a/src/demo_connector/server.py b/src/demo_connector/server.py
-index d29cff2..e408ee5 100644
+index d533826..183faea 100644
 --- a/src/demo_connector/server.py
 +++ b/src/demo_connector/server.py
 @@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
