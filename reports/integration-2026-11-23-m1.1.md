@@ -60,9 +60,29 @@ Verdict **accept with minor, 8/10**, no blocker or major. Checked: 44/44 toolkit
 
 ## Gate
 
-GATE_PLACEHOLDER
+Code under test: `bc712f5` (later commits change only `reports/`). Run: `bash -x scripts/ci/check-all.sh` as written, `DOCKER_BUILD_FLAGS` as below, `MUTMUT_PACKAGES=packages/gxg-connector-kit`.
 
-(heartbeat: final check-all on `bc712f5` green through docker_smoke; stand running)
+| Step | Result |
+|---|---|
+| lock checks (root, demo, ui, notifier, telegram), `uv sync --locked` | OK |
+| ruff check / format | OK (180 files) |
+| mypy, all 9 calls of `check-all.sh` | OK |
+| `uv run pytest` | 1275 passed |
+| `approval/tests_db` | 360 passed |
+| `approval/ui/tests_db`, `approval/notifier/tests_db` | 109 passed |
+| `approval/deploy/tests` | 6 passed |
+| schema lock; kit 457 passed, branch coverage 100 % of the key modules | OK |
+| `connectors/demo`: pytest; `check-connectors` | 146 passed; 19/19 passed (EX included) |
+| `connectors/telegram` pytest; `check_upstream.sh` pinned and `--drift` (`gxg_agents_v2` @ `f1c4d6d`) | 110 passed; OK |
+| schema guard; gitleaks tree and full range; `tests/secrets` | all caught; no leaks found; 21 passed |
+| policy validate / lint / `bundle_smoke.sh` | OK |
+| `connectors/demo/docker_smoke.sh` | `docker_smoke: OK` |
+| `stand/run.sh` (M5 + M8 EX-01 + M11) | **fresh 54/0, after-restart 54/0, after-recreate 54/0**; records `reports/integration/2026-11-23-m1.1-stand-{M5,M11}.json` (the milestone files `reports/conformance/M5.json`, `M11.json` were restored from git) |
+| `scripts/ci/mutmut.sh` | **not run**: owner's decision of 2026-11-23 (plan `f559284`, relayed by the orchestrator): no mutmut at integration, the full run only before the merge to main. Stopped at its start; no result is claimed |
+
+`check-all: OK` was therefore not printed: every step before `mutmut.sh` passed in this one run.
+
+Earlier runs on this branch, all red before the fixes named here: `22346df` (root pytest: check-connectors on demo with M8 effects, template drift → escalation, `16d6d85`, `8d9fe32`); `ccb0ee2` (`mypy --strict approval/tests_db`: `server.Wiring` not re-exported → `e3e0d1c`); `e3e0d1c` (broken copy 11 out of date after the harness fix → `bc712f5`). The second run, of the steps after root pytest, was green, stand 54/0 ×3 included. Part of it ran on an intermediate demo, so it is not counted.
 
 ## Environment notes
 
