@@ -28,6 +28,7 @@ def test_signing_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.signing_key("GXG_SVC_KEY").public_key() == key.public_key()
 
 
-def test_mcp_refuses_to_start_without_a_real_identity_verifier() -> None:
-    with pytest.raises(SystemExit, match="IdentityVerifier"):
+def test_mcp_refuses_to_start_without_its_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GXG_API_AUDIENCE", raising=False)  # identity keys and the service key: test_mcp_identity.py
+    with pytest.raises(SystemExit, match="missing configuration"):
         cli.main(["mcp"])

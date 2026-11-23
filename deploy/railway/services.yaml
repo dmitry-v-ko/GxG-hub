@@ -131,8 +131,11 @@ services:
   mcp:
     kind: app
     source: {dockerfile: deploy/railway/approval.Dockerfile}
-    start: gxg-approval mcp  # NB: cli.py at the integration head refuses to start `mcp` (no production IdentityVerifier)
+    start: gxg-approval mcp
+    port: 8091
     env:
+      GXG_LISTEN: 0.0.0.0:8091
+      GXG_IDENTITY_KEYS: ${{contextforge.GXG_IDENTITY_KEYS}}  # public keys of the ContextForge adapter (variant C)
       GXG_SERVICE_ID: approval-mcp
       GXG_API_URL: http://${{api.RAILWAY_PRIVATE_DOMAIN}}:8090
       GXG_API_AUDIENCE: approval-api

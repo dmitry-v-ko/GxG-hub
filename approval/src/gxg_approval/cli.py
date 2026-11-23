@@ -67,6 +67,8 @@ def main(argv: list[str] | None = None) -> None:
         _executor()
     elif args.process == "keys":
         _keys(args)
+    elif args.process == "mcp":
+        _mcp()
     elif args.process == "decider":
         _decider()
     elif args.process == "admin":
@@ -74,9 +76,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.process in ("switch", "passkeys"):
         _operator(args)
     else:
-        raise SystemExit(
-            "mcp: no production IdentityVerifier yet (ADR-0001 variant C lands with M5); refusing to start (SEC-03)"
-        )
+        raise SystemExit(f"unknown process {args.process}")
 
 
 def _executor() -> None:
@@ -172,6 +172,12 @@ def executor_metrics() -> CollectorRegistry:
     scrape = CollectorRegistry(auto_describe=False)
     scrape.register(RESERVE_CONFLICTS)
     return scrape
+
+
+def _mcp() -> None:
+    from .mcp import from_env
+
+    _serve(from_env().http_app(path="/mcp"), "0.0.0.0:8091")
 
 
 def _decider() -> None:
