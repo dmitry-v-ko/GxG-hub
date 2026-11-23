@@ -181,3 +181,8 @@ gxg_approval.admin.x_create_app__mutmut_56  # getattr(key, "KEY", key) is key: P
 gxg_approval.decider.x_create_app__mutmut_2  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: docs_url=None is redundant
 gxg_approval.decider.x_create_app__mutmut_3  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: redoc_url=None is redundant
 gxg_approval.executor.xǁExecutorǁtake__mutmut_15  # "or" lets a stale row call gxg_reserve, which the database refuses (status ≠ approved, or no due execute task: 0006 guard); the conflict is counted and the row delivered as before
+gxg_approval.metrics.xǁDatabaseCollectorǁcollect__mutmut_6  # "select … from" lower-case: SQL keywords are case-insensitive
+gxg_approval.metrics.xǁDatabaseCollectorǁcollect__mutmut_7  # NAME, LABELS, GXG_METRICS() upper-case: unquoted identifiers fold to lower case
+gxg_approval.metrics.x_registry__mutmut_2  # auto_describe=None is falsy like False: the same registry
+gxg_approval.sweeper.x_sweep_once__mutmut_10  # "select gxg_sweep" lower-case: SQL keywords are case-insensitive
+gxg_approval.sweeper.x_purge_once__mutmut_10  # "select gxg_purge" lower-case: SQL keywords are case-insensitive

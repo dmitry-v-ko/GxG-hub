@@ -29,7 +29,10 @@ def test_expired_intent_leaves_pending_within_60_s(
     owner.execute("UPDATE intents SET expires_at = now() - interval '1 second' WHERE intent_id = %s", (due,))
     stop = threading.Event()
     worker = threading.Thread(
-        target=sweeper.run, args=(pg.dsn("gxg_sweeper"),), kwargs={"interval_s": 0.2, "stop": stop}
+        target=sweeper.run,
+        args=(pg.dsn("gxg_sweeper"),),
+        kwargs={"interval_s": 0.2, "stop": stop},
+        daemon=True,  # a broken stop check fails the test instead of holding the process
     )
     started = time.monotonic()
     worker.start()
@@ -105,7 +108,10 @@ def test_reconnects_after_a_database_error(
 ) -> None:
     stop = threading.Event()
     worker = threading.Thread(
-        target=sweeper.run, args=("host=/nonexistent dbname=x",), kwargs={"interval_s": 0.05, "stop": stop}
+        target=sweeper.run,
+        args=("host=/nonexistent dbname=x",),
+        kwargs={"interval_s": 0.05, "stop": stop},
+        daemon=True,
     )
     worker.start()
     time.sleep(0.3)

@@ -139,6 +139,7 @@ def test_sweeper_purges_hourly(pg: Any, propose: Callable[..., Any], owner: psyc
             target=sweeper.run,
             args=(pg.dsn("gxg_sweeper"),),
             kwargs={"interval_s": 0.01, "retention_days": 30, "stop": stop, "clock": lambda: next(ticks, 3700.0)},
+            daemon=True,
         )
         worker.start()
         worker.join(10)

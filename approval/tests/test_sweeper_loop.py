@@ -33,6 +33,7 @@ class Conn:
 
     def execute(self, sql: str, params: Any) -> Any:
         self.calls.append((sql, params))
+        assert len(self.calls) < 100, "the loop does not stop"  # a broken stop check fails fast, not hangs
         queue = self.answers[sql.partition("(")[0].upper()]
         return Row(queue.pop(0) if len(queue) > 1 else queue[0])
 
@@ -46,8 +47,12 @@ class Row:
 
 
 def connected(monkeypatch: pytest.MonkeyPatch, conn: Conn) -> None:
+    connects = list[str]()
+
     @contextlib.contextmanager
-    def connect(_dsn: str, **_kw: Any) -> Iterator[Conn]:
+    def connect(dsn: str, **_kw: Any) -> Iterator[Conn]:
+        connects.append(dsn)
+        assert len(connects) < 10, "the loop reconnects without working"
         yield conn
 
     monkeypatch.setattr(psycopg, "connect", connect)
@@ -74,7 +79,11 @@ def test_no_row_counts_as_zero() -> None:
 
 
 def test_database_error_waits_one_interval(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
-    def refused(_dsn: str, **_kw: Any) -> Any:
+    tries = list[str]()
+
+    def refused(dsn: str, **_kw: Any) -> Any:
+        tries.append(dsn)
+        assert len(tries) < 10, "the loop does not stop"
         raise psycopg.OperationalError("down")
 
     monkeypatch.setattr(psycopg, "connect", refused)
