@@ -298,5 +298,5 @@ def test_a_foreign_shared_variable_is_a_named_exception(
     out = capsys.readouterr().out
     assert "NOTE (project): shared variable OPENROUTER_API_KEY is not ours, the owner decides" in out
     assert "foreign-key-value" not in out
-    deployed.shared["GXG_SECRET__SOMETHING"] = "x"  # but any other shared variable still fails
+    deployed.shared["GXG_SECRET__SOMETHING"] = "x"  # noqa: S105 # but any other shared variable still fails
     assert run(deployed, "--verify") == 1
