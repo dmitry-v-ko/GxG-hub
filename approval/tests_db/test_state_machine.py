@@ -74,6 +74,7 @@ class Machine:
     owner: psycopg.Connection[Any]
     roles: dict[str, psycopg.Connection[Any]]
     propose: Callable[..., Any]
+    decide_db: Callable[..., None]
 
     def call(self, role: str, sql: str, *args: Any) -> Any:
         with mapped_errors():
@@ -102,27 +103,18 @@ class Machine:
         return r["status"], r["version"], r["attempts"], execs, audit, decisions
 
     # --- events -------------------------------------------------------------------------------------
+    def decide(self, i: str, who: str, decision: str, version: int, args_hash: str, comment: str | None = None) -> None:
+        """Through the decider's functions (AS-30): the only path to gxg_decide."""
+        with mapped_errors():
+            self.decide_db(i, who, decision, version, args_hash, comment)
+
     def approve(self, i: str, who: str = HUMAN) -> None:
         r = self.row(i)
-        self.call(
-            "ui",
-            "SELECT gxg_decide(%s, %s, 'approve', %s, %s, false, null)",
-            i,
-            who,
-            r["version"],
-            r["canonical_args_hash"],
-        )
+        self.decide(i, who, "approve", r["version"], r["canonical_args_hash"])
 
     def reject(self, i: str) -> None:
         r = self.row(i)
-        self.call(
-            "ui",
-            "SELECT gxg_decide(%s, %s, 'reject', %s, %s, false, 'no')",
-            i,
-            HUMAN,
-            r["version"],
-            r["canonical_args_hash"],
-        )
+        self.decide(i, HUMAN, "reject", r["version"], r["canonical_args_hash"], "no")
 
     def cancel(self, i: str) -> None:
         self.call("api", "SELECT gxg_cancel(%s, 't-alpha', %s, %s)", i, BOT, self.row(i)["version"])
@@ -238,10 +230,12 @@ class Machine:
 
 
 @pytest.fixture
-def machine(pg: Any, owner: psycopg.Connection[Any], propose: Callable[..., Any]) -> Iterator[Machine]:
+def machine(
+    pg: Any, owner: psycopg.Connection[Any], propose: Callable[..., Any], decide_db: Callable[..., None]
+) -> Iterator[Machine]:
     roles = {r: pg.connect(f"gxg_{r}") for r in ("api", "ui", "executor", "sweeper")}
     try:
-        yield Machine(owner, roles, propose)
+        yield Machine(owner, roles, propose, decide_db)
     finally:
         for conn in roles.values():
             conn.close()
@@ -309,14 +303,12 @@ def test_t2_needs_the_quorum_t3_records_the_vote(machine: Machine) -> None:
     assert r["approved_at"] is not None
     assert (r["execution_deadline"] - r["approved_at"]).total_seconds() == r["execution_window_s"]
     topics = machine.owner.execute("SELECT topic FROM outbox WHERE intent_id = %s ORDER BY id", (intent,)).fetchall()
-    assert topics == [("notify",), ("execute",), ("webhook",)]
+    # M10: a webhook event per status change, from the trigger: T1 (pending_approval), then T2 (approved)
+    assert topics == [("webhook",), ("notify",), ("webhook",), ("execute",)]
     rejected, _ = machine.make("pending_approval", approvals=2)
     machine.approve(rejected, HUMAN)
     rr = machine.row(rejected)
-    machine.call(
-        "ui", "SELECT gxg_decide(%s, %s, 'reject', %s, %s, false, 'no')", rejected, HUMAN2, rr["version"],
-        rr["canonical_args_hash"],
-    )  # fmt: skip
+    machine.decide(rejected, HUMAN2, "reject", rr["version"], rr["canonical_args_hash"], "no")
     assert machine.row(rejected)["status"] == "rejected"  # T4 by the second approver
     assert machine.call("api", "SELECT gxg_received_approvals(%s)", rejected) == 1  # a rejection is no approval
 
@@ -344,29 +336,18 @@ def test_t2_refuses_what_the_ui_must_never_get_through(machine: Machine) -> None
     ]
     for who, version, args_hash, code in cases:
         with pytest.raises(GxgError) as err:
-            machine.call(
-                "ui", "SELECT gxg_decide(%s, %s, 'approve', %s, %s, false, null)", intent, who, version, args_hash
-            )
+            machine.decide(intent, who, "approve", version, args_hash)
         assert err.value.code == code, who
     machine.owner.execute(
         "UPDATE intents SET requester_principal = %s, allowed_approvers = %s, step_up_required = true "
         "WHERE intent_id = %s",
         (HUMAN, [HUMAN, HUMAN2], intent),
     )
-    for who, step_up in ((HUMAN, True), (HUMAN2, False), ("oidc:https://idp.example.invalid:3", True)):
+    for who in (HUMAN, "oidc:https://idp.example.invalid:3"):  # the requester; a human outside the frozen set
         with pytest.raises(GxgError) as err:
-            machine.call(
-                "ui",
-                "SELECT gxg_decide(%s, %s, 'approve', 1, %s, %s, null)",
-                intent,
-                who,
-                r["canonical_args_hash"],
-                step_up,
-            )
+            machine.decide(intent, who, "approve", 1, r["canonical_args_hash"])
         assert err.value.code == "permission_denied", who
-    machine.call(
-        "ui", "SELECT gxg_decide(%s, %s, 'approve', 1, %s, true, null)", intent, HUMAN2, r["canonical_args_hash"]
-    )
+    machine.decide(intent, HUMAN2, "approve", 1, r["canonical_args_hash"])  # every decision is step-up (AS-30)
     assert machine.row(intent)["status"] == "approved"
     expired, _ = machine.make("pending_approval")
     machine.owner.execute("UPDATE intents SET expires_at = now() WHERE intent_id = %s", (expired,))
@@ -542,7 +523,7 @@ def test_unknown_outcomes_are_invalid_input(machine: Machine) -> None:
             machine.call("executor", sql, *args)
         assert err.value.code == "invalid_input"
     with pytest.raises(GxgError) as err:
-        machine.call("ui", "SELECT gxg_decide(%s, %s, 'maybe', 1, %s, false, null)", intent, HUMAN, "0" * 64)
+        machine.decide(intent, HUMAN, "maybe", 1, "0" * 64)
     assert err.value.code == "invalid_input"
 
 

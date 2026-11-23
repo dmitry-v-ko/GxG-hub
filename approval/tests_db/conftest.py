@@ -34,9 +34,10 @@ IMAGE = "postgres:16.6-alpine"
 BUNDLE_KID = "ci-test"
 ADMIN = "test"  # superuser of the test container; trust auth on the Unix socket
 REPO = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
-ROLES = ("gxg_api", "gxg_mcp", "gxg_ui", "gxg_executor", "gxg_sweeper", "gxg_notifier", "gxg_admin")
+ROLES = ("gxg_api", "gxg_mcp", "gxg_ui", "gxg_executor", "gxg_sweeper", "gxg_notifier", "gxg_admin", "gxg_decider")
 TABLES = (
-    "intents, decisions, executions, outbox, switches, approver_links, audit_events, link_codes, webauthn_credentials"
+    "intents, decisions, executions, outbox, switches, approver_links, audit_events, link_codes, webauthn_credentials, "
+    "decider_challenges, passkey_invites, webhook_deliveries"
 )
 
 API_ID, MCP_ID, EXECUTOR_ID = "approval-api", "approval-mcp", "executor"
@@ -376,3 +377,35 @@ def _jwks(*keys: Ed25519PrivateKey) -> dict[str, Any]:
 def make_jwks() -> Callable[..., dict[str, Any]]:
     """JWKS document (AS-09) of the given executor keys."""
     return _jwks
+
+
+TEST_OPERATOR = "oidc:https://idp.example.invalid:operator"
+DUMMY_ASSERTION = (
+    '{"credential_id": "t", "authenticator_data": "t", "client_data_json": "t", "signature": "t"}'
+)  # gxg_decide stores it; the decider (not the database) checks the signature (AS-30)
+
+
+def _decide_db(
+    pg: Pg, intent_id: Any, human: str, decision: str, version: int, args_hash: str, comment: str | None = None
+) -> None:
+    """A human decision through the decider's two database functions, as after a verified assertion: an enrolled
+    test passkey (counter 0), a fresh challenge, then gxg_decide. Refusals propagate as psycopg errors."""
+    cred = ("cred:" + human).encode()
+    with pg.connect("gxg_owner") as owner:
+        owner.execute(
+            "INSERT INTO webauthn_credentials (credential_id, human_principal, public_key, sign_count, created_at, "
+            "enrolled_by) VALUES (%s, %s, '\\x00', 0, now(), %s) ON CONFLICT DO NOTHING",
+            (cred, human, TEST_OPERATOR),
+        )
+    with pg.connect("gxg_decider") as decider:
+        row = decider.execute(
+            "SELECT gxg_decision_challenge(%s, %s, %s, %s, %s)", (human, intent_id, decision, version, args_hash)
+        ).fetchone()
+        assert row is not None
+        decider.execute("SELECT gxg_decide(%s, %s, 0, %s, %s)", (row[0], cred, comment, DUMMY_ASSERTION))
+
+
+@pytest.fixture
+def decide_db(pg: Pg) -> Callable[..., None]:
+    """`decide_db(intent_id, human, decision, version, args_hash, comment=None)`: see _decide_db."""
+    return lambda *args, **kw: _decide_db(pg, *args, **kw)

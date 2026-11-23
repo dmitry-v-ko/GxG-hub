@@ -280,7 +280,7 @@ def test_propose_is_listed_and_execute_is_not(stack: Stack) -> None:
     assert stack.demo.tools() == ["demo.boards.list", "demo.message.propose", "demo.note.get", "demo.notes.search"]
 
 
-def test_human_approval_path(stack: Stack, pg: Any) -> None:
+def test_human_approval_path(stack: Stack, decide_db: Any) -> None:
     """Without an auto rule: pending_approval → a human approves (T2) → executed."""
     # M9: T1 freezes the tenant's approvers from the bundle and gxg_decide checks them, so the human is one
     human = "oidc:https://idp.example.invalid:9"
@@ -294,11 +294,7 @@ def test_human_approval_path(stack: Stack, pg: Any) -> None:
     ex = stack.executor()
     assert ex.run_once() is False  # nothing to execute (the outbox row is a `notify`)
     i = stack.intent(created["intent_id"])
-    with pg.connect("gxg_ui") as ui:
-        ui.execute(
-            "SELECT gxg_decide(%s, %s, 'approve', %s, %s, false, null)",
-            (created["intent_id"], human, i["version"], i["canonical_args_hash"]),
-        )
+    decide_db(created["intent_id"], human, "approve", i["version"], i["canonical_args_hash"])
     stack.drain(ex, lambda: stack.status(created["intent_id"]) == "succeeded")
     assert len(stack.demo.calls()) == 1
 
@@ -1062,7 +1058,8 @@ def test_without_an_active_signing_key_nothing_is_reserved_and_no_attempt_is_spe
     assert stack.status(created["intent_id"]) == "approved"
     assert stack.intent(created["intent_id"])["attempts"] == 0 and stack.executions(created["intent_id"]) == []
     deferred = stack.owner.execute(
-        "SELECT attempts FROM outbox WHERE intent_id = %s AND delivered_at IS NULL", (created["intent_id"],)
+        "SELECT attempts FROM outbox WHERE intent_id = %s AND delivered_at IS NULL AND topic = 'execute'",
+        (created["intent_id"],),
     ).fetchone()
     assert deferred == (1,)
     stack.signing = [{**later, "not_before": PAST}]  # a key becomes active

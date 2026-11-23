@@ -14,7 +14,7 @@ from typing import Any
 import psycopg
 import pytest
 
-ROLES = ("gxg_api", "gxg_mcp", "gxg_ui", "gxg_executor", "gxg_sweeper", "gxg_notifier", "gxg_admin")
+ROLES = ("gxg_api", "gxg_mcp", "gxg_ui", "gxg_executor", "gxg_sweeper", "gxg_notifier", "gxg_admin", "gxg_decider")
 TABLE_PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
 ALL = "*"
 CIPHER = {"args_ciphertext", "preview_ciphertext"}
@@ -37,7 +37,7 @@ MATRIX: dict[str, dict[str, dict[str, set[str] | str]]] = {
         "switches": {"SELECT": ALL},
         "audit_events": {"INSERT": ALL},
         "approver_links": {"SELECT": ALL},
-        "webauthn_credentials": {"SELECT": ALL, "INSERT": ALL, "UPDATE": {"sign_count"}},
+        "webauthn_credentials": {"SELECT": ALL},  # M10 (AS-30): the decider enrolls, the ui only shows
     },
     "gxg_executor": {
         "intents": {"SELECT": "-preview_ciphertext"},
@@ -58,16 +58,28 @@ MATRIX: dict[str, dict[str, dict[str, set[str] | str]]] = {
         "outbox": {"SELECT": ALL, "UPDATE": {"delivered_at", "attempts"}},
         "audit_events": {"INSERT": ALL},
         "approver_links": {"SELECT": ALL},
+        # M10 (AS-23): one row per (event, subscriber), a table AS-27 does not list (pending_owner_decision)
+        "webhook_deliveries": {
+            "SELECT": ALL, "INSERT": ALL, "UPDATE": {"next_at", "attempts", "last_status", "delivered_at", "dead_at"}
+        },
     },
     "gxg_admin": {
         "outbox": {"INSERT": ALL},
         "switches": {"SELECT": ALL, "INSERT": ALL, "UPDATE": ALL},
         "audit_events": {"INSERT": ALL},
     },
+    # M10 (AS-30): reads passkeys and challenges; every write is one of its functions
+    "gxg_decider": {
+        "webauthn_credentials": {"SELECT": "-created_at"},
+        "decider_challenges": {"SELECT": ALL},
+    },
 }
 FUNCTIONS = {
-    "gxg_api": {"gxg_record_auto_decision", "gxg_received_approvals", "gxg_cancel", "gxg_dispatch"},  # T1, T6, T9
-    "gxg_ui": {"gxg_decide", "gxg_resolve_manual", "gxg_link_code"},  # T2-T4, T18; Telegram link code (M9)
+    # T1, T6, T9; /metrics (M10)
+    "gxg_api": {"gxg_record_auto_decision", "gxg_received_approvals", "gxg_cancel", "gxg_dispatch", "gxg_metrics"},
+    "gxg_ui": {"gxg_resolve_manual", "gxg_link_code"},  # T18; Telegram link code (M9). T2-T4: the decider (M10)
+    "gxg_decider": {"gxg_decision_challenge", "gxg_decide", "gxg_enroll_challenge", "gxg_enroll"},  # AS-30
+    "gxg_admin": {"gxg_switch", "gxg_passkey_invite"},  # AS-24, EX-13
     "gxg_notifier": {"gxg_link_claim"},  # `/link <code>` (M9)
     "gxg_executor": {
         "gxg_reserve",
@@ -81,7 +93,8 @@ FUNCTIONS = {
         "gxg_release_reservation",
         "gxg_expire_dispatch",
         "gxg_sweep",
-    },  # T5, T8, T10, T14
+        "gxg_purge",
+    },  # T5, T8, T10, T14; RET-01 (M10)
 }
 TABLES = (
     "intents",
@@ -94,6 +107,9 @@ TABLES = (
     "transition_rules",
     "link_codes",
     "webauthn_credentials",
+    "decider_challenges",
+    "passkey_invites",
+    "webhook_deliveries",
 )
 
 
@@ -192,7 +208,7 @@ STATEMENTS = {
     "FROM intents",
     "update_execution": "UPDATE executions SET state = 'dispatching'",
     "insert_decision": f"INSERT INTO decisions SELECT gen_random_uuid(), intent_id, tenant_id, '{HUMAN}', 'approve', "
-    f"1, canonical_args_hash, false, null, now() FROM intents",
+    f"1, canonical_args_hash, false, null, now(), null FROM intents",
     "read_args": "SELECT args_ciphertext FROM intents",
     "read_preview": "SELECT preview_ciphertext FROM intents",
     "read_intents": "SELECT intent_id, status FROM intents",
@@ -210,8 +226,22 @@ STATEMENTS = {
     "relink_approver": "UPDATE approver_links SET telegram_user_id = 44",
     "read_links": "SELECT telegram_user_id FROM approver_links",
     "read_rules": "SELECT * FROM transition_rules",
-    "call_decide": "SELECT gxg_decide(gen_random_uuid(), 'oidc:x', 'approve', 1, '', true, null)",
-    "add_passkey": "INSERT INTO webauthn_credentials VALUES ('\\x01', 'oidc:x', '\\x02', 0, now())",
+    "call_decide": "SELECT gxg_decide('\\x01', '\\x01', 0, null, '{}')",
+    "call_challenge": "SELECT gxg_decision_challenge('oidc:x', gen_random_uuid(), 'approve', 1, '')",
+    "add_passkey": "INSERT INTO webauthn_credentials VALUES ('\\x01', 'oidc:x', '\\x02', 0, now(), 'oidc:op')",
+    "count_passkey": "UPDATE webauthn_credentials SET sign_count = 9",
+    "read_passkeys": "SELECT public_key FROM webauthn_credentials",
+    "read_challenges": "SELECT challenge FROM decider_challenges",
+    "call_enroll": "SELECT gxg_enroll('\\x01', '\\x01', '\\x02', 0)",
+    "call_invite": "SELECT gxg_passkey_invite('oidc:x', repeat('a', 64), 'oidc:op', 600)",
+    "read_invites": "SELECT token_hash FROM passkey_invites",
+    "call_switch": "SELECT gxg_switch('global', true, 'probe', 'oidc:op')",
+    "call_purge": "SELECT gxg_purge(30, 1)",
+    "call_metrics": "SELECT * FROM gxg_metrics()",
+    "read_deliveries": "SELECT event FROM webhook_deliveries",
+    "add_delivery": "INSERT INTO webhook_deliveries (outbox_id, subscriber_id, tenant_id, event, created_at, next_at) "
+    "VALUES (1, 's', 't-alpha', '{}', now(), now())",
+    "retarget_delivery": "UPDATE webhook_deliveries SET subscriber_id = 'x'",
     "read_link_codes": "SELECT code_hash FROM link_codes",
     "call_link_code": "SELECT gxg_link_code('oidc:x', '{t-alpha}', '123456')",
     "call_link_claim": "SELECT gxg_link_claim('123456', 42)",
@@ -220,7 +250,7 @@ STATEMENTS = {
     "call_move_helper": "SELECT _gxg_blocked('t', 'x')",
 }
 ALLOWED = {
-    "gxg_api": {"read_intents", "insert_audit", "insert_outbox", "read_switches"},
+    "gxg_api": {"read_intents", "insert_audit", "insert_outbox", "read_switches", "call_metrics"},
     "gxg_mcp": {"insert_audit"},
     "gxg_ui": {
         "read_intents",
@@ -230,8 +260,7 @@ ALLOWED = {
         "insert_audit",
         "read_switches",
         "read_links",
-        "call_decide",
-        "add_passkey",
+        "read_passkeys",
         "call_link_code",
     },
     "gxg_executor": {
@@ -245,9 +274,17 @@ ALLOWED = {
         "read_switches",
         "call_reserve",
     },
-    "gxg_sweeper": {"read_intents", "read_executions", "insert_audit", "insert_outbox", "read_switches", "call_sweep"},
-    "gxg_notifier": {"insert_audit", "read_outbox", "deliver_outbox", "read_links", "call_link_claim"},
-    "gxg_admin": {"insert_audit", "insert_outbox", "read_switches", "set_switch", "clear_switch"},
+    "gxg_sweeper": {
+        "read_intents", "read_executions", "insert_audit", "insert_outbox", "read_switches", "call_sweep", "call_purge",
+    },
+    "gxg_notifier": {
+        "insert_audit", "read_outbox", "deliver_outbox", "read_links", "call_link_claim", "read_deliveries",
+        "add_delivery",
+    },
+    "gxg_admin": {
+        "insert_audit", "insert_outbox", "read_switches", "set_switch", "clear_switch", "call_switch", "call_invite",
+    },
+    "gxg_decider": {"call_decide", "call_challenge", "read_passkeys", "read_challenges", "call_enroll"},
 }
 
 

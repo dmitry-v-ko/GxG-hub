@@ -45,6 +45,7 @@ def test_expired_intent_leaves_pending_within_60_s(
     audit = owner.execute("SELECT actor, from_status, to_status FROM audit_events WHERE action = 'expire_approval'")
     assert audit.fetchall() == [("sweeper", "pending_approval", "expired")]
     assert owner.execute("SELECT topic FROM outbox WHERE intent_id = %s ORDER BY id", (due,)).fetchall() == [
+        ("webhook",),  # M10: T1 event (trigger)
         ("notify",),
         ("webhook",),
     ]

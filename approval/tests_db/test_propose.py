@@ -30,7 +30,9 @@ def stored_hash(owner: psycopg.Connection[Any]) -> str:
 
 
 def count(owner: psycopg.Connection[Any], table: str = "intents") -> int:
-    row = owner.execute(f"SELECT count(*) FROM {table}").fetchone()
+    # M10: webhook events (one per status change) are counted by test_webhooks.py, not here
+    where = " WHERE topic <> 'webhook'" if table == "outbox" else ""
+    row = owner.execute(f"SELECT count(*) FROM {table}{where}").fetchone()
     assert row is not None
     return int(row[0])
 
@@ -47,7 +49,7 @@ def test_human_approval_by_default_for_external_effect(
     stored = owner.execute("SELECT connector_id, execute_tool, effect_class, policy_version FROM intents").fetchone()
     assert stored == ("demo", "demo.message.execute", "external_effect", "b" * 40)  # AS-26: from the bundle
     assert doc["approval"] == {"mode": "human", "required_approvals": 1, "received_approvals": 0, "rule_ids": []}
-    row = owner.execute("SELECT topic, payload FROM outbox").fetchall()
+    row = owner.execute("SELECT topic, payload FROM outbox WHERE topic <> 'webhook'").fetchall()
     assert row == [
         ("notify", {"intent_id": doc["intent_id"], "tenant_id": "t-alpha", "status": "pending_approval", "version": 1,
                     "title": "Send a message", "target_label": "Board b1", "requester": "agent:t-alpha:bot",
@@ -67,7 +69,7 @@ def test_write_reversible_is_approved_without_human(
     doc = propose(tool="demo.note.propose").json()
     assert doc["status"] == "approved" and doc["approval"]["mode"] == "not_required"
     assert doc["execution_deadline"] is not None
-    assert owner.execute("SELECT topic FROM outbox").fetchall() == [("execute",)]
+    assert owner.execute("SELECT topic FROM outbox WHERE topic <> 'webhook'").fetchall() == [("execute",)]
     assert count(owner, "decisions") == 0
 
 
@@ -335,7 +337,7 @@ def test_auto_approval_writes_policy_decision(
     assert doc["approval"]["received_approvals"] == 0  # human approvals only; the policy decision is not one
     rows = owner.execute("SELECT decided_by, decision, intent_version FROM decisions").fetchall()
     assert rows == [(f"policy:auto-b@{'b' * 40}", "approve", 1)]
-    assert owner.execute("SELECT topic FROM outbox").fetchall() == [("execute",)]
+    assert owner.execute("SELECT topic FROM outbox WHERE topic <> 'webhook'").fetchall() == [("execute",)]
 
 
 def test_policy_decision_only_for_auto_intents(
@@ -545,7 +547,7 @@ def test_no_approver_can_decide_alert(
     assert owner.execute("SELECT allowed_approvers FROM intents").fetchall() == [([],)]
     assert ("gxg_approval", 30, f"ALERT policy tenant=t-alpha: no approver of the tenant may decide intent "
             f"{doc['intent_id']}") in caplog.record_tuples  # fmt: skip
-    payload = owner.execute("SELECT payload FROM outbox").fetchone()
+    payload = owner.execute("SELECT payload FROM outbox WHERE topic <> 'webhook'").fetchone()
     assert payload is not None and payload[0]["approvers"] == []
 
 
