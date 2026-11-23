@@ -15,3 +15,4 @@ status 2026-11-23T00:5xZ: all 9 packages finished in the check-all run; the cont
 it left one SQL mutation in approval/.../0001_core.py (preview_ciphertext check removed); restored from git, never committed. Next: list check of ui/notifier/root, SQL driver again.
 list check (2026-11-23, mutmut results --all of all 9 packages, 11611 mutants): not killed 162, listed as equivalent 162, both 162; unexplained 0, stale 0.
 SQL driver: rerun started (same PostgreSQL container setup as mutmut.sh).
+heartbeat 2026-11-23T01:21:05Z: SQL driver 29 of 118 mutations done, none unexpected so far
