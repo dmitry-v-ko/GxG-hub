@@ -89,10 +89,11 @@ def approve(owner: Any, decide_db: Any, intent_id: str) -> None:
 
 
 def deliveries(owner: Any) -> list[tuple[Any, ...]]:
-    return owner.execute(
+    rows: list[tuple[Any, ...]] = owner.execute(
         "SELECT event->>'status', attempts, delivered_at IS NOT NULL, dead_at IS NOT NULL, last_status "
         "FROM webhook_deliveries ORDER BY id"
     ).fetchall()
+    return rows
 
 
 def test_every_status_change_is_delivered_signed(
@@ -153,7 +154,9 @@ def test_unavailable_subscriber_backoff_then_dead_and_alert(
             "SELECT extract(epoch FROM next_at - now())::int FROM webhook_deliveries ORDER BY id LIMIT 1"
         ).fetchone()[0]
         gaps.append(gap)
-        owner.execute("UPDATE webhook_deliveries SET next_at = now() WHERE id = (SELECT min(id) FROM webhook_deliveries)")
+        owner.execute(
+            "UPDATE webhook_deliveries SET next_at = now() WHERE id = (SELECT min(id) FROM webhook_deliveries)"
+        )
         hooks.deliver()
     assert all(abs(g - want) <= 1 for g, want in zip(gaps[:6], [5, 10, 20, 40, 80, 160], strict=True)), gaps
     assert max(gaps) <= 3600 and gaps[-1] >= 3590  # capped at 1 h
@@ -187,7 +190,8 @@ def test_subscriber_back_after_an_hour_gets_everything_in_order(
     execute(pg, intent)
     run(hooks)
     owner.execute(
-        "UPDATE webhook_deliveries SET created_at = created_at - interval '1 hour', next_at = next_at - interval '2 hours'"
+        "UPDATE webhook_deliveries "
+        "SET created_at = created_at - interval '1 hour', next_at = next_at - interval '2 hours'"
     )
     receiver.up = True
     for _ in range(6):
@@ -230,7 +234,7 @@ def test_no_secret_no_unsigned_delivery(
     propose()
     run(hooks)
     assert receiver.requests == [] and deliveries(owner)[0][4] == "no secret"
-    hooks.bundles.current.webhooks  # the bundle stays; the ref is resolved inside secrets_dir only
+    # a ref is resolved inside secrets_dir only
     assert hooks._secret("secret://../../etc/passwd") is None
 
 

@@ -47,7 +47,9 @@ _SQL_HEADS = (
     "SELECT DISTINCT ON (subscriber_id) id, subscriber_id, event, next_at <= now() FROM webhook_deliveries "
     "WHERE delivered_at IS NULL AND dead_at IS NULL ORDER BY subscriber_id, id"
 )
-_SQL_DELIVERED = "UPDATE webhook_deliveries SET delivered_at = now(), attempts = attempts + 1, last_status = %s WHERE id = %s"
+_SQL_DELIVERED = (
+    "UPDATE webhook_deliveries SET delivered_at = now(), attempts = attempts + 1, last_status = %s WHERE id = %s"
+)
 # AS-23: backoff from 5 s doubling up to 1 h; dead once the event is 24 h old (database clock, one for all rows)
 _SQL_FAILED = (
     "UPDATE webhook_deliveries SET attempts = attempts + 1, last_status = %s, "

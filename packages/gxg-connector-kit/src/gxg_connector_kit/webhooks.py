@@ -1,6 +1,6 @@
 """Webhook signature of AS-22, for the sender (notifier) and for every receiver (Signals, M12):
 `GxG-Signature: t=<unix>,v1=<hex(HMAC-SHA256(secret, t + "." + body))>`. A receiver refuses a bad signature,
-`|now − t| > 300 s` and a repeated `event_id` (EX-20).
+`|now - t| > 300 s` and a repeated `event_id` (EX-20).
 """
 
 from __future__ import annotations
