@@ -55,6 +55,7 @@ CASES = {  # patch -> (the check that catches it, every check that fails: an exa
     "19-query-logged-on-error": ("SC-09", {"SC-09"}),  # the query in a log line on a provider error only
 }
 FIRST_TEN = sorted(CASES)[:10]
+EX = {"EX-01", "EX-02", "EX-03", "EX-04", "EX-05", "EX-11", "EX-14", "EX-16"}
 pytestmark = pytest.mark.e2e  # child processes: mutmut's trampolines do not reach them
 
 
@@ -77,7 +78,9 @@ def check(root: Path, tmp: Path) -> tuple[int, dict[str, dict[str, Any]], str]:
 def test_demo_passes(tmp_path: Path) -> None:
     code, report, out = check(DEMO, tmp_path)
     assert code == 0, out
-    assert {k for k, v in report.items() if v["status"] == "passed"} == {c for c, _ in CASES.values()} | {"MC-01"}
+    # demo has effects since M8 (demo.message.propose): the EX checks apply to it and pass
+    expected = {c for c, _ in CASES.values()} | {"MC-01"} | EX
+    assert {k for k, v in report.items() if v["status"] == "passed"} == expected
     assert len(CASES) == 19
     assert all(v["status"] in ("passed", "not_applicable") for v in report.values()), report
 

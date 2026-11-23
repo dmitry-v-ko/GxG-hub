@@ -5,6 +5,7 @@ Imported only by the conformance suite (a dev dependency); not part of the servi
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from typing import Any, get_args
 
@@ -22,7 +23,10 @@ MISSING_NOTE = "00000000-0000-4000-8000-000000000000"
 
 
 def start(settings: KitSettings, wiring: Wiring) -> Running:
-    app, connector = server.build(settings, Backend(scan_delay_s=0))
+    if isinstance(settings, server.Settings):  # stage C: the fake provider's journal next to the bundle state
+        settings = dataclasses.replace(settings, provider_db=settings.state_file.parent / "provider.sqlite3")
+    demo_wiring = server.Wiring(approval=wiring.approval, jwks=wiring.jwks)
+    app, connector = server.build(settings, Backend(scan_delay_s=0), demo_wiring)
     backend = connector.backend
     enter = backend._enter
 
@@ -30,11 +34,19 @@ def start(settings: KitSettings, wiring: Wiring) -> Running:
         backend.calls[kind] += 1
         raise RuntimeError(f"backend exploded: {os.environ.get(SECRET_ENV)}")
 
+    provider = connector.effects.provider if connector.effects is not None else None
+
     def fail(mode: str | None) -> None:
         backend.failure = mode if mode in BACKEND_FAILURES else None  # type: ignore[assignment]
         backend._enter = crash if mode == "crash" else enter  # type: ignore[method-assign]
+        if provider is not None:  # stage C: the effect goes to demo's own fake provider (provider.py)
+            provider.set_mode("commit_then_drop" if mode == "commit_then_drop" else "ok")
 
-    return Running(app=app, calls=lambda: sum(backend.calls.values()), fail=fail)
+    def calls() -> int:  # backend reads plus provider sends
+        return sum(backend.calls.values()) + (len(provider.calls()) if provider is not None else 0)
+
+    internal = connector.effects.internal_app() if connector.effects is not None else None
+    return Running(app=app, calls=calls, fail=fail, internal=internal)
 
 
 def rids(tool: str, result: dict[str, Any]) -> set[str]:
@@ -73,4 +85,6 @@ def harness() -> Harness:
         secret_env=SECRET_ENV,
         rids=rids,
         failures=(*BACKEND_FAILURES, "crash"),
+        actor="agent:t-alpha:actor",  # read and propose on a-public (fixtures/grants)
+        propose=Call("demo.message.propose", {"board_id": "a-public", "recipient": "partner_1", "text": "hello"}),
     )
