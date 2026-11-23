@@ -35,3 +35,8 @@
 - Секундный cron Signals: wakeup по `next_poll_at` или не создавать run при пустой выборке.
 - Webhook для tenant'а не того workspace: 2xx-ignore или 403 вместо 503.
 - mastra typecheck зависит от `frontend/node_modules`: `npm ci` в обоих каталогах в CI.
+- M12 ц2 (критик 8.5): при deferral записывать safe-код последней ошибки и время начала ожидания; метрика/эскалация для intent, ждущего дольше `expires_at` + запас.
+- M12 ц2: reconciliation для кандидата, терминализированного по `permission_denied`/`not_found`, если Hub позже вернёт терминальный статус intent'а.
+- M12 ц2: один источник поддерживаемых `action@version` для фильтра выборки и для claim.
+- M12 ц2: индекс/сгенерированная колонка под фильтр `action_key@version` при росте очереди.
+- M12 ц2: явно ограничить клиентские повторы `telegram.message.propose` по `internal_error`.
