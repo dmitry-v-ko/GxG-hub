@@ -28,7 +28,7 @@
 | M6-Q1–Q4, Q6 | по умолчанию из аудита: коллекция = entity_type.key; одна connection на tenant; читателям только published; write-tools скрыты от read-ключа; миграции только для тестов | ничего |
 | M11-4: ключ дедупликации Telegram для Signals (`chat_ref:message_id` вместо `peer_id:message_id`) | решается в задании M12: сопоставление ключей один раз или переход на новый ключ | M12 |
 | M11-5: роль `gxg_telegram_reader` в production (нужен `BYPASSRLS`, выдаёт суперпользователь Supabase) | принято: оператор базы выполняет `connectors/telegram/archive/reader_role.sql`, пароль из secret store; миграций в gxg_agents_v2 нет | ручное действие при развёртывании |
-| M6/MCC-03: одна роль `gxg_kb_reader` на все tenant'ы (изоляция RLS по `gxg.workspace_id`) против роли на tenant через `credential_ref` | ждёт владельца; по умолчанию одна роль (один Supabase-проект) | M6-PENDING-OWNER п. 7 |
+| M6/MCC-03: одна роль `gxg_kb_reader` на все tenant'ы (изоляция RLS по `gxg.workspace_id`) против роли на tenant через `credential_ref` | решено владельцем 2026-11-23: одна роль, пока tenant один; роль на tenant — при появлении второго tenant'а | M6-PENDING-OWNER п. 7 |
 | M6: создать `gxg_kb_reader` в Supabase, `write-paths.sql`, SECURITY DEFINER-функции, hardening (этап 2) | ручное действие владельца при развёртывании | `gxg-kb-service/schema/` |
 
 | Веха | Цикл | Роль | Ветка | Commit | Оценка | Решение | Дата |
@@ -219,3 +219,4 @@
 | M11.1 | 3 (follow-up) | владелец вехи | gxg-telegram-service: claude/m11.1-telegram-service | 5bcf392 | — | F1, F2, SI-03 (grant collect), переход на кит 7e7ce56, F3–F6: check-all OK, check-connectors 21/21, mutmut 0 необъяснённых; MAJOR-1 (429 до dispatch тратит попытку) → спека | 2026-11-23 |
 | — | — | оркестратор (проверено субагентом) | — | a2ae2ff | — | спека: T12b/AS-12a — 429 `rate_limited` до dispatch откладывает повтор без траты попытки; EX-25 в матрице; demo-режим `execute_quota`; реализация — в M10; включить EX-25 в AC-M10-07 — вопрос владельцу | 2026-11-23 |
 | интеграция | — | оркестратор | claude/integration | 16d6d85 | — | эскалация AC-M1.1-04 (demo M8 ↔ шаблон): вариант 1 — demo оставляет свой effects.py, тесты M8 без изменений; тест дрейфа сравнивает с рендером with_effects с явным списком допустимых отличий; patches перегенерировать; ревью субагентом; перевод на кит — backlog | 2026-11-23 |
+| — | — | решение владельца | — | — | — | AC-M12-06 (SI-03) добавлен; AC-M10-07 расширен до EX-25; KB: одна роль базы на все tenant'ы, пока tenant один (отступление от MCC-03) | 2026-11-23 |
