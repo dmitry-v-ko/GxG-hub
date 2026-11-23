@@ -240,6 +240,7 @@ def test_fan_out_by_tenant_and_prefix_and_gone_subscribers(
     """AS-21: a subscriber gets its tenant's events only (and those of its business_task_prefix); a subscriber
     removed from the bundle gets nothing more."""
     world.webhooks = [SUBSCRIBER | {"id": "prefixed", "business_task_prefix": "sig-"},
+                      SUBSCRIBER | {"id": "upper", "business_task_prefix": "XX"},  # no task id: never a match
                       SUBSCRIBER | {"id": "beta", "tenant": "t-beta"}]  # fmt: skip
     world.reload("c" * 40)
     propose(business_task_id="sig-1")
@@ -339,3 +340,54 @@ def test_process_roles_cannot_forge_webhook_events(pg: Any, role: str) -> None:
         conn.execute(
             "INSERT INTO outbox (topic, payload, created_at, available_at) VALUES ('notify', '{}', now(), now())"
         )
+
+
+def test_request_shape_timeout_no_redirects_and_logs(
+    hooks: Webhooks, receiver: Receiver, propose: Any, owner: Any, caplog: Any
+) -> None:
+    """The exact request (JSON, signature header, 10 s timeout, redirects not followed), the try count and the log
+    lines of a failed and of a dead delivery (alert context: subscriber, event, status; never the URL or body)."""
+    sent: list[dict[str, Any]] = []
+
+    class Spy:
+        def post(self, url: str, **kw: Any) -> httpx.Response:
+            sent.append({"url": url, **kw})
+            return httpx.Response(302, headers={"location": "https://elsewhere.internal/"})
+
+    hooks.http = Spy()  # type: ignore[assignment]
+    propose()
+    hooks.fan_out()
+    caplog.set_level("WARNING", logger="gxg_approval_notifier.webhooks")
+    assert hooks.deliver() == 1
+    (call,) = sent
+    assert call["headers"]["Content-Type"] == "application/json" and webhooks.HEADER in call["headers"]
+    assert call["timeout"] == hooks_mod.HTTP_TIMEOUT_S == 10 and call["follow_redirects"] is False
+    event = deliveries(owner)
+    assert event[0][4] == "302" and event[0][2] is False  # a redirect is not a delivery
+    eid = owner.execute("SELECT event->>'event_id' FROM webhook_deliveries").fetchone()[0]
+    assert [r.getMessage() for r in caplog.records] == [f"webhook signals-alpha: event {eid} not delivered (302)"]
+    caplog.clear()
+    owner.execute("UPDATE webhook_deliveries SET next_at = now(), created_at = now() - interval '25 hours'")
+    assert hooks.deliver() == 1
+    assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
+        ("ERROR", f"webhook signals-alpha: event {eid} is dead after 24 h (302)")
+    ]
+    assert hooks.deliver() == 0  # nothing pending
+
+
+def test_every_due_head_is_tried_in_one_pass(
+    hooks: Webhooks, receiver: Receiver, world: Any, propose: Any, owner: Any
+) -> None:
+    """One subscriber's head not due, another's gone from the bundle: the other due heads still go in this pass."""
+    world.webhooks = [SUBSCRIBER | {"id": "a-first"}, SUBSCRIBER | {"id": "b-gone"}, SUBSCRIBER | {"id": "c-due"}]
+    world.reload("f" * 40)
+    propose()
+    hooks.fan_out()
+    owner.execute("UPDATE webhook_deliveries SET next_at = now() + interval '1 hour' WHERE subscriber_id = 'a-first'")
+    world.webhooks = [SUBSCRIBER | {"id": "a-first"}, SUBSCRIBER | {"id": "c-due"}]
+    world.reload("0" * 40)
+    assert hooks.deliver() == 1
+    rows = owner.execute(
+        "SELECT subscriber_id, delivered_at IS NOT NULL, last_status FROM webhook_deliveries ORDER BY subscriber_id"
+    ).fetchall()
+    assert rows == [("a-first", False, None), ("b-gone", False, "not in the bundle"), ("c-due", True, "204")]

@@ -165,3 +165,5 @@ telegram_connector.archive.xǁArchiveServiceǁread_thread__mutmut_21  # M11: sam
 telegram_connector.archive.xǁArchiveServiceǁcollect__mutmut_34  # M11: same as search__mutmut_21
 telegram_connector.server.x_build__mutmut_10  # M11: detected, not equivalent: store = None makes build() fail and the in-process MCP session hangs, so mutmut reports a timeout instead of a failure
 telegram_connector.tools.xǁTelegramToolǁrun__mutmut_151  # M11: as demo's run__mutmut_133: duration_ms * 1001, 0.1 % off a log field
+gxg_approval_notifier.webhooks.x_allowed_url__mutmut_9  # rstrip("XX.XX") on a lower-cased host: no "X" to strip, only the dots as before
+gxg_approval_notifier.webhooks.x_body_of__mutmut_4  # ensure_ascii=None is falsy like False: the same bytes
