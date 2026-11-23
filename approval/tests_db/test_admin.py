@@ -221,6 +221,8 @@ def test_required_claims_and_leeway(admin_client: TestClient) -> None:
     late = token(exp=now - 5, iat=now - 60)  # 5 s plus the fraction of this second ago: past the leeway
     assert admin_client.get("/v1/switches", headers=auth(late)).status_code == 401
     assert admin_client.get("/v1/switches", headers=auth(token(exp=now + 2))).status_code == 200
+    skewed = token(exp=now - 3, iat=now - 60)  # 3-4 s ago: inside the 5 s leeway
+    assert admin_client.get("/v1/switches", headers=auth(skewed)).status_code == 200
 
 
 def test_pyjwk_signing_key_and_auth_time_boundary(pg: Any, owner: psycopg.Connection[Any]) -> None:

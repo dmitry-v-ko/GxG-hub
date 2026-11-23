@@ -173,3 +173,11 @@ gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_16  # split("?", 2)[0] == split("
 gxg_approval.admin.x_create_app__mutmut_12  # Starlette headers are case-insensitive: "AUTHORIZATION" finds the same header
 gxg_approval.admin.x_create_app__mutmut_13  # a missing header as "XXXX" instead of "": neither starts with "Bearer ", the same 401
 gxg_approval.executor.xǁExecutorǁ_defer__mutmut_2  # cast(None, …): typing.cast is a no-op at runtime
+gxg_approval.admin.x_create_app__mutmut_2  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: docs_url=None is redundant
+gxg_approval.admin.x_create_app__mutmut_3  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: redoc_url=None is redundant
+gxg_approval.admin.x_create_app__mutmut_49  # getattr(None, "key", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.admin.x_create_app__mutmut_55  # getattr(key, "XXkeyXX", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.admin.x_create_app__mutmut_56  # getattr(key, "KEY", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.decider.x_create_app__mutmut_2  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: docs_url=None is redundant
+gxg_approval.decider.x_create_app__mutmut_3  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: redoc_url=None is redundant
+gxg_approval.executor.xǁExecutorǁtake__mutmut_15  # "or" lets a stale row call gxg_reserve, which the database refuses (status ≠ approved, or no due execute task: 0006 guard); the conflict is counted and the row delivered as before
