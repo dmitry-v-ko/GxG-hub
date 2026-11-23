@@ -31,6 +31,14 @@ services:
     volume: /var/lib/postgresql/data
     env: {POSTGRES_USER: postgres, POSTGRES_DB: gxg_approval, PGDATA: /var/lib/postgresql/data/pgdata}
     secrets: {POSTGRES_PASSWORD: {gen: random:24}}
+  # The archive database of gxg-telegram-service (ADR-0005): pgvector as in the stand (compose.yaml), the service owns
+  # the schema and its migrations.
+  telegram-db:
+    kind: postgres
+    image: pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
+    volume: /var/lib/postgresql/data
+    env: {POSTGRES_USER: archive_owner, POSTGRES_DB: archive, PGDATA: /var/lib/postgresql/data/pgdata}
+    secrets: {POSTGRES_PASSWORD: {gen: random:24}}
 
   # ---------------------------------------------------------------- ContextForge (entry: tag:gateway)
   contextforge:
@@ -221,6 +229,6 @@ services:
     secrets:
       TELEGRAM_API_ID: {gen: owner}
       TELEGRAM_API_HASH: {gen: owner}
-      TELEGRAM_ARCHIVE_DSN: {gen: owner}  # the archive database is outside Railway (the service owns it, ADR-0005)
+      TELEGRAM_ARCHIVE_DSN: {gen: "tpl:postgresql://${{telegram-db.POSTGRES_USER}}:${{telegram-db.POSTGRES_PASSWORD}}@${{telegram-db.RAILWAY_PRIVATE_DOMAIN}}:5432/${{telegram-db.POSTGRES_DB}}"}
       TELEGRAM_WEBHOOK_HMAC: {gen: hmac:32}  # signs `telegram.message.created` to Signals (SI-03)
-    internal_urls: []
+    internal_urls: [TELEGRAM_ARCHIVE_DSN]

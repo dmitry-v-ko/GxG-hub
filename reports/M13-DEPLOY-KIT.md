@@ -154,7 +154,7 @@ dry-run: no API calls made
 8. **Bundle.** Доставляется переменной `GXG_BUNDLE_B64` (tar.gz, base64); лимит размера переменной не проверен. Освежать нужно раз в ≤ 12 ч (GR-13): автоматики с токеном Railway в наборе нет.
 9. **Ротация ключей Approval.** `gxg-approval keys rotate` — файловая операция хоста. На Railway ключи — переменные, ротации там нет; процедура нужна к M14. Скрипт ключи не ротирует и отклоняет частично заданную пару.
 10. **Секрет вебхука Signals.** `GXG_SECRET__WEBHOOK__signals` создаётся скриптом; значение Signals владелец переносит из Railway UI, имя должно совпасть с `secret://signals` подписки.
-11. **База архива Telegram** (pgvector) вне Railway: `TELEGRAM_ARCHIVE_DSN` задаёт владелец. В список «две базы» она не входит.
+11. **База архива Telegram** — третий Postgres `telegram-db` (pgvector, образ стенда), DSN генерируется. Схему и миграции накатывает сам `gxg-telegram-service`.
 12. **`db-init`.** Роли и `ALTER DATABASE … OWNER TO gxg_owner` не проверены на настоящем PostgreSQL (в тестах его нет); сверить с миграциями. `db-init` держит пароли всех ролей, поэтому временный и удаляется `--finalize`; `--verify` красный, пока он есть.
 13. **AS-28 и `api`.** В таблице у `api` свой ключ service JWT, в `compose.yaml` его нет (`api` только проверяет). Набор следует compose.
 14. **Bootstrap ContextForge** (`stand/bootstrap.py`) под Railway не адаптирован: шаг 6 runbook'а ручной.
