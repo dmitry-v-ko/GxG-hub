@@ -1,12 +1,9 @@
-== approval/notifier: {"killed":428,"survived":5,"total":433,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
-not killed: 5, listed as equivalent: 2
+== approval/notifier: {"killed":431,"survived":2,"total":433,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+not killed: 2, listed as equivalent: 2
 gxg_approval_notifier.webhooks.x_allowed_url__mutmut_9  # rstrip("XX.XX") on a lower-cased host: no "X" to strip, only the dots as before
 gxg_approval_notifier.webhooks.x_body_of__mutmut_4  # ensure_ascii=None is falsy like False: the same bytes
 == M7 SQL mutations (scripts/ci/mutate_m7_sql.py)
 SQL driver: run separately (reports/mutmut/M10-sql.txt) and in the gate
-SURVIVED, not equivalent:
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_15
-gxg_approval_notifier.webhooks.xǁWebhooksǁdeliver__mutmut_29
-gxg_approval_notifier.webhooks.xǁWebhooksǁfan_out__mutmut_14
+mutmut: OK, no surviving non-equivalent mutants
 SQL mutations: OK
-exit 1
+exit 0
