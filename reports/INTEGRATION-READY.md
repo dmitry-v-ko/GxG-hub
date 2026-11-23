@@ -1,34 +1,34 @@
-# INTEGRATION READY: M1.1 (MCP Toolkit) on top of M3, M4.1, M5, M7, M8, M9, M11
+# INTEGRATION READY: M10 (Webhooks and operations) on top of M1.1, M3, M4.1, M5, M7, M8, M9, M11
 
-- Branch: `claude/integration`; code under test: `bc712f5` (later commits change only `reports/` and the docs taken from the plan branch).
-- Merged: `claude/m1.1-toolkit@bffcbd4` (services pin `7e7ce56` is in the history); `docs/specs`, `docs/adr`, `docs/implementation-plan-v1.md`, `reports/GOAL.md`, `reports/progress.md` from `claude/admiring-planck-vzys0x@f559284`.
+- Branch: `claude/integration`; code under test: `1c6c970` (later commits change only `reports/`).
+- Merged: `claude/m10-ops@280541d` (M10 closed at 9.0, `d75ab91` is its ancestor); `docs/specs`, `docs/adr`, `docs/implementation-plan-v1.md`, `reports/GOAL.md`, `reports/progress.md` from `claude/admiring-planck-vzys0x@d6d5e35`.
 - `git diff origin/claude/admiring-planck-vzys0x -- docs/specs docs/adr docs/implementation-plan-v1.md` is empty.
-- demo M8 vs `gxg_connector_kit.effects`: orchestrator's decision, option 1. demo keeps its own `effects.py`. The M8 tests are unchanged and green (81/81, demo 146/146). demo is the template render `with_effects: true` up to `DEMO_DRIFT`: six replacements in `server.py`, each with a reason. The broken copies were regenerated. Moving demo onto the kit is a `docs/backlog.md` row. Critic of the M1.1 test changes: accept with minor, 8/10; the minors are fixed or in the backlog. Details: `reports/integration-2026-11-23-m1.1.md`.
-- AC-M1.1-04: the M8 tests are green, and demo is on the template up to `DEMO_DRIFT`. `check-connectors` on demo: 19/19, EX-01…EX-16 included.
-- Nothing lost: every file, every `test_*` function and every backlog row of `40cec84` and `m1.1-toolkit` is present. `reports/critic|conformance|mutmut|plans/*` of both branches are unchanged; the equivalents list and `.gitleaksignore` are a union.
+- demo vs template (M1.1): M10 changed only domain files of demo (`effects.py`, `provider.py`, tests); `test_demo_is_on_the_template` passes, `DEMO_DRIFT` unchanged, broken copies regenerated with no diff.
+- Two integration defects found and fixed: demo's metrics counter in the default prometheus registry broke `check-connectors` (copies imported in one process) → own registry; an M1.1 test with a fixed bundle date went stale after 24 h (GR-13) → built now. Details: `reports/integration-2026-11-23-m10.md`.
+- Nothing lost: every file, every `test_*` function (except 12 step-up tests M10 itself removed for the `decider`), every backlog row and every equivalent mutant of both sides is present; `reports/critic|conformance|mutmut|plans/*` unchanged.
 
-## Checks (local, full clone, Docker 29.10.0 started by hand, registry mirror `mirror.gcr.io`, `kernel.pid_max` 4194304)
+## Checks (local, full clone, Docker 29.10.0 started by hand, mirror `mirror.gcr.io`, `kernel.pid_max` 4194304)
 
-Run: `bash -x scripts/ci/check-all.sh` on `bc712f5`, `DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt'`, `gxg_agents_v2` clone at `../gxg_agents_v2` (pinned `f1c4d6d`, read-only).
+Run: `check-all.sh` without `mutmut.sh`, on `1c6c970`, `DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt'`, `UPSTREAM_DRIFT=skip`. Output ends with `check-all: OK`.
 
 | Check | Result |
 |---|---|
-| `uv lock --check` (root, demo, ui, notifier, telegram), `uv sync --locked` | OK |
-| ruff check / format | OK (180 files) |
-| mypy (all 9 calls from `check-all.sh`) | OK |
-| `uv run pytest` (all packages, `tests/contract`, `tests/toolkit`, `tools/gxg-connector-check`) | 1275 passed |
-| `approval/tests_db` | 360 passed |
-| `approval/ui/tests_db`, `approval/notifier/tests_db` (incl. E2E) | 109 passed |
-| `approval/deploy/tests` | 6 passed |
-| kit 457 + coverage of the key modules 100 % branches; schema lock; schema guard | OK |
-| demo 146 + `check-connectors` 19/19; telegram 110 | OK |
-| `check_upstream.sh` pinned and `--drift` | OK |
-| gitleaks tree HEAD and full range; `tests/secrets` 21 | no leaks found |
-| policy validate / lint / bundle smoke | OK |
-| `connectors/demo/docker_smoke.sh` | OK |
-| `stand/run.sh` (M5 + M8 EX-01 + M11) | fresh 54/0, after-restart 54/0, after-recreate 54/0 |
-| `scripts/ci/mutmut.sh` | not run: owner's decision of 2026-11-23 (plan `f559284`): mutmut only before the merge to main |
+| `uv lock --check` (5), `uv sync --locked`, ruff, mypy (all calls) | OK |
+| `uv run pytest` | 1301 passed |
+| `approval/tests_db` | 438 passed |
+| `approval/ui/tests_db`, `approval/notifier/tests_db` (incl. E2E) | 143 passed |
+| `approval/deploy/tests` | 9 passed |
+| kit 473 + coverage of key modules; schema lock; schema guard | OK |
+| demo 149 + `check-connectors`; telegram 110 | OK |
+| gitleaks tree and range; `tests/secrets` 21 | no leaks found |
+| policy validate / lint, bundle smoke, `docker_smoke.sh` | OK |
+| `stand/run.sh` | fresh 54/0, after-restart 54/0, after-recreate 54/0 |
+| `reports/conformance/stage-C.json` on the merged code | 26/26 |
+| ponytail-review of the diff | Ship; two nice-to-have notes (receiver `seen` set grows; demo `/metrics` has no process metrics) |
+| `scripts/ci/mutmut.sh` | not run (light process: full run once before `main`) |
 
-`check-all: OK` was not printed because it was stopped at `mutmut.sh`; every step before that passed in one run on `bc712f5`.
+## Open
 
-GitHub CI was not checked; everything above is local.
+- `check_upstream.sh` (pinned and `--drift`) against `gxg_agents_v2` **not run**: no clone here, `add_repo` forbidden for this thread (`UPSTREAM_DRIFT=skip`). M10 does not touch telegram or the archive schema. Run it where a clone exists before `main`.
+- `max_attempts` (policy field): implemented by M10, absent from `approval-policy-v1.md` on the docs branch (the integration took the docs branch). Owner decision `pending_owner_decision`: add the row to the spec or drop the field.
+- GitHub CI not checked; everything above is local.
