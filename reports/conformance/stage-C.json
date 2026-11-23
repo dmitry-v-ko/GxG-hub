@@ -1,7 +1,7 @@
 {
   "stage": "C",
-  "commit": "2a52ca3",
-  "run_at": "2026-11-23T10:23:57Z",
+  "commit": "3e5541c",
+  "run_at": "2026-11-23T13:46:56Z",
   "command": "uv run python scripts/ci/stage_c.py --stand reports/conformance/M10-stand/fresh.xml --stand reports/conformance/M10-stand/after-restart.xml --stand reports/conformance/M10-stand/after-recreate.xml",
   "pytest_exit": 0,
   "ids": [
