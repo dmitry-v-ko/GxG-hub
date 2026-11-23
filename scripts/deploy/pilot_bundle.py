@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import base64
 import io
+import json
 import os
 import subprocess
 import sys
@@ -133,7 +134,9 @@ class Pilot:
         return ok
 
     def publish(self, bundle: Path, seed: str) -> list[str]:
-        keys = f"{KID}={public_key(seed)}"
+        pub = public_key(seed)
+        approval_keys = json.dumps({KID: pub})  # the approval processes: JSON kid -> key (bundle_store_from_env)
+        kit_keys = f"{KID}={pub}"  # the connector kit (MCP services): `kid=key[,kid=key]`
         b64 = pack(bundle)
         done = []
         for name, (keys_var, b64_var) in CONSUMERS.items():
@@ -145,7 +148,10 @@ class Pilot:
                     "projectId": self.dep.project_id,
                     "environmentId": self.dep.env_id,
                     "serviceId": self.dep.service_ids[name],
-                    "variables": {keys_var: keys, b64_var: b64},
+                    "variables": {
+                        keys_var: kit_keys if keys_var.startswith("TELEGRAM_") else approval_keys,
+                        b64_var: b64,
+                    },
                     "skipDeploys": True,
                 },
             )
