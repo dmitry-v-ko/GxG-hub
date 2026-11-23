@@ -45,8 +45,7 @@ def start(settings: KitSettings, wiring: Wiring) -> Running:
     def calls() -> int:  # backend reads plus provider sends
         return sum(backend.calls.values()) + (len(provider.calls()) if provider is not None else 0)
 
-    internal = connector.effects.internal_app() if connector.effects is not None else None
-    return Running(app=app, calls=calls, fail=fail, internal=internal)
+    return Running(app=app, calls=calls, fail=fail, internal=connector.internal)  # the app server.configs serves
 
 
 def rids(tool: str, result: dict[str, Any]) -> set[str]:
