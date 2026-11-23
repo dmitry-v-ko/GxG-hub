@@ -213,6 +213,7 @@ class World:
     payload_private: dict[str, dict[str, str]] = field(default_factory=dict)
     policies: dict[str, Any] = field(default_factory=dict)
     demo_tenants: list[str] = field(default_factory=lambda: [ALPHA, BETA])
+    webhooks: list[dict[str, Any]] = field(default_factory=list)  # platform.webhooks (AS-21, M10)
 
     def __post_init__(self) -> None:
         self.store = BundleStore(
@@ -266,7 +267,8 @@ class World:
                     "approval_policy": self.policies.get(BETA),
                 },
             },
-            "platform": {"schema_version": 1, "services": self.services()},
+            "platform": {"schema_version": 1, "services": self.services()}
+            | ({"webhooks": self.webhooks} if self.webhooks else {}),
         }
         data = canonical.dumps(doc)
         self.signed = data, sign_bundle(self.ci_signer, data)

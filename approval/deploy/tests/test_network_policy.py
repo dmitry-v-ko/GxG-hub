@@ -30,7 +30,7 @@ ROOT = next(p for p in Path(__file__).resolve().parents if (p / ".git").exists()
 COMPOSE = ROOT / "approval/deploy/compose.yaml"
 SECRETS = ("db_superuser_password", "db_dsn_owner", "db_dsn_api", "db_dsn_sweeper", "svc_key_mcp", "db_dsn_ui",
            "ui_session_key", "oidc_client_secret_ui", "preview_keys_ui", "ui_tls_key", "db_dsn_notifier",
-           "telegram_bot_token")  # fmt: skip
+           "telegram_bot_token", "db_dsn_decider", "db_dsn_admin")  # fmt: skip
 PROBE = (
     "import socket, sys\n"
     "for target in sys.argv[1:]:\n"
@@ -82,7 +82,7 @@ def stand(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, Any]]:
     sh("docker", "build", "-q", *flags, "-t", "gxg-test-oidc:m9", "-f",
        str(ROOT / "approval/deploy/test-oidc.Dockerfile"), str(ROOT))  # fmt: skip
     work = tmp_path_factory.mktemp("stand")
-    for d in ("secrets", "config", "bundle"):
+    for d in ("secrets", "config", "bundle", "secrets/webhooks"):
         (work / d).mkdir()
     password = secrets.token_urlsafe(16)
     for name in SECRETS:
@@ -111,6 +111,7 @@ def stand(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, Any]]:
         "GXG_OIDC_CLIENT_ID": "stand",
         "GXG_UI_PUBLISH": f"127.0.0.1:{port}",
         "GXG_TELEGRAM_API_URL": "http://fake-telegram:8081",
+        "GXG_ADMIN_OPERATORS": "oidc:https://oidc:9400:operator",  # admin is not started here
     }
     compose = ["docker", "compose", "-p", project, "-f", str(COMPOSE), "--profile", "test"]
     try:

@@ -885,12 +885,14 @@ name = "gxg-approval-notifier"
 version = "0.0.0"
 source = { editable = "approval/notifier" }
 dependencies = [
+    { name = "gxg-connector-kit" },
     { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "gxg-connector-kit", editable = "packages/gxg-connector-kit" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
 ]
