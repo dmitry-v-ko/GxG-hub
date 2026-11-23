@@ -1,0 +1,19 @@
+# CI of `{{ name }}`: scripts/check-all.sh, which ends with `uv run check-connectors --connector .`.
+# GxG-hub is private: the kit and the suite come from it by git; GXG_HUB_TOKEN is a read-only token for it.
+name: ci
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.32"
+      - name: read access to GxG-hub
+        env:
+          GXG_HUB_TOKEN: {{ "${{ secrets.GXG_HUB_TOKEN }}" }}
+        if: env.GXG_HUB_TOKEN != ''
+        run: git config --global url."https://x-access-token:${GXG_HUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+      - run: scripts/check-all.sh

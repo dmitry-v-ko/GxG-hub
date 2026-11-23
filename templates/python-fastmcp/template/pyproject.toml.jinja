@@ -1,0 +1,71 @@
+[project]
+name = "gxg-connector-{{ name }}"
+version = "0.1.0"
+description = "GxG MCP connector `{{ name }}` (made from templates/python-fastmcp)."
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn; the same pin as the kit `mcp` extra
+    "gxg-connector-kit[mcp]",
+    "pyyaml>=6,<7",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "{{ name }}_connector"
+
+[tool.uv.sources]
+{%- if kit_source == "path" %}
+gxg-connector-kit = { path = "{{ repo }}/packages/gxg-connector-kit", editable = true }
+gxg-connector-check = { path = "{{ repo }}/tools/gxg-connector-check", editable = true }
+{%- else %}
+# GxG-hub at a pinned commit (ADR-0005): bumping `rev` is a deliberate update of the kit and the conformance suite.
+gxg-connector-kit = { git = "{{ kit_url }}", subdirectory = "packages/gxg-connector-kit", rev = "{{ kit_rev }}" }
+gxg-connector-check = { git = "{{ kit_url }}", subdirectory = "tools/gxg-connector-check", rev = "{{ kit_rev }}" }
+{%- endif %}
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+    "pytest-timeout>=2.3,<3",
+    "gxg-connector-check",  # `uv run check-connectors --connector .`
+    "ruff==0.17.6",
+    "mypy==2.4.1",
+    "types-PyYAML>=6,<7",
+]
+
+# The conformance suite (MC, SC, EX) starts the connector through this harness.
+[tool.gxg-connector-check]
+harness = "{{ name }}_connector.conformance:harness"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+xfail_strict = true
+timeout = 120  # pytest-timeout: a hanging test fails
+{%- if kit_source == "git" %}
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "S", "PL", "RUF"]
+ignore = ["PLR2004", "PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gxg_connector_kit", "gxg_connector_check", "{{ name }}_connector"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+{%- endif %}

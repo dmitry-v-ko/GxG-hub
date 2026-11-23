@@ -30,7 +30,8 @@ from standlib import (
     sh,
 )
 
-from demo_connector.tools import load_schema
+from demo_connector.tools import ROOT
+from gxg_connector_kit.mcp import load_schema as kit_schema
 
 MANIFEST = yaml.safe_load((REPO / "connectors" / "demo" / "gxg-manifest.yaml").read_text(encoding="utf-8"))
 # The stand runs `demo` read-only (no Approval Service, no DEMO_APPROVAL_URL): only the read tools are published.
@@ -56,6 +57,10 @@ async def _sdk_session(stand: Stand, agent: str) -> dict[str, Any]:
         boards = next(t for t in tools if t.name == stand.tool("t-alpha", "demo.boards.list"))
         result = await session.call_tool(boards.name, {})
         return {"init": init, "tools": tools, "result": result}
+
+
+def load_schema(rel: str) -> Any:
+    return kit_schema(ROOT, rel)
 
 
 def test_mc01_negotiate_discover_invoke_with_the_official_sdk(stand: Stand) -> None:

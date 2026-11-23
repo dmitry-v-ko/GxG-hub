@@ -1,10 +1,15 @@
 # Build context is the repository root; only what the image needs goes in.
 *
 !packages/gxg-connector-kit
-!schemas/search-result.schema.json
+!schemas
 !connectors/demo
+**/.env*
+**/*.pem
+**/*.key
 **/.venv
 **/__pycache__
 **/mutants
 **/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
 connectors/demo/tests

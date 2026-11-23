@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/backend.py b/src/demo_connector/backend.py
+index 1bb04c3..86bc7a8 100644
+--- a/src/demo_connector/backend.py
++++ b/src/demo_connector/backend.py
+@@ -36,7 +36,7 @@ class Backend:
+ 
+     def readiness(self) -> Readiness:
+         """MCC-09: the backend answers (in-process fixtures: unless a test mode makes it unavailable)."""
+-        if self.failure in ("temporarily_unavailable", "timeout_before_start"):
++        if False:  # BROKEN: readiness ignores the backend (MCC-09)
+             return Readiness(False, ("backend is not available",))
+         return Readiness(True)
+ 

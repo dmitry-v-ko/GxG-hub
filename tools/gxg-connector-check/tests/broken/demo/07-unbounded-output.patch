@@ -1,0 +1,26 @@
+diff --git a/gxg-manifest.yaml b/gxg-manifest.yaml
+index 28eae04..41abf17 100644
+--- a/gxg-manifest.yaml
++++ b/gxg-manifest.yaml
+@@ -21,7 +21,7 @@ tools:
+     resource: { type: board, scope: list }
+     input_schema: schemas/notes-search.input.json
+     output_schema: ../../schemas/search-result.schema.json
+-    limits: { max_results: 50, timeout_s: 20 }
++    limits: { timeout_s: 20 }  # BROKEN: no max_results
+   - name: demo.note.get
+     version: 1.0.0
+     title: "Заметка"
+diff --git a/schemas/notes-search.input.json b/schemas/notes-search.input.json
+index 79f1ab8..a175fa1 100644
+--- a/schemas/notes-search.input.json
++++ b/schemas/notes-search.input.json
+@@ -11,7 +11,7 @@
+       "maxItems": 10,
+       "items": {"type": "string", "minLength": 1, "maxLength": 64}
+     },
+-    "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20},
++    "limit": {"type": "integer", "minimum": 1, "maximum": 100000, "default": 20},
+     "cursor": {"type": ["string", "null"], "maxLength": 1024},
+     "mode": {"const": "auto", "default": "auto", "description": "Reserved: the connector picks index or scan"}
+   }

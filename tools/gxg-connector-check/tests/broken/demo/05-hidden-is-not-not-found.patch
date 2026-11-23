@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index 34549d6..759d1cd 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -63,6 +63,8 @@ class Connector:
+     async def resolve(self, tool: str, access: Access, args: dict[str, Any]) -> tuple[str, Any] | None:
+         """`demo.note.get`: the board from the backend, not from an argument (GR-01, GR-03)."""
+         note = self.backend.get_note(access.ident.tenant_id, args["note_id"])
++        if note is not None and access.connection and not access.check(rid(access.connection, note.board_id)).allowed:
++            raise GxgError("permission_denied", "this note is on a board you may not read")  # BROKEN: GR-17
+         return None if note is None or access.connection is None else (rid(access.connection, note.board_id), note)
+ 
+     def _readable(self, access: Access) -> dict[str, tuple[str, str]]:

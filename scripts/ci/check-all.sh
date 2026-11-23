@@ -12,7 +12,8 @@ uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/tests \
-  approval/src approval/tests scripts tests/secrets
+  approval/src approval/tests scripts tests/secrets \
+  tools/gxg-connector-check/src tools/gxg-connector-check/tests tests/toolkit
 # separate run: two conftest.py modules clash in one mypy run; tests/ci imports the root conftest
 uv run mypy --strict conftest.py tests/ci
 uv run mypy --strict approval/tests_db
@@ -29,7 +30,7 @@ uv run pytest approval/deploy/tests  # AC-M9-12: images and networks; extra buil
 uv run python scripts/ci/schema_lock.py
 uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-branch --cov-report=json:coverage-kit.json
 uv run python scripts/ci/check_coverage.py coverage-kit.json
-(cd connectors/demo && uv sync --locked && uv run pytest -q)
+(cd connectors/demo && uv sync --locked && uv run pytest -q && uv run check-connectors --connector .)  # M1.1
 (cd connectors/telegram && uv sync --locked && uv run pytest -q)
 # ADR-0004: the telegram_archive schema contract against gxg_agents_v2 (pinned commit and newer migrations).
 # Needs a clone (GXG_AGENTS_V2, default ../gxg_agents_v2); UPSTREAM_DRIFT=skip only where no clone can exist.
@@ -48,5 +49,5 @@ uv run gxg-policy lint policies/
 bash scripts/ci/bundle_smoke.sh
 connectors/demo/docker_smoke.sh  # needs a Docker daemon; extra build flags: DOCKER_BUILD_FLAGS
 stand/run.sh  # M5 + M11 dev stand end to end (needs a Docker daemon); extra build flags: DOCKER_BUILD_FLAGS
-scripts/ci/mutmut.sh >/dev/null
+scripts/ci/mutmut.sh >/dev/null  # MUTMUT_PACKAGES="<dirs>": only the packages of a milestone (DoD-1)
 echo "check-all: OK"

@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Reference connector `demo`: read tools (M3), demo.message.propose with internal execute (M8)."
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn
-    "gxg-connector-kit",
+    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn; the same pin as the kit `mcp` extra
+    "gxg-connector-kit[mcp]",
     "pyyaml>=6,<7",  # gxg-manifest.yaml is read at start; already installed by fastmcp
 ]
 
@@ -21,15 +21,21 @@ module-name = "demo_connector"
 gxg-connector-kit = { path = "../../packages/gxg-connector-kit", editable = true }
 # editable: gxg-policy finds the repository schemas/ from its own source location
 gxg-policy = { path = "../../tools/gxg-policy", editable = true }
+gxg-connector-check = { path = "../../tools/gxg-connector-check", editable = true }
 
 [dependency-groups]
 # Standalone `uv run pytest` inside connectors/demo. The repository-wide policy
 # (no network, no skip/xfail) applies when tests run from the repository root.
-dev = ["pytest>=8.3,<10", "gxg-policy", "mutmut==3.8.1"]
+dev = ["pytest>=8.3,<10", "pytest-timeout>=2.3,<3", "gxg-policy", "gxg-connector-check", "mutmut==3.8.1"]
+
+# `uv run check-connectors --connector .` (M1.1): the conformance suite starts demo through this harness
+[tool.gxg-connector-check]
+harness = "demo_connector.conformance:harness"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+timeout = 300  # pytest-timeout (DoD-1): a hanging test fails
 xfail_strict = true
 
 # DoD-4: modules with the M3 key conditions (grant filtering, not_found, fallback) and M8 (execute checks, provider).

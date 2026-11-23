@@ -546,9 +546,12 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=46,<51" },
+    { name = "fastmcp", marker = "extra == 'mcp'", specifier = "==4.1.8" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10,<3" },
+    { name = "pyyaml", marker = "extra == 'mcp'", specifier = ">=6,<7" },
 ]
+provides-extras = ["mcp"]
 
 [[package]]
 name = "gxg-connector-telegram"

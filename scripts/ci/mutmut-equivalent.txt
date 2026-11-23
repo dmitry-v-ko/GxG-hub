@@ -165,3 +165,17 @@ telegram_connector.archive.xǁArchiveServiceǁread_thread__mutmut_21  # M11: sam
 telegram_connector.archive.xǁArchiveServiceǁcollect__mutmut_34  # M11: same as search__mutmut_21
 telegram_connector.server.x_build__mutmut_10  # M11: detected, not equivalent: store = None makes build() fail and the in-process MCP session hangs, so mutmut reports a timeout instead of a failure
 telegram_connector.tools.xǁTelegramToolǁrun__mutmut_151  # M11: as demo's run__mutmut_133: duration_ms * 1001, 0.1 % off a log field
+gxg_connector_check.bundle.x_write__mutmut_13  # M1.1: astimezone(None) converts to local time; the runners and the image run in UTC (and the tests pass UTC datetimes), so the stamp is the same
+gxg_connector_kit.effects.xǁApprovalǁpost__mutmut_15  # M1.1: HTTP header names are case-insensitive (httpx sends the same header)
+gxg_connector_kit.effects.xǁApprovalǁpost__mutmut_16  # M1.1: same as _15 (upper case)
+gxg_connector_kit.effects.xǁInternalǁ_checked__mutmut_83  # M1.1: rpartition("@") = partition("@"): execution-token.schema.json allows exactly one `@` in `tool`
+gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_18  # M1.1: Starlette request headers are case-insensitive
+gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_19  # M1.1: default "XXXX" instead of "": no space, so scheme "XXXX", token "" -> the same `missing` refusal
+gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_136  # M1.1: duration * 1001 instead of * 1000: within a millisecond per second; the audit only needs the order of magnitude
+gxg_connector_kit.effects.xǁInternalǁapp__mutmut_26  # M1.1: Starlette upper-cases Route methods ("post" == "POST")
+gxg_connector_kit.effects.xǁInternalǁapp__mutmut_38  # M1.1: same as app__mutmut_26 (reconcile route)
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_43  # M1.1: `>=` instead of `>` when dropping dispatched jti: equal only at the same float instant
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_47  # M1.1: keeping a dispatched jti until exp-5 instead of exp+5: the kit's JtiCache refuses any replay until exp anyway; only the 401/409 label differs in the last 10 s of a token
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_50  # M1.1: same as _47 (exp+6)
+gxg_connector_kit.mcp.xǁBundleFilesǁ__init____mutmut_4  # M1.1: _seen = "" instead of None: neither equals a (mtime, mtime) tuple, so the first refresh loads either way
+gxg_connector_kit.mcp.xǁGxgToolǁrun__mutmut_140  # M1.1: same as effects _endpoint__mutmut_136 (duration * 1001)

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 from gxg_connector_kit.errors import GxgError
+from gxg_connector_kit.readiness import Readiness
 
 from . import data
 from .data import Board, Note
@@ -33,6 +34,12 @@ class Backend:
         self.delay_s = 0.0  # set by POST /_test/backend/fail `slow:<ms>`: every call waits (MC-03)
         self.calls: Counter[str] = Counter()  # tests: backend calls per method (AC-M3-07, AC-M3-08)
 
+    def readiness(self) -> Readiness:
+        """MCC-09: the backend answers (in-process fixtures: unless a test mode makes it unavailable)."""
+        if self.failure in ("temporarily_unavailable", "timeout_before_start"):
+            return Readiness(False, ("backend is not available",))
+        return Readiness(True)
+
     def _enter(self, kind: str) -> None:
         """Count the call, then apply the test failure mode (the service behind the connector is down)."""
         self.calls[kind] += 1
@@ -48,7 +55,7 @@ class Backend:
     def get_note(self, tenant: str, note_id: str) -> Note | None:
         """The note with its real board (GR-03), or None. Only this tenant's data (GR-02)."""
         self._enter("get")
-        for board in self.boards.get(tenant, {}).values():
+        for board in self.boards[tenant].values():  # a tenant without a connection never gets here (kit hook)
             for note in board.notes:
                 if note.id == note_id:
                     return note

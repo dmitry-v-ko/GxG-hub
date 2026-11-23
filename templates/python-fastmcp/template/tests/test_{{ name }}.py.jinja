@@ -1,0 +1,34 @@
+"""Domain tests of `{{ name }}`: the fake provider and the handlers. The contract (MC, SC, EX) is check-connectors."""
+
+from __future__ import annotations
+
+import pytest
+
+from gxg_connector_kit.errors import GxgError
+from {{ name }}_connector.backend import Backend
+
+
+def test_search_stays_in_the_named_collections_of_the_tenant() -> None:
+    backend = Backend()
+    found = backend.search("t-alpha", {"c-public"}, "STATUS")
+    assert {i.collection for i in found} == {"c-public"} and found
+    assert backend.search("t-beta", {"c-public"}, "status") == []  # another tenant's collection name
+    assert backend.calls["search"] == 2
+
+
+def test_get_is_scoped_to_the_tenant() -> None:
+    backend = Backend()
+    item = backend.items["t-alpha"][0]
+    assert backend.get("t-alpha", item.id) == item
+    assert backend.get("t-beta", item.id) is None
+
+
+def test_failure_modes_raise_their_codes() -> None:
+    backend = Backend()
+    backend.failure = "rate_limited"
+    with pytest.raises(GxgError) as exc:
+        backend.get("t-alpha", "x")
+    assert (exc.value.code, exc.value.retry_after_s) == ("rate_limited", 5)
+    backend.failure = "temporarily_unavailable"
+    with pytest.raises(GxgError, match="not available"):
+        backend.search("t-alpha", {"c-public"}, "x")

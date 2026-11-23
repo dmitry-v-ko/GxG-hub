@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index 34549d6..3dd3ab3 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -67,7 +67,7 @@ class Connector:
+ 
+     def _readable(self, access: Access) -> dict[str, tuple[str, str]]:
+         """{board id: (RID, grant id)} the caller may read. Nothing granted: no backend call (GR-16)."""
+-        if access.nothing or access.connection is None:
++        if access.connection is None:  # BROKEN: lists the boards before knowing anything is granted
+             return {}
+         out = {}
+         for board in self.backend.list_boards(access.ident.tenant_id):

@@ -1,6 +1,6 @@
 # MCP Connector Toolkit v1
 
-**Статус:** план. Генератор, шаблоны и интеграционный стенд не созданы. Существуют только JSON Schema в `schemas/` и smoke-тесты в `tests/contract/`.
+**Статус:** реализовано в M1.1 (критик цикла 2 — 9.0, проверенный код `5cca255` в `claude/m1.1-toolkit`): модули кита `gxg_connector_kit.mcp` и `gxg_connector_kit.effects`, `check-connectors` (`tools/gxg-connector-check`), шаблон copier `templates/python-fastmcp`, `scripts/new-connector`. TS-шаблон — с первым TS-коннектором с эффектами.
 
 ## Цель
 

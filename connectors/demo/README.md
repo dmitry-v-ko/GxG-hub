@@ -17,7 +17,9 @@
 
 Fake provider (`provider.py`): журнал вызовов в SQLite (`DEMO_PROVIDER_DB`, переживает рестарт), идемпотентность по `provider_key` = `intent_id`; `reconcile` ищет по нему же (EFF-25). Режимы (только тестовый профиль): `PUT /_test/provider/mode {"mode": "<ok|reject|rate_limited|timeout_before_start|commit_then_drop>[,no_dedupe][,slow:<ms>]", "count": n}` — режим на n вызовов, затем `ok`; `GET /_test/provider/calls?provider_key=…`. Провайдер «получает» запрос сразу (строка журнала), `slow` задерживает только ответ.
 
-Порядок проверок каждого вызова: identity из заголовка (верификатор кита) → входная схема → grants (`allowed()` до backend'а, `check()` на каждом элементе) → backend. Аргументы и `_meta` полномочий не дают.
+Порядок проверок каждого вызова — конвейер кита `gxg_connector_kit.mcp` (M1.1): identity из заголовка → входная схема → bundle → hook ресурса (`allowed()` до backend'а, `check()` RID) → handler (`check()` на каждом элементе) → выходная схема и размер. Аргументы и `_meta` полномочий не дают.
+
+`demo` сделан на шаблоне `templates/python-fastmcp` (`.copier-answers.yml`): `server.py`, `__main__.py`, `Dockerfile`, `Dockerfile.dockerignore` — файлы шаблона, совпадение проверяет `tests/toolkit/test_template.py`.
 
 ## Запуск
 
@@ -38,4 +40,5 @@ Identity от ContextForge (ADR-0001, вариант C): `DEMO_IDENTITY_KEYS=<ki
 
 - `uv run pytest` здесь или из корня: официальный MCP SDK-клиент через ASGI-транспорт, bundle собирает `gxg-policy build` из `fixtures/grants/` с ключом, созданным в тесте.
 - `connectors/demo/docker_smoke.sh`: сборка и запуск образа (AC-M3-01, AC-M3-11).
+- `uv run check-connectors --connector .`: общий conformance-набор (MC, SC, MCC-05/09), harness — `src/demo_connector/conformance.py`.
 - `uv run mutmut run` здесь (или `scripts/ci/mutmut.sh` для всех вех): `tools.py`, `backend.py`.

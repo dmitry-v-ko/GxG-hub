@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "message.propose input",
+  "description": "Propose to send a message to a recipient of a collection. Creates an intent; nothing is sent until it is approved and executed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["collection_id", "recipient", "text"],
+  "properties": {
+    "collection_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "recipient": {"type": "string", "pattern": "^[a-z0-9_]{3,32}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 256}
+  }
+}

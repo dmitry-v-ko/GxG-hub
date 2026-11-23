@@ -1,0 +1,41 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index 34549d6..fc9cb29 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -15,6 +15,9 @@ from collections.abc import Callable, Mapping
+ from pathlib import Path
+ from typing import Any
+ 
++from fastmcp.tools.base import ToolResult
++from mcp.types import TextContent
++
+ from gxg_connector_kit import mcp
+ from gxg_connector_kit.errors import GxgError
+ from gxg_connector_kit.grants import GrantResolver
+@@ -36,6 +39,17 @@ def rid(connection: str, board: str) -> str:
+     return f"{DOMAIN}:{connection}/{RTYPE}/{board}"
+ 
+ 
++class PlainErrors(mcp.GxgTool):
++    """BROKEN: errors as plain text without the structured envelope."""
++
++    async def run(self, arguments: dict[str, Any]) -> ToolResult:
++        result = await super().run(arguments)
++        if isinstance(result.structured_content, dict) and "code" in result.structured_content:
++            text = TextContent(type="text", text=f"Error: {result.structured_content['message']}")
++            return ToolResult(content=[text], is_error=True)
++        return result
++
++
+ class Connector:
+     """`gxg_connector_kit.mcp.Domain` of `demo`."""
+ 
+@@ -48,7 +62,7 @@ class Connector:
+         self._cursor = mcp.Cursor()
+ 
+     def tools(self, verifier: IdentityVerifier, refresh: Callable[[], None]) -> list[mcp.GxgTool]:
+-        return mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)
++        return [PlainErrors(**dict(t)) for t in mcp.tools(self, MANIFEST, self.grants, verifier, refresh, logs, ROOT)]
+ 
+     def handlers(self) -> Mapping[str, Handler]:
+         return {

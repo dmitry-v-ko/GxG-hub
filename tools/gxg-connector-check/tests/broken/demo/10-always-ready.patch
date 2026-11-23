@@ -1,0 +1,21 @@
+diff --git a/src/demo_connector/server.py b/src/demo_connector/server.py
+index 7bf8d43..1ca8bf2 100644
+--- a/src/demo_connector/server.py
++++ b/src/demo_connector/server.py
+@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+ from starlette.applications import Starlette
+ 
+ from gxg_connector_kit import mcp
++from gxg_connector_kit.readiness import Readiness
+ from gxg_connector_kit.mcp import ConfigError, NoVerifier, serve
+ 
+ from .backend import Backend
+@@ -38,7 +39,7 @@ def build(settings: mcp.Settings, backend: Backend | None = None) -> tuple[Starl
+     connector = Connector(backend or Backend(), store)
+     tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)
+     # MCC-09: backend + valid bundle; a read-only connector does not depend on the Approval Service.
+-    ready = mcp.readiness_of(store.readiness, connector.backend.readiness)
++    ready = lambda: Readiness(True)  # noqa: E731 - BROKEN: ready without a valid bundle
+     return mcp.create_app(CONNECTOR_ID, tools, files.refresh, ready, logs.startup), connector
+ 
+ 

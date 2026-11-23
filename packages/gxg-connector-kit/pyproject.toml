@@ -9,6 +9,13 @@ dependencies = [
     "pyjwt[crypto]>=2.10,<3",
 ]
 
+[project.optional-dependencies]
+# gxg_connector_kit.mcp and .effects: the FastMCP plumbing shared by every connector (M1.1, mcp-toolkit-v1)
+mcp = [
+    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette, uvicorn and httpx2
+    "pyyaml>=6,<7",
+]
+
 [build-system]
 requires = ["uv_build>=0.11,<0.14"]
 build-backend = "uv_build"
@@ -26,6 +33,8 @@ only_mutate = [
     "src/gxg_connector_kit/grants.py",
     "src/gxg_connector_kit/canonical.py",
     "src/gxg_connector_kit/cf_identity.py",  # M5: ContextForge identity (SEC-03)
+    "src/gxg_connector_kit/mcp.py",  # M1.1: call pipeline (MCC-02…05, MCC-09)
+    "src/gxg_connector_kit/effects.py",  # M1.1: propose, execute, reconcile (EFF-18, AS-12)
 ]
 pytest_add_cli_args_test_selection = ["tests"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]

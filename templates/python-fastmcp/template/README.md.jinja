@@ -1,0 +1,35 @@
+{%- set P = name | upper -%}
+# GxG connector `{{ name }}`
+
+Made from `templates/python-fastmcp` of GxG-hub (`scripts/new-connector`). Contract: [MCP Connector Contract](https://github.com/dmitry-v-ko/GxG-hub/blob/main/docs/specs/mcp-connector-contract-v1.md) (MCC-01…10).
+
+| Tool | Class | What |
+| --- | --- | --- |
+| `{{ name }}.items.search` | read | Search in the collections the caller may read; bounded, cursor pages |
+| `{{ name }}.item.get` | read | One item; the collection comes from the provider; hidden = `not_found` |
+{%- if with_effects %}
+| `{{ name }}.message.propose` | external_effect | Creates an intent; sending happens only through `{{ name }}.message.execute` on the internal port, by the Executor |
+{%- endif %}
+
+Every call goes through `gxg_connector_kit.mcp`: identity → input schema → bundle → resource hook → handler → output bound → envelope and audit. Replace `backend.py` (the fake provider) and the example tools with your domain; keep the harness (`conformance.py`) working.
+
+## Commands
+
+```bash
+{%- if kit_source == "git" %}
+scripts/check-all.sh                     # the gate: lock, ruff, mypy, tests, check-connectors
+{%- endif %}
+uv run pytest                            # domain tests
+uv run check-connectors --connector .    # the GxG conformance suite (MC, SC, EX)
+uv run python -m {{ name }}_connector    # serve: MCP on :8080{% if with_effects %}, internal :8081{% endif %}
+```
+
+Configuration: `config.example.env` (no secrets). The service JWT key ({{ P }}_SVC_KEY_FILE) and the provider credential ({{ P }}_PROVIDER_TOKEN) come from the secret store, never from the repository. The generator creates no credentials and no grants: grants come from the signed bundle of `policies/` in GxG-hub.
+
+Registration in ContextForge (MCC-10): only after check-connectors and the stand pass; see `contextforge/registration.example.yaml` (disabled).
+{%- if kit_source == "git" %}
+
+## Updating the kit
+
+`gxg-connector-kit` and `gxg-connector-check` are git dependencies on one pinned GxG-hub commit (`pyproject.toml`, `rev`). A bump is deliberate: change `rev`, `uv lock`, `scripts/check-all.sh`. `copier update` brings the template-owned files (server, Dockerfile, CI) up to date.
+{%- endif %}

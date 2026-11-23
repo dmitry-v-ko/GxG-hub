@@ -5,19 +5,21 @@ version = "0.0.0"
 description = "GxG Hub monorepo root: dev tooling, contract tests, unit tests of all packages."
 requires-python = ">=3.12"
 dependencies = [
-    "gxg-connector-kit",
+    "gxg-connector-kit[mcp]",
     "gxg-approval",
     "gxg-policy",
     "gxg-connector-demo",
     "gxg-approval-ui",
     "gxg-approval-notifier",
     "gxg-connector-telegram",
+    "gxg-connector-check",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3,<10",
     "pytest-socket==0.8.1",  # AC-M0-01: no internet socket in tests
+    "pytest-timeout==2.4.0",  # DoD-1 (3rd edition): every test has a time limit
     "ruff==0.17.6",
     "mypy==2.4.1",
     "types-PyYAML>=6,<7",
@@ -31,6 +33,7 @@ dev = [
     "pytest-cov>=6,<8",
     # DoD-4: mutation testing (root: [tool.mutmut] below; kit: packages/gxg-connector-kit/pyproject.toml)
     "mutmut==3.8.1",
+    "copier==9.19.1",  # M1.1: scripts/new-connector renders templates/python-fastmcp
     "cryptography>=44,<51",
     # spikes/m4-contextforge verifier tests: the PyJWT version in the pinned ContextForge image
     "PyJWT==2.15.1",
@@ -44,7 +47,7 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["packages/gxg-connector-kit", "approval", "tools/gxg-policy"]
+members = ["packages/gxg-connector-kit", "approval", "tools/gxg-policy", "tools/gxg-connector-check"]
 # Connectors keep their own lockfile (docs/specs/mcp-toolkit-v1.md, demo-connector-v1.md);
 # the root pulls them in by path only to run their unit tests.
 # ui and notifier are separate deployables with their own lockfile too (AS-29).
@@ -54,6 +57,7 @@ exclude = ["connectors/*", "approval/ui", "approval/notifier"]
 gxg-connector-kit = { workspace = true }
 gxg-approval = { workspace = true }
 gxg-policy = { workspace = true }
+gxg-connector-check = { workspace = true }
 gxg-connector-demo = { path = "connectors/demo", editable = true }
 gxg-approval-ui = { path = "approval/ui", editable = true }
 gxg-approval-notifier = { path = "approval/notifier", editable = true }
@@ -74,6 +78,8 @@ testpaths = [
     "approval/tests",
     "approval/ui/tests",
     "tools/gxg-policy/tests",
+    "tools/gxg-connector-check/tests",
+    "tests/toolkit",
     "connectors/demo/tests",
     "connectors/telegram/tests",
     "spikes/m4-contextforge/tests",
@@ -82,6 +88,8 @@ testpaths = [
 ]
 # DoD-5: a skipped or xfailed test is a failure, not a pass.
 xfail_strict = true
+# DoD-1 (3rd edition): pytest-timeout on every test; a hang is a red gate, not a wait
+timeout = 600
 # `from scripts.ci import ...` in tests: mutmut tracks code by its dotted module name.
 # Test helpers of gxg-connector-kit (kit_testing.py); importlib mode does not add test dirs to sys.path.
 pythonpath = [".", "packages/gxg-connector-kit/tests", "connectors/telegram/archive"]
@@ -106,7 +114,11 @@ ignore = [
 "**/tests/**" = ["S101", "S603", "S607", "PLC0415"]
 "**/tests_db/**" = ["S101", "S603", "S607", "PLC0415", "S608", "S105", "S106", "PLR0917"]  # S608: SQL built from test constants
 "conftest.py" = ["S101"]
+# the conformance checks are pytest tests shipped as a package (check-connectors)
+"tools/gxg-connector-check/src/gxg_connector_check/checks.py" = ["S101"]
+"tools/gxg-connector-check/tests/broken/make_patches.py" = ["E501"]  # the broken code is quoted verbatim
 "scripts/ci/**" = ["S603", "S607"]
+"scripts/new_connector.py" = ["S603", "S607"]  # runs git and uv
 "stand/*.py" = ["S603", "S607"]  # dev stand scripts run docker compose and gxg-policy
 "approval/src/gxg_approval/cli.py" = ["PLC0415"]  # each process imports only what it runs
 "approval/ui/src/gxg_approval_ui/cli.py" = ["PLC0415"]
@@ -115,7 +127,7 @@ ignore = [
 "approval/src/gxg_approval/migrations/**" = ["S101", "S608", "E501"]  # static DDL from code constants
 
 [tool.ruff.lint.isort]
-known-first-party = ["gxg_connector_kit", "gxg_approval", "gxg_approval_ui", "gxg_approval_notifier", "gxg_policy", "demo_connector", "telegram_connector"]
+known-first-party = ["gxg_connector_kit", "gxg_connector_check", "gxg_approval", "gxg_approval_ui", "gxg_approval_notifier", "gxg_policy", "demo_connector", "telegram_connector"]
 
 [tool.mypy]
 # Baseline for every package; the strict set is enforced separately with

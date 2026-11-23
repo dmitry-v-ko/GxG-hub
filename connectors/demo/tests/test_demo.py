@@ -252,6 +252,7 @@ async def test_bundle_is_reloaded_when_its_files_change(env: Env, caplog: pytest
         assert (await http.get("/readyz")).status_code == 200
     events = [json.loads(r.getMessage()) for r in caplog.records if r.name == "demo_connector"]
     assert {"event": "bundle_loaded", "bundle_version": "0" * 40} in events
+    assert any(e["event"] == "not_ready" for e in events)  # /readyz logs why, under the connector's logger (MCC-09)
     rejected = [e for e in events if e["event"] == "bundle_rejected"]
     assert len(rejected) == 1 and sorted(rejected[0]) == ["event", "reason"] and "signature" in rejected[0]["reason"]
 
@@ -1113,3 +1114,16 @@ async def test_backend_failure_modes_through_the_test_controls(demo: Demo) -> No
         demo.backend.calls.clear()
         await demo.ok("demo.boards.list")
         assert (await ctl.get("/_test/backend/calls")).json() == {"boards": 1}
+
+
+async def test_readyz_follows_the_backend(demo: Demo) -> None:
+    """MCC-09: backend + valid bundle; a backend that is down makes the connector not ready."""
+    assert (await demo.http.get("/readyz")).status_code == 200
+    demo.backend.failure = "temporarily_unavailable"
+    r = await demo.http.get("/readyz")
+    assert (r.status_code, r.json()) == (503, {"status": "not_ready"})
+    demo.backend.failure = "timeout_before_start"
+    assert (await demo.http.get("/readyz")).status_code == 503
+    assert dataclasses.astuple(demo.backend.readiness()) == (False, ("backend is not available",))
+    demo.backend.failure = "rate_limited"  # limited, not down
+    assert (await demo.http.get("/readyz")).status_code == 200

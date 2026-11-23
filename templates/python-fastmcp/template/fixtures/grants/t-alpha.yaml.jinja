@@ -1,0 +1,33 @@
+# Test grants of `{{ name }}` (synthetic, no secrets). The conformance suite signs them into a test bundle.
+tenant: t-alpha
+schema_version: 1
+
+connections:
+  - id: {{ name }}-main
+    domain: {{ name }}
+    credential_ref: secret://t-alpha/{{ name }}/main
+
+principals:
+  agents:
+    - id: agent:t-alpha:reader
+    - id: agent:t-alpha:actor
+    - id: agent:t-alpha:nobody
+
+grants:
+  - id: alpha-reader
+    subjects: [agent:t-alpha:reader]
+    actions: [read]
+    resources:
+      - {{ name }}:{{ name }}-main/collection/c-public
+      - {{ name }}:{{ name }}-main/collection/c-team
+  - id: alpha-actor
+    subjects: [agent:t-alpha:actor]
+    actions: [read, propose]
+    resources:
+      - {{ name }}:{{ name }}-main/collection/c-public
+  - id: alpha-reader-secret-expired   # GR-06: expired, gives nothing
+    subjects: [agent:t-alpha:reader]
+    actions: [read]
+    resources:
+      - {{ name }}:{{ name }}-main/collection/c-secret
+    expires_at: "2026-01-01T00:00:00Z"
