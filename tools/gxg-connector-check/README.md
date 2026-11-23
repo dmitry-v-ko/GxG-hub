@@ -27,7 +27,7 @@ uv run check-connectors --connector . [--report checks.json]
 
 ## Как коннектор подключается
 
-В `pyproject.toml` коннектора — `[tool.gxg-connector-check] harness = "<pkg>.conformance:harness"`. `harness()` возвращает `gxg_connector_check.Harness`: каталог, класс `Settings`, функцию запуска (`start(settings, wiring) -> Running`: ASGI-приложения, счётчик вызовов провайдера, режимы отказа), principals и по одному вызову на tool. Остальное набор строит сам: подписанный тестовый bundle из `fixtures/grants/`, тестовый issuer identity, фейковый Approval Service с ключом executor'а.
+В `pyproject.toml` коннектора — `[tool.gxg-connector-check] harness = "<pkg>.conformance:harness"`. `harness()` возвращает `gxg_connector_check.Harness`: каталог, класс `Settings`, функцию запуска (`start(settings, wiring) -> Running`: ASGI-приложения, счётчик вызовов провайдера, режимы отказа), principals и по одному вызову на tool. Tool, который по праву отвечает только оператору (маска на весь тип ресурса), помечается `Call(..., caller="operator")`, а principal оператора — `Harness.operator`: набор вызывает такой tool от оператора и проверяет, что reader и principal без grants получают отказ (SC-10). Остальное набор строит сам: подписанный тестовый bundle из `fixtures/grants/`, тестовый issuer identity, фейковый Approval Service с ключом executor'а.
 
 Сервис в отдельном репозитории подключает набор git-зависимостью на тот же закреплённый commit GxG-hub, что и кит (так делает `scripts/new-connector --dest <вне репозитория>`).
 
