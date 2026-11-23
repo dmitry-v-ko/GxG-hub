@@ -71,7 +71,7 @@ DEMO_DRIFT = [
         "src/demo_connector/server.py",
         "from .backend import Backend\n",
         "from . import stage_c as effects\nfrom .backend import Backend\n"
-        "from .stage_c import Wiring  # noqa: F401 - M8 tests use server.Wiring\n",
+        "from .stage_c import Wiring as Wiring  # noqa: PLC0414 - explicit re-export: M8 tests use server.Wiring\n",
         "stage_c supplies connect/Wiring/Settings in place of the kit's effects; M8 tests use server.Wiring",
     ),
     (

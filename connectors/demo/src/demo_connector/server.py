@@ -21,7 +21,7 @@ from gxg_connector_kit.mcp import ConfigError, NoVerifier, serve
 
 from . import stage_c as effects
 from .backend import Backend
-from .stage_c import Wiring  # noqa: F401 - M8 tests use server.Wiring
+from .stage_c import Wiring as Wiring  # noqa: PLC0414 - explicit re-export: M8 tests use server.Wiring
 from .tools import Connector, logs
 
 __all__ = ["ConfigError", "NoVerifier", "Settings", "build", "configs", "main", "parse_keys", "serve"]
