@@ -28,6 +28,8 @@
 | M6-Q1–Q4, Q6 | по умолчанию из аудита: коллекция = entity_type.key; одна connection на tenant; читателям только published; write-tools скрыты от read-ключа; миграции только для тестов | ничего |
 | M11-4: ключ дедупликации Telegram для Signals (`chat_ref:message_id` вместо `peer_id:message_id`) | решается в задании M12: сопоставление ключей один раз или переход на новый ключ | M12 |
 | M11-5: роль `gxg_telegram_reader` в production (нужен `BYPASSRLS`, выдаёт суперпользователь Supabase) | принято: оператор базы выполняет `connectors/telegram/archive/reader_role.sql`, пароль из secret store; миграций в gxg_agents_v2 нет | ручное действие при развёртывании |
+| M6/MCC-03: одна роль `gxg_kb_reader` на все tenant'ы (изоляция RLS по `gxg.workspace_id`) против роли на tenant через `credential_ref` | ждёт владельца; по умолчанию одна роль (один Supabase-проект) | M6-PENDING-OWNER п. 7 |
+| M6: создать `gxg_kb_reader` в Supabase, `write-paths.sql`, SECURITY DEFINER-функции, hardening (этап 2) | ручное действие владельца при развёртывании | `gxg-kb-service/schema/` |
 
 | Веха | Цикл | Роль | Ветка | Commit | Оценка | Решение | Дата |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -202,3 +204,4 @@
 | M6 | — | решение владельца | gxg-kb-service: claude/m6-kb-service | 64c7da6 | — | `stand/.env` (синтетические секреты стенда, 025c900): переписать историю ветки и force-push; остальные пункты M6-PENDING-OWNER — по умолчанию | 2026-11-22 |
 | M11.1 | 1 | оркестратор | gxg-telegram-service: claude/m11.1-telegram-service | 050a576 | — | watchdog 2: тред disconnected с 20:58, mutmut (2824/4924) потерян с контейнером; узкое задание: mutmut только по модулям вехи (DoD-1), частями с коммитом, heartbeat ≤ 30 мин, отчёт соответствия ц1, критик | 2026-11-22 |
 | M1.1 | 2 | независимый критик | claude/m1.1-toolkit | 5cca255 (+f82cd2d READY) | **9.0** | ≥ 9 — **веха закрыта** (6.0 → 9.0); AC-M1.1-01…04 passed; major missed_earlier (SC-09: маркер не шлётся в цикле режимов отказа) — исправление отдельным коммитом до перевода M11.1/M6 на `check-connectors`; demo M8 ↔ `gxg_connector_kit.effects` — при интеграции | 2026-11-23 |
+| M6 | 3 (KB-сервис) | независимый критик | gxg-kb-service: claude/m6-kb-service | f06efa8 (+bc87d82 READY) | **9.0** | ≥ 9 — **веха закрыта** (6.0 → 8.0 → 9.0); AC-M6-01…04 passed; `stand/.env` удалён из истории (решение владельца); переход на шаблон M1.1 и `check-connectors` — отдельным шагом; MCC-03 (п. 7) — владельцу | 2026-11-23 |
