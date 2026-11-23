@@ -13,6 +13,15 @@
 # Nothing here prints a variable value.
 set -eu
 
+# Railway mounts volumes root-owned. Started as root (the images do not set USER), take the volume directories over and
+# re-run this script as the unprivileged service user before anything else: no secret file or process ever belongs to root.
+if [ "$(id -u)" = 0 ] && id gxg >/dev/null 2>&1; then
+  for dir in ${GXG_VOLUME_DIRS:-/var/lib/gxg /var/lib/telegram}; do
+    [ -d "$dir" ] && chown gxg "$dir"
+  done
+  exec setpriv --reuid=gxg --regid=gxg --init-groups "$0" "$@"
+fi
+
 # Railway may run this script twice (ENTRYPOINT and an explicit start command): the second pass only execs.
 if [ -n "${GXG_ENTRYPOINT_DONE:-}" ]; then exec "$@"; fi
 export GXG_ENTRYPOINT_DONE=1

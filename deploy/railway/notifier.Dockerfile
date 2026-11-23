@@ -24,7 +24,7 @@ COPY --from=build /app/approval/notifier/.venv /app/approval/notifier/.venv
 RUN useradd --system --uid 10003 gxg && mkdir -p /var/lib/gxg && chown gxg /var/lib/gxg
 
 COPY deploy/railway/entrypoint.sh /opt/gxg/entrypoint.sh
-USER gxg
+# Railway mounts volumes root-owned: the entrypoint starts as root, chowns them and drops to gxg (setpriv) before anything else.
 ENV PATH=/app/approval/notifier/.venv/bin:$PATH PYTHONUNBUFFERED=1
 ENTRYPOINT ["/opt/gxg/entrypoint.sh"]
 CMD ["gxg-approval-notifier"]

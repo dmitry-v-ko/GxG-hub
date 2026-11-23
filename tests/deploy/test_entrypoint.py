@@ -155,3 +155,25 @@ def test_a_second_pass_through_the_entrypoint_only_execs(tmp_path: Path) -> None
     done = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False, timeout=30)
     assert done.returncode == 0 and done.stdout == "dsn-MARKER", done.stderr
     assert (tmp_path / "calls").read_text().count("tailscaled --tun=userspace-networking") == 1
+
+
+def test_root_start_takes_the_volume_and_drops_to_the_service_user(tmp_path: Path) -> None:
+    """Railway mounts volumes root-owned: as root the entrypoint chowns them and re-runs itself as `gxg`."""
+    volume = tmp_path / "vol"
+    volume.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls"
+    (bin_dir / "id").write_text('#!/bin/sh\n[ "$1" = "-u" ] && echo 0 || exit 0\n')
+    (bin_dir / "chown").write_text(f'#!/bin/sh\necho "chown $*" >>{log}\n')
+    (bin_dir / "setpriv").write_text(f'#!/bin/sh\necho "setpriv $*" >>{log}\n')
+    for f in bin_dir.iterdir():
+        f.chmod(0o755)
+    env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "GXG_VOLUME_DIRS": str(volume)}
+    done = subprocess.run(  # noqa: S603
+        ["sh", str(ENTRY), "true"], env=env, capture_output=True, text=True, check=False, timeout=30
+    )
+    assert done.returncode == 0, done.stderr
+    calls = log.read_text()
+    assert f"chown gxg {volume}" in calls
+    assert "setpriv --reuid=gxg --regid=gxg --init-groups" in calls and str(ENTRY) in calls

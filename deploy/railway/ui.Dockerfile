@@ -25,7 +25,7 @@ RUN useradd --system --uid 10002 gxg && mkdir -p /var/lib/gxg && chown gxg /var/
 
 COPY deploy/railway/entrypoint.sh /opt/gxg/entrypoint.sh
 COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscale /usr/local/bin/
-USER gxg
+# Railway mounts volumes root-owned: the entrypoint starts as root, chowns them and drops to gxg (setpriv) before anything else.
 ENV PATH=/app/approval/ui/.venv/bin:$PATH PYTHONUNBUFFERED=1
 EXPOSE 8443
 ENTRYPOINT ["/opt/gxg/entrypoint.sh"]
