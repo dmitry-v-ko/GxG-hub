@@ -13,6 +13,22 @@
 # Nothing here prints a variable value.
 set -eu
 
+# Railway may run this script twice (ENTRYPOINT and an explicit start command): the second pass only execs.
+if [ -n "${GXG_ENTRYPOINT_DONE:-}" ]; then exec "$@"; fi
+export GXG_ENTRYPOINT_DONE=1
+
+# GXG_REQUIRE: names the owner must set; a clear message instead of a crash deep inside the process. Exit 78 is a
+# configuration error: with the restart policy ON_FAILURE and a retry limit the service stops and waits.
+missing=""
+for name in ${GXG_REQUIRE:-}; do
+  [ -n "$(printenv "$name")" ] || missing="$missing $name"
+done
+if [ -n "$missing" ]; then
+  echo "entrypoint: not started, the owner has to set:$missing (docs/runbooks/m13-pilot-deploy.md)" >&2
+  exit 78
+fi
+unset GXG_REQUIRE
+
 FILES="${GXG_FILES_DIR:-/dev/shm/gxg-files}"
 umask 077
 mkdir -p "$FILES"
@@ -24,11 +40,11 @@ materialise() { # prefix
       WEBHOOK__*)
         rel="${name#WEBHOOK__}"
         mkdir -p "$FILES/webhooks"
-        printenv "$var" >"$FILES/webhooks/$rel"
+        printf '%s' "$(printenv "$var")" >"$FILES/webhooks/$rel"
         export GXG_WEBHOOK_SECRETS_DIR="$FILES/webhooks"
         ;;
       *)
-        printenv "$var" >"$FILES/$name"
+        printf '%s' "$(printenv "$var")" >"$FILES/$name"
         export "${name}_FILE=$FILES/$name"
         ;;
     esac

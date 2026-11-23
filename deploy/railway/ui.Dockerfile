@@ -1,5 +1,6 @@
 # Railway wrapper of approval/ui/Dockerfile: the same build, plus entrypoint.sh (secrets as files) and tailscale
 # (userspace networking, `tailscale serve`; ADR-0003).
+# The optional ca-bundle secret mount of the original is dropped (Railway has no TLS-intercepting proxy to trust).
 # tests/deploy checks that the original text is still contained here. Build context: the repository root.
 ARG TAILSCALE_IMAGE=tailscale/tailscale:v1.84.2
 FROM ${TAILSCALE_IMAGE} AS tailscale
@@ -16,9 +17,7 @@ COPY packages/gxg-connector-kit packages/gxg-connector-kit
 COPY approval/ui approval/ui
 WORKDIR /app/approval/ui
 # Optional secret `ca-bundle`: a TLS-intercepting proxy's CA for the download only, never stored in a layer.
-RUN --mount=type=secret,id=ca-bundle,required=false \
-    if [ -f /run/secrets/ca-bundle ]; then export SSL_CERT_FILE=/run/secrets/ca-bundle; fi \
-    && uv sync --no-dev --no-editable
+RUN uv sync --no-dev --no-editable
 
 FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 COPY --from=build /app/approval/ui/.venv /app/approval/ui/.venv

@@ -114,6 +114,8 @@ def test_wrapper_dockerfiles_still_contain_the_original_build(name: str, cmd: st
     original = (ROOT / f"approval/{name}/Dockerfile").read_text().rstrip("\n")
     wrapper = (ROOT / f"deploy/railway/{name}.Dockerfile").read_text()
     build_stage = original.split("USER gxg")[0]
+    # the wrapper drops the optional ca-bundle secret mount (a sandbox-proxy convenience Railway cannot use)
+    build_stage = re.sub(r"RUN --mount=type=secret.*?&& uv sync", "RUN uv sync", build_stage, flags=re.DOTALL)
     assert build_stage in wrapper  # the build (and so the lockfile and the base digests) is the one AC-M9-12 tests
     assert wrapper.rstrip().endswith(f'ENTRYPOINT ["/opt/gxg/entrypoint.sh"]\nCMD ["{cmd}"]')
 
@@ -124,3 +126,32 @@ def test_no_railway_dockerfile_declares_a_volume() -> None:
     assert len(files) >= 4
     for f in files:
         assert not re.search(r"^\s*VOLUME\b", f.read_text(), re.MULTILINE | re.IGNORECASE), f.name
+
+
+def test_missing_owner_variables_stop_the_start_with_a_clear_message(tmp_path: Path) -> None:
+    done = run_entry(tmp_path, {"GXG_REQUIRE": "GXG_OIDC_ISSUER GXG_SECRET__X", "GXG_SECRET__X": "set"}, "echo started")
+    assert done.returncode == 78 and "started" not in done.stdout
+    assert "the owner has to set: GXG_OIDC_ISSUER" in done.stderr and "GXG_SECRET__X" not in done.stderr
+    (tmp_path / "again").mkdir()
+    ok = run_entry(tmp_path / "again", {"GXG_REQUIRE": "A B", "A": "1", "B": "2"}, "echo started")
+    assert ok.returncode == 0 and "started" in ok.stdout
+
+
+def test_a_second_pass_through_the_entrypoint_only_execs(tmp_path: Path) -> None:
+    """Railway may call the entrypoint again with an explicit start command: files stay, tailscale is not restarted."""
+    env = {
+        "PATH": f"{stubs(tmp_path)}:{os.environ['PATH']}",
+        "GXG_FILES_DIR": str(tmp_path / "f"),
+        "TS_STATE_DIR": str(tmp_path / "ts"),
+    }
+    env |= {
+        "GXG_SECRET__GXG_DB_DSN": "dsn-MARKER",
+        "TS_HOSTNAME": "h",
+        "TS_TAGS": "tag:x",
+        "TS_AUTHKEY": AUTHKEY,
+        "GXG_TS_SERVE": SERVE,
+    }
+    cmd = ["sh", str(ENTRY), "sh", str(ENTRY), "sh", "-c", 'cat "$GXG_DB_DSN_FILE"']
+    done = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False, timeout=30)
+    assert done.returncode == 0 and done.stdout == "dsn-MARKER", done.stderr
+    assert (tmp_path / "calls").read_text().count("tailscaled --tun=userspace-networking") == 1

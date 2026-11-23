@@ -507,6 +507,7 @@ class Deployer:
             want["restartPolicyType"] = "NEVER"
         elif svc["kind"] in ("app", "postgres"):
             want["restartPolicyType"] = "ON_FAILURE"
+            want["restartPolicyMaxRetries"] = 5  # a service that cannot start waits for the owner, it does not loop
         have = (
             self.api.call(Q_INSTANCE, serviceId=self.service_ids[name], environmentId=self.env_id).get(
                 "serviceInstance"
