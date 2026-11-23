@@ -250,3 +250,38 @@ def test_verify_covers_admin(deployed: MockRailway, capsys: pytest.CaptureFixtur
     assert "FAIL admin: secret variables equal the declared set (AS-28)" in out
     assert "FAIL admin: no Railway public domain" in out
     assert "leaked-client-secret" not in out
+
+
+def test_repository_services_follow_the_configured_branch(
+    deployed: MockRailway, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = rd.load_spec()
+    for name, svc in spec["services"].items():
+        if svc.get("image"):
+            assert deployed.by_name(name)["trigger"] is None
+        else:
+            want = svc["source"].get("branch") or spec["repo"]["branch"]
+            assert deployed.by_name(name)["trigger"]["branch"] == want, (
+                name
+            )  # not the `main` serviceCreate fell back to
+    assert deployed.by_name("telegram")["trigger"] == {
+        "repository": "dmitry-v-ko/gxg-telegram-service",
+        "branch": "claude/m11.1-telegram-service",
+    }
+    # drifted by hand: the next run reconnects it, then nothing more happens
+    deployed.by_name("api")["trigger"]["branch"] = "main"
+    deployed.mutations.clear()
+    assert run(deployed) == 0
+    assert deployed.mutations == ["ServiceConnect"]
+    deployed.mutations.clear()
+    assert run(deployed) == 0 and deployed.mutations == []
+    # and --verify reports a wrong branch
+    set_owner_values(deployed)
+    run(deployed, "--finalize")
+    deployed.by_name("telegram")["trigger"]["branch"] = "main"
+    capsys.readouterr()
+    assert run(deployed, "--verify") == 1
+    assert (
+        "FAIL telegram: built from dmitry-v-ko/gxg-telegram-service@claude/m11.1-telegram-service"
+        in capsys.readouterr().out
+    )

@@ -144,6 +144,10 @@ Q_INSTANCE = """query ServiceInstance($serviceId: String!, $environmentId: Strin
   serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { startCommand healthcheckPath restartPolicyType } }"""
 Q_INSTANCE_UPDATE = """mutation ServiceInstanceUpdate($serviceId: String!, $environmentId: String, $input: ServiceInstanceUpdateInput!) {
   serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }"""
+Q_TRIGGERS = """query DeploymentTriggers($projectId: String!, $environmentId: String!, $serviceId: String!) {
+  deploymentTriggers(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId) {
+  edges { node { repository branch } } } }"""
+Q_CONNECT = """mutation ServiceConnect($id: String!, $input: ServiceConnectInput!) { serviceConnect(id: $id, input: $input) { id } }"""
 Q_REDEPLOY = """mutation ServiceInstanceRedeploy($serviceId: String!, $environmentId: String!) {
   serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId) }"""
 Q_VARIABLES = """query Variables($projectId: String!, $environmentId: String!, $serviceId: String) {
@@ -413,6 +417,31 @@ class Deployer:
         branch = src.get("branch") or self.spec["repo"]["branch"]
         return {"source": {"repo": repo}, "branch": branch}
 
+    def repo_source(self, name: str) -> tuple[str, str] | None:
+        """(repository, branch) a repository-built service must follow; None for image services."""
+        svc = self.spec["services"][name]
+        if svc.get("image"):
+            return None
+        src = svc["source"]
+        return src.get("repo") or self.spec["repo"]["name"], src.get("branch") or self.spec["repo"]["branch"]
+
+    def source_ok(self, name: str) -> bool:
+        want = self.repo_source(name)
+        if want is None:
+            return True
+        data = self.api.call(
+            Q_TRIGGERS, projectId=self.project_id, environmentId=self.env_id, serviceId=self.service_ids[name]
+        )
+        triggers = [e["node"] for e in (data.get("deploymentTriggers") or {}).get("edges", [])]
+        return any((t.get("repository"), t.get("branch")) == want for t in triggers)
+
+    def ensure_source(self, name: str) -> None:
+        """serviceCreate does not reliably pin the branch (it fell back to `main`): connect the service explicitly."""
+        want = self.repo_source(name)
+        if want is not None and not self.source_ok(name):
+            self.api.call(Q_CONNECT, id=self.service_ids[name], input={"repo": want[0], "branch": want[1]})
+            self.out.say(f"connected {name} to {want[0]}@{want[1]}")
+
     def apply(self) -> None:
         self.discover(create=True)
         for name, svc in self.spec["services"].items():
@@ -447,6 +476,7 @@ class Deployer:
                 )
                 self.out.say(f"set variables on {name}: {', '.join(sorted(writes))}")
                 changed.append(name)
+            self.ensure_source(name)
             self.ensure_instance(name)
             self.ensure_volume(name)
             self.close_exposure(name)
@@ -574,6 +604,9 @@ class Deployer:
             if name not in self.service_ids:
                 check(False, name, "service exists")
                 continue
+            if self.repo_source(name) is not None:
+                want = self.repo_source(name)
+                check(self.source_ok(name), name, f"built from {want[0]}@{want[1]}" if want else "source")
             service_domains, custom_domains, tcp = self.exposure(name)
             check(not service_domains, name, "no Railway public domain")
             check(not custom_domains, name, "no custom domain")

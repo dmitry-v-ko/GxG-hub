@@ -8,6 +8,7 @@ from typing import Any
 
 MUTATIONS = {
     "ProjectCreate", "ServiceCreate", "ServiceDelete", "ServiceInstanceUpdate", "ServiceInstanceRedeploy",
+    "ServiceConnect",
     "VariableCollectionUpsert", "VolumeCreate", "ServiceDomainDelete", "CustomDomainDelete", "TcpProxyDelete",
 }  # fmt: skip
 
@@ -64,12 +65,15 @@ class MockRailway:
 
     def op_ServiceCreate(self, v: dict[str, Any]) -> dict[str, Any]:
         sid = self.new_id()
+        src = v["input"].get("source", {})
+        # the live API bound a repository service to `main` whatever `branch` said: the mock keeps that behaviour
+        trigger = {"repository": src["repo"], "branch": "main"} if "repo" in src else None
         self.services[sid] = {
             "name": v["input"]["name"],
             "vars": {},
             "instance": {},
             "volume": None,
-            "source": v["input"],
+            "trigger": trigger,
         }
         return {"serviceCreate": {"id": sid, "name": v["input"]["name"]}}
 
@@ -133,3 +137,11 @@ class MockRailway:
         for sid, items in self.tcp.items():
             self.tcp[sid] = [d for d in items if d["id"] != v["id"]]
         return {"tcpProxyDelete": True}
+
+    def op_DeploymentTriggers(self, v: dict[str, Any]) -> dict[str, Any]:
+        trigger = self.services[v["serviceId"]]["trigger"]
+        return {"deploymentTriggers": {"edges": [{"node": trigger}] if trigger else []}}
+
+    def op_ServiceConnect(self, v: dict[str, Any]) -> dict[str, Any]:
+        self.services[v["id"]]["trigger"] = {"repository": v["input"]["repo"], "branch": v["input"]["branch"]}
+        return {"serviceConnect": {"id": v["id"]}}
