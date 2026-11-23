@@ -911,3 +911,27 @@ async def test_the_provider_gets_the_canonical_args(internal: Internal) -> None:
     r = await internal.execute(exec_token.sign(EXEC, claims(ahs=ahs)), nfd)
     assert r.json()["status"] == "succeeded"
     assert internal.provider.calls()[0]["text_hash"] == hashlib.sha256(nfc.encode()).hexdigest()
+
+
+def _failures(text: str) -> dict[str, float]:
+    from prometheus_client.parser import text_string_to_metric_families
+
+    return {
+        s.labels["reason"]: s.value
+        for f in text_string_to_metric_families(text)
+        for s in f.samples
+        if s.name == "gxg_token_verify_failures_total"
+    }
+
+
+async def test_token_verify_failures_are_counted_on_metrics(internal: Internal) -> None:
+    """AC-M10-05 (connector side): `gxg_token_verify_failures_total{reason}` on the internal port's /metrics."""
+    before = _failures((await internal.client.get("/metrics")).text)
+    token = exec_token.sign(EXEC, claims())
+    assert (await internal.execute(token, intent_id="00000000-0000-4000-8000-000000000001")).status_code == 401
+    assert (await internal.execute(token)).status_code == 401  # the local jti cache: a replay
+    r = await internal.client.get("/metrics")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
+    after = _failures(r.text)
+    assert after.get("binding", 0) - before.get("binding", 0) == 1
+    assert after.get("replay", 0) - before.get("replay", 0) == 1

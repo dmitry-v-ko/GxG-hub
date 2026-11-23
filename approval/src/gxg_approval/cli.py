@@ -108,6 +108,14 @@ def _executor() -> None:
         svc_key=c.signing_key("GXG_SVC_KEY"),
         http=http,
     )
+    from prometheus_client import CollectorRegistry, start_http_server
+
+    from .executor import RESERVE_CONFLICTS
+
+    scrape = CollectorRegistry(auto_describe=False)
+    scrape.register(RESERVE_CONFLICTS)  # the database figures are on api /metrics
+    host, _, port = c.env("GXG_METRICS_LISTEN", "0.0.0.0:9101").rpartition(":")
+    start_http_server(int(port), addr=host, registry=scrape)
     executor.run(threading.Event(), poll_s=float(c.env("GXG_POLL_S", "1")))
 
 
