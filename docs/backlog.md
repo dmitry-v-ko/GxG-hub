@@ -24,3 +24,14 @@
 | M7 | reports/critic/M7-final.json | major missed_earlier: мутант `execution_deadline = now() + interval '1 hour'` (вместо окна, зафиксированного на T1) выживает — тест T2 использует умолчание 3600; minor: выживают gxg_cancel без webhook-outbox, reject требует step-up, decided_by из последнего правила; схема MCP не совпадает с ответом api | В M8 (execution window — путь исполнения) |
 | M9 | reports/critic/M9-final.json | minor: access log uvicorn пишет `?code=` OIDC callback (SEC-17 — исправить в M10); outbox уведомлений хранит title/requester бессрочно (очистка — M10, RET-01); кнопки решения видны approver'у вне замороженного набора (UX); двойной префикс в логе getUpdates; gitleaks на shallow clone ловит граничные коммиты. threat_model open: bidi-символы в тексте Telegram, step-up через passkey с украденной сессией и компрометация `ui` (закрывает AS-30 в M10), нет серверного отзыва сессии | M10 (access log, очистка outbox, AS-30, отзыв сессий) |
 | M11 | reports/critic/M11-cycle-4.json | minor: The bare 'search_path' match flags any migration with a SECURITY DEFINER function (SET search_path = pg_catalo; Unquoted word splitting and git's C-quoting of non-ASCII names: an archive rename in '20270101 next.sql' or '2; Quoted or mixed-case identifiers pass: alter table "capability_hub"."connections" drop column "metadata" (supa | при следующем касании |
+
+## M12 (критик цикла 1, 2026-11-23; ветка gxg_agents_v2 codex/m12-signals-gxg-hub @ 1487186)
+
+- Счётчик старого пути перенести в legacy-handler'ы (`run-action-workflow.ts:353`), чтобы AC-M12-05 мерил исполнение, а не конфигурацию.
+- AC-M12-01: фикстура соответствия `peer_id:message_id` ↔ `chat_ref:message_id`, legacy-сторона через настоящий `HubCollectionDriver`, медиа без текста и edited.
+- AC-M12-06: отдельный harness без webhook'ов со сравнением множеств; случай «чат в конфигурации без grant» через webhook.
+- AC-M12-02: assert, что множество `business_task_id` равно множеству id кандидатов.
+- Верхняя граница или alert для бесконечно отложенных gxg-кандидатов (`hub_transport_failed`).
+- Секундный cron Signals: wakeup по `next_poll_at` или не создавать run при пустой выборке.
+- Webhook для tenant'а не того workspace: 2xx-ignore или 403 вместо 503.
+- mastra typecheck зависит от `frontend/node_modules`: `npm ci` в обоих каталогах в CI.
