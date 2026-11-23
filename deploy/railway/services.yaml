@@ -40,6 +40,15 @@ services:
     env: {POSTGRES_USER: archive_owner, POSTGRES_DB: archive, PGDATA: /var/lib/postgresql/data/pgdata}
     secrets: {POSTGRES_PASSWORD: {gen: random:24}}
 
+  # Holds the Ed25519 key that signs the grants bundle (GR-11), nothing else. No source, never deployed: a service
+  # without a source runs nothing. Not on `admin` (AS-28: admin's secret set is fixed). scripts/deploy/pilot_bundle.py reads
+  # the key in memory to re-sign the bundle; the public half is published here as a variable.
+  bundle-signer:
+    kind: vault
+    secrets:
+      GXG_BUNDLE_SIGNING_KEY: {gen: ed25519_seed, as28: bundle_signing}
+    config: {GXG_BUNDLE_PUBLIC_KEY: "ed25519_pub:GXG_BUNDLE_SIGNING_KEY"}
+
   # ---------------------------------------------------------------- ContextForge (entry: tag:gateway)
   contextforge:
     kind: app

@@ -56,6 +56,7 @@ AS28: dict[str, frozenset[str]] = {
     "webhook_secrets": frozenset({"notifier"}),
     "tailscale": frozenset({"ui", "admin"}),  # tag:approval-ui and tag:approval-admin entries (ADR-0003)
     "bootstrap": frozenset({"db-init"}),  # transient job, removed by --finalize
+    "bundle_signing": frozenset({"bundle-signer"}),  # vault service, never deployed: signs the grants bundle (GR-11)
 }
 ROLE_OF = {  # AS-27: one role per process
     "migrate": "gxg_owner", "admin": "gxg_admin", "api": "gxg_api", "sweeper": "gxg_sweeper", "executor": "gxg_executor",
@@ -104,7 +105,7 @@ def http_transport(token: str, url: str = API) -> Transport:
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {token}",
-                "User-Agent": "gxg-deploy",
+                "User-Agent": os.environ.get("RAILWAY_USER_AGENT", "gxg-deploy"),  # the API edge rejects some agents
             },
             method="POST",
         )
@@ -143,7 +144,7 @@ Q_PROJECT_CREATE = """mutation ProjectCreate($input: ProjectCreateInput!) { proj
 Q_SERVICE_CREATE = "mutation ServiceCreate($input: ServiceCreateInput!) { serviceCreate(input: $input) { id name } }"
 Q_SERVICE_DELETE = "mutation ServiceDelete($id: String!, $environmentId: String) { serviceDelete(id: $id, environmentId: $environmentId) }"
 Q_INSTANCE = """query ServiceInstance($serviceId: String!, $environmentId: String!) {
-  serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { startCommand healthcheckPath restartPolicyType } }"""
+  serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { startCommand healthcheckPath restartPolicyType restartPolicyMaxRetries } }"""
 Q_INSTANCE_UPDATE = """mutation ServiceInstanceUpdate($serviceId: String!, $environmentId: String, $input: ServiceInstanceUpdateInput!) {
   serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }"""
 Q_TRIGGERS = """query DeploymentTriggers($projectId: String!, $environmentId: String!, $serviceId: String!) {
@@ -412,6 +413,8 @@ class Deployer:
         self.service_ids = {s["name"]: s["id"] for s in edges(node, "services")}
 
     def source_input(self, svc: dict[str, Any]) -> dict[str, Any]:
+        if svc["kind"] == "vault":
+            return {}  # no source: the service only holds variables, nothing is built or run
         if svc.get("image"):
             return {"source": {"image": svc["image"]}}
         src = svc["source"]
@@ -422,7 +425,7 @@ class Deployer:
     def repo_source(self, name: str) -> tuple[str, str] | None:
         """(repository, branch) a repository-built service must follow; None for image services."""
         svc = self.spec["services"][name]
-        if svc.get("image"):
+        if svc.get("image") or svc["kind"] == "vault":
             return None
         src = svc["source"]
         return src.get("repo") or self.spec["repo"]["name"], src.get("branch") or self.spec["repo"]["branch"]
@@ -482,7 +485,7 @@ class Deployer:
             self.ensure_instance(name)
             self.ensure_volume(name)
             self.close_exposure(name)
-        for name in changed:
+        for name in (n for n in changed if self.spec["services"][n]["kind"] != "vault"):
             self.api.call(Q_REDEPLOY, serviceId=self.service_ids[name], environmentId=self.env_id)
             self.out.say(f"redeploy {name}")
         missing = self.owner_todo(values)
@@ -500,6 +503,8 @@ class Deployer:
 
     def ensure_instance(self, name: str) -> None:
         svc = self.spec["services"][name]
+        if svc["kind"] == "vault":
+            return
         want: dict[str, Any] = {}
         if svc.get("start"):
             want["startCommand"] = svc["start"]

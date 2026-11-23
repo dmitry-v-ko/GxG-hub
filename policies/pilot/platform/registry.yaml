@@ -1,0 +1,14 @@
+# Pilot platform registry (M13). Public keys only: they are the GXG_SVC_PUBLIC_KEY variables of the live services
+# (scripts/deploy/pilot_bundle.py --check compares them with Railway). Format: docs/specs/approval-service-v1.md#реестр-платформы
+# Not listed: `api` (it only verifies service JWTs, it has no key of its own, services.yaml) and the Telegram connector
+# (no service key exists yet; it joins the registry with the first connector grants, see reports/M13-LIVE.md).
+schema_version: 1
+services:
+  - id: executor
+    kind: executor
+    public_keys: [ed25519:DiNOXTkmM14WwnHUQVgpOpMkf2Xv_GYqdlluozp8I6c]
+    tenants: ["*"]
+  - id: approval-mcp
+    kind: approval_mcp
+    public_keys: [ed25519:0jhcQt7IEfA0Pg9sJKsdAQsYspIwWIdd33ttaAJKDUE]
+    tenants: ["*"]

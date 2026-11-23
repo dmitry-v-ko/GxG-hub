@@ -257,7 +257,7 @@ def test_repository_services_follow_the_configured_branch(
 ) -> None:
     spec = rd.load_spec()
     for name, svc in spec["services"].items():
-        if svc.get("image"):
+        if svc.get("image") or svc["kind"] == "vault":
             assert deployed.by_name(name)["trigger"] is None
         else:
             want = svc["source"].get("branch") or spec["repo"]["branch"]

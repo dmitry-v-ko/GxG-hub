@@ -1,0 +1,15 @@
+# Pilot tenant. No humans and no grants on chats yet: they are added after the owner signs in to Telegram and the UI
+# (reports/M13-LIVE.md). No secrets: credential_ref points to the secret store. Format: docs/specs/resource-grants-v1.md
+tenant: t-pilot
+schema_version: 1
+
+connections:
+  - id: tg-pilot
+    domain: telegram
+    credential_ref: secret://t-pilot/telegram/pilot
+
+principals:
+  agents:
+    - id: agent:t-pilot:pilot
+
+grants: []
