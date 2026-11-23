@@ -221,3 +221,84 @@ def test_health(api: TestClient, pg: Any) -> None:
         not_ready = decider.create_app(decider.Deps(pool, "ui.example.test", PUBLIC_URL, ready=lambda: False))
         with TestClient(not_ready) as client:
             assert client.get("/readyz").status_code == 503
+
+
+def test_database_functions_refuse_on_their_own(pg: Any, propose: Callable[..., Any], owner: Any) -> None:
+    """Defence in depth: gxg_decide itself refuses what the decider's Python already filters (a compromised decider
+    process or a bug there): unknown, used or old challenge, a passkey not enrolled or of another human, a counter
+    that did not grow, an assertion without its parts."""
+    i = intent(propose, owner)
+    full = '{"credential_id": "c", "authenticator_data": "a", "client_data_json": "j", "signature": "s"}'
+    owner.execute(
+        "INSERT INTO webauthn_credentials VALUES ('\\x01', %s, '\\x00', 5, now(), %s), ('\\x02', %s, '\\x00', 0, now(), "
+        "NULL), ('\\x03', %s, '\\x00', 0, now(), %s)",
+        (HUMAN1, OPERATOR, HUMAN1, HUMAN2, OPERATOR),
+    )
+
+    def challenge(conn: Any) -> bytes:
+        row = conn.execute(
+            "SELECT gxg_decision_challenge(%s, %s, 'approve', %s, %s)", (HUMAN1, i["intent_id"], 1, i["args_hash"])
+        ).fetchone()
+        return bytes(row[0])
+
+    with pg.connect("gxg_decider") as d:
+        cases = [
+            (b"\x00" * 48, b"\x01", 6, full, "GX403"),  # unknown challenge
+            (None, b"\x02", 6, full, "GX403"),  # not enrolled through the decider
+            (None, b"\x03", 6, full, "GX403"),  # HUMAN2's passkey for HUMAN1's challenge
+            (None, b"\x01", 5, full, "GX403"),  # the counter did not grow
+            (None, b"\x01", 6, '{"credential_id": "c"}', "GX400"),  # assertion without its parts
+            (None, b"\x01", 6, '"text"', "GX400"),
+        ]
+        for ch, cred, n, assertion, state in cases:
+            with pytest.raises(psycopg.Error) as err:
+                d.execute("SELECT gxg_decide(%s, %s, %s, null, %s)", (ch or challenge(d), cred, n, assertion))
+            assert err.value.sqlstate == state, (cred, n, assertion)
+        old = challenge(d)
+        owner.execute("UPDATE decider_challenges SET created_at = now() - interval '301 seconds' WHERE challenge = %s",
+                      (old,))  # fmt: skip
+        with pytest.raises(psycopg.Error) as err:
+            d.execute("SELECT gxg_decide(%s, '\\x01', 6, null, %s)", (old, full))
+        assert err.value.sqlstate == "GX403"
+        assert count(owner) == 0
+        good = challenge(d)
+        d.execute("SELECT gxg_decide(%s, '\\x01', 6, null, %s)", (good, full))
+        with pytest.raises(psycopg.Error) as err:
+            d.execute("SELECT gxg_decide(%s, '\\x01', 7, null, %s)", (good, full))
+        assert err.value.sqlstate == "GX409"  # used
+    assert count(owner) == 1
+    assert owner.execute("SELECT sign_count FROM webauthn_credentials WHERE credential_id = '\\x01'").fetchone() == (6,)
+
+
+def test_enroll_function_refuses_on_its_own(pg: Any, owner: Any) -> None:
+    token = decider.invite_hash("t" * 24)
+    with pg.connect("gxg_admin") as admin:
+        admin.execute("SELECT gxg_passkey_invite(%s, %s, %s, 600)", (HUMAN1, token, OPERATOR))
+        for bad in ((HUMAN1, token, OPERATOR, 59), ("agent:x", token, OPERATOR, 600), (HUMAN1, "x", OPERATOR, 600)):
+            with pytest.raises(psycopg.Error) as err:
+                admin.execute("SELECT gxg_passkey_invite(%s, %s, %s, %s)", bad)
+            assert err.value.sqlstate == "GX400", bad
+    with pg.connect("gxg_decider") as d:
+        ch = bytes(d.execute("SELECT gxg_enroll_challenge(%s, %s)", (HUMAN1, token)).fetchone()[0])
+        with pytest.raises(psycopg.Error) as err:
+            d.execute("SELECT gxg_enroll(%s, '\\x09', '\\x00', 0)", (b"\x00" * 32,))
+        assert err.value.sqlstate == "GX403"
+        owner.execute("UPDATE decider_challenges SET created_at = now() - interval '301 seconds'")
+        with pytest.raises(psycopg.Error) as err:
+            d.execute("SELECT gxg_enroll(%s, '\\x09', '\\x00', 0)", (ch,))
+        assert err.value.sqlstate == "GX403"
+        ch = bytes(d.execute("SELECT gxg_enroll_challenge(%s, %s)", (HUMAN1, token)).fetchone()[0])
+        owner.execute("UPDATE passkey_invites SET expires_at = now()")
+        with pytest.raises(psycopg.Error) as err:
+            d.execute("SELECT gxg_enroll(%s, '\\x09', '\\x00', 0)", (ch,))
+        assert err.value.sqlstate == "GX403"
+        owner.execute("UPDATE passkey_invites SET expires_at = now() + interval '1 hour'")
+        assert d.execute("SELECT gxg_enroll(%s, '\\x09', '\\x00', 0)", (ch,)).fetchone() == (HUMAN1,)
+        with pytest.raises(psycopg.Error) as err:
+            d.execute("SELECT gxg_enroll(%s, '\\x0a', '\\x00', 0)", (ch,))
+        assert err.value.sqlstate == "GX409"  # the challenge is used
+        with pytest.raises(psycopg.Error) as err:
+            d.execute("SELECT gxg_enroll_challenge(%s, %s)", (HUMAN1, token))
+        assert err.value.sqlstate == "GX403"  # the invite is used
+    row = owner.execute("SELECT human_principal, enrolled_by FROM webauthn_credentials").fetchone()
+    assert row == (HUMAN1, OPERATOR)

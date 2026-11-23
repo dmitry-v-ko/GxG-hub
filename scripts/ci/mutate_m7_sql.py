@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DoD-4 for M7 and M8, SQL part: each mutation of a key SQL condition must turn `approval/tests_db` red.
+"""DoD-4 for M7, M8 and M10, SQL part: each mutation of a key SQL condition must turn `approval/tests_db` red.
 
 mutmut mutates Python only: it leaves the PL/pgSQL of the migration and the SQL string constants of `intents.py`
 alone, and no maintained mutation tool exists for application SQL (reports/plans/M7-cycle-2.md, DoD-6; the
@@ -22,6 +22,7 @@ INT = "approval/src/gxg_approval/intents.py"
 MIG2 = "approval/src/gxg_approval/migrations/versions/0002_executor.py"
 MIG3 = "approval/src/gxg_approval/migrations/versions/0003_idempotency_per_requester.py"
 MIG4 = "approval/src/gxg_approval/migrations/versions/0004_ui_notifier.py"  # M9
+MIG5 = "approval/src/gxg_approval/migrations/versions/0005_ops.py"  # M10
 EXE = "approval/src/gxg_approval/executor.py"
 TESTS = ["approval/tests_db", "approval/ui/tests_db", "approval/notifier/tests_db", "-m", "not e2e"]
 M8_TESTS = ["approval/tests_db/test_executor.py", "approval/tests_db/test_roles.py"]  # M8 rows: their tests only
@@ -71,29 +72,27 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG, "AND requester_principal = p_principal FOR UPDATE", "FOR UPDATE", "cancel another requester's intent"),
     (MIG, "IF r.version <> p_version THEN PERFORM _gxg_fail('GX409', 'intent version changed'); END IF;\n"
      "  r := _gxg_move(r, 'cancel'", "r := _gxg_move(r, 'cancel'", "cancel with a stale version"),
-    # T2-T4 decide
-    (MIG, "IF p_decision NOT IN ('approve', 'reject') THEN", "IF false THEN", "unknown decision accepted"),
-    (MIG, "IF r.version <> p_version OR r.canonical_args_hash", "IF r.canonical_args_hash", "stale screen decides"),
-    (MIG, "OR r.canonical_args_hash <> p_args_hash OR", "OR", "decision on changed args"),
-    (MIG, "OR now() >= r.expires_at THEN", " THEN", "decision after the approval deadline"),
-    (MIG, "IF p_approver = r.requester_principal OR", "IF", "requester approves own intent"),
-    (MIG, "OR NOT p_approver LIKE 'oidc:%'", "", "a machine principal approves"),
-    (MIG, "     OR NOT p_approver = ANY (coalesce(r.allowed_approvers, ARRAY[]::text[]))\n", "",
+    # T2-T4 decide: since M10 the checks live in 0005's _gxg_decide (0001's gxg_decide is dropped)
+    (MIG5, "IF p_decision NOT IN ('approve', 'reject') THEN", "IF false THEN", "unknown decision accepted"),
+    (MIG5, "IF r.version <> p_version OR r.canonical_args_hash", "IF r.canonical_args_hash", "stale screen decides"),
+    (MIG5, "OR r.canonical_args_hash <> p_args_hash OR now()", "OR now()", "decision on changed args"),
+    (MIG5, "OR now() >= r.expires_at THEN", " THEN", "decision after the approval deadline"),
+    (MIG5, "IF p_approver = r.requester_principal OR", "IF", "requester approves own intent"),
+    (MIG5, "OR NOT p_approver LIKE 'oidc:%'\n", "\n", "a machine principal approves"),
+    (MIG5, "     OR NOT p_approver = ANY (coalesce(r.allowed_approvers, ARRAY[]::text[])) THEN", " THEN",
      "approver outside allowed_approvers"),
-    (MIG, "coalesce(r.allowed_approvers, ARRAY[]::text[])", "coalesce(r.allowed_approvers, ARRAY[p_approver])",
+    (MIG5, "coalesce(r.allowed_approvers, ARRAY[]::text[])", "coalesce(r.allowed_approvers, ARRAY[p_approver])",
      "intent without a frozen approver set decided by anyone"),
-    (MIG, "\n     OR (p_decision = 'approve' AND r.step_up_required AND NOT p_step_up) THEN", " THEN",
-     "approve without required step-up"),
-    (MIG, "PERFORM _gxg_fail('GX409', 'this approver has already decided')", "NULL", "second vote of one human"),
-    (MIG, "WHEN approvals >= r.required_approvals THEN", "WHEN approvals > r.required_approvals THEN",
+    (MIG5, "PERFORM _gxg_fail('GX409', 'this approver has already decided')", "NULL", "second vote of one human"),
+    (MIG5, "WHEN approvals >= r.required_approvals THEN", "WHEN approvals > r.required_approvals THEN",
      "quorum needs one vote more"),
-    (MIG, "WHEN approvals >= r.required_approvals THEN", "WHEN approvals >= 1 THEN", "quorum of one"),
-    (MIG, "execution_deadline = now() + make_interval(secs => r.execution_window_s)", "execution_deadline = now()",
+    (MIG5, "WHEN approvals >= r.required_approvals THEN", "WHEN approvals >= 1 THEN", "quorum of one"),
+    (MIG5, "execution_deadline = now() + make_interval(secs => r.execution_window_s)", "execution_deadline = now()",
      "no execution window after approval"),
-    (MIG, "execution_deadline = now() + make_interval(secs => r.execution_window_s)",
+    (MIG5, "execution_deadline = now() + make_interval(secs => r.execution_window_s)",
      "execution_deadline = now() + interval '1 hour'", "T2 deadline from 1 h, not the window frozen at T1"),
-    (MIG, "    PERFORM _gxg_outbox('execute', r);\n    PERFORM _gxg_outbox('webhook', r);\n",
-     "    PERFORM _gxg_outbox('webhook', r);\n", "approved intent never queued for execution"),
+    (MIG5, "    PERFORM _gxg_outbox('execute', r);\n  END IF;\nEND $$;\nDROP", "  END IF;\nEND $$;\nDROP",
+     "approved intent never queued for execution"),
     # T18 manual resolution
     (MIG, "IF NOT p_actor LIKE 'oidc:%' THEN PERFORM _gxg_fail('GX403', 'only a human resolves manually'); END IF;",
      "", "a machine principal resolves manually"),
@@ -200,7 +199,8 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG4, "ON FUNCTION gxg_link_claim(text, bigint) TO gxg_notifier;",
      "ON FUNCTION gxg_link_claim(text, bigint) TO gxg_notifier, gxg_ui;", "ui claims codes"),
     (MIG4, "GRANT SELECT, INSERT, UPDATE (sign_count) ON webauthn_credentials TO gxg_ui;",
-     "GRANT SELECT, INSERT, UPDATE ON webauthn_credentials TO gxg_ui;", "ui rewrites a passkey's key"),
+     "GRANT SELECT, INSERT, UPDATE ON webauthn_credentials TO gxg_ui;",
+     EQUIVALENT + "0005 revokes INSERT and UPDATE on webauthn_credentials from gxg_ui (table and column level)"),
     # migration 0003 (M8, EFF-08 per requester): pinned by test_propose.py, so it runs with every DB test
     (MIG3, "UNIQUE (tenant_id, requester_principal, idempotency_key)", "UNIQUE (tenant_id, idempotency_key)",
      "idempotency unique per tenant, not per requester (EFF-08)"),
@@ -230,6 +230,92 @@ M8_MUTATIONS: list[tuple[str, str, str, str]] = [
 ]  # fmt: skip
 
 
+# M10 (migration 0005): decider functions (AS-30), webhook events, purge (RET-01), kill switch, grants.
+M10_TESTS = [
+    "approval/tests_db/test_decider.py",
+    "approval/tests_db/test_purge.py",
+    "approval/tests_db/test_admin.py",
+    "approval/tests_db/test_roles.py",
+    "approval/tests_db/test_state_machine.py",
+    "approval/tests_db/test_metrics.py",
+    "approval/ui/tests_db/test_decisions.py",
+    "approval/notifier/tests_db/test_webhooks.py",
+    "-m",
+    "not e2e",
+]
+M10_MUTATIONS: list[tuple[str, str, str, str]] = [
+    # gxg_decision_challenge
+    (MIG5, "IF r.status <> 'pending_approval' OR r.version <> p_version OR", "IF r.version <> p_version OR",
+     "a challenge for a decided intent"),
+    (MIG5, "OR r.version <> p_version OR r.canonical_args_hash <> p_args_hash THEN",
+     "OR r.canonical_args_hash <> p_args_hash THEN", "a challenge for a stale version"),
+    (MIG5, "OR r.version <> p_version OR r.canonical_args_hash <> p_args_hash THEN", "OR r.version <> p_version THEN",
+     "a challenge for other args"),
+    (MIG5, "p_intent::text || p_args_hash || p_version::text || p_decision", "p_intent::text || p_args_hash",
+     "the challenge does not bind version and decision"),
+    (MIG5, "IF p_human IS NULL OR NOT p_human LIKE 'oidc:%' THEN", "IF p_human IS NULL THEN",
+     "a challenge for a machine principal"),
+    # gxg_decide
+    (MIG5, "IF ch.used_at IS NOT NULL THEN PERFORM _gxg_fail('GX409', 'assertion already used'); END IF;", "",
+     "a used decision challenge accepted again"),
+    (MIG5, "  IF ch.created_at < now() - {CHALLENGE_MAX_AGE} THEN PERFORM _gxg_fail('GX403', 'challenge older than 5 "
+     "minutes'); END IF;\n  SELECT * INTO cr", "  SELECT * INTO cr", "a decision challenge older than 5 minutes"),
+    (MIG5, "  UPDATE decider_challenges SET used_at = now() WHERE challenge = p_challenge;\n"
+     "  UPDATE webauthn_credentials", "  UPDATE webauthn_credentials", "the decision challenge is never used up"),
+    (MIG5, "IF NOT FOUND OR cr.enrolled_by IS NULL OR cr.human_principal <> ch.human_principal THEN",
+     "IF NOT FOUND OR cr.human_principal <> ch.human_principal THEN", "a passkey written around the decider"),
+    (MIG5, "IF NOT FOUND OR cr.enrolled_by IS NULL OR cr.human_principal <> ch.human_principal THEN",
+     "IF NOT FOUND OR cr.enrolled_by IS NULL THEN", "another human's passkey decides"),
+    (MIG5, "AND p_sign_count <= cr.sign_count THEN", "AND p_sign_count < cr.sign_count THEN",
+     "a repeated signature counter accepted"),
+    (MIG5, "     OR NOT p_assertion ?& ARRAY['credential_id', 'authenticator_data', 'client_data_json', 'signature'] THEN",
+     " THEN", "a decision stored without its assertion"),
+    (MIG5, "  UPDATE webauthn_credentials SET sign_count = p_sign_count WHERE credential_id = p_credential_id;\n", "",
+     "the counter is never stored"),
+    # enrollment
+    (MIG5, "AND used_at IS NULL AND expires_at > now()) THEN", "AND expires_at > now()) THEN",
+     "a used invite gives a new registration challenge"),
+    (MIG5, "IF NOT FOUND OR inv.used_at IS NOT NULL OR inv.expires_at <= now()", "IF NOT FOUND OR inv.expires_at <= now()",
+     "a used invite enrolls again"),
+    (MIG5, "OR inv.expires_at <= now() OR inv.human_principal", "OR inv.human_principal", "an expired invite enrolls"),
+    (MIG5, "IF ch.used_at IS NOT NULL THEN PERFORM _gxg_fail('GX409', 'registration already used'); END IF;", "",
+     "a registration challenge used twice"),
+    (MIG5, "  UPDATE passkey_invites SET used_at = now() WHERE token_hash = inv.token_hash;\n", "",
+     "an invite is never used up"),
+    (MIG5, "VALUES (p_credential_id, ch.human_principal, p_public_key, p_sign_count, now(), inv.created_by);",
+     "VALUES (p_credential_id, ch.human_principal, p_public_key, p_sign_count, now(), NULL);",
+     "an enrolled passkey is not marked as enrolled"),
+    (MIG5, "OR p_ttl_s IS NULL OR p_ttl_s NOT BETWEEN 60 AND 86400 THEN", " THEN", "an invite valid for ever"),
+    # webhook events
+    (MIG5, "  WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE", "  EXECUTE", "an event without a status change"),
+    (MIG5, "   WHERE p_topic <> 'webhook'\n", "\n", "two webhook events for one change"),
+    (MIG5, "CREATE TRIGGER intents_created_event AFTER INSERT ON intents FOR EACH ROW EXECUTE FUNCTION "
+     "_gxg_intent_event();\n", "", "no event for T1"),
+    # purge
+    (MIG5, "terminal_at < now() - make_interval(days => p_days)", "terminal_at < now()", "payload purged at once"),
+    (MIG5, "WHERE status IN {TERMINAL} AND terminal_at", "WHERE terminal_at", EQUIVALENT + "only terminal moves set terminal_at "
+     "(_gxg_move), and outcome_unknown is never terminal"),
+    (MIG5, "IF p_days IS NULL OR p_days NOT BETWEEN 1 AND 90 THEN", "IF p_days IS NULL THEN",
+     "retention outside 1…90 days"),
+    (MIG5, "DELETE FROM outbox WHERE delivered_at < now() - interval '1 day';", "",
+     "delivered notify rows (title, requester) kept for ever"),
+    (MIG5, "DELETE FROM outbox WHERE delivered_at < now() - interval '1 day';",
+     "DELETE FROM outbox WHERE delivered_at IS NULL OR delivered_at < now() - interval '1 day';",
+     "undelivered outbox rows deleted"),
+    (MIG5, "coalesce(delivered_at, dead_at) < now() - interval '7 days'", "coalesce(delivered_at, dead_at) < now()",
+     "finished deliveries deleted at once"),
+    # kill switch (EX-13)
+    (MIG5, "     OR p_blocked IS NULL OR length(coalesce(p_reason, '')) NOT BETWEEN 3 AND 500", "     OR p_blocked IS NULL",
+     "a switch without a reason"),
+    (MIG5, "CASE WHEN p_blocked THEN 'admin_switch_set' ELSE 'admin_switch_clear' END", "'admin_switch_set'",
+     "a cleared switch audited as set"),
+    # grants
+    (MIG5, "REVOKE INSERT, UPDATE ON webauthn_credentials FROM gxg_ui;", "", "ui writes passkeys (AS-30)"),
+    (MIG5, "GRANT EXECUTE ON FUNCTION gxg_purge(integer, integer) TO gxg_sweeper;",
+     "GRANT EXECUTE ON FUNCTION gxg_purge(integer, integer) TO gxg_sweeper, gxg_ui;", "ui purges payload"),
+]  # fmt: skip
+
+
 def run_tests(tests: list[str] = TESTS) -> bool:
     cmd = [sys.executable, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", *tests]
     return subprocess.run(cmd, cwd=ROOT, capture_output=True, check=False).returncode == 0
@@ -241,7 +327,11 @@ def main() -> int:
         print("baseline: tests are red, nothing to measure")
         return 2
     bad = 0
-    listed = [(m, TESTS) for m in MUTATIONS] + [(m, M8_TESTS) for m in M8_MUTATIONS]
+    listed = (
+        [(m, TESTS) for m in MUTATIONS]
+        + [(m, M8_TESTS) for m in M8_MUTATIONS]
+        + [(m, M10_TESTS) for m in M10_MUTATIONS]
+    )
     for (file, old, new, what), tests in listed:
         if only and not any(o in what for o in only):
             continue

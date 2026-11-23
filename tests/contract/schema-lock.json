@@ -20,7 +20,7 @@
       }
     },
     "approval-policy.schema.json": {
-      "normative_sha256": "e1b13f5d9ed6f14bb721b1d7331b0e4c765d3bbf2535b317e99fd191e7e29a47",
+      "normative_sha256": "b6f3768a2bd2d3a031b9ce26958779d1440c2479ac6d0ec2a1766b6ba7f33b66",
       "required": {
         "/": [
           "rules",

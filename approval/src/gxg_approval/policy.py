@@ -14,6 +14,7 @@ Mode = Literal["human", "auto", "not_required"]
 
 SPEC_APPROVAL_TTL_S = 24 * 3600  # effects-and-approval-v1 «Сроки по умолчанию»
 SPEC_EXECUTION_WINDOW_S = 3600
+SPEC_MAX_ATTEMPTS = 3  # approval-service-v1 DDL default; the policy may only lower it (M10)
 _UNITS = {"m": 60, "h": 3600, "d": 86400}
 
 
@@ -36,6 +37,7 @@ class Outcome:
     rule_ids: tuple[str, ...]  # every matched rule, sorted (AP-04)
     deny_reason: str | None = None  # rule id or why, for the audit
     alerts: tuple[str, ...] = ()  # AP-02 and empty approver sets: for the operator
+    max_attempts: int = SPEC_MAX_ATTEMPTS  # frozen at T1 like the windows (AP-04)
 
 
 def duration_s(value: str) -> int:
@@ -88,6 +90,10 @@ def evaluate(  # noqa: PLR0911 (one return per AP-01 step)
     window = min(SPEC_EXECUTION_WINDOW_S, duration_s(defaults.get("execution_window", "1h")))
     matched = sorted((r for r in doc.get("rules", []) if _matches(r, req, groups)), key=lambda r: r["id"])
     rule_ids = tuple(r["id"] for r in matched)
+    attempts = min(
+        [SPEC_MAX_ATTEMPTS, defaults.get("max_attempts", SPEC_MAX_ATTEMPTS)]
+        + [r["max_attempts"] for r in matched if "max_attempts" in r]
+    )
     by = {d: [r for r in matched if r["decision"] == d] for d in ("deny", "require_approval", "auto_approve")}
     high_risk = req.effect_class == "high_risk"
     alerts: tuple[str, ...] = ()
@@ -95,10 +101,10 @@ def evaluate(  # noqa: PLR0911 (one return per AP-01 step)
         alerts = (f"auto_approve ignored for high_risk tool {req.tool}: {[r['id'] for r in by['auto_approve']]}",)
 
     def deny(reason: str, more: tuple[str, ...] = ()) -> Outcome:
-        return Outcome(None, 0, False, None, ttl, window, rule_ids, reason, alerts + more)
+        return Outcome(None, 0, False, None, ttl, window, rule_ids, reason, alerts + more, attempts)
 
     def human(approvals: int, step_up: bool, approvers: tuple[str, ...] | None = None) -> Outcome:
-        return Outcome("human", approvals, step_up, approvers, ttl, window, rule_ids, None, alerts)
+        return Outcome("human", approvals, step_up, approvers, ttl, window, rule_ids, None, alerts, attempts)
 
     if by["deny"]:
         return deny(by["deny"][0]["id"])
@@ -121,7 +127,7 @@ def evaluate(  # noqa: PLR0911 (one return per AP-01 step)
     if by["auto_approve"] and req.effect_class == "external_effect":
         if any(_exhausted(r, auto_used(r["id"])) for r in by["auto_approve"]):
             return human(1, False)  # AP-01.6: exhausted limit → a human, not a refusal
-        return Outcome("auto", 0, False, None, ttl, window, rule_ids)  # external_effect: no AP-02 alert here
+        return Outcome("auto", 0, False, None, ttl, window, rule_ids, max_attempts=attempts)  # no AP-02 alert here
     if req.effect_class == "write_reversible":
-        return Outcome("not_required", 0, False, None, ttl, window, rule_ids)
+        return Outcome("not_required", 0, False, None, ttl, window, rule_ids, max_attempts=attempts)
     return human(1, high_risk)

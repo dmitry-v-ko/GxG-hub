@@ -33,6 +33,7 @@ gxg-connector-kit = { workspace = true }
 # DoD-4: from this directory, with a PostgreSQL for all mutants (scripts/ci/mutmut.sh starts one):
 #   GXG_TEST_PG_SOCKET_DIR=<dir> uv run mutmut run && uv run mutmut results
 # Key conditions of M7: policy engine, transition table, quotas, T1 checks. M8: executor, key rotation.
+# M10: decider (AS-30), admin (AS-24), metrics, sweeper purge.
 [tool.mutmut]
 source_paths = ["src"]
 only_mutate = [
@@ -44,6 +45,10 @@ only_mutate = [
     "src/gxg_approval/mcp.py",
     "src/gxg_approval/executor.py",
     "src/gxg_approval/keys.py",
+    "src/gxg_approval/decider.py",
+    "src/gxg_approval/admin.py",
+    "src/gxg_approval/metrics.py",
+    "src/gxg_approval/sweeper.py",
 ]
 also_copy = ["tests_db/"]
 pytest_add_cli_args_test_selection = ["tests", "tests_db"]

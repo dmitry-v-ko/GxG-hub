@@ -576,3 +576,17 @@ def test_no_alert_when_approvers_exist(
                                   "decision": "auto_approve", "limits": {"max_per_hour": 5}}])  # fmt: skip
     propose()  # auto: no approver set at all
     assert [m for _, _, m in caplog.record_tuples if "no approver" in m] == []
+
+
+def test_max_attempts_of_the_policy_is_frozen_at_t1(
+    propose: Callable[..., Any], owner: psycopg.Connection[Any], world: Any
+) -> None:
+    """M10: the policy's `max_attempts` (default 3) is stored at T1; a later policy does not change it (AP-04)."""
+    first = propose().json()["intent_id"]
+    world.set_policy("t-alpha", [], defaults={"max_attempts": 1})
+    second = propose(args={"text": "b", "n": 2}).json()["intent_id"]
+    world.set_policy("t-alpha", [], defaults={"max_attempts": 2})
+    rows = owner.execute(
+        "SELECT intent_id::text, max_attempts FROM intents WHERE intent_id IN (%s, %s)", (first, second)
+    ).fetchall()
+    assert dict(rows) == {first: 3, second: 1}
