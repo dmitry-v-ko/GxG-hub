@@ -230,8 +230,8 @@ def test_database_functions_refuse_on_their_own(pg: Any, propose: Callable[..., 
     i = intent(propose, owner)
     full = '{"credential_id": "c", "authenticator_data": "a", "client_data_json": "j", "signature": "s"}'
     owner.execute(
-        "INSERT INTO webauthn_credentials VALUES ('\\x01', %s, '\\x00', 5, now(), %s), ('\\x02', %s, '\\x00', 0, now(), "
-        "NULL), ('\\x03', %s, '\\x00', 0, now(), %s)",
+        "INSERT INTO webauthn_credentials VALUES ('\\x01', %s, '\\x00', 5, now(), %s), "
+        "('\\x02', %s, '\\x00', 0, now(), NULL), ('\\x03', %s, '\\x00', 0, now(), %s)",
         (HUMAN1, OPERATOR, HUMAN1, HUMAN2, OPERATOR),
     )
 

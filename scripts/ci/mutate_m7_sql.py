@@ -268,14 +268,16 @@ M10_MUTATIONS: list[tuple[str, str, str, str]] = [
      "IF NOT FOUND OR cr.enrolled_by IS NULL THEN", "another human's passkey decides"),
     (MIG5, "AND p_sign_count <= cr.sign_count THEN", "AND p_sign_count < cr.sign_count THEN",
      "a repeated signature counter accepted"),
-    (MIG5, "     OR NOT p_assertion ?& ARRAY['credential_id', 'authenticator_data', 'client_data_json', 'signature'] THEN",
+    (MIG5, "     OR NOT p_assertion ?& ARRAY['credential_id', 'authenticator_data', 'client_data_json', "
+     "'signature'] THEN",
      " THEN", "a decision stored without its assertion"),
     (MIG5, "  UPDATE webauthn_credentials SET sign_count = p_sign_count WHERE credential_id = p_credential_id;\n", "",
      "the counter is never stored"),
     # enrollment
     (MIG5, "AND used_at IS NULL AND expires_at > now()) THEN", "AND expires_at > now()) THEN",
      "a used invite gives a new registration challenge"),
-    (MIG5, "IF NOT FOUND OR inv.used_at IS NOT NULL OR inv.expires_at <= now()", "IF NOT FOUND OR inv.expires_at <= now()",
+    (MIG5, "IF NOT FOUND OR inv.used_at IS NOT NULL OR inv.expires_at <= now()",
+     "IF NOT FOUND OR inv.expires_at <= now()",
      "a used invite enrolls again"),
     (MIG5, "OR inv.expires_at <= now() OR inv.human_principal", "OR inv.human_principal", "an expired invite enrolls"),
     (MIG5, "IF ch.used_at IS NOT NULL THEN PERFORM _gxg_fail('GX409', 'registration already used'); END IF;", "",
@@ -293,8 +295,8 @@ M10_MUTATIONS: list[tuple[str, str, str, str]] = [
      "_gxg_intent_event();\n", "", "no event for T1"),
     # purge
     (MIG5, "terminal_at < now() - make_interval(days => p_days)", "terminal_at < now()", "payload purged at once"),
-    (MIG5, "WHERE status IN {TERMINAL} AND terminal_at", "WHERE terminal_at", EQUIVALENT + "only terminal moves set terminal_at "
-     "(_gxg_move), and outcome_unknown is never terminal"),
+    (MIG5, "WHERE status IN {TERMINAL} AND terminal_at", "WHERE terminal_at",
+     EQUIVALENT + "only terminal moves set terminal_at (_gxg_move), and outcome_unknown is never terminal"),
     (MIG5, "IF p_days IS NULL OR p_days NOT BETWEEN 1 AND 90 THEN", "IF p_days IS NULL THEN",
      "retention outside 1…90 days"),
     (MIG5, "DELETE FROM outbox WHERE delivered_at < now() - interval '1 day';", "",
@@ -305,7 +307,8 @@ M10_MUTATIONS: list[tuple[str, str, str, str]] = [
     (MIG5, "coalesce(delivered_at, dead_at) < now() - interval '7 days'", "coalesce(delivered_at, dead_at) < now()",
      "finished deliveries deleted at once"),
     # kill switch (EX-13)
-    (MIG5, "     OR p_blocked IS NULL OR length(coalesce(p_reason, '')) NOT BETWEEN 3 AND 500", "     OR p_blocked IS NULL",
+    (MIG5, "     OR p_blocked IS NULL OR length(coalesce(p_reason, '')) NOT BETWEEN 3 AND 500",
+     "     OR p_blocked IS NULL",
      "a switch without a reason"),
     (MIG5, "CASE WHEN p_blocked THEN 'admin_switch_set' ELSE 'admin_switch_clear' END", "'admin_switch_set'",
      "a cleared switch audited as set"),
