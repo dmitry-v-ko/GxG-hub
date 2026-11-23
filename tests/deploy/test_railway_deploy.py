@@ -266,7 +266,7 @@ def test_repository_services_follow_the_configured_branch(
             )  # not the `main` serviceCreate fell back to
     assert deployed.by_name("telegram")["trigger"] == {
         "repository": "dmitry-v-ko/gxg-telegram-service",
-        "branch": "claude/m11.1-telegram-service",
+        "branch": "claude/m13-railway",
     }
     # drifted by hand: the next run reconnects it, then nothing more happens
     deployed.by_name("api")["trigger"]["branch"] = "main"
@@ -282,7 +282,7 @@ def test_repository_services_follow_the_configured_branch(
     capsys.readouterr()
     assert run(deployed, "--verify") == 1
     assert (
-        "FAIL telegram: built from dmitry-v-ko/gxg-telegram-service@claude/m11.1-telegram-service"
+        "FAIL telegram: built from dmitry-v-ko/gxg-telegram-service@claude/m13-railway"
         in capsys.readouterr().out
     )
 

@@ -256,16 +256,25 @@ services:
   # this session): the variable names below are UNVERIFIED against its README and must be checked before the first deploy.
   telegram:
     kind: app
-    source: {repo: dmitry-v-ko/gxg-telegram-service, branch: claude/m11.1-telegram-service, dockerfile: Dockerfile}
+    source: {repo: dmitry-v-ko/gxg-telegram-service, branch: claude/m13-railway, dockerfile: Dockerfile}
     port: 8080
     healthcheck: /readyz
     volume: /var/lib/telegram  # the Telegram session (written by `gxg-telegram-admin login`), never in Git
     env:
       TELEGRAM_IDENTITY_KEYS: ${{contextforge.GXG_IDENTITY_KEYS}}
-    owner_env: [TELEGRAM_CONNECTIONS, TELEGRAM_BUNDLE_KEYS, GXG_BUNDLE_B64]
+      TELEGRAM_SESSIONS: tg-pilot=pilot
+      TELEGRAM_SESSION_WORKDIR: /var/lib/telegram/sessions
+      TELEGRAM_CONNECTIONS: t-pilot=tg-pilot:tg-pilot
+      TELEGRAM_APPROVAL_URL: http://${{api.RAILWAY_PRIVATE_DOMAIN}}:8090
+    owner_env: [TELEGRAM_BUNDLE_KEYS, GXG_BUNDLE_B64]  # written by scripts/deploy/pilot_bundle.py
     secrets:
       TELEGRAM_API_ID: {gen: owner}
       TELEGRAM_API_HASH: {gen: owner}
       TELEGRAM_ARCHIVE_DSN: {gen: "tpl:postgresql://${{telegram-db.POSTGRES_USER}}:${{telegram-db.POSTGRES_PASSWORD}}@${{telegram-db.RAILWAY_PRIVATE_DOMAIN}}:5432/${{telegram-db.POSTGRES_DB}}"}
+      TELEGRAM_CHAT_REF_SECRET: {gen: random:48}  # >= 32 bytes; the image's entrypoint turns it into a file
+      TELEGRAM_SVC_KEY: {gen: ed25519_seed}  # service JWT key, public half in the registry of the bundle
       TELEGRAM_WEBHOOK_HMAC: {gen: hmac:32}  # signs `telegram.message.created` to Signals (SI-03)
-    internal_urls: [TELEGRAM_ARCHIVE_DSN]
+    config: {TELEGRAM_SVC_PUBLIC_KEY: "ed25519_pub:TELEGRAM_SVC_KEY"}
+    internal_urls: [TELEGRAM_ARCHIVE_DSN, TELEGRAM_APPROVAL_URL]
+    # TODO(M13): TELEGRAM_SERVICE_DSN and a reader TELEGRAM_ARCHIVE_DSN need the roles of the service's db/ SQL (not
+    # readable from this session); TELEGRAM_ARCHIVE_DSN is the archive owner until then.
