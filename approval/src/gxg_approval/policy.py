@@ -101,7 +101,7 @@ def evaluate(  # noqa: PLR0911 (one return per AP-01 step)
         alerts = (f"auto_approve ignored for high_risk tool {req.tool}: {[r['id'] for r in by['auto_approve']]}",)
 
     def deny(reason: str, more: tuple[str, ...] = ()) -> Outcome:
-        return Outcome(None, 0, False, None, ttl, window, rule_ids, reason, alerts + more, attempts)
+        return Outcome(None, 0, False, None, ttl, window, rule_ids, reason, alerts + more)  # no intent: no attempts
 
     def human(approvals: int, step_up: bool, approvers: tuple[str, ...] | None = None) -> Outcome:
         return Outcome("human", approvals, step_up, approvers, ttl, window, rule_ids, None, alerts, attempts)

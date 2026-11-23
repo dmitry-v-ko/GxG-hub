@@ -59,7 +59,7 @@ class DatabaseCollector(Collector):
         families: dict[str, Any] = {}
         for name, labels in LABELS.items():
             kind = CounterMetricFamily if name.endswith("_total") else GaugeMetricFamily
-            families[name] = kind(name.removesuffix("_total"), HELP[name], labels=list(labels))
+            families[name] = kind(name, HELP[name], labels=list(labels))  # CounterMetricFamily drops "_total" itself
         latency: dict[tuple[str, str], dict[str, Any]] = {}
         for name, labels, value in rows:
             if name in families:
@@ -68,7 +68,7 @@ class DatabaseCollector(Collector):
             if not name.startswith(f"{LATENCY}_"):  # a figure this version does not know: skipped, never a 500
                 continue
             key = (str(labels["tenant"]), str(labels["tool"]))
-            h = latency.setdefault(key, {"buckets": [], "sum": 0.0, "count": 0.0})
+            h = latency.setdefault(key, {"buckets": []})  # gxg_metrics() gives _sum and _count with every bucket set
             if name == f"{LATENCY}_bucket":
                 h["buckets"].append((float(labels["le"]), value))
             else:

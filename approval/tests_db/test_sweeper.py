@@ -92,9 +92,12 @@ def test_batches_until_done(
 
 
 def test_interval_is_bounded() -> None:
-    for bad in (0, -1, 31):
+    stopped = threading.Event()
+    stopped.set()  # a wrong check returns at once instead of looping
+    for bad in (0, -1, 30.001, 31):
         with pytest.raises(ValueError, match="interval_s"):
-            sweeper.run("host=/nonexistent", interval_s=bad)
+            sweeper.run("host=/nonexistent", interval_s=bad, stop=stopped)
+    sweeper.run("host=/nonexistent", interval_s=sweeper.MAX_INTERVAL_S, stop=stopped)  # the bound itself is allowed
 
 
 def test_reconnects_after_a_database_error(
@@ -109,4 +112,4 @@ def test_reconnects_after_a_database_error(
     stop.set()
     worker.join(5)
     assert not worker.is_alive()
-    assert "sweeper: database error" in caplog.text
+    assert "sweeper: database error" in [r.getMessage() for r in caplog.records]

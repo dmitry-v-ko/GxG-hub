@@ -310,10 +310,8 @@ def _rate_limited(resp: httpx.Response) -> int | None:
     doc = _json(resp)
     if not _schema.validator("error").is_valid(doc) or doc.get("code") != "rate_limited":
         return None
-    retry = doc.get("retry_after_s")
-    if not isinstance(retry, int) or isinstance(retry, bool) or not 1 <= retry <= 86400:
-        return None
-    return retry
+    retry = doc.get("retry_after_s")  # error.schema: an integer 0…86400 (never a bool) when present
+    return retry if isinstance(retry, int) and retry >= 1 else None
 
 
 def _json(resp: httpx.Response) -> Any:

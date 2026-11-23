@@ -4,7 +4,7 @@ bundle age; executor: reserve conflicts; connector: token verify failures — se
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 import psycopg
 from fastapi.testclient import TestClient
@@ -65,7 +65,8 @@ def test_every_metric_is_exposed(
     assert (
         buckets["60.0"] == 1 and buckets["900.0"] == 2 and buckets["+Inf"] == 2
     )  # ~400 s and the deferred one at once
-    assert 399 < m["gxg_approval_latency_seconds_sum"][0][1] < 500
+    ((latency_labels, latency_sum),) = m["gxg_approval_latency_seconds_sum"]
+    assert latency_labels == {**t, "tool": "demo.message.propose"} and 399 < latency_sum < 500
     (age,) = m["gxg_bundle_age_seconds"]
     assert 0 <= age[1] < 60
     assert pending  # stays pending_approval
@@ -90,6 +91,8 @@ def test_bundle_age_without_a_bundle(world: Any) -> None:
     world.set_policy("t-beta", [], quotas={"pending_per_tenant_max": 7})
     age, limit = metrics.BundleAge(world.store, clock=lambda: world.store.current.built_at.timestamp() + 7).collect()
     assert [s.value for s in age.samples] == [7.0]
+    assert (age.name, age.documentation) == ("gxg_bundle_age_seconds", "age of the loaded grants bundle (alert > 13 h)")
+    assert (limit.name, limit.documentation) == ("gxg_intents_pending_limit", "pending_per_tenant_max (AP-06)")
     assert [(s.labels, s.value) for s in limit.samples] == [({"tenant": "t-alpha"}, 100.0), ({"tenant": "t-beta"}, 7.0)]
 
 
@@ -141,8 +144,12 @@ def test_unknown_database_figure_is_skipped(world: Any) -> None:
     """A figure the collector does not know (a newer migration) is skipped, not a 500 on every scrape."""
 
     class Pool:
+        timeouts: ClassVar[list[float]] = []
+
         def connection(self, timeout: float) -> Any:
             import contextlib
+
+            self.timeouts.append(timeout)
 
             class Conn:
                 def execute(self, _sql: str) -> Any:
@@ -160,3 +167,12 @@ def test_unknown_database_figure_is_skipped(world: Any) -> None:
     families = {f.name: f for f in metrics.DatabaseCollector(Pool()).collect()}  # type: ignore[arg-type]
     assert [s.value for s in families["gxg_intents_pending"].samples] == [2.0]
     assert families["gxg_approval_latency_seconds"].samples == []
+    assert Pool.timeouts == [5]  # a scrape never waits long for a pool connection
+
+
+def test_help_texts(client: TestClient) -> None:
+    """Every family of /metrics carries its HELP text (the operator reads it in Prometheus)."""
+    docs = {f.name: f.documentation for f in text_string_to_metric_families(client.get("/metrics").text)}
+    expected = {n.removesuffix("_total"): h for n, h in metrics.HELP.items()}
+    expected[metrics.LATENCY] = "time from T1 to approved (human)"
+    assert {n: docs.get(n) for n in expected} == expected
