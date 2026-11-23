@@ -7,7 +7,7 @@ Starting point: `claude/integration@40cec84` (M3, M4.1, M5, M7, M8, M9, M11). Fu
 | # | Source | Commit | What it brings |
 |---|---|---|---|
 | 1 | `origin/claude/m1.1-toolkit` | `bffcbd4` (pin for the services: `7e7ce56`, an ancestor of HEAD) | kit `gxg_connector_kit.{mcp,effects}`, template `templates/python-fastmcp` + `copier.yml`, `scripts/new-connector`, `tools/gxg-connector-check`, demo on the template, `reports/{critic,conformance,mutmut,plans}/M1.1*`, `reports/M1.1-READY.md` |
-| 2 | `origin/claude/admiring-planck-vzys0x` | branch head at merge time | `docs/specs`, `docs/adr`, `docs/implementation-plan-v1.md`, `reports/GOAL.md`, `reports/progress.md` (checkout of those paths) |
+| 2 | `origin/claude/admiring-planck-vzys0x` | `f559284` (taken again at the end: the owner's lighter process) | `docs/specs`, `docs/adr`, `docs/implementation-plan-v1.md`, `reports/GOAL.md`, `reports/progress.md` (checkout of those paths) |
 
 ```
 $ git diff origin/claude/admiring-planck-vzys0x -- docs/specs docs/adr docs/implementation-plan-v1.md | wc -l

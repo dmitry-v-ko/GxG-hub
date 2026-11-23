@@ -109,7 +109,8 @@ Fallback `index → scan` только при `temporarily_unavailable` или `
 | --- | --- | --- |
 | `ok` | Записывает и отвечает успехом | Базовый |
 | `reject` | Отказ без эффекта | EX-12 |
-| `rate_limited` | 429, `retry_after_s` | MC-03 |
+| `rate_limited` | 429, `retry_after_s` (у провайдера, после `dispatch`) | MC-03 |
+| `execute_quota:<n>/<s>` | Коннектор отвечает 429 `rate_limited` с `retry_after_s` **до** `dispatch`, если в окне `<s>` секунд уже `<n>` отправок; провайдер не вызывается | EX-25 |
 | `timeout_before_start` | Таймаут до записи | EX-12, MC-03 |
 | `commit_then_drop` | Записывает, затем обрывает ответ | EX-11 |
 | `slow:<ms>` | Задержка ответа | Гонки, таймауты |
