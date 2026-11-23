@@ -183,6 +183,19 @@ def test_admin_refuses_a_plain_http_issuer(monkeypatch: pytest.MonkeyPatch) -> N
     cli.require_https("http://127.0.0.1:9400", "x")
 
 
+def test_admin_refuses_a_plain_http_jwks_uri(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Critic M10-2 N3: an https issuer whose discovery points at a plain http JWKS is refused too."""
+    import io
+    import json
+    import urllib.request
+
+    monkeypatch.setenv("GXG_ADMIN_OIDC_ISSUER", "https://idp.example.com")
+    doc = json.dumps({"jwks_uri": "http://keys.example.com/jwks"}).encode()
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: io.BytesIO(doc))
+    with pytest.raises(SystemExit, match="jwks_uri of GXG_ADMIN_OIDC_ISSUER must be https"):
+        cli.main(["admin"])
+
+
 def test_executor_metrics_registry_has_reserve_conflicts() -> None:
     """Critic M10-1 #4: the executor's port exposes gxg_reserve_conflicts_total (and not the database figures)."""
     from prometheus_client import generate_latest

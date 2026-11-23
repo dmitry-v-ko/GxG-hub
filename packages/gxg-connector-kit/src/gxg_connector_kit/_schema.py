@@ -28,6 +28,8 @@ _FILES = (
     # connector internal HTTP (M8)
     "execute-request",
     "reconcile-result",
+    # 429 body of execute before dispatch (AS-12a, M10)
+    "error",
 )
 
 

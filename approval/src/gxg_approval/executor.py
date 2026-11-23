@@ -308,7 +308,7 @@ def release_reserved(conn: psycopg.Connection[Any], actor: str) -> int:
 def _rate_limited(resp: httpx.Response) -> int | None:
     """AS-12a: retry_after_s of a well-formed 429 (error.schema, code rate_limited, retry_after_s ≥ 1), else None."""
     doc = _json(resp)
-    if not isinstance(doc, dict) or doc.get("code") != "rate_limited":
+    if not _schema.validator("error").is_valid(doc) or doc.get("code") != "rate_limited":
         return None
     retry = doc.get("retry_after_s")
     if not isinstance(retry, int) or isinstance(retry, bool) or not 1 <= retry <= 86400:

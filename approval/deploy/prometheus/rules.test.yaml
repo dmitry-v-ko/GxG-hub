@@ -27,7 +27,7 @@ tests:
       - series: 'gxg_execute_deferred_total{tenant="t-alpha",tool="demo.message.propose"}'
         values: '0 0 1 2 2'
       - series: 'gxg_intents_expired_after_rate_limit{tenant="t-alpha"}'
-        values: '0 0 1 1'
+        values: '0 0 1 1 _ _'
     alert_rule_test:
       - eval_time: 150m
         alertname: GxgOutcomeUnknownGrowing
@@ -44,6 +44,9 @@ tests:
           - exp_labels: {severity: warning, tenant: t-alpha}
             exp_annotations:
               summary: "tenant t-alpha: approved intents expired while the connector answered 429"
+      - eval_time: 10m
+        alertname: GxgExpiredAfterRateLimit
+        exp_alerts: []  # the series leaves an hour after the expiry (gxg_metrics window): the alert clears
   - interval: 1m
     input_series:
       - series: 'gxg_intents_pending{tenant="t-alpha"}'

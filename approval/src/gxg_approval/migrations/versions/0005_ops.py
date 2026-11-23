@@ -321,10 +321,10 @@ CREATE FUNCTION gxg_metrics() RETURNS TABLE (name text, labels jsonb, value doub
   SELECT 'gxg_execute_deferred_total', jsonb_build_object('tenant', i.tenant_id, 'tool', i.tool_key), count(*)::float8
     FROM executions e JOIN intents i USING (intent_id) WHERE e.state = 'released' AND e.error_code = 'rate_limited'
    GROUP BY i.tenant_id, i.tool_key
-  UNION ALL  -- AS-12a alert: expired while the connector kept answering 429
+  UNION ALL  -- AS-12a alert: expired in the last hour while the connector kept answering 429 (clears after it)
   SELECT 'gxg_intents_expired_after_rate_limit', jsonb_build_object('tenant', i.tenant_id), count(*)::float8
     FROM intents i
-   WHERE i.status = 'expired' AND (SELECT e.error_code FROM executions e WHERE e.intent_id = i.intent_id
+   WHERE i.status = 'expired' AND i.terminal_at > now() - interval '1 hour' AND (SELECT e.error_code FROM executions e WHERE e.intent_id = i.intent_id
                                    ORDER BY e.attempt DESC LIMIT 1) = 'rate_limited'
    GROUP BY i.tenant_id
   UNION ALL

@@ -1339,12 +1339,19 @@ def test_ex25_rate_limited_body_bounds() -> None:
     from gxg_approval.executor import _rate_limited
 
     def resp(retry: Any) -> httpx.Response:
-        return httpx.Response(429, json={"code": "rate_limited", "message": "m", "retry_after_s": retry})
+        return httpx.Response(
+            429, json={"code": "rate_limited", "message": "m", "retryable": True, "retry_after_s": retry}
+        )
 
     assert _rate_limited(resp(1)) == 1 and _rate_limited(resp(86400)) == 86400
     for bad in (0, 86401, True, 2.5, "5"):
         assert _rate_limited(resp(bad)) is None, bad
     assert _rate_limited(httpx.Response(429, content=b"not json")) is None
+    good = {"code": "rate_limited", "message": "m", "retryable": True, "retry_after_s": 5}
+    assert _rate_limited(httpx.Response(429, json=good)) == 5
+    for drop in ("message", "retryable"):  # Critic M10-2 N5: the body is checked against error.schema
+        assert _rate_limited(httpx.Response(429, json={k: v for k, v in good.items() if k != drop})) is None, drop
+    assert _rate_limited(httpx.Response(429, json={**good, "extra": 1})) is None
 
 
 def test_ex25_logs_and_audit_details(stack: Stack, pg: Any, caplog: pytest.LogCaptureFixture) -> None:

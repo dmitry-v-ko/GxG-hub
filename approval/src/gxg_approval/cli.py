@@ -201,6 +201,7 @@ def _admin() -> None:
     require_https(issuer, "GXG_ADMIN_OIDC_ISSUER")  # discovery and JWKS decide who an operator is
     with urllib.request.urlopen(issuer.removesuffix("/") + "/.well-known/openid-configuration", timeout=10) as r:  # noqa: S310 (configured https issuer)
         jwks_uri = json.load(r)["jwks_uri"]
+    require_https(jwks_uri, "jwks_uri of GXG_ADMIN_OIDC_ISSUER")  # the keys that decide who an operator is
     operators = frozenset(o.strip() for o in c.env("GXG_ADMIN_OPERATORS").split(",") if o.strip())
     if not operators:
         raise SystemExit("GXG_ADMIN_OPERATORS: no platform_admin configured")

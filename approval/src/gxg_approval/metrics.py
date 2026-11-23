@@ -31,6 +31,8 @@ HELP = {
     "gxg_admin_actions_total": "admin actions (audit_events admin_*)",
     "gxg_webhook_dead": "webhook deliveries given up after 24 h (kept 7 days)",
     "gxg_webhook_pending": "webhook deliveries not yet delivered",
+    "gxg_execute_deferred_total": "execute attempts deferred by a 429 rate_limited (T12b, AS-12a)",
+    "gxg_intents_expired_after_rate_limit": "intents expired in the last hour with a 429-deferred last attempt",
 }
 LABELS = {
     "gxg_intents_created_total": ("tenant", "tool", "mode"),
@@ -41,6 +43,8 @@ LABELS = {
     "gxg_admin_actions_total": ("action",),
     "gxg_webhook_dead": ("subscriber",),
     "gxg_webhook_pending": ("subscriber",),
+    "gxg_execute_deferred_total": ("tenant", "tool"),
+    "gxg_intents_expired_after_rate_limit": ("tenant",),
 }
 LATENCY = "gxg_approval_latency_seconds"
 
@@ -60,6 +64,8 @@ class DatabaseCollector(Collector):
         for name, labels, value in rows:
             if name in families:
                 families[name].add_metric([str(labels[k]) for k in LABELS[name]], value)
+                continue
+            if not name.startswith(f"{LATENCY}_"):  # a figure this version does not know: skipped, never a 500
                 continue
             key = (str(labels["tenant"]), str(labels["tool"]))
             h = latency.setdefault(key, {"buckets": [], "sum": 0.0, "count": 0.0})
