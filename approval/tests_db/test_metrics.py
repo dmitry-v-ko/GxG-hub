@@ -38,9 +38,10 @@ def test_every_metric_is_exposed(
     owner.execute(
         "UPDATE intents SET created_at = created_at - interval '400 seconds' WHERE intent_id = %s", (approved,)
     )
+    assert row is not None
     decide_db(approved, HUMAN, "approve", 1, row[0])
     with pg.connect("gxg_executor") as ex, pg.connect("gxg_api") as api:
-        e = ex.execute("SELECT gxg_reserve(%s, 'x')", (approved,)).fetchone()[0]
+        e = (ex.execute("SELECT gxg_reserve(%s, 'x')", (approved,)).fetchone() or (None,))[0]
         api.execute("SELECT gxg_dispatch(%s, %s, 'demo', 30)", (e, approved))
         ex.execute("SELECT gxg_complete(%s, 'x', 'outcome_unknown', null, null, null)", (e,))
     with pg.connect("gxg_admin") as admin:
