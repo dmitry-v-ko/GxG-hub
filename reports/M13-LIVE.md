@@ -38,7 +38,11 @@
 
 Первые падения `mcp` и `sweeper` («missing configuration …_FILE») были гонкой: деплой стартовал раньше переменных; обычный redeploy исправил.
 
-### Telegram: не сделано
+### Telegram: обновление (после сообщения оркестратора)
+
+Коммит `7d3f0f2`-серия (ветка `claude/m13-deploy`): `telegram` переключён на `dmitry-v-ko/gxg-telegram-service@claude/m13-railway` (`serviceConnect`), добавлены `TELEGRAM_SESSIONS`, `TELEGRAM_SESSION_WORKDIR`, `TELEGRAM_CONNECTIONS=t-pilot=tg-pilot:tg-pilot`, `TELEGRAM_APPROVAL_URL`, сгенерированы `TELEGRAM_CHAT_REF_SECRET` и `TELEGRAM_SVC_KEY` (публичная часть — `TELEGRAM_SVC_PUBLIC_KEY`). Сборка на 17bfe66 всё ещё падает: `"/deploy/railway-entrypoint.sh": not found` (вероятно, `.dockerignore` репозитория сервиса исключает `deploy/`; убрать исключение или положить файл вне `deploy/`). Не сделано: `TELEGRAM_SERVICE_DSN` и роли `gxg_telegram_service`/`gxg_telegram_reader` (нужен SQL из `db/` сервиса, репозиторий мне недоступен), поэтому `TELEGRAM_ARCHIVE_DSN` пока на роли владельца архива; коннектор в реестр bundle не добавлен (нужны порт — в spec 8080, оркестратор назвал 8081 — и решение по https, AS-07).
+
+### Telegram: исходное состояние (до обновления)
 
 Репозиторий `dmitry-v-ko/gxg-telegram-service` недоступен анонимно (`git ls-remote` просит логин), `add_repo` по условию не вызывался. Dockerfile из него я не видел, поэтому `deploy/railway/telegram.Dockerfile` не писал: вслепую угадывать его состав и команду запуска хуже, чем честно остановиться. Из лога сборки Railway: в Dockerfile сервиса строки 17 и 24 (`RUN --mount=type=secret,id=ca-bundle,required=false`) и строка 37 (`VOLUME`) не поддерживаются Railway. Нужно в том репозитории убрать эти три строки (том — Railway Volume на `/var/lib/telegram`). Файл `TELEGRAM_API_HASH_FILE` из переменной в образе тоже может сделать только он: wrapper `deploy/railway/entrypoint.sh` берёт образ-копию в свой контекст. Предлагаю: либо положить в репозиторий сервиса копию `entrypoint.sh` и использовать её как ENTRYPOINT (имя переменной тогда `GXG_SECRET__TELEGRAM_API_HASH`, а `TELEGRAM_API_HASH` у сервиса переименовать), либо дать Railway токен чтения этого репозитория для Dockerfile в GxG-hub. Переменные `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` владелец уже задал; не задана только `TELEGRAM_CONNECTIONS`.
 
