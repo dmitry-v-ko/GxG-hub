@@ -265,7 +265,12 @@ def test_database_functions_refuse_on_their_own(pg: Any, propose: Callable[..., 
         d.execute("SELECT gxg_decide(%s, '\\x01', 6, null, %s)", (good, full))
         with pytest.raises(psycopg.Error) as err:
             d.execute("SELECT gxg_decide(%s, '\\x01', 7, null, %s)", (good, full))
-        assert err.value.sqlstate == "GX409"  # used
+        assert err.value.sqlstate == "GX409" and err.value.diag.message_primary == "assertion already used"
+        for args in (("agent:t-alpha:bot", i["intent_id"], 1, i["args_hash"]),  # a machine principal
+                     (HUMAN1, i["intent_id"], 2, i["args_hash"])):  # decided: approved at version 2  # fmt: skip
+            with pytest.raises(psycopg.Error) as err:
+                d.execute("SELECT gxg_decision_challenge(%s, %s, 'approve', %s, %s)", args)
+            assert err.value.sqlstate == ("GX403" if args[0].startswith("agent") else "GX409"), args
     assert count(owner) == 1
     assert owner.execute("SELECT sign_count FROM webauthn_credentials WHERE credential_id = '\\x01'").fetchone() == (6,)
 
@@ -288,6 +293,7 @@ def test_enroll_function_refuses_on_its_own(pg: Any, owner: Any) -> None:
             d.execute("SELECT gxg_enroll(%s, '\\x09', '\\x00', 0)", (ch,))
         assert err.value.sqlstate == "GX403"
         ch = bytes(d.execute("SELECT gxg_enroll_challenge(%s, %s)", (HUMAN1, token)).fetchone()[0])
+        spare = bytes(d.execute("SELECT gxg_enroll_challenge(%s, %s)", (HUMAN1, token)).fetchone()[0])
         owner.execute("UPDATE passkey_invites SET expires_at = now()")
         with pytest.raises(psycopg.Error) as err:
             d.execute("SELECT gxg_enroll(%s, '\\x09', '\\x00', 0)", (ch,))
@@ -297,6 +303,9 @@ def test_enroll_function_refuses_on_its_own(pg: Any, owner: Any) -> None:
         with pytest.raises(psycopg.Error) as err:
             d.execute("SELECT gxg_enroll(%s, '\\x0a', '\\x00', 0)", (ch,))
         assert err.value.sqlstate == "GX409"  # the challenge is used
+        with pytest.raises(psycopg.Error) as err:  # a second challenge of the same invite: the invite is used
+            d.execute("SELECT gxg_enroll(%s, '\\x0b', '\\x00', 0)", (spare,))
+        assert err.value.sqlstate == "GX403"
         with pytest.raises(psycopg.Error) as err:
             d.execute("SELECT gxg_enroll_challenge(%s, %s)", (HUMAN1, token))
         assert err.value.sqlstate == "GX403"  # the invite is used

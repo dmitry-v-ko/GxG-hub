@@ -1,0 +1,38 @@
+warning: The `UV_NATIVE_TLS` environment variable is deprecated and will be removed in a future release. Use `UV_SYSTEM_CERTS` instead.
+SURVIVED    0005_ops.py: a challenge for a decided intent
+killed      0005_ops.py: a challenge for a stale version
+killed      0005_ops.py: a challenge for other args
+killed      0005_ops.py: the challenge does not bind version and decision
+SURVIVED    0005_ops.py: a challenge for a machine principal
+SURVIVED    0005_ops.py: a used decision challenge accepted again
+killed      0005_ops.py: a decision challenge older than 5 minutes
+killed      0005_ops.py: the decision challenge is never used up
+killed      0005_ops.py: a passkey written around the decider
+killed      0005_ops.py: another human's passkey decides
+killed      0005_ops.py: a repeated signature counter accepted
+killed      0005_ops.py: a decision stored without its assertion
+killed      0005_ops.py: the counter is never stored
+killed      0005_ops.py: a used invite gives a new registration challenge
+SURVIVED    0005_ops.py: a used invite enrolls again
+killed      0005_ops.py: an expired invite enrolls
+killed      0005_ops.py: a registration challenge used twice
+killed      0005_ops.py: an invite is never used up
+killed      0005_ops.py: an enrolled passkey is not marked as enrolled
+killed      0005_ops.py: an invite valid for ever
+killed      0005_ops.py: an event without a status change
+killed      0005_ops.py: two webhook events for one change
+killed      0005_ops.py: no event for T1
+killed      0005_ops.py: payload purged at once
+equivalent  0005_ops.py: equivalent: only terminal moves set terminal_at (_gxg_move), and outcome_unknown is never terminal
+killed      0005_ops.py: retention outside 1…90 days
+killed      0005_ops.py: delivered notify rows (title, requester) kept for ever
+killed      0005_ops.py: undelivered outbox rows deleted
+killed      0005_ops.py: finished deliveries deleted at once
+killed      0005_ops.py: a switch without a reason
+SURVIVED    0005_ops.py: a cleared switch audited as set
+killed      0005_ops.py: ui writes passkeys (AS-30)
+killed      0005_ops.py: ui purges payload
+33 mutations listed: 5 not as expected (survivor, stale text, killed 'equivalent')
+exit 1
+
+Re-run after new tests (cycle 1): the 5 survivors above, all killed; 0 not as expected.

@@ -84,6 +84,8 @@ def test_clear_needs_a_fresh_login(admin_client: TestClient, owner: psycopg.Conn
     fresh = token(auth_time=int(time.time()) - 60)
     assert admin_client.post("/v1/switches", json=clear, headers=auth(fresh)).status_code == 200
     assert owner.execute("SELECT blocked, reason FROM switches").fetchall() == [(False, "resolved")]
+    actions = owner.execute("SELECT action FROM audit_events WHERE action LIKE 'admin%' ORDER BY id").fetchall()
+    assert actions == [("admin_switch_set",), ("admin_switch_clear",)]
 
 
 @pytest.mark.parametrize(
