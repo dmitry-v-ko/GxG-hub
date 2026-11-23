@@ -116,3 +116,11 @@ def test_wrapper_dockerfiles_still_contain_the_original_build(name: str, cmd: st
     build_stage = original.split("USER gxg")[0]
     assert build_stage in wrapper  # the build (and so the lockfile and the base digests) is the one AC-M9-12 tests
     assert wrapper.rstrip().endswith(f'ENTRYPOINT ["/opt/gxg/entrypoint.sh"]\nCMD ["{cmd}"]')
+
+
+def test_no_railway_dockerfile_declares_a_volume() -> None:
+    """Railway rejects the VOLUME instruction ("use Railway Volumes"); the volumes are created by railway_deploy.py."""
+    files = sorted((ROOT / "deploy/railway").glob("*.Dockerfile"))
+    assert len(files) >= 4
+    for f in files:
+        assert not re.search(r"^\s*VOLUME\b", f.read_text(), re.MULTILINE | re.IGNORECASE), f.name
