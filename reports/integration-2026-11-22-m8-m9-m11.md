@@ -17,7 +17,8 @@ Integration commits:
 - `64b2ed2` Merge M9 (conflicts and two semantic fixes, below).
 - `e3c96f4` Merge M11 (conflicts, backlog rows restored, below).
 - `aba22a5` docs from the plan branch.
-- this report and `INTEGRATION-READY.md`.
+- `e869b14` one M8 test adapted to M9's frozen approvers (found by the first gate run, below).
+- `ee9ce48`, heartbeats, this report, `reports/mutmut/integration-2026-11-22.txt` and `INTEGRATION-READY.md`: only `reports/`.
 
 ## Conflicts and how they were resolved
 
@@ -74,9 +75,37 @@ $ git diff origin/claude/admiring-planck-vzys0x -- docs/specs docs/adr docs/impl
 - Tests: every `test_*` function of every `test_*.py` in `15213ee`, `m8-executor`, `m9-ui-bot`, `m11-telegram-read` exists in HEAD. The one missing file, `approval/tests/test_approval_import.py` (only in M11), is the M0 placeholder that M7 deleted (`43d8a82`); M11 branched before M7.
 - The previous integration's fastmcp 4 port of `approval/mcp.py` is untouched by M8/M9/M11.
 
+## Minimal code changes (summary)
+
+| Change | Why |
+|---|---|
+| `0002_ui_notifier.py` → `0004_ui_notifier.py`, `revision "0004"`, `down_revision "0003"` | M8 and M9 both used revision `0002`; the migrations touch different objects |
+| `approval/src/gxg_approval/config.py`: `import json`, `import threading` | M9 dropped them, M8's `JsonFile` uses them |
+| `approval/tests_db/test_executor.py::test_human_approval_path`: the deciding human is an approver of t-alpha in the reloaded bundle | M9's T1 freezes the tenant's approvers from the bundle and `gxg_decide` refuses anyone else; the M8 test used a human in no bundle (`approver is not allowed to decide this intent`). Service code unchanged; the test still proves the human path to `succeeded` |
+
+## Gate
+
+First run (`aba22a5`): green up to `uv run pytest approval/tests_db`, then `1 failed, 359 passed` (`test_human_approval_path`, above). Fixed in `e869b14`.
+
+Second run (`e869b14`, `bash -x scripts/ci/check-all.sh`, no `MUTMUT_PACKAGES`): every step green through `stand/run.sh`; `mutmut.sh` finished all 9 Python packages. Then the container was lost while the last step of `mutmut.sh`, the SQL driver `mutate_m7_sql.py`, was running. After the restart:
+
+- the driver had left one SQL mutation in the tree (`0001_core.py`, `OR NEW.preview_ciphertext IS NULL` removed). It was restored with `git checkout` and never committed; every commit here adds files by explicit path;
+- `mutmut.sh`'s list comparison redone from the `mutants/` results of all 9 packages (11611 mutants): not killed 162, listed 162, both 162 — no unexplained, no stale entry;
+- the SQL driver re-run alone, with `mutmut.sh`'s PostgreSQL container setup: `118 mutations listed: 0 not as expected`, rc=0.
+
+The results table is in `INTEGRATION-READY.md`; mutmut details, the SQL output and every not-killed mutant are in `reports/mutmut/integration-2026-11-22.txt`; stand run records are in `reports/integration/2026-11-22-m8-m9-m11-stand-{M5,M11}.json` (the milestone records `reports/conformance/M5.json`, `M11.json` were restored from git after `stand/run.sh` rewrote them).
+
+### M9's three timed-out mutants
+`demo_connector.server.x_build__mutmut_9` was killed in 36 s when run alone and is killed in the full run. The two `gxg_approval.transitions.x_rules` mutants are killed too, with no timeouts in `connectors/demo` or `approval`. With `kernel.pid_max` 4194304 these were mutmut 3.8.1's false timeouts (`reports/mutmut/M8.txt`), not equivalent mutants and not missing tests. Nothing was added to the list for them.
+
+### Equivalent list
+`scripts/ci/mutmut-equivalent.txt` is the union of M3/M5/M1/M7/M8/M9/M11 entries, with no duplicate ids. Every entry is a mutant not killed in this run (no stale entry), and every not-killed mutant is listed.
+
+Remark for the owner (not changed, M11 decision): `telegram_connector.server.x_build__mutmut_10` is listed with the reason "detected, not equivalent: store = None makes build() fail and the in-process MCP session hangs". It times out here too. It is the telegram twin of demo's `x_build__mutmut_9`, which is killed now. A test that fails fast on a failing `build()` would remove this entry. It is not a hidden survivor, because the hang is the detection.
+
 ## Environment notes
 
 - `postgresql-16-pgvector` installed from apt (the M11 connector tests start their own PostgreSQL 16 with pgvector; CI installs the same package).
 - `gxg_agents_v2` cloned read-only to `../gxg_agents_v2` (depth 1, HEAD = pinned `f1c4d6d`) for `check_upstream.sh`; nothing written there.
-- `dockerd` started by hand (Docker 29.10.0); `kernel.pid_max` set to 4194304 before mutmut (`reports/mutmut/M8.txt`). The session's worker was restarted once during the work; dockerd and `pid_max` were set again before the gate.
+- `dockerd` started by hand (Docker 29.10.0); `kernel.pid_max` set to 4194304 before mutmut (`reports/mutmut/M8.txt`). The worker was restarted twice (once before the gate, once during the SQL driver, see Gate); each time dockerd and `pid_max` were set again before going on.
 - `DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt'`.

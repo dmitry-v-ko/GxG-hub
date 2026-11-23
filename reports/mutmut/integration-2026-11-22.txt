@@ -18,3 +18,288 @@ SQL driver: rerun started (same PostgreSQL container setup as mutmut.sh).
 heartbeat 2026-11-23T01:21:05Z: SQL driver 29 of 118 mutations done, none unexpected so far
 heartbeat 2026-11-23T01:51:20Z: SQL driver 62 of 118 mutations done, none unexpected so far
 heartbeat 2026-11-23T02:21:35Z: SQL driver 98 of 118 mutations done, none unexpected so far
+SQL driver rerun finished 2026-11-23T02:34:25Z: rc=0
+== scripts/ci/mutate_m7_sql.py output
+killed      0001_core.py: tool kill switch ignored at T7/T9
+killed      0001_core.py: a cleared switch still blocks T7/T9
+killed      0001_core.py: move from any status
+killed      0001_core.py: execution state ignored
+killed      0001_core.py: any target status
+equivalent  0001_core.py: equivalent: every caller passes a row it locked FOR UPDATE (_gxg_intent/_gxg_execution or gxg_cancel), so the version cannot differ; callers with a client version compare it before the move
+killed      0001_core.py: non-terminal status gets terminal_at
+killed      0001_core.py: intent born in any status
+killed      0001_core.py: born with version > 1
+killed      0001_core.py: born with attempts used
+killed      0001_core.py: born terminal
+killed      0001_core.py: born without encrypted preview
+killed      0001_core.py: status and approval mode disagree
+killed      0001_core.py: human intent without approvals
+killed      0001_core.py: approved without execution deadline
+killed      0001_core.py: policy decision for a non-auto intent
+equivalent  0001_core.py: equivalent: version 1 means no move yet, and the insert guard makes every auto intent approved at T1
+equivalent  0001_core.py: equivalent: T1 writes the policy decision in the transaction that inserts the auto intent, so a moved auto intent always has one and the EXISTS check refuses it
+killed      0001_core.py: second policy decision
+killed      0001_core.py: policy decision counted as a human approval
+killed      0001_core.py: rejections counted as approvals
+killed      0001_core.py: cancel another tenant's intent (same principal ID)
+killed      0001_core.py: cancel another requester's intent
+killed      0001_core.py: cancel with a stale version
+killed      0001_core.py: unknown decision accepted
+killed      0001_core.py: stale screen decides
+killed      0001_core.py: decision on changed args
+killed      0001_core.py: decision after the approval deadline
+killed      0001_core.py: requester approves own intent
+killed      0001_core.py: a machine principal approves
+killed      0001_core.py: approver outside allowed_approvers
+killed      0001_core.py: intent without a frozen approver set decided by anyone
+killed      0001_core.py: approve without required step-up
+killed      0001_core.py: second vote of one human
+killed      0001_core.py: quorum needs one vote more
+killed      0001_core.py: quorum of one
+killed      0001_core.py: no execution window after approval
+killed      0001_core.py: T2 deadline from 1 h, not the window frozen at T1
+killed      0001_core.py: approved intent never queued for execution
+killed      0001_core.py: a machine principal resolves manually
+killed      0001_core.py: manual outcome without a reason
+killed      0001_core.py: manual outcome, stale version
+killed      0001_core.py: reserve after the execution window
+killed      0001_core.py: reserve after the last attempt
+killed      0001_core.py: kill switch ignored at T7
+killed      0001_core.py: token sub of another intent dispatches
+killed      0001_core.py: another connector dispatches
+killed      0001_core.py: dispatch after the reservation lease
+killed      0001_core.py: kill switch ignored at T9
+killed      0001_core.py: dispatch does not count
+killed      0001_core.py: T12a does not count
+killed      0001_core.py: retry after the last attempt
+killed      0001_core.py: retry after the execution window
+killed      0001_core.py: unknown outcome never reconciled again
+killed      0001_core.py: approval expired early
+killed      0001_core.py: execution window expired early
+killed      0001_core.py: reservation released early
+killed      0001_core.py: dispatch declared unknown early
+killed      0001_core.py: auto usage count without its index
+equivalent  0001_core.py: equivalent: an execution in outcome_unknown belongs to an intent in outcome_unknown, and T7 (the only insert into executions) is allowed only from approved: the index is a second guard
+killed      0001_core.py: two votes of one human
+killed      0001_core.py: ui reads args
+killed      0001_core.py: executor reads preview
+killed      0001_core.py: ui writes executions
+killed      0001_core.py: audit rows can be changed
+killed      0001_core.py: ui runs T9 and T6
+killed      0001_core.py: every role runs every transition
+killed      intents.py: read another tenant's intent (same principal ID)
+killed      intents.py: read another requester's
+killed      intents.py: idempotency key shared across tenants
+killed      intents.py: idempotency key shared across requesters (EFF-08)
+killed      intents.py: a cleared switch blocks T1
+killed      intents.py: T1 without the tenant lock
+killed      intents.py: hourly quota counts another tenant's intents
+killed      intents.py: hourly quota counts other requesters
+killed      intents.py: hourly quota counts all history
+killed      intents.py: pending caps count every status
+killed      intents.py: pending caps count another tenant's intents
+killed      intents.py: requester pending cap counts the whole tenant
+killed      intents.py: auto limit counts another tenant's intents
+killed      intents.py: auto day limit window too long
+killed      intents.py: auto day limit window too short (fail open)
+killed      intents.py: auto hour window too short (fail open)
+killed      intents.py: retry_after_s from the newest intent
+killed      intents.py: auto hour limit counts the day
+killed      intents.py: auto limit counts human intents of the rule
+killed      intents.py: auto limit counts other rules
+killed      0004_ui_notifier.py: a code for a machine principal
+killed      0004_ui_notifier.py: a code that is not six digits
+killed      0004_ui_notifier.py: a code for no tenant
+killed      0004_ui_notifier.py: the same digits live twice
+killed      0004_ui_notifier.py: an older code keeps working
+killed      0004_ui_notifier.py: code lives too long
+killed      0004_ui_notifier.py: wrong guesses never counted
+killed      0004_ui_notifier.py: one more guess allowed
+killed      0004_ui_notifier.py: one sender's guesses block everyone
+killed      0004_ui_notifier.py: a used code works again
+killed      0004_ui_notifier.py: an expired code works
+killed      0004_ui_notifier.py: a code is never used up
+killed      0004_ui_notifier.py: a new link does not replace the old Telegram account
+killed      0004_ui_notifier.py: a code links only the first tenant
+killed      0004_ui_notifier.py: ui writes outbox rows
+killed      0004_ui_notifier.py: ui writes links directly
+killed      0004_ui_notifier.py: ui claims codes
+killed      0004_ui_notifier.py: ui rewrites a passkey's key
+killed      0003_idempotency_per_requester.py: idempotency unique per tenant, not per requester (EFF-08)
+killed      0002_executor.py: AS-10 release leaves the execution reserved
+killed      0002_executor.py: released intent never re-queued
+killed      0002_executor.py: executor cannot release after a key removal
+equivalent  0002_executor.py: equivalent: the CONTINUE WHEN after the row lock skips every execution that is not reserved
+killed      0002_executor.py: release aborts on an execution dispatched between the loop's SELECT and the lock
+killed      executor.py: delivered outbox rows handled again
+killed      executor.py: outcome_unknown never reconciled
+killed      executor.py: executor eats the notifier's rows
+killed      executor.py: a kill-switched row is retried without backoff
+killed      executor.py: rows are never delivered
+killed      executor.py: kill-switched row without backoff count
+killed      executor.py: reconcile backoff ignores the time waited
+118 mutations listed: 0 not as expected (survivor, stale text, killed 'equivalent')
+SQL rc=0
+== not killed, by package (all listed in scripts/ci/mutmut-equivalent.txt)
+demo_connector.backend.xǁBackendǁ_scan__mutmut_7: survived
+demo_connector.effects.xǁApprovalǁpost__mutmut_15: survived
+demo_connector.effects.xǁApprovalǁpost__mutmut_16: survived
+demo_connector.effects.xǁEffectsǁ_checked__mutmut_71: survived
+demo_connector.effects.xǁEffectsǁ_checked__mutmut_94: survived
+demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_12: survived
+demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_131: survived
+demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_18: survived
+demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_19: survived
+demo_connector.effects.xǁEffectsǁexecute__mutmut_40: survived
+demo_connector.effects.xǁEffectsǁexecute__mutmut_44: survived
+demo_connector.effects.xǁEffectsǁexecute__mutmut_47: survived
+demo_connector.effects.xǁEffectsǁexecute__mutmut_96: survived
+demo_connector.effects.xǁEffectsǁinternal_app__mutmut_15: survived
+demo_connector.effects.xǁEffectsǁinternal_app__mutmut_24: survived
+demo_connector.provider.xǁProviderǁ__init____mutmut_9: survived
+demo_connector.provider.xǁProviderǁcalls__mutmut_11: survived
+demo_connector.provider.xǁProviderǁcalls__mutmut_12: survived
+demo_connector.provider.xǁProviderǁcalls__mutmut_16: survived
+demo_connector.provider.xǁProviderǁcalls__mutmut_17: survived
+demo_connector.provider.xǁProviderǁlookup__mutmut_7: survived
+demo_connector.provider.xǁProviderǁlookup__mutmut_8: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_13: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_14: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_2: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_33: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_34: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_40: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_41: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_43: survived
+demo_connector.provider.xǁProviderǁsend__mutmut_44: survived
+demo_connector.server.x_configs__mutmut_19: survived
+demo_connector.server.x_configs__mutmut_23: survived
+demo_connector.server.x_configs__mutmut_27: survived
+demo_connector.server.x_configs__mutmut_36: survived
+demo_connector.server.x_effects__mutmut_36: survived
+demo_connector.server.x_effects__mutmut_38: survived
+demo_connector.server.x_serve__mutmut_1: no tests
+demo_connector.server.x_serve__mutmut_2: no tests
+demo_connector.server.xǁBundleFilesǁ__init____mutmut_3: survived
+demo_connector.tools.x_load_schema__mutmut_4: survived
+demo_connector.tools.xǁConnectorǁtools__mutmut_15: survived
+demo_connector.tools.xǁConnectorǁtools__mutmut_17: survived
+demo_connector.tools.xǁDemoToolǁrun__mutmut_133: survived
+gxg_approval.api.x__error__mutmut_5: survived
+gxg_approval.api.x__error__mutmut_6: survived
+gxg_approval.api.x__responses__mutmut_8: survived
+gxg_approval.api.x_create_app__mutmut_19: survived
+gxg_approval.api.x_create_app__mutmut_25: survived
+gxg_approval.api.x_create_app__mutmut_26: survived
+gxg_approval.executor.x_release_reserved__mutmut_1: survived
+gxg_approval.executor.xǁExecutorǁ_post__mutmut_18: survived
+gxg_approval.executor.xǁExecutorǁ_post__mutmut_19: survived
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_27: survived
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_2: survived
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_52: survived
+gxg_approval.executor.xǁExecutorǁ_settle__mutmut_2: survived
+gxg_approval.executor.xǁExecutorǁexecute__mutmut_2: survived
+gxg_approval.executor.xǁExecutorǁrun__mutmut_6: survived
+gxg_approval.executor.xǁExecutorǁtake__mutmut_36: survived
+gxg_approval.executor.xǁExecutorǁtake__mutmut_6: survived
+gxg_approval.keys.x__write__mutmut_4: survived
+gxg_approval.keys.x__write__mutmut_5: survived
+gxg_approval.mcp.x_create_server__mutmut_14: survived
+gxg_approval.mcp.x_create_server__mutmut_15: survived
+gxg_approval.mcp.x_create_server__mutmut_46: survived
+gxg_approval.mcp.x_create_server__mutmut_62: survived
+gxg_approval.mcp.x_create_server__mutmut_87: survived
+gxg_approval_ui.render.x_card__mutmut_6: survived
+gxg_approval_ui.stepup.x_registration_options__mutmut_2: survived
+gxg_connector_kit._jwt.x_verify__mutmut_41: survived
+gxg_connector_kit._jwt.x_verify__mutmut_70: survived
+gxg_connector_kit._jwt.x_verify__mutmut_71: survived
+gxg_connector_kit._jwt.x_verify__mutmut_72: survived
+gxg_connector_kit._jwt.x_verify__mutmut_76: survived
+gxg_connector_kit._jwt.x_verify__mutmut_77: survived
+gxg_connector_kit._jwt.x_verify__mutmut_78: survived
+gxg_connector_kit.cf_identity.x_args_hash__mutmut_5: survived
+gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27: survived
+gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4: survived
+gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8: survived
+gxg_identity.core.x_args_hash__mutmut_5: survived
+gxg_policy.bundle.x__sorted__mutmut_9: survived
+gxg_policy.bundle.x_bundle_doc__mutmut_33: survived
+gxg_policy.bundle.x_bundle_doc__mutmut_35: survived
+gxg_policy.bundle.x_jcs__mutmut_2: survived
+gxg_policy.bundle.x_unb64url__mutmut_6: survived
+gxg_policy.bundle.x_unb64url__mutmut_7: survived
+gxg_policy.diff.x_diff__mutmut_23: survived
+gxg_policy.diff.x_diff__mutmut_29: survived
+gxg_policy.diff.x_diff__mutmut_43: survived
+gxg_policy.diff.x_diff__mutmut_59: survived
+gxg_policy.diff.x_diff__mutmut_65: survived
+gxg_policy.diff.xǁ_Diffǁgrants__mutmut_31: survived
+gxg_policy.diff.xǁ_Diffǁgrants__mutmut_85: survived
+gxg_policy.diff.xǁ_Diffǁnumber__mutmut_12: survived
+gxg_policy.diff.xǁ_Diffǁnumber__mutmut_22: survived
+gxg_policy.diff.xǁ_Diffǁplatform__mutmut_43: survived
+gxg_policy.diff.xǁ_Diffǁplatform__mutmut_87: survived
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_173: survived
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_175: survived
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_9: survived
+gxg_policy.diff.xǁ_Diffǁsets__mutmut_23: survived
+gxg_policy.diff.xǁ_Diffǁtools__mutmut_39: survived
+gxg_policy.lint.x_load_manifests__mutmut_3: survived
+gxg_policy.lint.x_load_manifests__mutmut_5: survived
+gxg_policy.lint.xǁ_Linterǁrid__mutmut_13: survived
+gxg_policy.lint.xǁ_Linterǁrid__mutmut_16: survived
+gxg_policy.load.x_load__mutmut_28: survived
+gxg_policy.load.x_load__mutmut_31: survived
+gxg_policy.load.x_load__mutmut_54: survived
+gxg_policy.load.x_load__mutmut_56: survived
+gxg_policy.load.x_parse_ts__mutmut_1: survived
+gxg_policy.load.x_validator__mutmut_18: survived
+gxg_policy.load.x_validator__mutmut_21: survived
+gxg_policy.load.x_validator__mutmut_4: survived
+gxg_policy.load.x_validator__mutmut_6: survived
+scripts.ci.widening_gate.x_codeowners__mutmut_5: survived
+scripts.ci.widening_gate.x_codeowners__mutmut_8: survived
+scripts.ci.widening_gate.x_github_api__mutmut_16: survived
+scripts.ci.widening_gate.x_github_api__mutmut_17: survived
+scripts.ci.widening_gate.x_github_api__mutmut_19: survived
+scripts.ci.widening_gate.x_github_api__mutmut_20: survived
+scripts.ci.widening_gate.x_github_api__mutmut_24: survived
+scripts.ci.widening_gate.x_github_api__mutmut_25: survived
+scripts.ci.widening_gate.x_main__mutmut_125: survived
+scripts.ci.widening_gate.x_main__mutmut_127: survived
+scripts.ci.widening_gate.x_main__mutmut_61: survived
+scripts.ci.widening_gate.x_main__mutmut_63: survived
+scripts.ci.widening_gate.x_main__mutmut_65: survived
+scripts.ci.widening_gate.x_main__mutmut_67: survived
+scripts.ci.widening_gate.x_main__mutmut_76: survived
+scripts.ci.widening_gate.x_main__mutmut_78: survived
+scripts.ci.widening_gate.x_main__mutmut_89: survived
+scripts.ci.widening_gate.x_main__mutmut_94: survived
+scripts.ci.widening_gate.x_report_out__mutmut_10: survived
+scripts.ci.widening_gate.x_report_out__mutmut_14: survived
+scripts.ci.widening_gate.x_report_out__mutmut_7: survived
+scripts.ci.widening_gate.x_run__mutmut_80: survived
+scripts.ci.widening_gate.x_run__mutmut_83: survived
+scripts.ci.widening_gate.x_upsert_comment__mutmut_23: survived
+telegram_connector.archive.xǁArchiveServiceǁ_run__mutmut_2: survived
+telegram_connector.archive.xǁArchiveServiceǁ_run__mutmut_5: survived
+telegram_connector.archive.xǁArchiveServiceǁ_run__mutmut_7: survived
+telegram_connector.archive.xǁArchiveServiceǁcollect__mutmut_34: survived
+telegram_connector.archive.xǁArchiveServiceǁread_thread__mutmut_21: survived
+telegram_connector.archive.xǁArchiveServiceǁready__mutmut_3: survived
+telegram_connector.archive.xǁArchiveServiceǁready__mutmut_4: survived
+telegram_connector.archive.xǁArchiveServiceǁscope_chats__mutmut_6: survived
+telegram_connector.archive.xǁArchiveServiceǁsearch__mutmut_21: survived
+telegram_connector.server.x_build__mutmut_10: timeout
+telegram_connector.server.x_serve__mutmut_1: no tests
+telegram_connector.server.x_serve__mutmut_2: no tests
+telegram_connector.server.xǁBundleFilesǁ__init____mutmut_3: survived
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_32: survived
+telegram_connector.tools.x_load_schema__mutmut_4: survived
+telegram_connector.tools.x_service_error__mutmut_7: survived
+telegram_connector.tools.xǁConnectorǁsearch__mutmut_18: survived
+telegram_connector.tools.xǁConnectorǁtools__mutmut_11: survived
+telegram_connector.tools.xǁConnectorǁtools__mutmut_13: survived
+telegram_connector.tools.xǁTelegramToolǁrun__mutmut_13: survived
+telegram_connector.tools.xǁTelegramToolǁrun__mutmut_151: survived
