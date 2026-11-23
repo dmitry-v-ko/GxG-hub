@@ -1,0 +1,82 @@
+{
+  "milestone": "M10",
+  "cycle": 3,
+  "branch": "claude/m10-ops",
+  "commit": "7da6e46",
+  "code_commit": "3e5541c",
+  "base": "40cec84",
+  "score": 9.0,
+  "caps_applied": [],
+  "dimensions": {"spec": 2.75, "tests": 2, "security": 1.75, "code": 1.25, "ops": 0.75, "evidence": 0.5},
+  "critic_runs": [
+    {"command": "DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt' uv run pytest approval/tests approval/tests_db approval/notifier approval/ui approval/deploy/tests packages/gxg-connector-kit/tests connectors/demo/tests -q -p no:cacheprovider", "result": "1485 passed, 0 skipped, 0 failed"},
+    {"command": "uv run ruff check . && uv run ruff format --check . && mypy steps of scripts/ci/check-all.sh (lines 12-25)", "result": "clean; root suite 1172 passed"},
+    {"command": "manual mutation metrics.py: skip of unknown non-latency rows -> if False; pytest approval/tests_db/test_metrics.py", "result": "killed (test_unknown_database_figure_is_skipped); reverted"},
+    {"command": "manual mutation 0005 gxg_metrics(): drop terminal_at > now() - 1 hour; pytest approval/tests_db/test_metrics.py", "result": "killed (test_scrape_after_a_deferral_and_an_expiry_by_rate_limit); reverted"},
+    {"command": "manual mutation executor._rate_limited: error.schema check -> cycle-2 hand check; pytest -k ex25", "result": "killed (test_ex25_rate_limited_body_bounds); reverted"},
+    {"command": "manual mutation cli._admin: drop require_https(jwks_uri); pytest approval/tests_db/test_admin.py", "result": "killed (test_admin_refuses_a_plain_http_jwks_uri); reverted"},
+    {"command": "manual mutation metrics.LABELS: rename gxg_execute_deferred_total; pytest approval/tests_db/test_metrics.py", "result": "killed (3 tests); reverted"},
+    {"command": "md5sum schemas/error.schema.json packages/gxg-connector-kit/src/gxg_connector_kit/schemas/error.schema.json", "result": "equal; kit drift test covers it"},
+    {"command": "inspect reports/conformance/M10-stand/*.xml", "result": "54 tests, 0 failures/errors/skips x3; run 13:00-13:30 UTC after 3e5541c (12:59); stand code unchanged in cycle 3, not re-run"}
+  ],
+  "checklist_cycle_2": [
+    {"item": 1, "status": "done", "evidence": "metrics.py HELP/LABELS for both; only gxg_approval_latency_seconds_* rows go to the histogram, unknown skipped; test_scrape_after_a_deferral_and_an_expiry_by_rate_limit (real /metrics after T12b and T8), SPEC in test_every_metric_is_exposed has gxg_execute_deferred_total; mutations killed"},
+    {"item": 2, "status": "done", "evidence": "0005 gauge windowed to terminal_at in the last hour; DB test: -61 min -> series gone; rules.test.yaml eval_time 10m exp_alerts []"},
+    {"item": 3, "status": "done", "evidence": "cli._admin require_https(jwks_uri); test_admin_refuses_a_plain_http_jwks_uri; mutation killed"},
+    {"item": 4, "status": "done", "evidence": "reports/mutmut/M10-cycle-3.txt: per-module runs of policy, metrics, sweeper, intents, api, transitions, executor._rate_limited; 0 non-equivalent survivors; equivalent reasons in scripts/ci/mutmut-equivalent.txt checked"},
+    {"item": 5, "status": "done", "evidence": "executor._rate_limited uses _schema.validator('error'); kit carries error.schema (drift-tested); cases without message/retryable or with an extra key -> None; mutation killed"},
+    {"item": 6, "status": "done", "evidence": "stage-C.json and M10.json at 3e5541c; 26/26; AC-M10-05 lists test_metrics.py"}
+  ],
+  "acceptance": [
+    {"id": "AC-M10-01", "status": "passed", "evidence": "notifier tests_db/test_webhooks.py (signed delivery per status change; receiver refuses bad signature, t > 300 s, replayed event_id), kit tests/test_webhooks.py; re-run green"},
+    {"id": "AC-M10-02", "status": "passed", "evidence": "test_unavailable_subscriber_backoff_then_dead_and_alert, test_subscriber_back_after_an_hour_gets_everything_in_order; promtool GxgWebhookDead; re-run green"},
+    {"id": "AC-M10-03", "status": "passed", "evidence": "approval/tests_db/test_purge.py (31 d purged, outcome_unknown kept, metadata kept); re-run green"},
+    {"id": "AC-M10-04", "status": "passed", "evidence": "test_admin.py::test_global_switch_blocks_the_next_dispatch_of_every_tenant, ::test_cli_switch_and_invite_call_the_admin_api; promtool GxgSwitchChanged/GxgAdminAction; re-run green"},
+    {"id": "AC-M10-05", "status": "passed", "evidence": "test_metrics.py: SPEC (incl. gxg_execute_deferred_total) on /metrics, scrape after T12b and after T8-after-429 returns 200 with both AS-12a series, unknown figure skipped; promtool rules load and test (outcome_unknown > 1 h fires; GxgExpiredAfterRateLimit fires and clears); re-run green; critic mutations killed"},
+    {"id": "AC-M10-06", "status": "passed", "evidence": "reports/conformance/M10-mc05.md: no ContextForge minor after v1.1.1; fastmcp 4.2.4 re-run green, pins unchanged. Caveat N7 (run before cycle-2 demo code) is in docs/backlog.md"},
+    {"id": "AC-M10-07", "status": "passed", "evidence": "reports/conformance/stage-C.json at 3e5541c: EX-01...EX-25 and MC-05 passed; the EX tests pass in the critic re-run; stand JUnit 54/0 x3 at 3e5541c"},
+    {"id": "AC-M10-08", "status": "passed", "evidence": "approval/tests_db/test_decider.py, approval/ui/tests_db/test_decisions.py, test_e2e.py, test_roles.py (gxg_ui no EXECUTE on gxg_decide); re-run green"}
+  ],
+  "findings": [
+    {"id": "N10", "severity": "minor", "origin": "missed_earlier", "ref": "ops: runbooks (M10 «Делаем»)",
+     "where": "docs/runbooks/approval-ops.md",
+     "problem": "no runbook step for GxgExecuteDeferred and GxgExpiredAfterRateLimit (cycle 2), nor for GxgPendingNearTenantLimit, GxgReserveConflictsSpike, GxgTokenVerifyFailures, GxgQuotaRepeated, GxgClockSkew; the on-call has no action for an expiry after 429",
+     "required_improvement": "backlog: one runbook section per alert (check the connector quota/flood-wait; the agent proposes again)"},
+    {"id": "N11", "severity": "minor", "origin": "new_regression", "ref": "approval-service-v1 metrics table (> 0 intents expired after 429), N2 fix",
+     "where": "approval/src/gxg_approval/migrations/versions/0005_ops.py gxg_intents_expired_after_rate_limit; approval/deploy/prometheus/rules.yaml GxgExpiredAfterRateLimit",
+     "problem": "the 1 h window means an expiry during a Prometheus/api outage longer than 1 h is never alerted; the alert summary does not say 'in the last hour' (HELP does). Deferrals stay visible via the monotonic gxg_execute_deferred_total",
+     "required_improvement": "backlog: 'in the last hour' in the summary, or a monotonic count of expiries after 429"}
+  ],
+  "required_improvements": [],
+  "ponytail_review": "reports/critic/M10-cycle-3.review.md (short diff review; ponytail-review not required by the lighter process)",
+  "threat_model": [
+    {"path": "compromised ui records a decision directly", "status": "closed", "evidence": "test_roles.py, test_ui_role_cannot_call_gxg_decide re-run green"},
+    {"path": "forged / foreign / replayed / stale assertion; passkey written around the decider", "status": "closed", "evidence": "test_decider.py, ui test_decisions.py re-run green"},
+    {"path": "approve on an args/hash mismatch via a reject POST", "status": "closed", "evidence": "challenge refuses approve on envelope mismatch (unchanged in cycle 3)"},
+    {"path": "compromised ui substitutes the challenge (R1); enrolls its key with an invite in flight (R2)", "status": "open", "evidence": "recorded for owner acceptance in reports/M10-PENDING-OWNER.md (rule 4: agent against the owner)"},
+    {"path": "webhook forgery / old t / replay by an outsider; lost 2xx blocks a subscriber", "status": "closed", "evidence": "kit verify, notifier tests re-run green"},
+    {"path": "forged webhook event by a process role with INSERT on outbox", "status": "closed", "evidence": "0005 outbox_webhook_guard (unchanged)"},
+    {"path": "SSRF through webhook URLs", "status": "open", "evidence": "IP literals refused; names rely on the egress allowlist (low, unchanged)"},
+    {"path": "operator impersonation on admin via an http issuer", "status": "closed", "evidence": "require_https on the issuer"},
+    {"path": "operator impersonation via an http jwks_uri in discovery", "status": "closed", "evidence": "N3 fixed: require_https(jwks_uri); test; critic mutation killed"},
+    {"path": "malformed 429 body treated as a deferral (T12b instead of T12a)", "status": "closed", "evidence": "N5 fixed: error.schema validation; critic mutation killed"},
+    {"path": "connector 429 loop spends no attempt forever (T12b)", "status": "closed", "evidence": "bounded by execution_deadline -> T8; EX-25 tests re-run green"},
+    {"path": "late 429 after T10 / CAS race; 429 after dispatch as deferral; reserve before the deferral time", "status": "closed", "evidence": "EX-25 tests re-run green (unchanged code)"},
+    {"path": "monitoring blinded by a single expiry after 429", "status": "closed", "evidence": "N1 fixed: unknown rows skipped, both figures exposed; real /metrics scrape after T8 returns 200"},
+    {"path": "cross-tenant aggregates through unauthenticated /metrics", "status": "open", "evidence": "backlog (cycle-1 F12), aggregates only"}
+  ],
+  "existing_solutions": [
+    {"component": "webhook sign/verify (kit webhooks.py)", "alternative": "standardwebhooks / svix: other header format than AS-22; stdlib hmac (used)", "verdict": "justified_custom"},
+    {"component": "webhook delivery (notifier)", "alternative": "Svix server, pgmq: extra service or foreign format; outbox exists", "verdict": "justified_custom"},
+    {"component": "decider WebAuthn verification", "alternative": "py_webauthn (used)", "verdict": "use_existing"},
+    {"component": "metrics", "alternative": "prometheus_client custom Collector (used); cycle 3 relies on CounterMetricFamily dropping _total", "verdict": "use_existing"},
+    {"component": "alert rule checks", "alternative": "promtool check/test rules (used)", "verdict": "use_existing"},
+    {"component": "payload purge", "alternative": "pg_cron (new extension); existing sweeper loop (used)", "verdict": "use_existing"},
+    {"component": "admin operator token", "alternative": "PyJWT PyJWKClient (used); discovery by urllib", "verdict": "use_existing"},
+    {"component": "429 body check (cycle 3)", "alternative": "kit _schema.validator + repository error.schema (used, replaces the hand check)", "verdict": "use_existing"},
+    {"component": "SEC-17 access log filter", "alternative": "stdlib logging.Filter (used)", "verdict": "use_existing"},
+    {"component": "T12b deferral (gxg_defer, T7 guard)", "alternative": "none: state machine transition in the same transaction as the outbox task", "verdict": "justified_custom"},
+    {"component": "https rule for admin issuer and jwks_uri", "alternative": "ui config.require_tls (duplicated, N9 in backlog)", "verdict": "use_existing"}
+  ],
+  "lean_lines": 15
+}
