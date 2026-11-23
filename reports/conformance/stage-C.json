@@ -1,8 +1,8 @@
 {
   "stage": "C",
-  "commit": "3e5541c",
-  "run_at": "2026-11-23T13:46:56Z",
-  "command": "uv run python scripts/ci/stage_c.py --stand reports/conformance/M10-stand/fresh.xml --stand reports/conformance/M10-stand/after-restart.xml --stand reports/conformance/M10-stand/after-recreate.xml",
+  "commit": "45dd530",
+  "run_at": "2026-11-23T17:31:37Z",
+  "command": "uv run python scripts/ci/stage_c.py --stand stand/secrets/junit/after-recreate.xml",
   "pytest_exit": 0,
   "ids": [
     {
@@ -16,18 +16,18 @@
         },
         {
           "test": "stand/tests/test_ex.py::test_ex01_no_agent_lists_execute_on_any_path",
-          "cases": 3,
-          "passed": 3
+          "cases": 1,
+          "passed": 1
         },
         {
           "test": "stand/tests/test_ex.py::test_ex01_calls_by_name_are_refused_on_every_path",
-          "cases": 3,
-          "passed": 3
+          "cases": 1,
+          "passed": 1
         },
         {
           "test": "stand/tests/test_ex.py::test_ex01_unified_pdp_denies_a_registered_execute_tool",
-          "cases": 3,
-          "passed": 3
+          "cases": 1,
+          "passed": 1
         }
       ]
     },
