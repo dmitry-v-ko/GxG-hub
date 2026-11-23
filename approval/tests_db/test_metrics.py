@@ -85,3 +85,19 @@ def test_bundle_age_without_a_bundle(world: Any) -> None:
     age, limit = metrics.BundleAge(world.store, clock=lambda: world.store.current.built_at.timestamp() + 7).collect()
     assert [s.value for s in age.samples] == [7.0]
     assert [(s.labels, s.value) for s in limit.samples] == [({"tenant": "t-alpha"}, 100.0), ({"tenant": "t-beta"}, 7.0)]
+
+
+def test_executions_total_never_goes_down(
+    client: TestClient, propose: Callable[..., Any], owner: psycopg.Connection[Any], pg: Any
+) -> None:
+    """Critic M10-1 #1: a counter by the outcome reached — reconcile keeps outcome_unknown and adds reconciled_*."""
+    intent = propose(tool="demo.note.propose").json()["intent_id"]
+    with pg.connect("gxg_executor") as ex, pg.connect("gxg_api") as api:
+        e = (ex.execute("SELECT gxg_reserve(%s, 'x')", (intent,)).fetchone() or (None,))[0]
+        api.execute("SELECT gxg_dispatch(%s, %s, 'demo', 30)", (e, intent))
+        ex.execute("SELECT gxg_complete(%s, 'x', 'outcome_unknown', null, null, null)", (e,))
+        before = {s["outcome"]: v for s, v in scrape(client)["gxg_executions_total"]}
+        ex.execute("SELECT gxg_reconcile(%s, 'x', 'executed', null)", (intent,))
+    after = {s["outcome"]: v for s, v in scrape(client)["gxg_executions_total"]}
+    assert before == {"outcome_unknown": 1.0}
+    assert after == {"outcome_unknown": 1.0, "reconciled_executed": 1.0}

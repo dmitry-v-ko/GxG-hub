@@ -88,7 +88,8 @@ FUNCTIONS = {
         "gxg_complete",
         "gxg_reconcile",
         "gxg_release_reserved",
-    },  # T7, T11-T13, T12a, T15-T17; T10 at AS-10
+        "gxg_defer",
+    },  # T7, T11-T13, T12a, T12b, T15-T17; T10 at AS-10
     "gxg_sweeper": {
         "gxg_expire_approval",
         "gxg_expire_execution",

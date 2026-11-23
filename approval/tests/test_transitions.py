@@ -14,8 +14,8 @@ def test_install_sql_has_every_rule() -> None:
     assert "('T12a', 'complete_refused_before_dispatch', 'executing', 'reserved', 'failed')" in sql
 
 
-def test_tids_cover_t1_to_t18_and_t12a() -> None:
-    assert {r[0] for r in transitions.rules()} == {f"T{n}" for n in range(1, 19)} | {"T12a"}
+def test_tids_cover_t1_to_t18_t12a_and_t12b() -> None:
+    assert {r[0] for r in transitions.rules()} == {f"T{n}" for n in range(1, 19)} | {"T12a", "T12b"}  # T12b: M10
 
 
 def test_install_sql_refuses_values_that_would_need_quoting(monkeypatch: pytest.MonkeyPatch) -> None:

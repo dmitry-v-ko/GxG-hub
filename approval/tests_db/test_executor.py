@@ -8,6 +8,7 @@ the `gxg_executor` role; races use threads against one PostgreSQL (EX-10).
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import json
 import os
@@ -604,7 +605,10 @@ def test_ac09_executor_dies_between_reserve_and_dispatch(stack: Stack, pg: Any) 
         sweeper.execute("SELECT gxg_sweep(100)")
     assert stack.status(created["intent_id"]) == "approved"
     stack.drain(stack.executor("alive"), lambda: stack.status(created["intent_id"]) == "succeeded")
-    assert stack.executions(created["intent_id"]) == [(1, "released", None), (2, "succeeded", None)]
+    assert stack.executions(created["intent_id"]) == [
+        (1, "released", "reserve_lease_expired"),
+        (2, "succeeded", None),
+    ]  # T10 reason (M10)
     assert stack.intent(created["intent_id"])["attempts"] == 1
     assert len(stack.demo.calls()) == 1
 
@@ -903,11 +907,13 @@ def test_a_released_execution_is_not_completed(stack: Stack, pg: Any, caplog: py
     with pg.connect("gxg_sweeper") as sweeper:
         sweeper.execute("SELECT gxg_sweep(100)")
     ex.execute(r)
-    assert stack.executions(created["intent_id"]) == [(1, "released", None)]
+    assert stack.executions(created["intent_id"]) == [(1, "released", "reserve_lease_expired")]  # T10 reason (M10)
     events = [json.loads(x.getMessage()) for x in caplog.records if x.name == "gxg_approval.executor"]
-    assert events == [{"event": "not_completed", "intent_id": created["intent_id"], "execution_id": str(r.execution_id),
-                       "tenant": "t-alpha", "tool": "demo.message.propose", "state": "released",
+    assert events == [{"event": "ignored", "intent_id": created["intent_id"], "execution_id": str(r.execution_id),
+                       "tenant": "t-alpha", "tool": "demo.message.propose", "outcome": "released",
                        "error": "http_503"}]  # fmt: skip
+    audit = stack.owner.execute("SELECT details FROM audit_events WHERE action = 'complete_ignored'").fetchall()
+    assert audit == [({"execution_id": str(r.execution_id), "outcome": "released", "error": "http_503"},)]
 
 
 @pytest.mark.parametrize(
@@ -1141,3 +1147,176 @@ def _release_or_error(pg: Any) -> Any:
             return release_reserved(conn, "test")
     except Exception as exc:
         return exc
+
+
+# --- EX-25 (AS-12a, T12b): 429 rate_limited before dispatch defers without spending an attempt -----------------
+
+
+def _due_now(stack: Stack, intent_id: str) -> None:
+    stack.owner.execute(
+        "UPDATE outbox SET available_at = now() WHERE intent_id = %s AND topic = 'execute' AND delivered_at IS NULL",
+        (intent_id,),
+    )
+
+
+def _task_delay(stack: Stack, intent_id: str) -> float:
+    row = stack.owner.execute(
+        "SELECT extract(epoch FROM max(available_at) - now()) FROM outbox WHERE intent_id = %s AND topic = 'execute' "
+        "AND delivered_at IS NULL",
+        (intent_id,),
+    ).fetchone()
+    assert row is not None and row[0] is not None
+    return float(row[0])
+
+
+def limited(retry: Any = 30, code: str = "rate_limited") -> Callable[[httpx.Request], httpx.Response]:
+    body = {"code": code, "message": "send quota", "retryable": True} | (
+        {} if retry is None else {"retry_after_s": retry}
+    )
+    return lambda _r: httpx.Response(429, json=body)
+
+
+def test_ex25_quota_429_then_ok_spends_no_attempt(stack: Stack) -> None:
+    """The demo connector's own quota (`execute_quota`) answers 429 before dispatch: exec released with
+    error_code rate_limited, attempts unchanged, the next reserve not before clamp(retry_after_s), then succeeded."""
+    first = stack.propose(idempotency_key="quota-key-1")
+    ex = stack.executor()
+    stack.demo.mode("ok,execute_quota:1/60")
+    stack.drain(ex, lambda: stack.status(first["intent_id"]) == "succeeded")
+    second = stack.propose(idempotency_key="quota-key-2")
+    i = second["intent_id"]
+    stack.drain(ex, lambda: stack.executions(i) != [] and stack.status(i) == "approved")
+    assert stack.executions(i) == [(1, "released", "rate_limited")] and stack.intent(i)["attempts"] == 0
+    delay = _task_delay(stack, i)
+    assert 55 * 1.0 - 2 <= delay <= 60 * 1.2 + 1  # clamp(retry_after_s ≈ 60, 5, 3600) plus jitter ≤ 20 %
+    assert ex.run_once() is False  # T7 only from a due task: nothing to reserve before it
+    stack.demo.mode("ok")
+    _due_now(stack, i)
+    stack.drain(ex, lambda: stack.status(i) == "succeeded")
+    assert stack.intent(i)["attempts"] == 1
+    assert [e[1:] for e in stack.executions(i)] == [("released", "rate_limited"), ("succeeded", None)]
+    assert len(stack.demo.calls(i)) == 1
+    with stack.pg.connect("gxg_api") as api:
+        m = api.execute("SELECT labels, value FROM gxg_metrics() WHERE name = 'gxg_execute_deferred_total'").fetchall()
+        done = api.execute("SELECT labels->>'outcome', value FROM gxg_metrics() WHERE name = 'gxg_executions_total'")
+        outcomes = done.fetchall()
+    assert m == [({"tenant": "t-alpha", "tool": "demo.message.propose"}, 1.0)]
+    assert outcomes == [("succeeded", 2.0)]  # a deferral is not a finished attempt
+
+
+def test_ex25_always_429_expires_at_the_deadline_with_no_provider_call(stack: Stack, pg: Any) -> None:
+    created = stack.propose(idempotency_key="quota-always")
+    i = created["intent_id"]
+    ex = mock_executor(stack, limited(retry=1))
+    for n in range(1, 6):  # retry_after_s 1 is clamped to 5 s; the test moves the task forward instead of waiting
+        assert stack.status(i) == "approved"
+        _due_now(stack, i)
+        stack.drain(ex, functools.partial(lambda k: stack.status(i) == "approved" and len(stack.executions(i)) == k, n))
+    assert stack.intent(i)["attempts"] == 0 and {e[1:] for e in stack.executions(i)} == {("released", "rate_limited")}
+    assert len(stack.executions(i)) == 5
+    delay = _task_delay(stack, i)
+    assert 5 - 1 <= delay <= 6 + 1  # min 5 s, jitter ≤ 20 %
+    stack.owner.execute("UPDATE intents SET execution_deadline = now() WHERE intent_id = %s", (i,))
+    with pg.connect("gxg_sweeper") as sweeper:
+        sweeper.execute("SELECT gxg_sweep(100)")
+    assert stack.status(i) == "expired" and stack.demo.calls(i) == []
+    with pg.connect("gxg_api") as api:
+        m = api.execute("SELECT value FROM gxg_metrics() WHERE name = 'gxg_intents_expired_after_rate_limit'")
+        assert m.fetchall() == [(1.0,)]
+
+
+def test_ex25_no_task_past_the_deadline(stack: Stack) -> None:
+    """T12b: if now + delay ≥ execution_deadline no task is queued; T8 closes the intent."""
+    created = stack.propose(idempotency_key="quota-late")
+    i = created["intent_id"]
+    stack.owner.execute(
+        "UPDATE intents SET execution_deadline = now() + interval '3 seconds' WHERE intent_id = %s", (i,)
+    )
+    ex = mock_executor(stack, limited(retry=30))
+    stack.drain(ex, lambda: len(stack.executions(i)) > 0 and stack.status(i) == "approved")
+    pending = stack.owner.execute(
+        "SELECT count(*) FROM outbox WHERE intent_id = %s AND topic = 'execute' AND delivered_at IS NULL", (i,)
+    ).fetchone()
+    assert pending == (0,)
+
+
+@pytest.mark.parametrize(
+    ("retry", "code"), [(None, "rate_limited"), (0, "rate_limited"), ("5", "rate_limited"), (30, "conflict")]
+)
+def test_ex25_malformed_429_is_t12a(stack: Stack, retry: Any, code: str) -> None:
+    """AS-12a: any other 429 before dispatch (no retry_after_s, another code) is a refusal: the attempt counts."""
+    created = stack.propose(idempotency_key=f"quota-bad-{retry}-{code}")
+    i = created["intent_id"]
+    ex = mock_executor(stack, limited(retry=retry, code=code))
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    ex.execute(r)
+    assert stack.intent(i)["attempts"] == 1 and stack.executions(i) == [(1, "failed_before_effect", "http_429")]
+
+
+def test_ex25_429_after_dispatch_is_outcome_unknown(stack: Stack, pg: Any) -> None:
+    """A 429 after a successful dispatch is no deferral (AS-12: any HTTP error after dispatch)."""
+    created = stack.propose(idempotency_key="quota-after")
+    i = created["intent_id"]
+
+    def dispatched_then_429(_r: httpx.Request) -> httpx.Response:
+        with pg.connect("gxg_api") as api:
+            e = stack.owner.execute("SELECT execution_id FROM executions WHERE intent_id = %s", (i,)).fetchone()
+            assert e is not None
+            api.execute("SELECT gxg_dispatch(%s, %s, 'demo', 30)", (e[0], i))
+        return limited(retry=30)(_r)
+
+    ex = mock_executor(stack, dispatched_then_429)
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    ex.execute(r)
+    assert stack.status(i) == "outcome_unknown" and stack.intent(i)["attempts"] == 1
+
+
+def test_ex25_late_429_after_t10_is_ignored(stack: Stack, pg: Any) -> None:
+    """The sweeper released the reservation (T10) first: the late 429 is ignored and audited."""
+    created = stack.propose(idempotency_key="quota-t10")
+    i = created["intent_id"]
+    ex = mock_executor(stack, limited(retry=30))
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    stack.owner.execute("UPDATE executions SET reserve_lease_until = now() - interval '1 second'")
+    with pg.connect("gxg_sweeper") as sweeper:
+        sweeper.execute("SELECT gxg_sweep(100)")
+    ex.execute(r)
+    assert stack.executions(i) == [(1, "released", "reserve_lease_expired")] and stack.intent(i)["attempts"] == 0
+    audit = stack.owner.execute("SELECT details->>'outcome' FROM audit_events WHERE action = 'complete_ignored'")
+    assert audit.fetchall() == [("released",)]
+
+
+def test_ex25_defer_cas_race_is_ignored(stack: Stack, pg: Any) -> None:
+    """T12b CAS: the execution leaves `reserved` between the executor's read and gxg_defer → ignored, audited."""
+    created = stack.propose(idempotency_key="quota-race")
+    i = created["intent_id"]
+    ex = mock_executor(stack, limited(retry=30))
+    r = ex.take()
+    assert isinstance(r, Reserved)
+    real = ex.conn.execute
+
+    def race(sql: Any, *a: Any, **kw: Any) -> Any:
+        if str(sql).startswith("SELECT gxg_defer"):
+            stack.owner.execute("UPDATE executions SET reserve_lease_until = now() - interval '1 second'")
+            with pg.connect("gxg_sweeper") as sweeper:
+                sweeper.execute("SELECT gxg_sweep(100)")
+        return real(sql, *a, **kw)
+
+    setattr(ex.conn, "execute", race)  # noqa: B010 (mypy: a bound method of psycopg)
+    ex.execute(r)
+    assert stack.executions(i) == [(1, "released", "reserve_lease_expired")]
+    audit = stack.owner.execute("SELECT details->>'outcome' FROM audit_events WHERE action = 'complete_ignored'")
+    assert audit.fetchall() == [("rate_limited",)]
+
+
+def test_ex25_reserve_needs_a_due_task(stack: Stack, pg: Any) -> None:
+    """T7 only from an outbox task with available_at ≤ now."""
+    created = stack.propose(idempotency_key="quota-task")
+    i = created["intent_id"]
+    stack.owner.execute("UPDATE outbox SET available_at = now() + interval '1 minute' WHERE intent_id = %s", (i,))
+    with pg.connect("gxg_executor") as ex, pytest.raises(psycopg.Error) as err:
+        ex.execute("SELECT gxg_reserve(%s, 'x')", (i,))
+    assert err.value.sqlstate == "GX409"

@@ -59,6 +59,16 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "webhook {{ $labels.subscriber }}: an event was given up after 24 h (AS-23)"
+      - alert: GxgExecuteDeferred
+        expr: increase(gxg_execute_deferred_total[1h]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.tenant }}/{{ $labels.tool }}: execute deferred by 429 rate_limited (T12b, AS-12a)"
+      - alert: GxgExpiredAfterRateLimit
+        expr: gxg_intents_expired_after_rate_limit > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "tenant {{ $labels.tenant }}: approved intents expired while the connector answered 429"
       - alert: GxgClockSkew
         expr: abs(node_timex_offset_seconds) > 2
         for: 5m

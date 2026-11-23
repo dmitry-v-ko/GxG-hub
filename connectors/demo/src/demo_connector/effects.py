@@ -48,6 +48,7 @@ HTTP = {
     "permission_denied": 403,
     "conflict": 409,
     "effect_disabled": 423,
+    "rate_limited": 429,  # AS-12a: the connector's own send limit, before dispatch (T12b)
     "temporarily_unavailable": 503,
 }
 NOT_FOUND = "not found"
@@ -215,6 +216,9 @@ class Effects:
 
     async def execute(self, body: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
         claims, args = await self._checked(body, entry)  # args: the canonical form whose hash was approved
+        wait = self.provider.quota_wait_s()  # EFF-18 п.3a: own send limit before dispatch, the provider is not asked
+        if wait is not None:
+            raise GxgError("rate_limited", "send quota of the connector is used up", retry_after_s=wait)
         token = body["execution_token"]
         resp = await self.approval.post(f"/v1/executions/{claims['jti']}/dispatch", {"execution_token": token})
         if resp.status_code == 423:

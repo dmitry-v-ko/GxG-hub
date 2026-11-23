@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import math
 import re
 import sqlite3
 import threading
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -26,6 +27,7 @@ MODES: tuple[Mode, ...] = ("ok", "reject", "rate_limited", "timeout_before_start
 EFFECT = ("ok", "commit_then_drop")
 RETRY_AFTER_S = 3
 _SLOW = re.compile(r"slow:([0-9]{1,6})")
+_QUOTA = re.compile(r"execute_quota:([1-9][0-9]{0,5})/([1-9][0-9]{0,5})")  # EX-25: <n> sends per <s> seconds
 _SCHEMA = """CREATE TABLE IF NOT EXISTS sends (  -- was `calls`, keyed by idempotency_key (cycle 2): left as is
   id INTEGER PRIMARY KEY, tenant TEXT NOT NULL, provider_key TEXT NOT NULL, execution_id TEXT NOT NULL,
   recipient TEXT NOT NULL, text_hash TEXT NOT NULL, attempt INTEGER NOT NULL,
@@ -59,15 +61,18 @@ class Provider:
         self.remaining: int | None  # calls left in `mode`, then `ok`; None: until changed
         self.dedupe: bool
         self.delay_s: float
+        self.quota: tuple[int, int] | None  # execute_quota: the connector's own send limit, checked before dispatch
         self.set_mode("ok")
 
     def set_mode(self, spec: str, count: int | None = None) -> None:
-        """`<mode>[,no_dedupe][,slow:<ms>]`; a bad spec raises ValueError and changes nothing."""
+        """`<mode>[,no_dedupe][,slow:<ms>][,execute_quota:<n>/<s>]`; a bad spec raises ValueError, changes nothing."""
         mode: Mode = "ok"
-        dedupe, delay = True, 0.0
+        dedupe, delay, quota = True, 0.0, None
         for part in spec.split(","):
-            slow = _SLOW.fullmatch(part)
-            if part == "no_dedupe":
+            slow, limit = _SLOW.fullmatch(part), _QUOTA.fullmatch(part)
+            if limit:
+                quota = (int(limit[1]), int(limit[2]))
+            elif part == "no_dedupe":
                 dedupe = False
             elif slow:
                 delay = int(slow[1]) / 1000
@@ -77,7 +82,22 @@ class Provider:
                 raise ValueError(f"unknown provider mode {part!r}")
         if count is not None and count < 1:
             raise ValueError("count must be positive")
-        self.mode, self.remaining, self.dedupe, self.delay_s = mode, count, dedupe, delay
+        self.mode, self.remaining, self.dedupe, self.delay_s, self.quota = mode, count, dedupe, delay, quota
+
+    def quota_wait_s(self, now: datetime | None = None) -> int | None:
+        """EX-25 (demo-connector-v1 `execute_quota`): seconds until a send fits the quota again, None if it fits.
+        Counted on the journal: every recorded send within the window."""
+        if self.quota is None:
+            return None
+        n, window = self.quota
+        now = now or datetime.now(UTC)
+        start = (now - timedelta(seconds=window)).isoformat()
+        with self._lock:
+            rows = self._db.execute("SELECT at FROM sends WHERE at > ? ORDER BY at", (start,)).fetchall()
+        if len(rows) < n:
+            return None
+        oldest = datetime.fromisoformat(rows[-n][0])
+        return max(1, math.ceil(window - (now - oldest).total_seconds()))
 
     def _take_mode(self) -> Mode:
         mode = self.mode

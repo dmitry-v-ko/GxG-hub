@@ -1,4 +1,4 @@
-"""`executor` process: outbox → reserve (T7) → execution token → connector `execute` → complete (T11-T13, T12a);
+"""`executor` process: outbox → reserve (T7) → execution token → connector `execute` → complete (T11-T13, T12a, T12b);
 outcome_unknown → connector `reconcile` (T15-T17) with backoff.
 
 Coordination only through the database (approval-service-v1 «Процессы»): any number of executors may run; rows are
@@ -60,6 +60,11 @@ SELECT e.execution_id, extract(epoch FROM now() - e.dispatched_at) AS waited,
   FROM executions e JOIN intents i USING (intent_id) WHERE e.intent_id = %s AND e.state = 'outcome_unknown'"""
 _SQL_RECONCILE = "SELECT gxg_reconcile(%s, %s, %s, %s)"
 _SQL_RELEASE = "SELECT gxg_release_reserved(%s)"
+_SQL_DEFER_LIMITED = "SELECT gxg_defer(%s, %s, %s)"
+_SQL_IGNORED = (
+    "INSERT INTO audit_events (at, actor, action, tenant_id, intent_id, details) "
+    "VALUES (now(), %s, 'complete_ignored', %s, %s, %s)"
+)
 
 
 @dataclass(frozen=True)
@@ -199,6 +204,8 @@ class Executor:
             resp = self._post(service, f"/internal/v1/execute/{intent['execute_tool']}", {**body, "args": args}, tool)
         except (GxgError, httpx.HTTPError):  # no key or no answer: nothing usable came back
             return self._settle(r, intent, "no_response")
+        if resp.status_code == 429 and (retry := _rate_limited(resp)) is not None:
+            return self._defer(r, intent, retry)  # AS-12a, T12b: a known limit before dispatch, no attempt spent
         result: Any = _json(resp) if resp.status_code == 200 else None
         if not _schema.validator("effect-result").is_valid(result):
             return self._settle(r, intent, f"http_{resp.status_code}")
@@ -209,9 +216,34 @@ class Executor:
         """AS-12: no effect result. Before dispatch the attempt is refused (T12a); after it, outcome_unknown (T13)."""
         state = cast(tuple[str], self.conn.execute(_SQL_STATE, (r.execution_id,)).fetchone())[0]
         if state not in ("reserved", "dispatching"):  # the sweeper moved it first (T10, T14): its outcome stands
-            return _event("not_completed", r, intent, state=state, error=error)
+            return self._ignored(r, intent, state, error)
         outcome = "refused_before_dispatch" if state == "reserved" else "outcome_unknown"
-        return self._complete(r, intent, outcome, (None, None, error))
+        try:
+            return self._complete(r, intent, outcome, (None, None, error))
+        except GxgError as exc:  # T12a CAS: the sweeper released or expired it meanwhile — the late answer is ignored
+            if exc.code != "conflict":
+                raise
+            return self._ignored(r, intent, outcome, error)
+
+    def _defer(self, r: Reserved, intent: dict[str, Any], retry_after_s: int) -> None:
+        """T12b: CAS on the reserved execution; a 429 after dispatch is no deferral (AS-12: outcome_unknown)."""
+        state = cast(tuple[str], self.conn.execute(_SQL_STATE, (r.execution_id,)).fetchone())[0]
+        if state != "reserved":
+            return self._settle(r, intent, "http_429")
+        try:
+            with self.conn.transaction(), mapped_errors():
+                self.conn.execute(_SQL_DEFER_LIMITED, (r.execution_id, self.instance, retry_after_s))
+        except GxgError as exc:
+            if exc.code != "conflict":
+                raise
+            return self._ignored(r, intent, "rate_limited", f"retry_after_s={retry_after_s}")
+        _event("deferred", r, intent, retry_after_s=retry_after_s)
+
+    def _ignored(self, r: Reserved, intent: dict[str, Any], outcome: str, error: str | None) -> None:
+        """A late answer for an execution that moved on (T10, T14): audited, nothing else changes (T12a, T12b CAS)."""
+        details = json.dumps({"execution_id": str(r.execution_id), "outcome": outcome, "error": error})
+        self.conn.execute(_SQL_IGNORED, (f"executor:{self.instance}", intent["tenant_id"], r.intent_id, details))
+        _event("ignored", r, intent, outcome=outcome, error=error)
 
     def _connector(self, intent: dict[str, Any]) -> tuple[Service, Mapping[str, Any]] | None:
         """AS-25, AS-26 by the current bundle."""
@@ -271,6 +303,17 @@ def release_reserved(conn: psycopg.Connection[Any], actor: str) -> int:
     """AS-10 release (gxg_release_reserved) as the executor role; also `gxg-approval keys release`."""
     with conn.transaction():
         return cast(tuple[int], conn.execute(_SQL_RELEASE, (actor,)).fetchone())[0]
+
+
+def _rate_limited(resp: httpx.Response) -> int | None:
+    """AS-12a: retry_after_s of a well-formed 429 (error.schema, code rate_limited, retry_after_s ≥ 1), else None."""
+    doc = _json(resp)
+    if not isinstance(doc, dict) or doc.get("code") != "rate_limited":
+        return None
+    retry = doc.get("retry_after_s")
+    if not isinstance(retry, int) or isinstance(retry, bool) or not 1 <= retry <= 86400:
+        return None
+    return retry
 
 
 def _json(resp: httpx.Response) -> Any:

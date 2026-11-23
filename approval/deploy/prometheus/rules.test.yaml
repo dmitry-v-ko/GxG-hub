@@ -18,6 +18,32 @@ tests:
           - exp_labels: {severity: critical, tenant: t-alpha}
             exp_annotations:
               summary: "tenant t-alpha: intents in outcome_unknown for more than 1 h (runbook: outcome_unknown)"
+  - interval: 1m  # critic M10-1 #1: a reconcile does not lower the counter, so no alert after it
+    input_series:
+      - series: 'gxg_executions_total{tenant="t-alpha",tool="demo.message.propose",outcome="outcome_unknown"}'
+        values: '1x180'
+      - series: 'gxg_executions_total{tenant="t-alpha",tool="demo.message.propose",outcome="reconciled_executed"}'
+        values: '_x90 1x90'
+      - series: 'gxg_execute_deferred_total{tenant="t-alpha",tool="demo.message.propose"}'
+        values: '0 0 1 2 2'
+      - series: 'gxg_intents_expired_after_rate_limit{tenant="t-alpha"}'
+        values: '0 0 1 1'
+    alert_rule_test:
+      - eval_time: 150m
+        alertname: GxgOutcomeUnknownGrowing
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: GxgExecuteDeferred
+        exp_alerts:
+          - exp_labels: {severity: warning, tenant: t-alpha, tool: demo.message.propose}
+            exp_annotations:
+              summary: "t-alpha/demo.message.propose: execute deferred by 429 rate_limited (T12b, AS-12a)"
+      - eval_time: 3m
+        alertname: GxgExpiredAfterRateLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, tenant: t-alpha}
+            exp_annotations:
+              summary: "tenant t-alpha: approved intents expired while the connector answered 429"
   - interval: 1m
     input_series:
       - series: 'gxg_intents_pending{tenant="t-alpha"}'

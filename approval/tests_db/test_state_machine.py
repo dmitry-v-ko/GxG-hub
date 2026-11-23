@@ -47,6 +47,7 @@ EXPECTED: dict[str, dict[str, set[str]]] = {
     "complete_succeeded": {"executing/dispatching": {"succeeded"}},  # T11
     "complete_failed_before_effect": {"executing/dispatching": {"approved", "failed"}},  # T12
     "complete_refused_before_dispatch": {"executing/reserved": {"approved", "failed"}},  # T12a
+    "complete_rate_limited": {"executing/reserved": {"approved"}},  # T12b (AS-12a, M10)
     "complete_outcome_unknown": {"executing/dispatching": {"outcome_unknown"}},  # T13
     "dispatch_lease_expired": {"executing/dispatching": {"outcome_unknown"}},  # T14
     "reconcile_executed": {"outcome_unknown": {"reconciled_succeeded"}},  # T15
@@ -60,6 +61,7 @@ EXEC_EVENTS = {
     "complete_succeeded",
     "complete_failed_before_effect",
     "complete_refused_before_dispatch",
+    "complete_rate_limited",
     "complete_outcome_unknown",
     "dispatch_lease_expired",
 }
@@ -177,6 +179,9 @@ class Machine:
             "complete_failed_before_effect": lambda: self.complete(i, "failed_before_effect"),
             "complete_refused_before_dispatch": lambda: self.complete(i, "refused_before_dispatch"),
             "complete_outcome_unknown": lambda: self.complete(i, "outcome_unknown"),
+            "complete_rate_limited": lambda: self.call(
+                "executor", "SELECT gxg_defer(%s, 'executor-1', 30)", self.execution(i) or uuid.uuid4()
+            ),
             "dispatch_lease_expired": lambda: self.lease_expired(i, "dispatch_lease_until", "gxg_expire_dispatch"),
             "reconcile_executed": lambda: self.reconcile(i, "executed"),
             "reconcile_not_executed": lambda: self.reconcile(i, "not_executed"),

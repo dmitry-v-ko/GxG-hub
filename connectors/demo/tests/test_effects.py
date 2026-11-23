@@ -935,3 +935,42 @@ async def test_token_verify_failures_are_counted_on_metrics(internal: Internal) 
     after = _failures(r.text)
     assert after.get("binding", 0) - before.get("binding", 0) == 1
     assert after.get("replay", 0) - before.get("replay", 0) == 1
+
+
+async def test_execute_quota_answers_429_before_dispatch(internal: Internal) -> None:
+    """EX-25 (demo-connector-v1 `execute_quota:<n>/<s>`): with n sends in the window, 429 rate_limited with
+    retry_after_s, no dispatch, no provider call."""
+    internal.provider.set_mode("ok,execute_quota:1/60")
+    assert (await internal.execute(exec_token.sign(EXEC, claims()))).status_code == 200
+    calls, dispatches = len(internal.provider.calls()), len(internal.dispatches())
+    other = {"jti": "00000000-0000-4000-8000-0000000000e2"}
+    r = await internal.execute(exec_token.sign(EXEC, claims(**other)), execution_id=other["jti"])
+    doc = r.json()
+    assert r.status_code == 429 and doc["code"] == "rate_limited" and 55 <= doc["retry_after_s"] <= 60
+    assert len(internal.provider.calls()) == calls and len(internal.dispatches()) == dispatches
+
+
+def test_quota_window_and_spec() -> None:
+    import tempfile
+    from datetime import UTC, datetime, timedelta
+    from pathlib import Path
+
+    from demo_connector.provider import Provider
+
+    p = Provider(Path(tempfile.mkdtemp()) / "p.sqlite")
+    assert p.quota_wait_s() is None
+    p.set_mode("execute_quota:2/30")
+    assert p.quota == (2, 30) and p.quota_wait_s() is None
+    for n in range(2):
+        p._db.execute(
+            "INSERT INTO sends (tenant, provider_key, execution_id, recipient, text_hash, attempt, outcome, at) "
+            "VALUES ('t', ?, 'e', 'r', 'h', 1, 'ok', ?)",
+            (f"k{n}", (datetime.now(UTC) - timedelta(seconds=20 - n)).isoformat()),
+        )
+    assert p.quota_wait_s() in (10, 11)  # the older of the two leaves the window in ~10 s
+    assert p.quota_wait_s(datetime.now(UTC) + timedelta(seconds=15)) is None
+    for bad in ("execute_quota:0/5", "execute_quota:1", "execute_quota:x/1"):
+        with pytest.raises(ValueError):
+            p.set_mode(bad)
+    p.set_mode("ok")
+    assert p.quota is None

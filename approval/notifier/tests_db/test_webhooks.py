@@ -325,3 +325,17 @@ def test_notifier_role_cannot_rewrite_events(pg: Any, hooks: Webhooks, propose: 
                     "DELETE FROM webhook_deliveries"):  # fmt: skip
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 conn.execute(sql)
+
+
+@pytest.mark.parametrize("role", ["gxg_api", "gxg_sweeper", "gxg_admin"])
+def test_process_roles_cannot_forge_webhook_events(pg: Any, role: str) -> None:
+    """Critic M10-1 (minor): roles with outbox INSERT write other topics, never a webhook event to be signed."""
+    with pg.connect(role) as conn:
+        with pytest.raises(psycopg.Error) as err:
+            conn.execute(
+                "INSERT INTO outbox (topic, payload, created_at, available_at) VALUES ('webhook', '{}', now(), now())"
+            )
+        assert err.value.sqlstate == "GX403"
+        conn.execute(
+            "INSERT INTO outbox (topic, payload, created_at, available_at) VALUES ('notify', '{}', now(), now())"
+        )

@@ -229,6 +229,18 @@ CREATE TRIGGER intents_status_event AFTER UPDATE OF status ON intents FOR EACH R
   WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE FUNCTION _gxg_intent_event();
 
 -- The trigger is the only source of webhook events now; other topics unchanged (SEC-18: no args, no preview).
+-- Only the trigger writes webhook events: a process role with INSERT on outbox (api, sweeper, admin) cannot forge one
+-- for the notifier to sign. Not SECURITY DEFINER: current_user is the owner only inside the definer functions.
+CREATE FUNCTION _gxg_outbox_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.topic = 'webhook' AND current_user <> (SELECT pg_get_userbyid(relowner) FROM pg_class
+                                                 WHERE oid = 'outbox'::regclass) THEN
+    RAISE EXCEPTION USING ERRCODE = 'GX403', MESSAGE = 'webhook events come from the status trigger only';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER outbox_webhook_guard BEFORE INSERT ON outbox FOR EACH ROW EXECUTE FUNCTION _gxg_outbox_guard();
+
 CREATE OR REPLACE FUNCTION _gxg_outbox(p_topic text, r intents, p_delay_s integer DEFAULT 0) RETURNS void
   LANGUAGE sql AS $$
   INSERT INTO outbox (topic, intent_id, payload, created_at, available_at)
@@ -296,10 +308,25 @@ CREATE FUNCTION gxg_metrics() RETURNS TABLE (name text, labels jsonb, value doub
   SELECT 'gxg_intents_outcome_unknown', jsonb_build_object('tenant', tenant_id), count(*)::float8
     FROM intents WHERE status = 'outcome_unknown' GROUP BY tenant_id
   UNION ALL
-  SELECT 'gxg_executions_total', jsonb_build_object('tenant', i.tenant_id, 'tool', i.tool_key, 'outcome', e.state),
+  -- monotonic per label (a counter): an execution counts under every outcome it reached, so a reconciled one stays
+  -- under outcome_unknown too; released rows: by reason (T12b rate_limited is gxg_execute_deferred_total)
+  SELECT 'gxg_executions_total', jsonb_build_object('tenant', i.tenant_id, 'tool', i.tool_key, 'outcome', o.outcome),
          count(*)::float8
-    FROM executions e JOIN intents i USING (intent_id) WHERE e.state NOT IN ('reserved', 'dispatching')
-   GROUP BY i.tenant_id, i.tool_key, e.state
+    FROM executions e JOIN intents i USING (intent_id)
+   CROSS JOIN LATERAL unnest(CASE WHEN e.state IN ('reconciled_executed', 'reconciled_not_executed')
+                                  THEN ARRAY['outcome_unknown', e.state] ELSE ARRAY[e.state] END) AS o(outcome)
+   WHERE e.state NOT IN ('reserved', 'dispatching') AND coalesce(e.error_code, '') <> 'rate_limited'
+   GROUP BY i.tenant_id, i.tool_key, o.outcome
+  UNION ALL
+  SELECT 'gxg_execute_deferred_total', jsonb_build_object('tenant', i.tenant_id, 'tool', i.tool_key), count(*)::float8
+    FROM executions e JOIN intents i USING (intent_id) WHERE e.state = 'released' AND e.error_code = 'rate_limited'
+   GROUP BY i.tenant_id, i.tool_key
+  UNION ALL  -- AS-12a alert: expired while the connector kept answering 429
+  SELECT 'gxg_intents_expired_after_rate_limit', jsonb_build_object('tenant', i.tenant_id), count(*)::float8
+    FROM intents i
+   WHERE i.status = 'expired' AND (SELECT e.error_code FROM executions e WHERE e.intent_id = i.intent_id
+                                   ORDER BY e.attempt DESC LIMIT 1) = 'rate_limited'
+   GROUP BY i.tenant_id
   UNION ALL
   SELECT 'gxg_switch_blocked', jsonb_build_object('scope', scope), CASE WHEN blocked THEN 1 ELSE 0 END FROM switches
   UNION ALL

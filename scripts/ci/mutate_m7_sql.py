@@ -23,6 +23,7 @@ MIG2 = "approval/src/gxg_approval/migrations/versions/0002_executor.py"
 MIG3 = "approval/src/gxg_approval/migrations/versions/0003_idempotency_per_requester.py"
 MIG4 = "approval/src/gxg_approval/migrations/versions/0004_ui_notifier.py"  # M9
 MIG5 = "approval/src/gxg_approval/migrations/versions/0005_ops.py"  # M10
+MIG6 = "approval/src/gxg_approval/migrations/versions/0006_t12b.py"  # M10 scope addition: T12b
 EXE = "approval/src/gxg_approval/executor.py"
 TESTS = ["approval/tests_db", "approval/ui/tests_db", "approval/notifier/tests_db", "-m", "not e2e"]
 M8_TESTS = ["approval/tests_db/test_executor.py", "approval/tests_db/test_roles.py"]  # M8 rows: their tests only
@@ -240,6 +241,7 @@ M10_TESTS = [
     "approval/tests_db/test_metrics.py",
     "approval/ui/tests_db/test_decisions.py",
     "approval/notifier/tests_db/test_webhooks.py",
+    "approval/tests_db/test_executor.py",
     "-m",
     "not e2e",
 ]
@@ -312,6 +314,30 @@ M10_MUTATIONS: list[tuple[str, str, str, str]] = [
      "a switch without a reason"),
     (MIG5, "CASE WHEN p_blocked THEN 'admin_switch_set' ELSE 'admin_switch_clear' END", "'admin_switch_set'",
      "a cleared switch audited as set"),
+    # metrics (critic M10-1 #1), outbox guard
+    (MIG5, "THEN ARRAY['outcome_unknown', e.state] ELSE", "THEN ARRAY[e.state] ELSE",
+     "a reconcile lowers gxg_executions_total{outcome_unknown}"),
+    (MIG5, " AND coalesce(e.error_code, '') <> 'rate_limited'\n", "\n", "a deferral counted as a finished attempt"),
+    (MIG5, "  IF NEW.topic = 'webhook' AND current_user", "  IF false AND current_user",
+     "a process role forges a webhook event"),
+    # T12b (0006)
+    (MIG6, "  PERFORM _gxg_check((x.r).status, 'complete_rate_limited', (x.e).state, 'approved');\n", "",
+     "T12b from any status or execution state"),
+    (MIG6, "error_code = 'rate_limited'\n", "error_code = 'released'\n", "deferral without its reason"),
+    (MIG6, "greatest({MIN_DELAY_S}, p_retry_after_s)", "p_retry_after_s", "retry sooner than 5 s"),
+    (MIG6, "  IF now() + make_interval(secs => delay) < r.execution_deadline THEN\n"
+     "    PERFORM _gxg_outbox('execute', r, ceil(delay)::integer);\n  END IF;",
+     "  PERFORM _gxg_outbox('execute', r, ceil(delay)::integer);", "a task queued past the execution deadline"),
+    (MIG6, "  IF p_retry_after_s IS NULL OR p_retry_after_s < 1 THEN", "  IF p_retry_after_s IS NULL THEN",
+     "a deferral without a positive retry_after_s"),
+    (MIG6, "AND delivered_at IS NULL AND available_at <= now()) THEN", "AND delivered_at IS NULL) THEN",
+     "T7 before the task is due"),
+    (MIG6, "AND delivered_at IS NULL AND available_at <= now()) THEN", "AND available_at <= now()) THEN",
+     "T7 from a delivered task"),
+    (MIG6, "  WHEN (OLD.state = 'reserved' AND NEW.state = 'released' AND NEW.error_code IS NULL)\n", "",
+     "every state change overwrites the error code"),
+    (MIG6, "GRANT EXECUTE ON FUNCTION gxg_defer(uuid, text, integer) TO gxg_executor;", "",
+     "the executor cannot defer"),
     # grants
     (MIG5, "REVOKE INSERT, UPDATE ON webauthn_credentials FROM gxg_ui;", "", "ui writes passkeys (AS-30)"),
     (MIG5, "GRANT EXECUTE ON FUNCTION gxg_purge(integer, integer) TO gxg_sweeper;",

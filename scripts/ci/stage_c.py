@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AC-M10-07: reports/conformance/stage-C.json — EX-01…EX-24 and MC-05 with the tests that prove each and their
+"""AC-M10-07: reports/conformance/stage-C.json — EX-01…EX-25 and MC-05 with the tests that prove each and their
 status in this run. pytest writes the results (JUnit XML); this script only maps ids to tests and reads them.
 
     uv run python scripts/ci/stage_c.py [--stand JUNIT ...] [--mc05 REPORT_MD]
@@ -90,6 +90,17 @@ EX: dict[str, list[str]] = {
         f"{A}/test_state_machine.py::test_t12_retries_until_max_attempts_then_fails",
     ],
     "EX-24": [f"{A}/test_executor.py::test_ac14_rotation_without_downtime_and_removal_of_a_compromised_kid"],
+    "EX-25": [
+        f"{A}/test_executor.py::test_ex25_quota_429_then_ok_spends_no_attempt",
+        f"{A}/test_executor.py::test_ex25_always_429_expires_at_the_deadline_with_no_provider_call",
+        f"{A}/test_executor.py::test_ex25_no_task_past_the_deadline",
+        f"{A}/test_executor.py::test_ex25_malformed_429_is_t12a",
+        f"{A}/test_executor.py::test_ex25_429_after_dispatch_is_outcome_unknown",
+        f"{A}/test_executor.py::test_ex25_late_429_after_t10_is_ignored",
+        f"{A}/test_executor.py::test_ex25_defer_cas_race_is_ignored",
+        f"{A}/test_executor.py::test_ex25_reserve_needs_a_due_task",
+        f"{DEMO}/test_effects.py::test_execute_quota_answers_429_before_dispatch",
+    ],
 }
 
 

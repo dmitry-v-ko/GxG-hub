@@ -28,7 +28,7 @@ def promtool(*args: str) -> subprocess.CompletedProcess[str]:
 
 def test_rules_are_valid() -> None:
     run = promtool("check", "rules", "rules.yaml")
-    assert run.returncode == 0 and "SUCCESS: 11 rules found" in run.stdout, run.stdout + run.stderr
+    assert run.returncode == 0 and "SUCCESS: 13 rules found" in run.stdout, run.stdout + run.stderr
 
 
 def test_rule_unit_tests_pass() -> None:
@@ -53,7 +53,7 @@ def test_prometheus_loads_the_rules() -> None:
             time.sleep(1)
         groups = doc["data"]["groups"]  # type: ignore[index]
         rules = [r for g in groups for r in g["rules"]]
-        assert len(rules) == 11 and all(r["health"] in ("ok", "unknown") for r in rules), rules
+        assert len(rules) == 13 and all(r["health"] in ("ok", "unknown") for r in rules), rules
         assert {r["name"] for r in rules} >= {"GxgOutcomeUnknownOverAnHour", "GxgSwitchChanged", "GxgWebhookDead"}
     finally:
         subprocess.run(["docker", "stop", name], capture_output=True, timeout=60, check=False)
