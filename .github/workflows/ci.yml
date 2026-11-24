@@ -241,6 +241,8 @@ jobs:
       - run: uv sync
       - run: uv run gxg-policy validate policies/
       - run: uv run gxg-policy lint policies/
+      - run: uv run gxg-policy validate policies/pilot
+      - run: uv run gxg-policy lint policies/pilot
       - name: Build twice with a throw-away key, compare, verify
         run: bash scripts/ci/bundle_smoke.sh
 

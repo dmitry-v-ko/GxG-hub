@@ -47,6 +47,8 @@ scripts/ci/gitleaks.sh range "0000000000000000000000000000000000000000..HEAD"
 uv run pytest tests/secrets
 uv run gxg-policy validate policies/
 uv run gxg-policy lint policies/
+uv run gxg-policy validate policies/pilot  # the pilot's own root (M13)
+uv run gxg-policy lint policies/pilot
 bash scripts/ci/bundle_smoke.sh
 connectors/demo/docker_smoke.sh  # needs a Docker daemon; extra build flags: DOCKER_BUILD_FLAGS
 stand/run.sh  # M5 + M11 dev stand end to end (needs a Docker daemon); extra build flags: DOCKER_BUILD_FLAGS

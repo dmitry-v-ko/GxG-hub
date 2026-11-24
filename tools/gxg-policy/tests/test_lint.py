@@ -323,3 +323,16 @@ def test_same_tool_name_twice_in_one_manifest_is_an_error(tmp_path: Path) -> Non
     assert pol.manifests == {}
     r = cli("lint", str(GOOD / "policies"), "--manifest", str(m))
     assert r.returncode == 1 and "[duplicate-tool]" in r.stderr
+
+
+def test_a_nested_policy_root_is_left_to_its_own_run(tmp_path: Path) -> None:
+    """policies/pilot is a root of its own (build: `gxg-policy build policies/pilot`): not an unknown file of policies/;
+    a directory that is no root (a typo) still is."""
+    root = _copy_good(tmp_path)
+    (root / "pilot" / "tenants").mkdir(parents=True)
+    (root / "pilot" / "tenants" / "t-x.yaml").write_text("not: a tenant\n")  # not read here
+    (root / "tenats").mkdir()
+    (root / "tenats" / "t-y.yaml").write_text("x: 1\n")
+    assert [str(f) for f in load(root).findings] == [
+        "tenats/t-y.yaml: <root>: [unknown-file] expected tenants/, approval/ or platform/"
+    ]

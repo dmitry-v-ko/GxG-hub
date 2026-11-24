@@ -126,6 +126,8 @@ def load(root: Path) -> Policies:
     for path in sorted(root.rglob("*.y*ml")):
         rel = path.relative_to(root).as_posix()
         kind = rel.split("/", 1)[0]
+        if kind not in KINDS and any((root / kind / k).is_dir() for k in KINDS):
+            continue  # a policy root of its own (policies/pilot): validated by its own `gxg-policy validate <dir>`
         if kind not in KINDS or "/" not in rel:
             pol.findings.append(Finding(rel, "", "unknown-file", "expected tenants/, approval/ or platform/"))
             continue
