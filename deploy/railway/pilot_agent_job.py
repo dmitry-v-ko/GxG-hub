@@ -161,7 +161,7 @@ def setup():
 
 
 def revoke():
-    """Keep the newest agent token (the one stored in the vault), revoke the older ones. Prints names and counts only."""
+    """Keep the newest agent token (the one in the vault), revoke the older ones. Prints names and counts only."""
     wait_healthy()
     login = httpx.post(
         CF + "/v1/auth/login",
