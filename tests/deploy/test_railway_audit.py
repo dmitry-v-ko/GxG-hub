@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
@@ -44,8 +45,9 @@ PROJECTS = {
 class Fixture:
     """Answers by operation name; `override[(op, key)]` replaces one answer. Records every operation it saw."""
 
-    def __init__(self, override: dict[tuple[str, str | None], Any] | None = None) -> None:
-        self.override, self.seen = override or {}, []
+    def __init__(self, override: Mapping[tuple[str, Any], Any] | None = None) -> None:
+        self.override: Mapping[tuple[str, Any], Any] = override or {}
+        self.seen: list[str] = []
 
     def __call__(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         op = re.search(r"(?:query|mutation)\s+(\w+)", query).group(1)  # type: ignore[union-attr]
