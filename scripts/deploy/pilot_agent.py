@@ -94,7 +94,7 @@ class Jobs:
         )  # fmt: skip
         self.out.say(f"set {name} on {service}")
 
-    def run(
+    def run(  # noqa: PLR0917
         self,
         name: str,
         variables: dict[str, str],
@@ -290,6 +290,7 @@ def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None
             "revoke": jobs.revoke,
             "scope": jobs.scope,
             "propose": jobs.propose,
+            "peek": lambda: jobs.peek(os.environ["GXG_PEEK"]),
         }[args.action]()
     except rd.DeployError as exc:
         out.say(f"error: {exc}", err=True)
