@@ -32,6 +32,22 @@ def main() -> None:
         conn.execute(sql.SQL("ALTER DATABASE {} OWNER TO gxg_owner").format(sql.Identifier(db[0])))
         conn.execute("ALTER SCHEMA public OWNER TO gxg_owner")
         print("db-init: done")
+        report(conn)
+
+
+def report(conn: psycopg.Connection) -> None:
+    """Read-only facts for the operator: who has a registered passkey (principals and counts, no key material)."""
+    try:
+        rows = conn.execute(
+            "SELECT human_principal, count(*), count(*) FILTER (WHERE enrolled_by IS NOT NULL) "
+            "FROM webauthn_credentials GROUP BY 1 ORDER BY 1"
+        ).fetchall()
+    except psycopg.Error as exc:
+        print(f"db-init: passkey report unavailable ({type(exc).__name__})")
+        return
+    for principal, total, enrolled in rows:
+        print(f"passkey {principal}: credentials={total} enrolled_by_operator={enrolled}")
+    print(f"passkey principals: {len(rows)}")
 
 
 if __name__ == "__main__":
