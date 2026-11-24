@@ -1,0 +1,52 @@
+// Tailscale policy of the GxG Hub tailnet (ADR-0003, SEC-13, SEC-25..27).
+// Source of truth is this file; the owner pastes it into admin console -> Access controls (docs/runbooks/tailnet-acl.md).
+// Everything not allowed below is denied. Checked offline by scripts/network/check_acl.py.
+{
+	// Only tailnet admins may put a tag on a node (SEC-27: tagged, pre-authorized keys).
+	"tagOwners": {
+		"tag:gateway":        ["autogroup:admin"], // ContextForge: MCP on 443, admin UI on 8443
+		"tag:approval-ui":    ["autogroup:admin"], // Approval Web UI
+		"tag:approval-admin": ["autogroup:admin"], // Approval `admin` (kill switch, passkey invites)
+		"tag:agent":          ["autogroup:admin"], // agents calling the MCP gateway
+	},
+
+	// The owner fills in real logins when applying the policy. Placeholders only; nothing real is kept in Git:
+	//   "group:operators": ["operator@example.com"],
+	//   "group:approvers": ["approver-1@example.com", "approver-2@example.com"],
+	"groups": {
+		"group:operators": [],
+		"group:approvers": [],
+	},
+
+	"acls": [
+		// ContextForge MCP (/admin and the admin API are closed on the proxy of this port).
+		{"action": "accept", "src": ["tag:agent", "group:operators"], "dst": ["tag:gateway:443"]},
+		// ContextForge admin UI: its own `tailscale serve`, operators only.
+		{"action": "accept", "src": ["group:operators"], "dst": ["tag:gateway:8443"]},
+		// Approval Web UI.
+		{"action": "accept", "src": ["group:approvers", "group:operators"], "dst": ["tag:approval-ui:443"]},
+		// Approval admin.
+		{"action": "accept", "src": ["group:operators"], "dst": ["tag:approval-admin:443"]},
+	],
+
+	// No `funnel` attribute anywhere: Funnel is off on every node (SEC-27). No exit node, no subnet router, no autogroup:internet.
+	"nodeAttrs": [],
+
+	"tests": [
+		// --- allowed
+		{"src": "tag:agent",        "accept": ["tag:gateway:443"]},
+		{"src": "group:operators",  "accept": ["tag:gateway:443", "tag:gateway:8443", "tag:approval-ui:443", "tag:approval-admin:443"]},
+		{"src": "group:approvers",  "accept": ["tag:approval-ui:443"]},
+
+		// --- denied: agent reaches only the MCP port
+		{"src": "tag:agent",        "deny": ["tag:gateway:8443", "tag:approval-ui:443", "tag:approval-admin:443"]},
+		// approver: no gateway (either port), no approval admin
+		{"src": "group:approvers",  "deny": ["tag:gateway:443", "tag:gateway:8443", "tag:approval-admin:443"]},
+		// operators: no other ports of the entry nodes
+		{"src": "group:operators",  "deny": ["tag:gateway:80", "tag:approval-ui:8443", "tag:approval-admin:80"]},
+		// Hub nodes do not initiate connections to each other or to people's devices
+		{"src": "tag:gateway",        "deny": ["tag:approval-ui:443", "tag:approval-admin:443", "tag:agent:443"]},
+		{"src": "tag:approval-ui",    "deny": ["tag:gateway:443", "tag:gateway:8443", "tag:approval-admin:443"]},
+		{"src": "tag:approval-admin", "deny": ["tag:gateway:443", "tag:gateway:8443", "tag:approval-ui:443"]},
+	],
+}

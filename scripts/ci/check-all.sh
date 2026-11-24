@@ -12,7 +12,7 @@ uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/tests \
-  approval/src approval/tests scripts tests/secrets tests/deploy \
+  approval/src approval/tests scripts tests/secrets tests/deploy tests/network \
   tools/gxg-connector-check/src tools/gxg-connector-check/tests tests/toolkit
 # separate run: two conftest.py modules clash in one mypy run; tests/ci imports the root conftest
 uv run mypy --strict conftest.py tests/ci
@@ -42,6 +42,7 @@ if [ "${UPSTREAM_DRIFT:-}" != skip ]; then
 fi
 uv run python scripts/ci/prove_schema_guard.py
 uv run python scripts/deploy/railway_deploy.py --dry-run >/dev/null  # M13: the deploy plan is valid (AS-28, no public exposure)
+uv run python scripts/network/check_acl.py  # M14: Tailscale policy (SEC-26, AC-M14-08), offline
 scripts/ci/gitleaks.sh tree HEAD
 scripts/ci/gitleaks.sh range "0000000000000000000000000000000000000000..HEAD"
 uv run pytest tests/secrets

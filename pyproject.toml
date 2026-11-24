@@ -86,6 +86,7 @@ testpaths = [
     "spikes/m4.1-gateways/tests",
     "gateway/contextforge/tests",
     "tests/deploy",  # M13: Railway deploy kit, offline
+    "tests/network",  # M14: Tailscale policy checker, offline
 ]
 # DoD-5: a skipped or xfailed test is a failure, not a pass.
 xfail_strict = true
