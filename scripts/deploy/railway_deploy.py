@@ -26,14 +26,18 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 import yaml
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization as ser
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.x509.oid import NameOID
 
 from gxg_approval.crypto import generate as x25519_pair
 from gxg_connector_kit import _jwt, exec_token
@@ -242,6 +246,7 @@ class Values:
         self.new: dict[str, dict[str, str]] = {s: {} for s in spec["services"]}
         self._role_pw: dict[str, str] = {}
         self._keysets: dict[str, dict[str, str]] = {}
+        self._pki: dict[str, str] | None = None
 
     def get(self, service: str, name: str) -> str | None:
         return self.new[service].get(name) or self.existing.get(service, {}).get(name)
@@ -293,6 +298,72 @@ class Values:
             else:
                 raise DeployError(f"unknown keyset {set_name}")
         return self._keysets[set_name]
+
+    def pki(self) -> dict[str, str]:
+        """Internal CA of the pilot (AS-07) and the connector's server certificate. The CA key lives in this call only:
+        it signs once and is dropped, a reissue creates a new CA (and so replaces every member of the set)."""
+        if self._pki is None:
+            host = str(self.spec["pki"]["host"])
+            now = datetime.now(UTC)
+            ca_key = ec.generate_private_key(ec.SECP256R1())
+            ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "gxg-pilot-internal-ca")])
+            ca = (
+                x509.CertificateBuilder()
+                .subject_name(ca_name)
+                .issuer_name(ca_name)
+                .public_key(ca_key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(now - timedelta(hours=1))
+                .not_valid_after(now + timedelta(days=365))
+                .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+                .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
+                .add_extension(
+                    x509.KeyUsage(
+                        digital_signature=False, content_commitment=False, key_encipherment=False,
+                        data_encipherment=False, key_agreement=False, key_cert_sign=True, crl_sign=True,
+                        encipher_only=False, decipher_only=False,
+                    ),
+                    critical=True,
+                )
+                .add_extension(  # the CA can vouch for private names only
+                    x509.NameConstraints(permitted_subtrees=[x509.DNSName("railway.internal")], excluded_subtrees=None),
+                    critical=True,
+                )
+                .sign(ca_key, hashes.SHA256())
+            )  # fmt: skip
+            key = ec.generate_private_key(ec.SECP256R1())
+            cert = (
+                x509.CertificateBuilder()
+                .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, host)]))
+                .issuer_name(ca_name)
+                .public_key(key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(now - timedelta(hours=1))
+                .not_valid_after(now + timedelta(days=365))
+                .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+                .add_extension(  # Python 3.13 verifies strictly: the leaf names its issuer key
+                    x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False
+                )
+                .add_extension(x509.SubjectAlternativeName([x509.DNSName(host)]), critical=False)
+                .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+                .sign(ca_key, hashes.SHA256())
+            )  # fmt: skip
+            pem = ser.Encoding.PEM
+            self._pki = {
+                "ca_cert": ca.public_bytes(pem).decode(),
+                "server_cert": cert.public_bytes(pem).decode(),
+                "server_key": key.private_bytes(pem, ser.PrivateFormat.PKCS8, ser.NoEncryption()).decode(),
+            }
+        return self._pki
+
+    def pki_members(self) -> list[tuple[str, str]]:
+        found = []
+        for svc_name, svc in self.spec["services"].items():
+            for var, sec in {**secrets_of(svc), **(svc.get("config") or {})}.items():
+                gen = sec.get("gen", "") if isinstance(sec, dict) else str(sec)
+                if gen.startswith("pki:"):
+                    found.append((svc_name, var))
+        return found
 
     def keyset_members(self, set_name: str) -> list[tuple[str, str, str]]:
         """(service, variable, member) of every variable that takes its value from this keyset."""
@@ -356,6 +427,8 @@ class Values:
         elif kind == "ed25519_identity_keys":
             secret_name, _, kid = arg.partition(":")
             value = f"{kid}=ed25519:{b64url(self._public(service, secret_name))}"
+        elif kind == "pki":
+            value = self.pki()[arg]
         elif kind == "keyset":
             set_name, _, member = arg.partition(".")
             value = self.keyset(set_name)[member]
@@ -372,6 +445,10 @@ class Values:
                 raise DeployError(
                     f"keyset {set_name} is partly set; remove all its variables to rotate, or restore them"
                 )
+        pki_vars = self.pki_members()  # the CA key is not kept: a partly set PKI cannot be completed, only reissued
+        present = [bool(self.existing.get(s, {}).get(v)) for s, v in pki_vars]
+        if pki_vars and any(present) and not all(present):
+            raise DeployError("the internal PKI is partly set; remove all its variables to reissue it, or restore them")
         for svc_name, svc in self.spec["services"].items():
             have = self.existing.get(svc_name, {})
             for var, value in (svc.get("env") or {}).items():  # enforced literals

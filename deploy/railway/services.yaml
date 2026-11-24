@@ -14,6 +14,7 @@ project: gxg-hub-pilot
 environment: production
 tenant: t-pilot  # pilot tenant: names the payload keys of Approval (crypto.py) and the gateway tenant
 repo: {name: dmitry-v-ko/GxG-hub, branch: claude/m13-deploy}
+pki: {host: telegram.railway.internal}  # internal CA (AS-07): the executor trusts it, the connector's execute port (8081) serves a cert for this name
 
 services:
   # ---------------------------------------------------------------- databases (private networking only)
@@ -172,7 +173,9 @@ services:
       GXG_SECRET__GXG_SVC_KEY: {gen: ed25519_seed, as28: svc_key}
       GXG_SECRET__GXG_EXEC_SIGNING_KEYS: {gen: "keyset:exec-signing.private", as28: exec_signing}
       GXG_SECRET__GXG_PAYLOAD_PRIVATE_KEYS: {gen: "keyset:payload.args_private", as28: payload_args}
-    config: {GXG_SVC_PUBLIC_KEY: "ed25519_pub:GXG_SECRET__GXG_SVC_KEY"}
+    config:
+      GXG_SVC_PUBLIC_KEY: "ed25519_pub:GXG_SECRET__GXG_SVC_KEY"
+      GXG_CONFIG__SSL_CERT: "pki:ca_cert"  # the entrypoint turns it into a file and exports SSL_CERT_FILE: httpx trusts the pilot CA
     internal_urls: [GXG_SECRET__GXG_DB_DSN]
   sweeper:
     kind: app
@@ -273,9 +276,12 @@ services:
       TELEGRAM_SERVICE_DSN: {gen: "tg_dsn:gxg_telegram_service"}  # roles are created by the job telegram-db-init
       TELEGRAM_ARCHIVE_DSN: {gen: "tg_dsn:gxg_telegram_reader"}
       TELEGRAM_CHAT_REF_SECRET: {gen: random:48}  # >= 32 bytes; the image's entrypoint turns it into a file
+      TELEGRAM_EXECUTE_TLS_KEY: {gen: "pki:server_key"}  # private key of that certificate (execute port 8081)
       TELEGRAM_SVC_KEY: {gen: ed25519_seed}  # service JWT key, public half in the registry of the bundle
       TELEGRAM_WEBHOOK_HMAC: {gen: hmac:32}  # signs `telegram.message.created` to Signals (SI-03)
-    config: {TELEGRAM_SVC_PUBLIC_KEY: "ed25519_pub:TELEGRAM_SVC_KEY"}
+    config:
+      TELEGRAM_SVC_PUBLIC_KEY: "ed25519_pub:TELEGRAM_SVC_KEY"
+      TELEGRAM_EXECUTE_TLS_CERT: "pki:server_cert"  # certificate for telegram.railway.internal, signed by the pilot CA
     internal_urls: [TELEGRAM_SERVICE_DSN, TELEGRAM_ARCHIVE_DSN, TELEGRAM_APPROVAL_URL]
   telegram-db-init:  # job: migrations, roles and passwords of telegram-db; removed by `railway_deploy.py --finalize`
     kind: job
