@@ -394,3 +394,30 @@ def test_decider_message_and_timeout() -> None:
         seen == {"url": "/v1/x", "json": {"a": 1}, "timeout": stepup.DECIDER_TIMEOUT_S}
         and stepup.DECIDER_TIMEOUT_S == 10
     )
+
+
+FORGED = {  # what `tailscale serve` adds in front of the ui (AC-M14-09, SEC-25): not an identity
+    "Tailscale-User-Login": "approver@example.com",
+    "Tailscale-User-Name": "Approver",
+    "Tailscale-User-Profile-Pic": "https://example.invalid/pic.png",
+    "X-Forwarded-For": "100.64.0.7",
+}
+
+
+def test_tailscale_headers_are_not_a_session(browser: Any, propose: Any, row_of: Any, owner: Any) -> None:
+    row = intent(propose, row_of)
+    landing = browser.client.get("/", headers=FORGED)  # the sign-in page: no list, no name
+    assert (
+        'id="login"' in landing.text
+        and str(row["intent_id"]) not in landing.text
+        and "approver@example.com" not in landing.text
+    )
+    for path in ("/history", "/unknown", f"/intents/{row['intent_id']}", "/passkeys", "/telegram"):
+        r = browser.client.get(path, headers=FORGED)
+        assert r.status_code == 403 and error_text(r) == ui.SIGN_IN[1], (path, r.status_code)
+    before = row["version"]
+    for action in ("decision", "resolve", "challenge"):
+        r = browser.client.post(f"/intents/{row['intent_id']}/{action}", data={"csrf": "x"}, headers=FORGED)
+        assert r.status_code == 403, (action, r.status_code)
+    assert row_of(row["intent_id"])["version"] == before  # nothing was decided
+    assert owner.execute("SELECT count(*) FROM decisions").fetchone() == (0,)

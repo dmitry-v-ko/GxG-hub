@@ -148,6 +148,26 @@ def test_sc02_anonymous_expired_and_foreign_tokens(stand: Stand) -> None:
     assert reached(stand, before) == []
 
 
+def test_ops07_tailscale_headers_are_not_an_identity(stand: Stand) -> None:
+    """OPS-07, AC-M14-09 (SEC-25): the headers `tailscale serve` adds in front of ContextForge, with or without the
+    admin's address, authenticate nobody: no token → 401 on every call path and on the admin API, nothing reaches the
+    connector. (On Railway the same request arrives over the tailnet: run it there with the real names, see M14.)"""
+    login = stand.env["PLATFORM_ADMIN_EMAIL"]
+    tool = stand.tool("t-alpha", "demo.boards.list")
+    before = len(stand.audit())
+    for forged in (
+        {"Tailscale-User-Login": login, "Tailscale-User-Name": "Operator", "Tailscale-User-Profile-Pic": "x"},
+        {"Tailscale-User-Login": "reader@t-alpha.agents.gxg.example.com"},
+    ):
+        for path in ("/rpc", stand.paths(ALPHA_READER)["virtual_server"], "/mcp/"):
+            status, resp = stand.rpc(path, "tools/call", {"name": tool, "arguments": {}}, token=None, extra=forged)
+            assert status == 401, (forged, path, status, resp)
+        for admin_path in ("/v1/gateways", "/v1/tools", "/v1/teams"):
+            r = stand.http.get(admin_path, headers=forged)
+            assert r.status_code in (401, 403), (forged, admin_path, r.status_code)
+    assert reached(stand, before) == []
+
+
 def test_sc02_agents_cannot_log_in_with_a_password(stand: Stand) -> None:
     """SEC-02: an agent's only credential is its token. No shared or known password lets anyone log in as an
     agent and mint more tokens (bootstrap.py gives each agent a random password it never keeps)."""
@@ -290,6 +310,7 @@ def test_sc06_inside_the_network_without_identity_is_unauthenticated(stand: Stan
         {},
         {"X-Forwarded-User-Email": "reader@t-alpha.agents.gxg.example.com"},
         {"X-Tenant-Id": "t-alpha"},
+        {"Tailscale-User-Login": "reader@t-alpha.agents.gxg.example.com"},  # AC-M14-09 (SEC-25)
     ):
         for tool in ("demo.boards.list", "demo.notes.search", "demo.note.get"):
             [resp] = stand.direct(NET_CONNECTORS, [(headers, {"name": tool, "arguments": {}})])

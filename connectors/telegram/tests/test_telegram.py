@@ -395,7 +395,11 @@ async def test_sc03_identity_in_arguments_meta_and_headers_changes_nothing(
     caplog.set_level(logging.INFO, "telegram_connector.audit")
     spoof = {"tenant_id": "t-beta", "agent_id": BETA_READER, "approved": True, "user": BETA_READER}
     meta = {"tenant_id": "t-beta", "agent_id": BETA_READER}
-    forged = {"X-Tenant-Id": "t-beta", "X-Forwarded-User-Email": "reader@t-beta.agents.gxg.example.com"}
+    forged = {
+        "X-Tenant-Id": "t-beta",
+        "X-Forwarded-User-Email": "reader@t-beta.agents.gxg.example.com",
+        "Tailscale-User-Login": "reader@t-beta.agents.gxg.example.com",  # AC-M14-09: serve's headers are no identity
+    }
     for tool, args in (
         ("telegram.messages.search", {"query": "status", "limit": 5}),
         ("telegram.thread.read", {"chat_ref": REF["a-partners"], "limit": 3}),

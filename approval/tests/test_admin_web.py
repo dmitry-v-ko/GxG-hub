@@ -269,3 +269,27 @@ def test_callback_is_a_page_not_a_redirect_so_the_strict_cookie_is_sent_next(mon
     cookie = done.headers["set-cookie"]
     assert "__Host-gxg_admin_session" in cookie and "SameSite=strict" in cookie and "Secure" in cookie
     assert f.client.get("/invites").status_code == 200  # the next, same-site request carries the cookie
+
+
+FORGED = {  # AC-M14-09 (OPS-07, SEC-25): what `tailscale serve` adds is not an operator
+    "Tailscale-User-Login": "operator@example.com",
+    "Tailscale-User-Name": "Operator",
+    "X-Forwarded-For": "100.64.0.7",
+}
+
+
+def test_tailscale_headers_are_not_an_operator(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)
+    calls = (
+        ("GET", "/v1/switches", None),
+        ("POST", "/v1/switches", {"scope": "global", "blocked": True, "reason": "forged header"}),
+        ("POST", "/v1/switches", {"scope": "global", "blocked": False, "reason": "forged header"}),
+        ("POST", "/v1/passkey-invites", {"human": "oidc:a:b"}),
+    )
+    for method, path, body in calls:
+        r = f.client.request(method, path, headers=FORGED, json=body)
+        assert r.status_code in (401, 403), (path, r.status_code)
+    assert f.client.get("/invites", headers=FORGED).headers["location"] == "/login"
+    posted = f.client.post("/invites", content="csrf=x&human=oidc:a:b",
+                           headers={**FORGED, "content-type": "application/x-www-form-urlencoded"})  # fmt: skip
+    assert posted.status_code == 303 and f.issued == []
