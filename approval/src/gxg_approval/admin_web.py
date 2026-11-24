@@ -171,7 +171,11 @@ def register(app: FastAPI, *, web: Web, deps: Any, issue_invite: Callable[[str, 
             return refuse(401, "Токен не принят.")
         if not hmac.compare_digest(str(claims["nonce"]), str(flow["nonce"])):
             return refuse(401, "Токен не принят.")
+        # Google puts no `auth_time` in the ID token. The request carried `prompt=login` and a `nonce`, so a token
+        # issued now (`iat`) is bound to a password prompt answered for this very request: `iat` stands in for it.
         auth_time = claims.get("auth_time")
+        if not isinstance(auth_time, int | float):
+            auth_time = claims.get("iat")
         if not isinstance(auth_time, int | float) or now - auth_time > MAX_AGE_S + 5:
             return refuse(403, "Нужен свежий вход (не старше 5 минут).")
         if claims.get("email_verified") is not True:

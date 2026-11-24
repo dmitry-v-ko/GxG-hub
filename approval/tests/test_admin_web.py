@@ -43,6 +43,7 @@ class Fixture:
         self.token_status = 200
         self.exchanges: list[dict[str, str]] = []
         self.nonce = ""
+        self.omit_auth_time = False
 
         def idp(request: httpx.Request) -> httpx.Response:
             self.exchanges.append({k: v[0] for k, v in parse_qs(request.content.decode()).items()})
@@ -53,6 +54,8 @@ class Fixture:
                 "iss": ISSUER, "aud": CLIENT, "sub": "op-1", "iat": now, "exp": now + 300, "auth_time": now,
                 "email_verified": True, "nonce": self.nonce,
             } | self.claims  # fmt: skip
+            if self.omit_auth_time:
+                doc.pop("auth_time")
             return httpx.Response(200, json={"id_token": jwt.encode(doc, self.sign_with, algorithm="ES256")})
 
         web = admin_web.Web(
@@ -236,3 +239,19 @@ def test_seal_roundtrip_and_expiry() -> None:
     assert admin_web.unseal(SESSION_KEY, value, now + 11) is None
     assert admin_web.unseal(b"x" * 32, value, now) is None
     assert admin_web.unseal(SESSION_KEY, "garbage", now) is None
+
+
+def test_without_auth_time_a_fresh_iat_signs_in_and_an_old_iat_does_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Google gives no `auth_time`: the freshness comes from `iat` of a token bound to this prompt=login request."""
+    f = build(monkeypatch)
+    f.omit_auth_time = True
+    client = f.sign_in()
+    assert client.get("/invites").status_code == 200
+    g = build(monkeypatch)
+    g.omit_auth_time = True
+    g.claims = {"iat": int(time.time()) - 1000}
+    login = g.client.get("/login")
+    q = parse_qs(urlsplit(login.headers["location"]).query)
+    g.nonce = q["nonce"][0]
+    assert g.client.get(f"/auth/callback?code=x&state={q['state'][0]}").status_code == 403
+    assert g.client.get("/invites").status_code == 303
