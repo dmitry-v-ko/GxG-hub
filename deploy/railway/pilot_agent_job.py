@@ -226,6 +226,9 @@ def probe():
     print(f"tools/list http={status} count={len(names)}", flush=True)
     for n in names:
         print(f"tool {n}", flush=True)
+    for tool in listed.get("result", {}).get("tools", []):
+        if tool["name"].endswith("message-propose"):  # the argument schema: names and types only, no values
+            print("schema " + json.dumps(tool.get("inputSchema", {}), separators=(",", ":"))[:1500], flush=True)
     for n in names:
         if n.endswith("message-propose"):
             status, res = rpc(

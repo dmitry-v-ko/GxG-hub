@@ -232,7 +232,7 @@ class Jobs:
             )  # fmt: skip
             self.out.say(f"== {gateway}")
             for line in lines:
-                if re.match(r"^(initialize|tools/list|tool |propose )", line) or re.search(
+                if re.match(r"^(initialize|tools/list|tool |propose |schema )", line) or re.search(
                     r"Traceback|Error|Failed|not found", line
                 ):
                     self.out.say("  " + line[:1000])
