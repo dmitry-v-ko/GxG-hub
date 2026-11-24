@@ -612,6 +612,10 @@ class Deployer:
         want: dict[str, Any] = {}
         if svc.get("start"):
             want["startCommand"] = svc["start"]
+        elif svc["kind"] == "app":
+            want["startCommand"] = (
+                ""  # a service without `start` in the spec runs the image's own command (a maintenance override is cleared)
+            )
         if svc.get("healthcheck"):
             want["healthcheckPath"] = svc["healthcheck"]
         elif svc["kind"] == "app":
