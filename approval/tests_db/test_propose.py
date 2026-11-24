@@ -59,8 +59,8 @@ def test_human_approval_by_default_for_external_effect(
     assert audit.fetchall() == [
         ("demo", "propose", "t-alpha", doc["intent_id"], "pending_approval",
          {"requester": "agent:t-alpha:bot", "identity_mode": "connector_attested", "rule_ids": [], "mode": "human",
-          "args_hash": stored_hash(owner)}),
-    ]  # fmt: skip
+          "args_hash": stored_hash(owner), "policy_version": "b" * 40}),
+    ]  # fmt: skip  # GR-14: the bundle version of the intent is in the audit row too
 
 
 def test_write_reversible_is_approved_without_human(
