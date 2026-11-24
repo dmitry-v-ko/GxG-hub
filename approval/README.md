@@ -41,7 +41,7 @@ Kill switch, включённый после reserve, срабатывает н�
 
 ### Ротация ключа (AS-10, SEC-10: не реже раза в 90 дней)
 
-Файлы (`deploy/compose.yaml`): ключи executor'а — `deploy/exec-keys/signing-keys.json` (каталог 0700, монтируется только в `executor`, AS-28; каталог, а не одиночный secret-файл: атомарную замену файла executor видит без рестарта), JWKS — `deploy/config/exec-jwks.json` (публичный, у `api`). `rotate` и `remove` запускает оператор **на хосте** с `GXG_EXEC_SIGNING_KEYS_FILE=deploy/exec-keys/signing-keys.json GXG_EXEC_JWKS_FILE=deploy/config/exec-jwks.json`; `release` — **в контейнере executor'а** (его роль БД): `docker compose exec executor gxg-approval keys release`.
+Файлы (`deploy/compose.yaml`): ключи executor'а — `deploy/exec-keys/signing-keys.json` (каталог 0700, монтируется только в `executor`, AS-28; каталог, а не одиночный secret-файл: атомарную замену файла executor видит без рестарта), JWKS — `deploy/config/exec-jwks.json` (публичный, у `api`). `rotate` и `remove` запускает оператор **на хосте** с `GXG_EXEC_SIGNING_KEYS_FILE=deploy/exec-keys/signing-keys.json GXG_EXEC_JWKS_FILE=deploy/config/exec-jwks.json` и `GXG_DB_DSN_FILE` (DSN роли executor'а: команда сначала пишет строку в `audit_events`, SEC-09; без БД ключи не меняются); `release` — **в контейнере executor'а** (его роль БД): `docker compose exec executor gxg-approval keys release`.
 
 | Шаг | Команда | Что происходит |
 | --- | --- | --- |

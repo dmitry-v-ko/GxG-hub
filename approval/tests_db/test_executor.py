@@ -734,7 +734,7 @@ def test_ac14_rotation_without_downtime_and_removal_of_a_compromised_kid(stack: 
     keys_file, jwks_file = stack.dir / "exec-keys.json", stack.dir / "exec-jwks.json"
     keys_file.write_text(json.dumps(stack.signing))
     jwks_file.write_text(json.dumps(stack.published))
-    new_kid = keymgmt.rotate(keys_file, jwks_file, now=t0)
+    new_kid = keymgmt.rotate(keys_file, jwks_file, now=t0, audit=lambda *_: None)
     stack.signing, stack.published = json.loads(keys_file.read_text()), json.loads(jwks_file.read_text())
     assert {k["kid"] for k in stack.published["keys"]} == {old_kid, new_kid}
     assert oct(keys_file.stat().st_mode & 0o777) == "0o600"
@@ -755,7 +755,7 @@ def test_ac14_rotation_without_downtime_and_removal_of_a_compromised_kid(stack: 
     third = stack.propose()
     r3 = ex.take()
     assert isinstance(r3, Reserved)
-    keymgmt.remove(keys_file, jwks_file, new_kid)
+    keymgmt.remove(keys_file, jwks_file, new_kid, audit=lambda *_: None)
     stack.signing, stack.published = json.loads(keys_file.read_text()), json.loads(jwks_file.read_text())
     assert ex.release_reserved() == 1  # AS-10
     assert stack.executions(third["intent_id"])[0][1] == "released"
@@ -1075,7 +1075,8 @@ def test_without_an_active_signing_key_nothing_is_reserved_and_no_attempt_is_spe
 
 
 def test_keys_cli_rotate_remove_and_release(stack: Stack, pg: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The documented commands: rotate/remove over the two files, release as the executor role (AS-10)."""
+    """The documented commands: rotate/remove over the two files, release as the executor role (AS-10).
+    SEC-09: each writes one audit row: the operator, the action, the kid(s), the JWKS hash before and after."""
     from gxg_approval import cli
 
     keys_file, jwks_file = stack.dir / "exec-keys" / "signing-keys.json", stack.dir / "config" / "exec-jwks.json"
@@ -1083,15 +1084,24 @@ def test_keys_cli_rotate_remove_and_release(stack: Stack, pg: Any, monkeypatch: 
     jwks_file.parent.mkdir()
     monkeypatch.setenv("GXG_EXEC_SIGNING_KEYS_FILE", str(keys_file))
     monkeypatch.setenv("GXG_EXEC_JWKS_FILE", str(jwks_file))
+    monkeypatch.setenv("LOGNAME", "alice")  # getpass.getuser(): the operator of the host
+    (stack.dir / "dsn").write_text(pg.dsn("gxg_executor"))
+    monkeypatch.setenv("GXG_DB_DSN_FILE", str(stack.dir / "dsn"))
+
+    def audit() -> list[tuple[str, str, dict[str, Any]]]:
+        rows = stack.owner.execute(
+            "SELECT actor, action, details FROM audit_events WHERE action LIKE 'key%' ORDER BY id"
+        ).fetchall()
+        return [(a, b, c) for a, b, c in rows]
+
     cli.main(["keys", "rotate"])
     (kid,) = [k["kid"] for k in json.loads(jwks_file.read_text())["keys"]]
     assert oct(keys_file.stat().st_mode & 0o777) == "0o600"
+    after_rotate = keymgmt.jwks_sha256(json.loads(jwks_file.read_text()))
     created = stack.propose()
     assert isinstance(stack.executor().take(), Reserved)
     cli.main(["keys", "remove", "--kid", kid])
     assert json.loads(jwks_file.read_text()) == {"keys": []} and json.loads(keys_file.read_text()) == []
-    (stack.dir / "dsn").write_text(pg.dsn("gxg_executor"))
-    monkeypatch.setenv("GXG_DB_DSN_FILE", str(stack.dir / "dsn"))
     cli.main(["keys", "release"])
     assert stack.executions(created["intent_id"])[0][1] == "released"
     assert stack.status(created["intent_id"]) == "approved"
@@ -1099,8 +1109,40 @@ def test_keys_cli_rotate_remove_and_release(stack: Stack, pg: Any, monkeypatch: 
         "SELECT actor FROM audit_events WHERE intent_id = %s ORDER BY id DESC LIMIT 1", (created["intent_id"],)
     ).fetchone()
     assert actor == ("keys release",)
+    empty = keymgmt.jwks_sha256({"keys": []})
+    rotated, removed, released = audit()
+    assert rotated[:2] == ("operator:alice", "key_rotated")
+    assert rotated[2]["kid"] == kid and rotated[2]["jwks_sha256_before"] == empty
+    assert rotated[2]["jwks_sha256_after"] == after_rotate and rotated[2]["not_before"].endswith("Z")
+    assert removed == ("operator:alice", "key_removed",
+                       {"kid": kid, "jwks_sha256_before": after_rotate, "jwks_sha256_after": empty})  # fmt: skip
+    assert released == ("operator:alice", "keys_released", {"released": 1})
     with pytest.raises(SystemExit, match="rotate"):
         cli.main(["keys", "remove"])
+    assert len(audit()) == 3  # a refused command writes nothing
+
+
+def test_keys_cli_changes_nothing_when_the_audit_row_cannot_be_written(
+    stack: Stack, pg: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SEC-09: no audit row, no rotation: the role without INSERT on audit_events (and no DSN at all) fail first."""
+    import psycopg
+
+    from gxg_approval import cli
+
+    keys_file, jwks_file = stack.dir / "signing-keys.json", stack.dir / "exec-jwks.json"
+    monkeypatch.setenv("GXG_EXEC_SIGNING_KEYS_FILE", str(keys_file))
+    monkeypatch.setenv("GXG_EXEC_JWKS_FILE", str(jwks_file))
+    (stack.dir / "dsn").write_text(pg.dsn("gxg_decider"))  # a role that may not INSERT into audit_events
+    monkeypatch.setenv("GXG_DB_DSN_FILE", str(stack.dir / "dsn"))
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        cli.main(["keys", "rotate"])
+    assert not keys_file.exists() and not jwks_file.exists()
+    monkeypatch.delenv("GXG_DB_DSN_FILE")
+    with pytest.raises(SystemExit, match="GXG_DB_DSN_FILE"):
+        cli.main(["keys", "rotate"])
+    assert not keys_file.exists() and not jwks_file.exists()
+    assert stack.owner.execute("SELECT count(*) FROM audit_events WHERE action LIKE 'key%'").fetchone() == (0,)
 
 
 # Lock waits of this test's database only: pg_locks is cluster-wide, and mutmut runs mutants in parallel.

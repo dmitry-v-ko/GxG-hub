@@ -8,7 +8,7 @@ import os
 import socket
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from prometheus_client import CollectorRegistry
@@ -119,27 +119,41 @@ def _executor() -> None:
     executor.run(threading.Event(), poll_s=float(c.env("GXG_POLL_S", "1")))
 
 
+_SQL_KEYS_AUDIT = "INSERT INTO audit_events (at, actor, action, details) VALUES (now(), %s, %s, %s)"
+
+
 def _keys(args: argparse.Namespace) -> None:
     """rotate/remove: on the host, over the executor's key directory and api's JWKS (README «Ротация ключа»).
-    release: inside the executor (its DB role), right after removing a compromised key (AS-10)."""
+    release: inside the executor (its DB role), right after removing a compromised key (AS-10).
+    SEC-09: each writes one audit_events row as `operator:<os user>` in the same transaction; no DB, no change."""
+    import getpass
+
+    import psycopg
+    from psycopg.types.json import Jsonb
+
     from . import config as c
     from . import keys
 
-    if args.action == "release":
-        import psycopg
-
-        from .executor import release_reserved
-
-        with psycopg.connect(c.secret("GXG_DB_DSN"), autocommit=True) as conn:
-            print(f"released {release_reserved(conn, 'keys release')} reservations")
-        return
-    keys_file, jwks_file = Path(c.env("GXG_EXEC_SIGNING_KEYS_FILE")), Path(c.env("GXG_EXEC_JWKS_FILE"))
-    if args.action == "rotate":
-        print(keys.rotate(keys_file, jwks_file))
-    elif args.action == "remove" and args.kid:
-        keys.remove(keys_file, jwks_file, args.kid)
-    else:
+    if args.action not in ("rotate", "remove", "release") or (args.action == "remove" and not args.kid):
         raise SystemExit("keys: rotate | remove --kid <kid> | release")
+    actor = f"operator:{getpass.getuser()}"
+    with psycopg.connect(c.secret("GXG_DB_DSN")) as conn:  # commits on exit, rolls back on an error
+
+        def audit(action: str, details: dict[str, Any]) -> None:
+            conn.execute(_SQL_KEYS_AUDIT, (actor, action, Jsonb(details)))
+
+        if args.action == "release":
+            from .executor import release_reserved
+
+            released = release_reserved(conn, "keys release")
+            audit("keys_released", {"released": released})
+            print(f"released {released} reservations")
+            return
+        keys_file, jwks_file = Path(c.env("GXG_EXEC_SIGNING_KEYS_FILE")), Path(c.env("GXG_EXEC_JWKS_FILE"))
+        if args.action == "rotate":
+            print(keys.rotate(keys_file, jwks_file, audit=audit))
+        else:
+            keys.remove(keys_file, jwks_file, args.kid, audit=audit)
 
 
 class NoQuery(logging.Filter):

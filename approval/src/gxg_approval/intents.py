@@ -337,6 +337,7 @@ def _insert(
             "rule_ids": list(decision.rule_ids),
             "mode": decision.mode,
             "args_hash": args_hash,
+            "policy_version": bundle_version,  # GR-14
         },
         intent_id=intent_id,
         to_status=row["status"],

@@ -33,7 +33,7 @@ gxg-approval switch clear --scope global --reason "INC-123 resolved"
 3. **Если ключ скомпрометирован:**
    - сразу выполнить `keys remove --kid <kid>`;
    - затем в executor выполнить `gxg-approval keys release`: все `reserved` исполнения перейдут в `released`.
-4. Ротацию отметить в журнале инцидентов. Это файловая операция на хосте: в `audit_events` она не попадает, запись есть только в журнале хоста.
+4. Каждая команда пишет одну строку в `audit_events` (SEC-09): `key_rotated`, `key_removed`, `keys_released`, актор `operator:<пользователь ОС>`, в `details` — `kid` и SHA-256 публичного JWKS до и после (`jwks_sha256_before`/`jwks_sha256_after`; у `keys_released` — число освобождённых). Команде нужен `GXG_DB_DSN_FILE` роли executor'а (на хосте для `rotate` и `remove` тоже). Строка пишется до изменения файлов, в одной транзакции: если БД недоступна, команда падает, ключи и JWKS не меняются. Ротацию всё равно отметить в журнале инцидентов.
 
 ## 3. Приглашение на passkey (AS-30)
 
