@@ -43,7 +43,7 @@ class World:
         self.requests.append(request)
         return httpx.Response(200, json={"intent_id": INTENT, "status": "pending_approval", "version": 3})
 
-    def token(self, tool: str, args: dict[str, Any], *, key: Ed25519PrivateKey | None = None) -> dict[str, str]:
+    def token(self, tool: str, args: dict[str, Any], *, signer: Ed25519PrivateKey | None = None) -> dict[str, str]:
         now = int(time.time())
         claims = {
             "iss": ISSUER, "aud": "approval-mcp", "sub": "agent:t-pilot:bot", "tenant_id": "t-pilot",
@@ -51,7 +51,7 @@ class World:
         }  # fmt: skip
         return {
             "X-GxG-Identity": jwt.encode(
-                claims, key or self.adapter, algorithm="EdDSA", headers={"typ": TYP, "kid": KID}
+                claims, signer or self.adapter, algorithm="EdDSA", headers={"typ": TYP, "kid": KID}
             )
         }
 
@@ -87,7 +87,7 @@ def test_signed_assertion_reaches_the_api_with_the_verified_scope(world: World) 
         lambda w: {},  # no assertion
         lambda w: w.token("effects.cancel", {"intent_id": INTENT}),  # bound to another tool
         lambda w: w.token("effects.status", {"intent_id": str(uuid.uuid4())}),  # bound to other arguments
-        lambda w: w.token("effects.status", {"intent_id": INTENT}, key=Ed25519PrivateKey.generate()),  # foreign key
+        lambda w: w.token("effects.status", {"intent_id": INTENT}, signer=Ed25519PrivateKey.generate()),  # foreign key
     ],
     ids=["missing", "other-tool", "other-args", "unknown-signer"],
 )
