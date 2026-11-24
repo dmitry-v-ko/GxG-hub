@@ -125,3 +125,17 @@
 - **Approver добавлен:** владелец (его OIDC principal) в `policies/pilot/tenants/t-pilot.yaml`, роль `approver`. Роль `operator` схема прав не допускает: оператор задаётся `GXG_UI_OPERATORS` / `GXG_ADMIN_OPERATORS`. Bundle перевыпущен 2026-11-24 11:36 UTC и раздан (`pilot_bundle.py --deploy`: `api`, `executor`, `ui`, `notifier`, `telegram`); **следующий перевыпуск не позже 23:36 UTC**.
 - **Состояние:** все сервисы SUCCESS, `railway_deploy.py --verify` rc=0; `ui` под базовым именем `gxg-approval-ui` (суффикса нет).
 - **Не подтверждено:** у `telegram` в логе деплоя только «Starting Container», так что слушает ли он `:8080`/`:8082` и применил ли `telegram-db-init` миграции и роли, по логам сказать нельзя (задача отработала и удалена `--finalize` до того, как я прочитал её лог: ошибка моего порядка). Проверять через мастер в UI (`/operator/telegram` должен ответить, а не «не отвечает»). TLS на `:8081` в сервисе пока не включён.
+
+## TLS и passkey
+
+**Проверка `telegram` (задача `telegram-db-init` в режиме `GXG_TGDB_MODE=check`, только SELECT и TCP/TLS-hello, затем удалена `--finalize`):**
+- роли `gxg_telegram_service` и `gxg_telegram_reader` существуют, оба с LOGIN; схемы `capability_hub` (`connections`) и `telegram_archive` (`chats`, `connection_state`, `folder_members`, `folders`, `messages`) на месте; Connection `tg-pilot`: `enabled=True`. Миграции и роли применены.
+- `telegram.railway.internal`: порты **8080, 8081, 8082 открыты**. По TLS-hello **ни один не говорит по TLS** (все «no TLS»), то есть `https://telegram.railway.internal:8081` из реестра bundle сейчас не работает. Старт-строку с портами и коммитом в entrypoint сервиса я не добавлял: пушить в `gxg-telegram-service` у меня нечем (доступ только к GxG-hub); порты видны и без неё.
+- Режим `check` теперь по умолчанию у этой задачи в `services.yaml` (первичная настройка новой `telegram-db`: убрать `GXG_TGDB_MODE`).
+
+**TLS executor → коннектор (8081):** со стороны Hub всё готово и выкачено (внутренний CA, сертификат на `telegram.railway.internal`, доверие `executor` через `SSL_CERT_FILE`, коннектор в реестре bundle с `https://…:8081`, см. раздел «TLS executor → Telegram-коннектор»). Не хватает только стороны сервиса: entrypoint должен материализовать `TELEGRAM_EXECUTE_TLS_KEY` / `TELEGRAM_EXECUTE_TLS_CERT` в файлы, а сервер порта 8081 — запускаться с `ssl_keyfile` / `ssl_certfile` и не стартовать без них. `TELEGRAM_EFFECTS_ENABLED` не ставился.
+
+**Passkey-приглашение: из Railway сделать нельзя.** `gxg-approval passkeys invite --human oidc:<iss>:<sub>` ходит в `admin` (`POST /v1/passkey-invites`) с `Authorization: Bearer <ID token оператора>`, который `admin` проверяет по `GXG_ADMIN_OIDC_ISSUER`/`GXG_ADMIN_OIDC_AUDIENCE` и списку `GXG_ADMIN_OPERATORS`. ID token выдаёт Google только владельцу при его входе; у задачи в Railway его нет, подделывать нельзя. Шаги для владельца с устройства в tailnet:
+1. Исправить `admin.GXG_ADMIN_OPERATORS` на формат `oidc:https://accounts.google.com:<sub>` (сейчас там email, а `admin` ждёт principal). Это же значение через ссылку читает `ui.GXG_UI_OPERATORS` (ожидает email): если менять, разделить их на два значения.
+2. Получить ID token (для `aud` = OIDC client id UI) и выполнить `GXG_ADMIN_URL=https://gxg-approval-admin.tail9fb746.ts.net GXG_OPERATOR_TOKEN_FILE=<файл с токеном> gxg-approval passkeys invite --human 'oidc:https://accounts.google.com:<sub>'`.
+3. Код из ответа (24 ч, одноразовый) владелец вводит на странице «Passkey» в UI и регистрирует ключ. В лог код не печатается.

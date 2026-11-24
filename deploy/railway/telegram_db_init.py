@@ -11,6 +11,7 @@ GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db).
 import json
 import os
 import socket
+import ssl
 from pathlib import Path
 
 import psycopg
@@ -50,12 +51,20 @@ def check(dsn: str) -> None:
 
 
 def probe(targets: str) -> None:
-    """TCP connect only (no bytes sent) to `host:port,...`: does the service listen on the private network?"""
+    """TCP connect and a TLS hello (nothing else is sent) to `host:port,...`: does the service listen, with TLS?"""
     for target in filter(None, (t.strip() for t in targets.split(","))):
         host, _, port = target.rpartition(":")
         try:
-            socket.create_connection((host, int(port)), timeout=5).close()
-            print(f"listen {target}: open", flush=True)
+            raw = socket.create_connection((host, int(port)), timeout=5)
+            ctx = ssl.create_default_context()
+            ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE  # only: does the port speak TLS, not trust
+            try:
+                with ctx.wrap_socket(raw, server_hostname=host) as tls:
+                    print(f"listen {target}: open, TLS {tls.version()}", flush=True)
+            except (ssl.SSLError, OSError):
+                print(f"listen {target}: open, no TLS", flush=True)
+            finally:
+                raw.close()
         except OSError as exc:
             print(f"listen {target}: closed ({type(exc).__name__})", flush=True)
 
