@@ -223,18 +223,20 @@ services:
       GXG_REQUIRE: GXG_UI_PUBLIC_URL GXG_OIDC_ISSUER GXG_OIDC_CLIENT_ID GXG_SECRET__GXG_OIDC_CLIENT_SECRET TS_AUTHKEY GXG_BUNDLE_KEYS GXG_BUNDLE_B64
       GXG_LISTEN: 127.0.0.1:8443
       GXG_DECIDER_URL: http://${{decider.RAILWAY_PRIVATE_DOMAIN}}:8093
+      GXG_TELEGRAM_ADMIN_URL: http://${{telegram.RAILWAY_PRIVATE_DOMAIN}}:8082  # operator wizard (/operator/telegram), private network only
       GXG_BUNDLE_STATE_FILE: /var/lib/gxg/bundle-state.json
       TS_HOSTNAME: gxg-approval-ui
       TS_TAGS: tag:approval-ui
       GXG_TS_SERVE: "443 - http://127.0.0.1:8443"
-    owner_env: [GXG_UI_PUBLIC_URL, GXG_OIDC_ISSUER, GXG_OIDC_CLIENT_ID, GXG_BUNDLE_KEYS, GXG_BUNDLE_B64]
+    owner_env: [GXG_UI_PUBLIC_URL, GXG_OIDC_ISSUER, GXG_OIDC_CLIENT_ID, GXG_BUNDLE_KEYS, GXG_BUNDLE_B64, GXG_UI_OPERATORS]  # operators: confirmed emails, comma-separated
     secrets:
       GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_ui", as28: db_dsn}
+      GXG_SECRET__GXG_UI_SVC_KEY: {gen: ed25519_seed, as28: ui_svc_key}  # service JWT iss=approval-ui; only the public half leaves
       GXG_SECRET__GXG_UI_SESSION_KEY: {gen: random:32, as28: ui_secrets}
       GXG_SECRET__GXG_OIDC_CLIENT_SECRET: {gen: owner, as28: ui_secrets}
       GXG_SECRET__GXG_PREVIEW_KEYS: {gen: "keyset:payload.preview_private", as28: payload_preview}
       TS_AUTHKEY: {gen: owner, as28: tailscale}
-    internal_urls: [GXG_SECRET__GXG_DB_DSN, GXG_DECIDER_URL]
+    internal_urls: [GXG_SECRET__GXG_DB_DSN, GXG_DECIDER_URL, GXG_TELEGRAM_ADMIN_URL]
   notifier:
     kind: app
     source: {dockerfile: deploy/railway/notifier.Dockerfile}
@@ -275,7 +277,9 @@ services:
       TELEGRAM_CHAT_REF_SECRET: {gen: random:48}  # >= 32 bytes; the image's entrypoint turns it into a file
       TELEGRAM_SVC_KEY: {gen: ed25519_seed}  # service JWT key, public half in the registry of the bundle
       TELEGRAM_WEBHOOK_HMAC: {gen: hmac:32}  # signs `telegram.message.created` to Signals (SI-03)
-    config: {TELEGRAM_SVC_PUBLIC_KEY: "ed25519_pub:TELEGRAM_SVC_KEY"}
+    config:
+      TELEGRAM_SVC_PUBLIC_KEY: "ed25519_pub:TELEGRAM_SVC_KEY"
+      TELEGRAM_ADMIN_CALLER_KEYS: "caller_keys:ui.GXG_SECRET__GXG_UI_SVC_KEY:approval-ui"  # who may call the admin API (:8082): `approval-ui=ed25519:<pub>`
     internal_urls: [TELEGRAM_SERVICE_DSN, TELEGRAM_ARCHIVE_DSN, TELEGRAM_APPROVAL_URL]
   telegram-db-init:  # job: migrations, roles and passwords of telegram-db; removed by `railway_deploy.py --finalize`
     kind: job
