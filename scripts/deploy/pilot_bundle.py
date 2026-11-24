@@ -10,7 +10,7 @@ The signing key lives in one place: the variable GXG_BUNDLE_SIGNING_KEY of the v
 railway_deploy.py, never deployed). This script reads it in memory, hands it to `gxg-policy build` through the child's
 environment, and never prints or writes it. It writes the public half (`GXG_BUNDLE_KEYS`) and the signed bundle
 (`GXG_BUNDLE_B64`, tar.gz) to the services that verify it. A bundle older than 24 h is rejected (GR-13): run this at
-least every 12 h with `--deploy`, because the containers unpack the variable at start.
+least every 12 h with `--deploy` (a planned cron service does it: deploy/railway/services.yaml `planned`), because the containers unpack the variable at start.
 """
 
 from __future__ import annotations
@@ -66,13 +66,16 @@ def public_key(seed_b64: str) -> str:
 def build(seed_b64: str, workdir: Path, out: rd.Out) -> Path:
     """`gxg-policy build` then `gxg-policy verify` into workdir/bundle; returns that directory."""
     bundle = workdir / "bundle"
-    version = subprocess.run(
-        ["git", "rev-parse", "HEAD"],  # noqa: S607
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    version = (
+        os.environ.get("RAILWAY_GIT_COMMIT_SHA")
+        or subprocess.run(  # a Railway build has no .git
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
     env = {**os.environ, SIGNING_VAR: seed_b64, "GXG_BUNDLE_KID": KID}
     base = [sys.executable, "-m", "gxg_policy.cli"]
     built = subprocess.run(  # noqa: S603

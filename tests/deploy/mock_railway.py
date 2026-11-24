@@ -9,7 +9,7 @@ from typing import Any
 MUTATIONS = {
     "ProjectCreate", "ServiceCreate", "ServiceDelete", "ServiceInstanceUpdate", "ServiceInstanceRedeploy",
     "ServiceConnect",
-    "VariableCollectionUpsert", "VolumeCreate", "ServiceDomainDelete", "CustomDomainDelete", "TcpProxyDelete",
+    "VariableCollectionUpsert", "VolumeCreate", "Deploy", "ServiceDomainDelete", "CustomDomainDelete", "TcpProxyDelete",
 }  # fmt: skip
 
 
@@ -87,6 +87,10 @@ class MockRailway:
     def op_ServiceInstanceUpdate(self, v: dict[str, Any]) -> dict[str, Any]:
         self.services[v["serviceId"]]["instance"].update(v["input"])
         return {"serviceInstanceUpdate": True}
+
+    def op_Deploy(self, v: dict[str, Any]) -> dict[str, Any]:
+        self.deploys = [*getattr(self, "deploys", []), v["s"]]
+        return {"serviceInstanceDeployV2": "deployment-id"}
 
     def op_ServiceInstanceRedeploy(self, v: dict[str, Any]) -> dict[str, Any]:
         return {"serviceInstanceRedeploy": True}

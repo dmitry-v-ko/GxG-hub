@@ -68,6 +68,7 @@ AS28: dict[str, frozenset[str]] = {
         {"admin"}
     ),  # the operator's browser sign-in of the invite page: client secret (a reference), session key
     "agent_token": frozenset({"pilot-agent"}),  # vault: the pilot agent's ContextForge API token (SEC-02)
+    "railway_token": frozenset({"bundle-reissue"}),  # planned cron job (services.yaml `planned`), not deployed yet
     "bundle_signing": frozenset({"bundle-signer"}),  # vault service, never deployed: signs the grants bundle (GR-11)
 }
 ROLE_OF = {  # AS-27: one role per process
@@ -160,7 +161,7 @@ Q_PROJECT_CREATE = """mutation ProjectCreate($input: ProjectCreateInput!) { proj
 Q_SERVICE_CREATE = "mutation ServiceCreate($input: ServiceCreateInput!) { serviceCreate(input: $input) { id name } }"
 Q_SERVICE_DELETE = "mutation ServiceDelete($id: String!, $environmentId: String) { serviceDelete(id: $id, environmentId: $environmentId) }"
 Q_INSTANCE = """query ServiceInstance($serviceId: String!, $environmentId: String!) {
-  serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { startCommand healthcheckPath restartPolicyType restartPolicyMaxRetries overlapSeconds } }"""
+  serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { startCommand healthcheckPath restartPolicyType restartPolicyMaxRetries overlapSeconds cronSchedule } }"""
 Q_INSTANCE_UPDATE = """mutation ServiceInstanceUpdate($serviceId: String!, $environmentId: String, $input: ServiceInstanceUpdateInput!) {
   serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }"""
 Q_TRIGGERS = """query DeploymentTriggers($projectId: String!, $environmentId: String!, $serviceId: String!) {
@@ -243,6 +244,25 @@ def validate_spec(spec: dict[str, Any]) -> list[str]:
         for proc in procs:
             if proc in services and not any(s.get("as28") == key for s in secrets_of(services[proc]).values()):
                 problems.append(f"{proc}: no secret of kind {key}, AS-28 expects one")
+    return problems
+
+
+def validate_planned(spec: dict[str, Any]) -> list[str]:
+    """The described-only services: a cron at least every 12 h, no public exposure, no copy of the signing key."""
+    problems: list[str] = []
+    for name, svc in (spec.get("planned") or {}).items():
+        minute, hour, *rest = str(svc.get("schedule", "")).split()
+        every = re.fullmatch(r"\*/(\d+)", hour)
+        if len(rest) != 3 or not (every and 0 < int(every[1]) <= 12 and minute.isdigit()):
+            problems.append(f"{name}: schedule must run every N hours, N <= 12 (GR-13), got {svc.get('schedule')!r}")
+        if svc.get("domain") or svc.get("domains") or svc.get("tcp_proxy"):
+            problems.append(f"{name}: public domain or TCP proxy in the spec (SEC-28)")
+        for var, sec in secrets_of(svc).items():
+            key = sec.get("as28")
+            if key not in AS28 or name not in AS28[key]:
+                problems.append(f"{name}: secret {var} ({key}) is not in the AS-28 table for this process")
+            if var == "GXG_BUNDLE_SIGNING_KEY":
+                problems.append(f"{name}: the signing key stays in bundle-signer, not here")
     return problems
 
 
@@ -634,7 +654,9 @@ class Deployer:
             )
         if (svc.get("env") or {}).get("TS_HOSTNAME"):
             want["overlapSeconds"] = 0  # the old container leaves the tailnet before the new one joins: no `<name>-2`
-        if svc["kind"] == "job":
+        if svc["kind"] == "cron":
+            want["cronSchedule"] = svc["schedule"]
+        if svc["kind"] in ("job", "cron"):
             want["restartPolicyType"] = "NEVER"
         elif svc["kind"] in ("app", "postgres"):
             want["restartPolicyType"] = "ON_FAILURE"
@@ -868,10 +890,12 @@ def dry_run(spec: dict[str, Any], out: Out) -> int:
             out.say(f"    owner variable {var}")
         for var in list(svc.get("seed") or {}) + list(svc.get("config") or {}):
             out.say(f"    generated/seeded once {var}")
-    for p in problems:
+    for name, svc in (spec.get("planned") or {}).items():
+        out.say(f"- {name} [{svc['kind']}, PLANNED, not deployed] cron {svc['schedule']}: {svc['start']}")
+    for p in problems + validate_planned(spec):
         out.say(f"PROBLEM {p}", err=True)
     out.say("dry-run: no API calls made" + (f", {len(problems)} problem(s)" if problems else ""))
-    return 1 if problems else 0
+    return 1 if problems or validate_planned(spec) else 0
 
 
 def main(argv: list[str] | None = None, *, transport: Transport | None = None, out: Out | None = None) -> int:

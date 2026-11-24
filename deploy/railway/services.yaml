@@ -321,3 +321,16 @@ services:
       GXG_TGDB_SUPERUSER_DSN: {gen: "superuser_dsn:telegram-db", as28: bootstrap}
       GXG_TGDB_ROLE_PASSWORDS: {gen: tg_role_passwords, as28: bootstrap}
     internal_urls: [GXG_TGDB_SUPERUSER_DSN]
+
+# Described, NOT deployed (M14 prep): this block is not under `services`, so apply, --verify and --audit never touch it.
+# To switch it on, the owner moves it under `services` (kind: cron sets cronSchedule, railway_deploy.py) and sets
+# RAILWAY_TOKEN; see docs/runbooks/bundle-reissue.md. The signing key stays in `bundle-signer`: this job reads it
+# through the Railway API in memory (pilot_bundle.py), it never holds a copy.
+planned:
+  bundle-reissue:
+    kind: cron
+    schedule: "0 */6 * * *"  # every 6 h, at most 12 h (GR-13: a bundle older than 24 h is refused, GxgBundleStale alerts at 13 h)
+    source: {dockerfile: deploy/railway/bundle-reissue.Dockerfile}
+    start: python scripts/deploy/pilot_bundle.py --deploy
+    secrets:
+      RAILWAY_TOKEN: {gen: owner, as28: railway_token}  # pending_owner_decision: a project token, see the runbook
