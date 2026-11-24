@@ -10,6 +10,7 @@ GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db).
 
 import json
 import os
+import socket
 from pathlib import Path
 
 import psycopg
@@ -48,8 +49,20 @@ def check(dsn: str) -> None:
             print("capability_hub.connections: MISSING", flush=True)
 
 
+def probe(targets: str) -> None:
+    """TCP connect only (no bytes sent) to `host:port,...`: does the service listen on the private network?"""
+    for target in filter(None, (t.strip() for t in targets.split(","))):
+        host, _, port = target.rpartition(":")
+        try:
+            socket.create_connection((host, int(port)), timeout=5).close()
+            print(f"listen {target}: open", flush=True)
+        except OSError as exc:
+            print(f"listen {target}: closed ({type(exc).__name__})", flush=True)
+
+
 def main() -> None:
     if os.environ.get("GXG_TGDB_MODE") == "check":
+        probe(os.environ.get("GXG_TGDB_PROBE", ""))
         return check(os.environ["GXG_TGDB_SUPERUSER_DSN"])
     if not DB.is_dir():  # name the real layout instead of a bare FileNotFoundError
         found = sorted(str(p) for p in Path("/app").rglob("*.sql") if ".venv" not in p.parts)
