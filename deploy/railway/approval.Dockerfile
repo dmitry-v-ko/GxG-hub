@@ -22,6 +22,7 @@ FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb
 COPY --from=build /app/.venv /app/.venv
 COPY approval/deploy/roles.sql /opt/gxg/roles.sql
 COPY deploy/railway/db_init.py /opt/gxg/db_init.py
+COPY deploy/railway/pilot_agent_job.py /opt/gxg/pilot_agent_job.py
 COPY deploy/railway/entrypoint.sh /opt/gxg/entrypoint.sh
 COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscale /usr/local/bin/
 RUN useradd --system --uid 10003 gxg && mkdir -p /var/lib/gxg && chown gxg /var/lib/gxg

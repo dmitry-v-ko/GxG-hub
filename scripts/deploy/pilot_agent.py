@@ -4,7 +4,7 @@
     RAILWAY_TOKEN=... python scripts/deploy/pilot_agent.py setup   # team, agent user + API token, gateways, virtual servers
     RAILWAY_TOKEN=... python scripts/deploy/pilot_agent.py probe   # the agent lists tools through ContextForge
 
-`setup` runs `deploy/railway/pilot_agent_job.py` as a temporary service (platform admin credentials by reference to
+`setup` runs `deploy/railway/pilot_agent_job.py` (it is in the Approval image) as a temporary service (platform admin credentials by reference to
 ContextForge's variables, never read here), reads its log (ids, tool names, the agent token SEALED to a one-time RSA key
 made in this process), stores the token in the vault service `pilot-agent` (PILOT_AGENT_TOKEN, AS-28 `agent_token`) and the
 ids in PILOT_AGENT_IDS, deletes the job. Neither the token nor the admin password is printed or written to disk.
@@ -29,11 +29,11 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]
 from scripts.deploy import railway_deploy as rd
 
 VAULT = "pilot-agent"
-JOB_FILE = rd.ROOT / "deploy/railway/pilot_agent_job.py"
 Q_DEPLOY = "mutation Deploy($s: String!, $e: String!) { serviceInstanceDeployV2(serviceId: $s, environmentId: $e) }"
 Q_DEPLOYMENTS = """query Deployments($input: DeploymentListInput!) { deployments(first: 1, input: $input) {
   edges { node { id status } } } }"""
 Q_LOGS = "query Logs($d: String!, $l: Int) { deploymentLogs(deploymentId: $d, limit: $l) { message } }"
+Q_BUILD_LOGS = "query BuildLogs($d: String!, $l: Int) { buildLogs(deploymentId: $d, limit: $l) { message } }"
 Q_UPSERT_ONE = "mutation Upsert($input: VariableUpsertInput!) { variableUpsert(input: $input) }"
 FINAL = {"SUCCESS", "FAILED", "CRASHED", "REMOVED"}
 OAEP = padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
@@ -78,7 +78,7 @@ class Jobs:
         )  # fmt: skip
         self.out.say(f"set {name} on {service}")
 
-    def run(self, name: str, variables: dict[str, str], timeout_s: int = 600) -> list[str]:
+    def run(self, name: str, variables: dict[str, str], timeout_s: int = 600, start: str = "") -> list[str]:
         """A temporary job service built from this repository: create, run once, return its log, delete."""
         dep = self.dep
         self.spec["services"][name] = {"kind": "job", "source": {"dockerfile": "deploy/railway/approval.Dockerfile"}}
@@ -104,7 +104,7 @@ class Jobs:
         self.api.call(
             rd.Q_INSTANCE_UPDATE,
             serviceId=dep.service_ids[name], environmentId=dep.env_id,
-            input={"startCommand": "/opt/gxg/entrypoint.sh python -c \"import os; exec(os.environ['GXG_JOB_PY'])\"",
+            input={"startCommand": start or "/opt/gxg/entrypoint.sh python /opt/gxg/pilot_agent_job.py",
                    "restartPolicyType": "NEVER"},
         )  # fmt: skip
         self.api.call(Q_DEPLOY, s=dep.service_ids[name], e=dep.env_id)
@@ -122,14 +122,14 @@ class Jobs:
                     if status in FINAL:
                         break
             lines = [m["message"] for m in self.api.call(Q_LOGS, d=deployment, l=2000)["deploymentLogs"]]
+            if status != "SUCCESS":  # why a deployment failed before it ran: the build log (no variable values in it)
+                build = self.api.call(Q_BUILD_LOGS, d=deployment, l=40)["buildLogs"]
+                lines += ["build: " + m["message"] for m in build]
             self.out.say(f"job {name}: {status or 'no deployment'}")
             return lines
         finally:
             self.api.call(rd.Q_SERVICE_DELETE, id=dep.service_ids[name], environmentId=dep.env_id)
             self.out.say(f"job {name} deleted")
-
-    def common(self) -> dict[str, str]:
-        return {"GXG_JOB_PY": JOB_FILE.read_text("utf-8")}
 
     def setup(self) -> int:
         private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -139,7 +139,7 @@ class Jobs:
         lines = self.run(
             "pilot-agent-setup",
             {
-                **self.common(), "GXG_JOB": "setup", "GXG_JOB_SEAL_PUBKEY": pem.decode(),
+                "GXG_JOB": "setup", "GXG_JOB_SEAL_PUBKEY": pem.decode(),
                 "PLATFORM_ADMIN_EMAIL": "${{contextforge.PLATFORM_ADMIN_EMAIL}}",
                 "PLATFORM_ADMIN_PASSWORD": "${{contextforge.PLATFORM_ADMIN_PASSWORD}}",
             },
@@ -164,7 +164,7 @@ class Jobs:
             lines = self.run(
                 "pilot-agent-probe",
                 {
-                    **self.common(), "GXG_JOB": "probe", "GXG_PROBE_SERVER": server,
+                    "GXG_JOB": "probe", "GXG_PROBE_SERVER": server,
                     "PILOT_AGENT_TOKEN": f"${{{{{VAULT}.PILOT_AGENT_TOKEN}}}}",
                 },
             )  # fmt: skip
