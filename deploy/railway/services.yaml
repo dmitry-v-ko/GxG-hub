@@ -209,6 +209,7 @@ services:
     volume: /var/lib/gxg  # only for the tailscale node state
     env:
       GXG_TS_STATE: /var/lib/gxg/tailscale
+      GXG_ADMIN_UI_URL: ${{ui.GXG_UI_PUBLIC_URL}}  # the invite page links to the «Passkey» page of the UI
       GXG_REQUIRE: GXG_ADMIN_OIDC_ISSUER GXG_ADMIN_OIDC_AUDIENCE GXG_ADMIN_OPERATORS TS_AUTHKEY
       GXG_LISTEN: 127.0.0.1:8092
       GXG_ADMIN_OIDC_ISSUER: ${{ui.GXG_OIDC_ISSUER}}
@@ -216,9 +217,13 @@ services:
       TS_HOSTNAME: gxg-approval-admin
       TS_TAGS: tag:approval-admin
       GXG_TS_SERVE: "443 - http://127.0.0.1:8092"
-    owner_env: [GXG_ADMIN_OPERATORS]  # oidc:<issuer>:<sub>,… (platform_admin)
+    owner_env: [GXG_ADMIN_OPERATORS, GXG_ADMIN_PUBLIC_URL]  # operators: oidc:<issuer>:<sub>,… (platform_admin); public URL: https://<node>.<tailnet>.ts.net (the OIDC redirect host of the invite page)
     secrets:
       GXG_SECRET__GXG_DB_DSN: {gen: "db_dsn:gxg_admin", as28: db_dsn}
+      # the invite page signs the operator in with the UI's OAuth client: the same client secret, by reference (Railway
+      # resolves it, this repository and the script never read it); a session key of its own
+      GXG_SECRET__GXG_ADMIN_OIDC_CLIENT_SECRET: {gen: "tpl:${{ui.GXG_SECRET__GXG_OIDC_CLIENT_SECRET}}", as28: admin_oidc}
+      GXG_SECRET__GXG_ADMIN_SESSION_KEY: {gen: random:32, as28: admin_oidc}
       TS_AUTHKEY: {gen: owner, as28: tailscale}  # its own key, tagged tag:approval-admin
     internal_urls: [GXG_SECRET__GXG_DB_DSN]
   ui:  # entry: tag:approval-ui, tailscale serve terminates TLS, the process listens on loopback only

@@ -63,6 +63,9 @@ AS28: dict[str, frozenset[str]] = {
     "webhook_secrets": frozenset({"notifier"}),
     "tailscale": frozenset({"ui", "admin"}),  # tag:approval-ui and tag:approval-admin entries (ADR-0003)
     "bootstrap": frozenset({"db-init", "telegram-db-init"}),  # transient job, removed by --finalize
+    "admin_oidc": frozenset(
+        {"admin"}
+    ),  # the operator's browser sign-in of the invite page: client secret (a reference), session key
     "bundle_signing": frozenset({"bundle-signer"}),  # vault service, never deployed: signs the grants bundle (GR-11)
 }
 ROLE_OF = {  # AS-27: one role per process

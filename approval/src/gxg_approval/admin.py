@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse, Response
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
 
+from . import admin_web
 from .decider import invite_hash
 
 STEP_UP_MAX_AGE_S = 300
@@ -49,6 +50,7 @@ class Deps:
     operators: frozenset[str]
     signing_key: Callable[[str], Any]  # token → verification key (PyJWKClient.get_signing_key_from_jwt in production)
     clock: Callable[[], float] = time.time
+    web: Any = None  # admin_web.Web: the operator's browser sign-in and the invite page (optional)
 
 
 class _Refused(Exception):
@@ -115,11 +117,18 @@ def create_app(deps: Deps) -> FastAPI:
         call("SELECT gxg_switch(%s, %s, %s, %s)", (body.scope, body.blocked, body.reason, who))
         return JSONResponse({"scope": body.scope, "blocked": body.blocked})
 
+    def issue_invite(who: str, human: str) -> str:
+        """The one place an invite is created (API and the operator page): audited in the same transaction."""
+        token = secrets.token_urlsafe(24)
+        call("SELECT gxg_passkey_invite(%s, %s, %s, %s)", (human, invite_hash(token), who, INVITE_TTL_S))
+        return token
+
     @app.post("/v1/passkey-invites")
     def invite(request: Request, body: Invite) -> Response:
         who = operator(request)
-        token = secrets.token_urlsafe(24)
-        call("SELECT gxg_passkey_invite(%s, %s, %s, %s)", (body.human, invite_hash(token), who, INVITE_TTL_S))
+        token = issue_invite(who, body.human)
         return JSONResponse({"human": body.human, "invite": token, "expires_in_s": INVITE_TTL_S})
 
+    if deps.web is not None:
+        admin_web.register(app, web=deps.web, deps=deps, issue_invite=issue_invite)
     return app

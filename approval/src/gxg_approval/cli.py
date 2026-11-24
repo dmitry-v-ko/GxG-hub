@@ -142,8 +142,20 @@ def _keys(args: argparse.Namespace) -> None:
         raise SystemExit("keys: rotate | remove --kid <kid> | release")
 
 
+class NoQuery(logging.Filter):
+    """SEC-17: uvicorn's access log line without the query string (`/auth/callback?code=…&state=…` → path only)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):  # client, method, path, http, code
+            record.args = (args[0], args[1], args[2].split("?", 1)[0], args[3], args[4])
+        return True
+
+
 def _serve(app: object, default_listen: str) -> None:
     import uvicorn
+
+    logging.getLogger("uvicorn.access").addFilter(NoQuery())
 
     from . import config as c
 
@@ -206,17 +218,39 @@ def _admin() -> None:
     issuer = c.env("GXG_ADMIN_OIDC_ISSUER")
     require_https(issuer, "GXG_ADMIN_OIDC_ISSUER")  # discovery and JWKS decide who an operator is
     with urllib.request.urlopen(issuer.removesuffix("/") + "/.well-known/openid-configuration", timeout=10) as r:  # noqa: S310 (configured https issuer)
-        jwks_uri = json.load(r)["jwks_uri"]
+        discovery = json.load(r)
+    jwks_uri = discovery["jwks_uri"]
     require_https(jwks_uri, "jwks_uri of GXG_ADMIN_OIDC_ISSUER")  # the keys that decide who an operator is
     operators = frozenset(o.strip() for o in c.env("GXG_ADMIN_OPERATORS").split(",") if o.strip())
     if not operators:
         raise SystemExit("GXG_ADMIN_OPERATORS: no platform_admin configured")
+    web = None
+    public_url = os.environ.get("GXG_ADMIN_PUBLIC_URL", "")
+    if public_url:  # the operator's browser sign-in and the invite page (admin_web)
+        import httpx
+
+        from .admin_web import Web
+
+        require_https(public_url, "GXG_ADMIN_PUBLIC_URL")
+        endpoints = {k: discovery[k] for k in ("authorization_endpoint", "token_endpoint")}
+        for key, url in endpoints.items():
+            require_https(url, f"{key} of GXG_ADMIN_OIDC_ISSUER")
+        web = Web(
+            public_url=public_url,
+            client_id=c.env("GXG_ADMIN_OIDC_AUDIENCE"),
+            client_secret=c.secret("GXG_ADMIN_OIDC_CLIENT_SECRET"),
+            session_key=c.secret("GXG_ADMIN_SESSION_KEY").encode(),
+            endpoints=lambda: endpoints,
+            http=httpx.Client(),
+            ui_url=os.environ.get("GXG_ADMIN_UI_URL", ""),
+        )
     deps = Deps(
         ConnectionPool(c.secret("GXG_DB_DSN"), kwargs={"autocommit": True}),
         issuer=issuer,
         audience=c.env("GXG_ADMIN_OIDC_AUDIENCE"),
         operators=operators,
         signing_key=jwt.PyJWKClient(jwks_uri, cache_keys=True).get_signing_key_from_jwt,
+        web=web,
     )
     _serve(create_app(deps), "0.0.0.0:8092")
 
