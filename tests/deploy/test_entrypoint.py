@@ -280,3 +280,25 @@ def test_numeric_run_as_user_for_an_image_whose_user_has_no_name(tmp_path: Path)
     assert done.returncode == 0, done.stderr
     calls = log.read_text()
     assert f"chown 10001 {volume}" in calls and "setpriv --reuid=10001 --regid=10001 --clear-groups" in calls
+
+
+def test_python_drop_when_the_image_has_no_setpriv(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls"
+    (bin_dir / "id").write_text('#!/bin/sh\n[ "$1" = "-u" ] && echo 0 || exit 1\n')
+    (bin_dir / "chown").write_text(f'#!/bin/sh\necho "chown $*" >>{log}\n')
+    (bin_dir / "python3").write_text(f'#!/bin/sh\necho "python3 user=$3 script=$4" >>{log}\n')
+    for f in bin_dir.iterdir():
+        f.chmod(0o755)
+    volume = tmp_path / "vol"
+    volume.mkdir()
+    env = {
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "GXG_VOLUME_DIRS": str(volume),
+        "GXG_RUN_AS": "10001",
+        "GXG_DROP_PYTHON": "1",
+    }
+    done = subprocess.run(["sh", str(ENTRY), "true"], env=env, capture_output=True, text=True, check=False, timeout=30)
+    assert done.returncode == 0, done.stderr
+    assert f"python3 user=10001 script={ENTRY}" in log.read_text()

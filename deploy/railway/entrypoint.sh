@@ -26,7 +26,22 @@ if [ "$(id -u)" = 0 ]; then
     for dir in ${GXG_VOLUME_DIRS:-/var/lib/gxg /var/lib/telegram}; do
       [ -d "$dir" ] && chown "$run_as" "$dir"
     done
-    exec setpriv --reuid="$run_as" --regid="$run_as" $groups "$0" "$@"
+    if [ -z "${GXG_DROP_PYTHON:-}" ] && command -v setpriv >/dev/null 2>&1; then
+      exec setpriv --reuid="$run_as" --regid="$run_as" $groups "$0" "$@"
+    fi
+    # an image without util-linux (ContextForge): the same drop with python
+    py="$(command -v python3 || echo /app/.venv/bin/python)"
+    exec "$py" -c 'import os, pwd, sys
+user = sys.argv[1]
+try:
+    entry = pwd.getpwnam(user)
+    uid, gid = entry.pw_uid, entry.pw_gid
+except KeyError:
+    uid = gid = int(user)
+os.setgroups([])
+os.setgid(gid)
+os.setuid(uid)
+os.execv(sys.argv[2], sys.argv[2:])' "$run_as" "$0" "$@"
   fi
 fi
 
