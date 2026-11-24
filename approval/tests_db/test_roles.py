@@ -79,7 +79,11 @@ MATRIX: dict[str, dict[str, dict[str, set[str] | str]]] = {
 FUNCTIONS = {
     # T1, T6, T9; /metrics (M10)
     "gxg_api": {"gxg_record_auto_decision", "gxg_received_approvals", "gxg_cancel", "gxg_dispatch", "gxg_metrics"},
-    "gxg_ui": {"gxg_resolve_manual", "gxg_link_code"},  # T18; Telegram link code (M9). T2-T4: the decider (M10)
+    "gxg_ui": {
+        "gxg_resolve_manual",
+        "gxg_link_code",
+        "gxg_decide_session",
+    },  # T18; link code (M9); AS-30a: T2-T4 without step-up (M13). With step-up: the decider (M10)
     "gxg_decider": {"gxg_decision_challenge", "gxg_decide", "gxg_enroll_challenge", "gxg_enroll"},  # AS-30
     "gxg_admin": {"gxg_switch", "gxg_passkey_invite"},  # AS-24, EX-13
     "gxg_notifier": {"gxg_link_claim"},  # `/link <code>` (M9)

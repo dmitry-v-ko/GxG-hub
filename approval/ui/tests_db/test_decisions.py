@@ -28,7 +28,9 @@ def test_approve_then_status(browser: Any, propose: Any, row_of: Any, owner: Any
     r = browser.login(HUMAN1).decide(intent)
     assert r.status_code == 303 and r.headers["location"] == f"/intents/{intent['intent_id']}"
     assert row_of(intent["intent_id"])["status"] == "approved"
-    assert owner.execute("SELECT decided_by, step_up, comment FROM decisions").fetchall() == [(HUMAN1, True, None)]
+    assert owner.execute("SELECT decided_by, step_up, comment FROM decisions").fetchall() == [
+        (HUMAN1, False, None)
+    ]  # AS-30a: no step-up, one button
 
 
 def test_reject(browser: Any, propose: Any, row_of: Any) -> None:

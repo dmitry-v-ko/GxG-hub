@@ -48,6 +48,30 @@ def report(conn: psycopg.Connection) -> None:
     for principal, total, enrolled in rows:
         print(f"passkey {principal}: credentials={total} enrolled_by_operator={enrolled}")
     print(f"passkey principals: {len(rows)}")
+    try:  # AS-30a: which pending intents are decided by one button, and who may call which decision function
+        for intent_id, status, step_up in conn.execute(
+            "SELECT intent_id, status, step_up_required FROM intents ORDER BY created_at DESC LIMIT 10"
+        ):
+            print(f"intent {intent_id}: status={status} step_up_required={step_up}")
+        for proc in (
+            "gxg_decide_session(text, uuid, integer, text, text, text)",
+            "gxg_decide(bytea, bytea, bigint, text, jsonb)",
+        ):
+            row = conn.execute("SELECT to_regprocedure(%s)", (proc,)).fetchone()
+            if row and row[0]:
+                grants = [
+                    r
+                    for r in ("gxg_ui", "gxg_decider")
+                    if (
+                        conn.execute("SELECT has_function_privilege(%s, %s, 'EXECUTE')", (r, proc)).fetchone()
+                        or [False]
+                    )[0]
+                ]
+                print(f"function {proc.split('(')[0]}: EXECUTE for {grants}")
+            else:
+                print(f"function {proc.split('(')[0]}: MISSING")
+    except psycopg.Error as exc:
+        print(f"decision report unavailable ({type(exc).__name__})")
 
 
 if __name__ == "__main__":
