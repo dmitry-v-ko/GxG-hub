@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """deploy/railway/entrypoint.sh with stub tailscale binaries, and the Railway Dockerfiles."""
 
 from __future__ import annotations
