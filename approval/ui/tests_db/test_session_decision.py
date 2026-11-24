@@ -22,7 +22,7 @@ def press(browser: Any, intent: dict[str, Any], decision: str = "approve", **ove
     """The form of the card without an assertion: what the button sends."""
     body = {"csrf": browser.csrf, "version": intent["version"], "args_hash": intent["canonical_args_hash"],
             "decision": decision, **over}  # fmt: skip
-    return browser.client.post(f"/intents/{intent['intent_id']}/decision", data=body)
+    return browser.client.post(f"/intents/{intent['intent_id']}/decision", data=body, follow_redirects=False)
 
 
 def decisions(owner: psycopg.Connection[Any]) -> list[tuple[Any, ...]]:

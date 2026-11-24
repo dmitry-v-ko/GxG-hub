@@ -219,13 +219,13 @@ def test_assertion_for_another_decision_version_or_hash(
 ) -> None:
     """AC-M10-08: signed «reject» sent as «approve» records a reject (the challenge decides, not the form); signed
     for version 1, sent after the version moved → 409; a challenge for another args hash is refused at issue."""
-    intent = new_intent(propose, row_of)
+    intent = new_intent(propose, row_of, tool=WIRE)  # AS-30a: without step-up a button decides, no assertion
     key = passkey(browser.login(HUMAN1))
     signed_reject = key.assertion(browser.challenge(intent, "reject").text)
     assert browser.challenge(intent, args_hash="0" * 64).status_code == 409
     world.set_policy("t-alpha", [{"id": "two", "match": {"tools": ["demo.message.propose"]},
-                                  "decision": "require_approval", "approvals": 2}])  # fmt: skip
-    quorum = new_intent(propose, row_of, args={"text": "quorum", "n": 3})
+                                  "decision": "require_approval", "approvals": 2, "step_up": True}])  # fmt: skip
+    quorum = new_intent(propose, row_of, args={"text": "quorum", "n": 3})  # step_up_required by the rule
     stale = key.assertion(browser.challenge(quorum).text)  # version 1
     assert make_browser().login(HUMAN2).decide(quorum).status_code == 303  # version 2 now
     assert browser.decide(quorum, assertion=stale).status_code == 409
@@ -268,7 +268,7 @@ def test_passkey_not_enrolled_through_the_decider(
 
     from webauthn.helpers import base64url_to_bytes, parse_attestation_object
 
-    intent = new_intent(propose, row_of)
+    intent = new_intent(propose, row_of, tool=WIRE)
     browser.login(HUMAN1)
     key = soft_authenticator()
     reg = json.loads(key.register('{"challenge": "AAAA"}'))

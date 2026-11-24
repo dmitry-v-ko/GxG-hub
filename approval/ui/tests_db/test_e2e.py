@@ -153,13 +153,14 @@ def test_approver_signs_in_and_approves(stack: dict[str, Any], propose: Any, exe
     assert out["noPasskeyShown"] == 1 and out["registered"] == "Passkey зарегистрирован"
     assert (out["wireBefore"], out["wireDecisionStatus"], out["wireAfter"]) == ("pending_approval", 303, "approved")
     assert "(step-up)" in out["wireDecisions"]
-    for intent in (ids["plain"], ids["wire"]):  # AS-30: every decision carries the real browser's assertion
-        row = owner.execute(
-            "SELECT decided_by, step_up, webauthn_assertion ?& ARRAY['authenticator_data', 'signature'] "
-            "FROM decisions WHERE intent_id = %s",
-            (intent,),
-        ).fetchall()
-        assert row == [(stack["alice"], True, True)]
+    sql = (  # decided_by, step_up, whether the row carries the real browser's WebAuthn assertion
+        "SELECT decided_by, step_up, webauthn_assertion ?& ARRAY['authenticator_data', 'signature'] "
+        "FROM decisions WHERE intent_id = %s"
+    )
+    # AS-30a: an intent without step-up is decided by the button alone (no assertion), a step-up one carries the
+    # assertion of the real browser (AS-30). Both paths run in the same browser.
+    assert owner.execute(sql, (ids["plain"],)).fetchall() == [(stack["alice"], False, None)]
+    assert owner.execute(sql, (ids["wire"],)).fetchall() == [(stack["alice"], True, True)]
 
     execute(ids["plain"])  # M8's executor is not on this branch: T7, T9, T11 through the real role functions
     assert browser(stack, "status", ids)["final"] == "succeeded"

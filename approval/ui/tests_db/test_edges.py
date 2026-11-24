@@ -112,7 +112,7 @@ def test_comment_limit(browser: Any, propose: Any, row_of: Any, owner: Any) -> N
 
 
 def test_missing_fields(browser: Any, propose: Any, row_of: Any, owner: Any) -> None:
-    row = intent(propose, row_of)
+    row = intent(propose, row_of, tool=WIRE)  # step-up: the passkey path (AS-30a: without it a button decides)
     browser.login(HUMAN1)
     url = f"/intents/{row['intent_id']}/challenge"
     base = {"version": 1, "args_hash": row["canonical_args_hash"], "decision": "approve"}
@@ -356,13 +356,13 @@ def test_decision_refusals_keep_their_text(
 ) -> None:
     """The decider's refusal text reaches the page; the current bundle is re-checked at the POST itself (an approver
     removed after the challenge); a broken passkey body says what is missing."""
-    row = intent(propose, row_of)
+    row = intent(propose, row_of, tool=WIRE)  # step-up: the passkey path
     key = passkey(browser.login(HUMAN1))
     assertion = key.assertion(browser.challenge(row, "reject").text)
     assert browser.decide(row, "reject", assertion=assertion).status_code == 303
     again = browser.decide(row, "reject", assertion=assertion)
     assert again.status_code == 403 and error_text(again) == "assertion refused"  # the decider's own message
-    other = intent(propose, row_of, args={"text": "o", "n": 9})
+    other = intent(propose, row_of, tool=WIRE, args={"text": "o", "n": 9})
     late = key.assertion(browser.challenge(other, "reject").text)
     beta = make_browser().login("oidc:https://idp.example.invalid:beta")
     r = beta.decide(other, "reject", assertion=late)
