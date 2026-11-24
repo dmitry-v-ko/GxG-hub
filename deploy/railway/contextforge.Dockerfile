@@ -10,5 +10,8 @@ FROM ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e0
 COPY gateway/contextforge/gxg_identity /app/plugins/gxg_identity
 COPY deploy/railway/entrypoint.sh /opt/gxg/entrypoint.sh
 COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscale /usr/local/bin/
+# Railway mounts the volume root-owned: the entrypoint starts as root, chowns it and drops to the image's user (10001).
+USER root
+ENV GXG_RUN_AS=10001
 ENTRYPOINT ["/opt/gxg/entrypoint.sh"]
 CMD ["./docker-entrypoint.sh"]

@@ -15,11 +15,19 @@ set -eu
 
 # Railway mounts volumes root-owned. Started as root (the images do not set USER), take the volume directories over and
 # re-run this script as the unprivileged service user before anything else: no secret file or process ever belongs to root.
-if [ "$(id -u)" = 0 ] && id gxg >/dev/null 2>&1; then
-  for dir in ${GXG_VOLUME_DIRS:-/var/lib/gxg /var/lib/telegram}; do
-    [ -d "$dir" ] && chown gxg "$dir"
-  done
-  exec setpriv --reuid=gxg --regid=gxg --init-groups "$0" "$@"
+# GXG_RUN_AS: the user to become (default `gxg`; a numeric uid for an image whose user has no name, ContextForge: 10001).
+run_as="${GXG_RUN_AS:-gxg}"
+if [ "$(id -u)" = 0 ]; then
+  case "$run_as" in
+    *[!0-9]*) groups="--init-groups"; known=$(id "$run_as" >/dev/null 2>&1 && echo yes || true) ;;
+    *) groups="--clear-groups"; known=yes ;;
+  esac
+  if [ -n "${known:-}" ]; then
+    for dir in ${GXG_VOLUME_DIRS:-/var/lib/gxg /var/lib/telegram}; do
+      [ -d "$dir" ] && chown "$run_as" "$dir"
+    done
+    exec setpriv --reuid="$run_as" --regid="$run_as" $groups "$0" "$@"
+  fi
 fi
 
 # Railway may run this script twice (ENTRYPOINT and an explicit start command): the second pass only execs.
@@ -81,7 +89,17 @@ if [ -n "${TS_HOSTNAME:-}" ]; then
   SELFCHECK="${GXG_TS_SELFCHECK:-1}"
   socks=""
   [ "$SELFCHECK" = 1 ] && socks="--socks5-server=localhost:1055" # loopback only: the self-check reaches its own tailnet name through it
-  tailscaled --tun=userspace-networking --state=mem: --socket="$TSDIR/tailscaled.sock" $socks >/dev/null 2>&1 &
+  # GXG_TS_STATE: a directory on the service's volume. The node (and so its name) then survives restarts and deploys;
+  # without it the state is in memory and every start registers a new node (`<name>-2`, `-3`, ...).
+  state="mem:"
+  have_state=""
+  if [ -n "${GXG_TS_STATE:-}" ]; then
+    mkdir -p "$GXG_TS_STATE"
+    chmod 700 "$GXG_TS_STATE"
+    state="$GXG_TS_STATE/tailscaled.state"
+    [ -s "$state" ] && have_state=1
+  fi
+  tailscaled --tun=userspace-networking --state="$state" --socket="$TSDIR/tailscaled.sock" $socks >/dev/null 2>&1 &
   TS="tailscale --socket=$TSDIR/tailscaled.sock"
   i=0
   until $TS version >/dev/null 2>&1; do
@@ -89,8 +107,16 @@ if [ -n "${TS_HOSTNAME:-}" ]; then
     [ "$i" -lt 50 ] || { echo "entrypoint: tailscaled did not start" >&2; exit 1; }
     sleep 0.2
   done
-  $TS up --auth-key="file:$TSDIR/authkey" --hostname="$TS_HOSTNAME" --advertise-tags="$TS_TAGS" \
-    --accept-dns=false --accept-routes=false --advertise-exit-node=false >/dev/null
+  up_flags="--hostname=$TS_HOSTNAME --advertise-tags=$TS_TAGS --accept-dns=false --accept-routes=false --advertise-exit-node=false"
+  joined=""
+  if [ -n "$have_state" ]; then # known node: no key needed; if the control plane forgot it, fall back to the key
+    # shellcheck disable=SC2086
+    $TS up --timeout=30s $up_flags >/dev/null 2>&1 && joined=1 && echo "entrypoint: rejoined the tailnet with the saved node state"
+  fi
+  if [ -z "$joined" ]; then
+    # shellcheck disable=SC2086
+    $TS up --auth-key="file:$TSDIR/authkey" $up_flags >/dev/null
+  fi
   rm -f "$TSDIR/authkey"
   printf '%s\n' "$GXG_TS_SERVE" | while read -r port path target; do
     [ -n "$port" ] || continue

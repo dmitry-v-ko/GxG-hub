@@ -56,7 +56,9 @@ services:
     source: {dockerfile: deploy/railway/contextforge.Dockerfile}
     port: 4444
     healthcheck: /health
+    volume: /var/lib/gxg  # only for the tailscale node state
     env:
+      GXG_TS_STATE: /var/lib/gxg/tailscale
       GXG_REQUIRE: APP_DOMAIN PLATFORM_ADMIN_EMAIL TS_AUTHKEY
       HOST: 0.0.0.0
       PORT: "4444"
@@ -204,7 +206,9 @@ services:
     source: {dockerfile: deploy/railway/approval.Dockerfile}
     start: /opt/gxg/entrypoint.sh gxg-approval admin
     port: 8092
+    volume: /var/lib/gxg  # only for the tailscale node state
     env:
+      GXG_TS_STATE: /var/lib/gxg/tailscale
       GXG_REQUIRE: GXG_ADMIN_OIDC_ISSUER GXG_ADMIN_OIDC_AUDIENCE GXG_ADMIN_OPERATORS TS_AUTHKEY
       GXG_LISTEN: 127.0.0.1:8092
       GXG_ADMIN_OIDC_ISSUER: ${{ui.GXG_OIDC_ISSUER}}
@@ -227,6 +231,7 @@ services:
       GXG_LISTEN: 127.0.0.1:8443
       GXG_DECIDER_URL: http://${{decider.RAILWAY_PRIVATE_DOMAIN}}:8093
       GXG_BUNDLE_STATE_FILE: /var/lib/gxg/bundle-state.json
+      GXG_TS_STATE: /var/lib/gxg/tailscale  # the node and its name survive restarts
       TS_HOSTNAME: gxg-approval-ui
       TS_TAGS: tag:approval-ui
       GXG_TS_SERVE: "443 - http://127.0.0.1:8443"

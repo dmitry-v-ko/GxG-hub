@@ -25,6 +25,7 @@ def stubs(tmp_path: Path, *, funnel: str = "No serve config") -> Path:
 echo "tailscale $*" >>{tmp_path}/calls
 case "$*" in *"funnel status"*) echo "{funnel}";; esac
 case "$*" in *"status --json"*) echo '{{"MagicDNSSuffix": "tail1.ts.net", "CertDomains": ["h.tail1.ts.net"], "Peer": {{"k": {{"DNSName": "other.tail1.ts.net."}}}}, "Self": {{"HostName": "h", "DNSName": "h-2.tail1.ts.net."}}}}';; esac
+case "$*" in "--socket="*" up "*) case "$*" in *--auth-key*) ;; *) [ -e {tmp_path}/up-needs-key ] && exit 1;; esac;; esac
 for a in "$@"; do case "$a" in --auth-key=file:*) cat "${{a#--auth-key=file:}}" >{tmp_path}/key-seen;; esac; done
 """
     )
@@ -213,3 +214,69 @@ def test_tailnet_selfcheck_logs_names_and_status_codes_only(tmp_path: Path) -> N
     )  # the name it really got, not the requested one
     assert "--socks5-server=localhost:1055" in (tmp_path / "calls").read_text()
     assert AUTHKEY not in out + done.stderr and "secret-MARKER" not in out + done.stderr
+
+
+def state_env(tmp_path: Path) -> dict[str, str]:
+    return {
+        "TS_HOSTNAME": "h",
+        "TS_TAGS": "tag:x",
+        "TS_AUTHKEY": AUTHKEY,
+        "GXG_TS_SERVE": "443 - http://127.0.0.1:8443",
+        "GXG_TS_STATE": str(tmp_path / "vol/tailscale"),
+    }
+
+
+def test_node_state_lives_on_the_volume_and_the_second_start_needs_no_key(tmp_path: Path) -> None:
+    first = run_entry(tmp_path, state_env(tmp_path), "true")
+    assert first.returncode == 0, first.stderr
+    state_dir = tmp_path / "vol/tailscale"
+    assert oct(state_dir.stat().st_mode & 0o777) == "0o700"
+    calls = (tmp_path / "calls").read_text()
+    assert f"--state={state_dir}/tailscaled.state" in calls and "--state=mem:" not in calls
+    assert "--auth-key=file:" in calls  # first login: the key
+    (state_dir / "tailscaled.state").write_text("node")  # what tailscaled leaves behind
+    (tmp_path / "calls").unlink()
+    (tmp_path / "key-seen").unlink()
+    second = run_entry(tmp_path, state_env(tmp_path), "true")
+    assert second.returncode == 0, second.stderr
+    again = (tmp_path / "calls").read_text()
+    assert " up " in again and "--auth-key" not in again  # a known node rejoins without the key
+    assert not (tmp_path / "key-seen").exists()
+    assert AUTHKEY not in first.stdout + first.stderr + second.stdout + second.stderr
+
+
+def test_a_forgotten_node_falls_back_to_the_key(tmp_path: Path) -> None:
+    state_dir = tmp_path / "vol/tailscale"
+    state_dir.mkdir(parents=True)
+    (state_dir / "tailscaled.state").write_text("node")
+    bin_dir = stubs(tmp_path)
+    (tmp_path / "up-needs-key").write_text("")
+    assert bin_dir.exists()
+    done = run_entry(tmp_path, state_env(tmp_path), "true")
+    assert done.returncode == 0, done.stderr
+    assert (tmp_path / "key-seen").read_text() == AUTHKEY  # the control plane lost the node: login with the key
+
+
+def test_without_a_state_directory_the_state_stays_in_memory(tmp_path: Path) -> None:
+    env = state_env(tmp_path)
+    del env["GXG_TS_STATE"]
+    assert run_entry(tmp_path, env, "true").returncode == 0
+    assert "--state=mem:" in (tmp_path / "calls").read_text()
+
+
+def test_numeric_run_as_user_for_an_image_whose_user_has_no_name(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls"
+    (bin_dir / "id").write_text('#!/bin/sh\n[ "$1" = "-u" ] && echo 0 || exit 1\n')
+    (bin_dir / "chown").write_text(f'#!/bin/sh\necho "chown $*" >>{log}\n')
+    (bin_dir / "setpriv").write_text(f'#!/bin/sh\necho "setpriv $*" >>{log}\n')
+    for f in bin_dir.iterdir():
+        f.chmod(0o755)
+    volume = tmp_path / "vol"
+    volume.mkdir()
+    env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "GXG_VOLUME_DIRS": str(volume), "GXG_RUN_AS": "10001"}
+    done = subprocess.run(["sh", str(ENTRY), "true"], env=env, capture_output=True, text=True, check=False, timeout=30)
+    assert done.returncode == 0, done.stderr
+    calls = log.read_text()
+    assert f"chown 10001 {volume}" in calls and "setpriv --reuid=10001 --regid=10001 --clear-groups" in calls
