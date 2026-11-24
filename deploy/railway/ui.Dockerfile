@@ -22,6 +22,8 @@ RUN uv sync --no-dev --no-editable
 FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 COPY --from=build /app/approval/ui/.venv /app/approval/ui/.venv
 RUN useradd --system --uid 10002 gxg && mkdir -p /var/lib/gxg && chown gxg /var/lib/gxg
+# curl: the tailnet self-check of entrypoint.sh
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY deploy/railway/entrypoint.sh /opt/gxg/entrypoint.sh
 COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscale /usr/local/bin/

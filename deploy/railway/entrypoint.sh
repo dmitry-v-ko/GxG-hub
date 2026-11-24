@@ -78,7 +78,10 @@ if [ -n "${TS_HOSTNAME:-}" ]; then
   mkdir -p "$TSDIR"
   printf '%s' "$TS_AUTHKEY" >"$TSDIR/authkey"
   unset TS_AUTHKEY
-  tailscaled --tun=userspace-networking --state=mem: --socket="$TSDIR/tailscaled.sock" >/dev/null 2>&1 &
+  SELFCHECK="${GXG_TS_SELFCHECK:-1}"
+  socks=""
+  [ "$SELFCHECK" = 1 ] && socks="--socks5-server=localhost:1055" # loopback only: the self-check reaches its own tailnet name through it
+  tailscaled --tun=userspace-networking --state=mem: --socket="$TSDIR/tailscaled.sock" $socks >/dev/null 2>&1 &
   TS="tailscale --socket=$TSDIR/tailscaled.sock"
   i=0
   until $TS version >/dev/null 2>&1; do
@@ -100,6 +103,33 @@ if [ -n "${TS_HOSTNAME:-}" ]; then
   if $TS funnel status 2>&1 | grep -qi 'funnel on'; then
     echo "entrypoint: funnel is on, refusing to start (SEC-27)" >&2
     exit 1
+  fi
+
+  # Self-check (log only: tailnet names, serve rules, HTTP status codes; no variable value, no response body).
+  if [ "$SELFCHECK" = 1 ]; then
+    echo "selfcheck: tailscale status"
+    $TS status --peers=false 2>&1 || true
+    echo "selfcheck: tailscale serve status"
+    $TS serve status 2>&1 || true
+    json="$($TS status --json 2>/dev/null || true)"
+    suffix="$(printf '%s' "$json" | sed -n 's/.*"MagicDNSSuffix": *"\([^"]*\)".*/\1/p' | head -n 1)"
+    # an empty CertDomains means HTTPS certificates are not enabled for the tailnet: `serve --https` cannot terminate TLS
+    echo "selfcheck: tailnet=${suffix:-unknown} cert_domains=$(printf '%s' "$json" | tr -d '\n ' | sed -n 's/.*"CertDomains":\(\[[^]]*\]\).*/\1/p')"
+    (
+      sleep "${GXG_SELFCHECK_DELAY:-15}"
+      port="${GXG_LISTEN##*:}"
+      [ -n "${GXG_LISTEN:-}" ] || port="${PORT:-}"
+      paths="${GXG_SELFCHECK_PATHS:-/healthz /login}"
+      if ! command -v curl >/dev/null 2>&1; then echo "selfcheck: curl is not installed in this image"; exit 0; fi
+      for path in $paths; do
+        res="$(curl -sS -o /dev/null -m 10 -w 'code=%{http_code}' "http://127.0.0.1:$port$path" 2>&1)" || true
+        echo "selfcheck: app http://127.0.0.1:$port$path $res"
+      done
+      for path in $paths; do
+        res="$(curl -sS -o /dev/null -m 20 --socks5-hostname localhost:1055 -w 'code=%{http_code}' "https://$TS_HOSTNAME.$suffix$path" 2>&1)" || true
+        echo "selfcheck: tailnet https://$TS_HOSTNAME.$suffix$path $res"
+      done
+    ) &
   fi
 fi
 

@@ -25,6 +25,8 @@ COPY deploy/railway/db_init.py /opt/gxg/db_init.py
 COPY deploy/railway/entrypoint.sh /opt/gxg/entrypoint.sh
 COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscale /usr/local/bin/
 RUN useradd --system --uid 10003 gxg && mkdir -p /var/lib/gxg && chown gxg /var/lib/gxg
+# curl: the tailnet self-check of entrypoint.sh
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
 # Railway mounts volumes root-owned: the entrypoint starts as root, chowns them and drops to gxg (setpriv) before anything else.
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1
 ENTRYPOINT ["/opt/gxg/entrypoint.sh"]

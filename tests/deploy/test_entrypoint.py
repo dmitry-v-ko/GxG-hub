@@ -17,12 +17,13 @@ SERVE = "443 /servers http://127.0.0.1:4444/servers\n443 /health http://127.0.0.
 
 def stubs(tmp_path: Path, *, funnel: str = "No serve config") -> Path:
     bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
+    bin_dir.mkdir(exist_ok=True)
     (bin_dir / "tailscaled").write_text(f'#!/bin/sh\necho "tailscaled $*" >>{tmp_path}/calls\n')
     (bin_dir / "tailscale").write_text(
         f"""#!/bin/sh
 echo "tailscale $*" >>{tmp_path}/calls
 case "$*" in *"funnel status"*) echo "{funnel}";; esac
+case "$*" in *"status --json"*) echo '{{"MagicDNSSuffix": "tail1.ts.net", "CertDomains": ["h.tail1.ts.net"]}}';; esac
 for a in "$@"; do case "$a" in --auth-key=file:*) cat "${{a#--auth-key=file:}}" >{tmp_path}/key-seen;; esac; done
 """
     )
@@ -38,6 +39,7 @@ def run_entry(
         "PATH": f"{stubs(tmp_path, funnel=funnel)}:{os.environ['PATH']}",
         "GXG_FILES_DIR": str(tmp_path / "files"),
         "TS_STATE_DIR": str(tmp_path / "ts"),
+        "GXG_TS_SELFCHECK": "0",
         **extra,
     }
     return subprocess.run(
@@ -143,6 +145,7 @@ def test_a_second_pass_through_the_entrypoint_only_execs(tmp_path: Path) -> None
         "PATH": f"{stubs(tmp_path)}:{os.environ['PATH']}",
         "GXG_FILES_DIR": str(tmp_path / "f"),
         "TS_STATE_DIR": str(tmp_path / "ts"),
+        "GXG_TS_SELFCHECK": "0",
     }
     env |= {
         "GXG_SECRET__GXG_DB_DSN": "dsn-MARKER",
@@ -175,3 +178,34 @@ def test_root_start_takes_the_volume_and_drops_to_the_service_user(tmp_path: Pat
     calls = log.read_text()
     assert f"chown gxg {volume}" in calls
     assert "setpriv --reuid=gxg --regid=gxg --init-groups" in calls and str(ENTRY) in calls
+
+
+def test_tailnet_selfcheck_logs_names_and_status_codes_only(tmp_path: Path) -> None:
+    bin_dir = stubs(tmp_path)
+    (bin_dir / "curl").write_text(
+        f'#!/bin/sh\nfor a; do last="$a"; done\necho "$last" >>{tmp_path}/urls\nprintf "code=200"\n'
+    )
+    (bin_dir / "curl").chmod(0o755)
+    done = run_entry(
+        tmp_path,
+        {
+            "TS_HOSTNAME": "h",
+            "TS_TAGS": "tag:x",
+            "TS_AUTHKEY": AUTHKEY,
+            "GXG_TS_SERVE": "443 - http://127.0.0.1:8443",
+            "GXG_TS_SELFCHECK": "1",
+            "GXG_SELFCHECK_DELAY": "0",
+            "GXG_LISTEN": "127.0.0.1:8443",
+            "GXG_SECRET__X": "secret-MARKER",
+        },
+        "true",
+    )
+    assert done.returncode == 0, done.stderr
+    out = done.stdout
+    assert (
+        "tailnet=tail1.ts.net" in out and 'cert_domains=["h.tail1.ts.net"]' in out
+    )  # from status --json, not typed in
+    assert "selfcheck: app http://127.0.0.1:8443/login code=200" in out
+    assert "selfcheck: tailnet https://h.tail1.ts.net/login code=200" in out
+    assert "--socks5-server=localhost:1055" in (tmp_path / "calls").read_text()
+    assert AUTHKEY not in out + done.stderr and "secret-MARKER" not in out + done.stderr
