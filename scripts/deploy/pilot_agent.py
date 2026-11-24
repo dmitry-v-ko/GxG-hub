@@ -213,7 +213,7 @@ class Jobs:
             source={"repo": "dmitry-v-ko/gxg-telegram-service", "branch": "claude/m13-railway"},
         )
         for line in lines:
-            if not line.startswith("build: "):
+            if not line.startswith("build: ") or re.search(r"Failed|not found|error", line):
                 self.out.say("  " + line[:300])
         return 0
 

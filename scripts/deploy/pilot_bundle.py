@@ -63,6 +63,13 @@ def public_key(seed_b64: str) -> str:
     return "ed25519:" + str(rd.b64url(raw))
 
 
+def manifests() -> list[str]:
+    """`--manifest` for every connector manifest kept in policies/pilot/manifests/<connector>/gxg-manifest.yaml (with its schemas/): the tools of a connector in the registry
+    (AS-26) come from its manifest, and the pilot's Telegram service has effect tools the old in-repo manifest lacks."""
+    files = sorted((POLICIES / "manifests").glob("*/gxg-manifest.yaml"))
+    return [arg for f in files for arg in ("--manifest", str(f))]
+
+
 def build(seed_b64: str, workdir: Path, out: rd.Out) -> Path:
     """`gxg-policy build` then `gxg-policy verify` into workdir/bundle; returns that directory."""
     bundle = workdir / "bundle"
@@ -76,7 +83,7 @@ def build(seed_b64: str, workdir: Path, out: rd.Out) -> Path:
     env = {**os.environ, SIGNING_VAR: seed_b64, "GXG_BUNDLE_KID": KID}
     base = [sys.executable, "-m", "gxg_policy.cli"]
     built = subprocess.run(  # noqa: S603
-        [*base, "build", str(POLICIES), "--out", str(bundle), "--bundle-version", version],
+        [*base, "build", str(POLICIES), "--out", str(bundle), "--bundle-version", version, *manifests()],
         env=env,
         check=False,
         capture_output=True,
