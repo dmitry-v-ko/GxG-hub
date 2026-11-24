@@ -189,3 +189,5 @@
 - Задачи иногда падают на сборке («couldn't locate the dockerfile in code archive»), если запускаются в первую минуту после push в ветку: Railway берёт ещё не обновлённый архив. Достаточно повторить; `pilot_agent.py` печатает причину.
 - Токены агента от трёх неудачных запусков setup не отозваны и действуют до 30 дней (их значения нигде не сохранены). Отозвать через admin API ContextForge.
 - Каждый запуск `railway_deploy.py` пересоздаёт `db-init`/`telegram-db-init` (transient), после чего нужен `--finalize` (сделан).
+
+**Токены агента:** отозваны 5 старых токенов `agent-t-pilot-pilot-*` (задача `pilot-agent-revoke`, значения не печатались; их было пять, не три: каждый неудачный запуск `setup` оставлял токен), остался один, из `pilot-agent.PILOT_AGENT_TOKEN`; контрольный `tools/list` им через ContextForge успешен (200, 3 tools).
