@@ -11,7 +11,7 @@
    ```bash
    RAILWAY_TOKEN=... uv run python scripts/deploy/pilot_agent.py setup
    ```
-   Задача внутри Railway создаёт нового пользователя-токен `agent-t-pilot-pilot-<время>`, кладёт его запечатанным в `pilot-agent.PILOT_AGENT_TOKEN`, ничего не печатает. Выход: `tool …`, `team …`.
+   Задача внутри Railway создаёт новый токен агента `agent-t-pilot-pilot-<время>`, кладёт его запечатанным в `pilot-agent.PILOT_AGENT_TOKEN`, ничего не печатает. Выход: `tool …`, `team …`.
 3. **Отозвать все старые токены агента** (остаётся самый новый):
    ```bash
    RAILWAY_TOKEN=... uv run python scripts/deploy/pilot_agent.py revoke

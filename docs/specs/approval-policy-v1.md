@@ -19,6 +19,7 @@ schema_version: 1
 defaults:
   approval_ttl: 24h          # pending_approval → expired
   execution_window: 1h       # approved → expired, если не исполнено
+  max_attempts: 3            # попыток дойти до dispatch (EFF-23), необязательно; 1…3, по умолчанию 3
 
 quotas:
   propose_per_requester_per_hour: 30
@@ -63,6 +64,7 @@ rules:
 | `step_up` | Нужна повторная аутентификация approver'а перед решением |
 | `approvers` | Сужение круга approver'ов: люди (`oidc:…`) или группы людей из файла grants. Без поля — любой `approver` tenant'а |
 | `approval_ttl`, `execution_window` | Переопределение сроков, только в сторону уменьшения |
+| `max_attempts` | Сколько попыток исполнения (`dispatch`, T7/T12/T12a) допустимо, прежде чем intent станет `failed`. Целое 1…3, по умолчанию 3, только в сторону уменьшения. Задаётся и в `defaults`, и в правиле; из умолчания и всех совпавших правил берётся **наименьшее** значение. Фиксируется в intent'е при T1 (AP-04) |
 | `limits` | Только для `auto_approve`, обязателен и непуст (хотя бы `max_per_hour` или `max_per_day`): сколько авто-одобрений в час и в сутки по этому правилу |
 
 Правило срабатывает, если intent удовлетворяет **всем** указанным условиям `match` (AND); внутри списка достаточно совпадения с одним элементом (OR).
@@ -99,5 +101,5 @@ rules:
 - ссылки в `requesters` и `approvers` существуют в файле grants того же tenant'а;
 - в `approvers` только люди с ролью `approver`;
 - нет `auto_approve` для tools класса `high_risk` (класс берётся из manifest коннектора);
-- `approval_ttl` и `execution_window` не больше умолчаний;
+- `approval_ttl` и `execution_window` не больше умолчаний; `max_attempts` — целое от 1 до 3;
 - отчёт diff: появившиеся `auto_approve`, увеличенные лимиты и удалённые `require_approval`/`deny` считаются **расширением** и требуют второго ревьюера (GR-10).

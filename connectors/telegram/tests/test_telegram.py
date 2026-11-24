@@ -936,17 +936,29 @@ def test_vendored_schema_is_the_pinned_upstream() -> None:
         assert hashlib.sha256((TG / "archive" / name).read_bytes()).hexdigest() == digest, name
 
 
+NEXT = "20270101000000_next.sql"
+
+
 @pytest.mark.parametrize(
-    ("migration", "fails"),
+    ("migration", "fails", "name"),
     [
-        ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;", True),
-        ("ALTER TABLE capability_hub.connections ADD COLUMN x int;", True),
-        ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;\n" + "-- padding\n" * 20000, True),
-        ("SET search_path = capability_hub;\nALTER TABLE connections DROP COLUMN scope;", True),
-        ("CREATE TABLE public.unrelated (id int);", False),
+        ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;", True, NEXT),
+        ("ALTER TABLE capability_hub.connections ADD COLUMN x int;", True, NEXT),
+        ("ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body;\n" + "-- padding\n" * 20000, True, NEXT),
+        ("SET search_path = capability_hub;\nALTER TABLE connections DROP COLUMN scope;", True, NEXT),
+        ('alter table "capability_hub"."connections" drop column "metadata";', True, NEXT),  # quoted, lower case
+        ("ALTER TABLE CAPABILITY_HUB.Connections DROP COLUMN scope;", True, NEXT),  # other case
+        ('ALTER TABLE "Telegram_Archive"."messages" DROP COLUMN text;', True, NEXT),
+        ("ALTER TABLE telegram_archive.messages DROP COLUMN text;", True, "20270101 следующая.sql"),  # space, non-ASCII
+        ("CREATE TABLE public.unrelated (id int);", False, NEXT),
+        # a SECURITY DEFINER function's own search_path is not the archive contract (backlog M11 F1)
+        ("CREATE FUNCTION f() RETURNS int LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public\n"
+         "AS $$ SELECT 1 $$;", False, NEXT),
     ],
-)
-def test_upstream_drift_check_fails_on_a_new_archive_migration(tmp_path: Path, migration: str, fails: bool) -> None:
+)  # fmt: skip
+def test_upstream_drift_check_fails_on_a_new_archive_migration(
+    tmp_path: Path, migration: str, fails: bool, name: str
+) -> None:
     """ADR-0004 'уведомление при обновлении': a gxg_agents_v2 migration after the pinned commit that touches the
     archive contract fails check_upstream.sh --drift (run by scripts/ci/check-all.sh)."""
     repo = tmp_path / "upstream"
@@ -961,12 +973,12 @@ def test_upstream_drift_check_fails_on_a_new_archive_migration(tmp_path: Path, m
         ).stdout.strip()
 
     git("init", "-q")
-    for name in ("20261105010000_telegram_archive.sql", "20261106010000_telegram_archive_semantic.sql"):
-        (repo / "supabase" / "migrations" / name).write_bytes((TG / "archive" / name).read_bytes())
+    for pinned in ("20261105010000_telegram_archive.sql", "20261106010000_telegram_archive_semantic.sql"):
+        (repo / "supabase" / "migrations" / pinned).write_bytes((TG / "archive" / pinned).read_bytes())
     git("add", "-A")
     git("commit", "-qm", "pinned")
     pin = git("rev-parse", "HEAD")
-    (repo / "supabase" / "migrations" / "20270101000000_next.sql").write_text(migration, encoding="utf-8")
+    (repo / "supabase" / "migrations" / name).write_text(migration, encoding="utf-8")
     git("add", "-A")
     git("commit", "-qm", "next")
     script = str(TG / "archive" / "check_upstream.sh")
@@ -978,7 +990,7 @@ def test_upstream_drift_check_fails_on_a_new_archive_migration(tmp_path: Path, m
         text=True,
     )
     assert run.returncode == (1 if fails else 0), run.stderr
-    assert ("20270101000000_next.sql" in run.stderr) is fails
+    assert (name in run.stderr) is fails
     same = subprocess.run(
         [script, str(repo)], env=os.environ | {"TELEGRAM_ARCHIVE_PIN": pin}, capture_output=True, check=False
     )

@@ -18,17 +18,18 @@ if [ "$drift" = 1 ]; then
     git -C "$upstream" fetch -q origin
     ref=origin/HEAD
   fi
-  changed=$(git -C "$upstream" diff --name-only "$commit" "$ref" -- supabase/migrations)
-  hits=""
-  for f in $changed; do
-    # grep reads the whole diff (no -q): with pipefail an early exit would SIGPIPE git diff on a big file and hide it.
-    # search_path: a migration may name the archive tables unqualified after SET search_path (reviewed by hand).
-    if git -C "$upstream" diff "$commit" "$ref" -- "$f" | grep -E 'telegram_archive|capability_hub\.connections|search_path' >/dev/null; then
-      hits="$hits $f"
-    fi
-  done
+  # A migration is flagged when its diff names the archive schema (quoted or not, any case), capability_hub.connections, or sets a
+  # search_path that includes one of the two schemas (an unqualified table name after it). Other `SET search_path` lines, e.g.
+  # a SECURITY DEFINER function's `pg_catalog, public`, are not the archive contract. -z and quotePath=false: names with spaces
+  # or non-ASCII characters are checked too. grep reads the whole diff (no -q): with pipefail an early exit would SIGPIPE git diff.
+  pat='telegram_archive|"?capability_hub"?[.]"?connections|search_path[^;]*capability_hub'
+  hits=$(git -C "$upstream" -c core.quotePath=false diff --name-only -z "$commit" "$ref" -- supabase/migrations |
+    while IFS= read -r -d '' f; do
+      if git -C "$upstream" diff "$commit" "$ref" -- "$f" | grep -Ei "$pat" >/dev/null; then printf '%s\n' "$f"; fi
+    done)
   if [ -n "$hits" ]; then
-    echo "archive schema: gxg_agents_v2 $ref changed the telegram_archive contract after $commit:$hits" >&2
+    echo "archive schema: gxg_agents_v2 $ref changed the telegram_archive contract after $commit:" >&2
+    echo "$hits" >&2
     echo "update archive/SOURCE.md and the vendored migrations (README 'Обновление gxg_agents_v2')" >&2
     exit 1
   fi
