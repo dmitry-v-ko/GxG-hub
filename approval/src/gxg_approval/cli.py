@@ -127,6 +127,8 @@ def _keys(args: argparse.Namespace) -> None:
     release: inside the executor (its DB role), right after removing a compromised key (AS-10).
     SEC-09: each writes one audit_events row as `operator:<os user>` in the same transaction; no DB, no change."""
     import getpass
+    import json
+    import sys
 
     import psycopg
     from psycopg.types.json import Jsonb
@@ -137,7 +139,21 @@ def _keys(args: argparse.Namespace) -> None:
     if args.action not in ("rotate", "remove", "release") or (args.action == "remove" and not args.kid):
         raise SystemExit("keys: rotate | remove --kid <kid> | release")
     actor = f"operator:{getpass.getuser()}"
-    with psycopg.connect(c.secret("GXG_DB_DSN")) as conn:  # commits on exit, rolls back on an error
+    try:
+        conn = psycopg.connect(c.secret("GXG_DB_DSN"))
+    except (psycopg.Error, OSError, SystemExit) as e:
+        if args.action != "remove":
+            raise
+
+        # A compromised key is removed at once even with the DB down: removal only narrows trust. The row is printed
+        # for the host's incident journal and the exit code says the audit is missing.
+        def journal(action: str, details: dict[str, Any]) -> None:
+            print(json.dumps({"actor": actor, "action": action, "details": details}), file=sys.stderr)
+
+        keys.remove(Path(c.env("GXG_EXEC_SIGNING_KEYS_FILE")), Path(c.env("GXG_EXEC_JWKS_FILE")), args.kid,
+                    audit=journal)  # fmt: skip
+        raise SystemExit(f"keys remove: {args.kid} removed, audit_events not written ({e}); add the row above") from e
+    with conn:  # commits on exit, rolls back on an error
 
         def audit(action: str, details: dict[str, Any]) -> None:
             conn.execute(_SQL_KEYS_AUDIT, (actor, action, Jsonb(details)))

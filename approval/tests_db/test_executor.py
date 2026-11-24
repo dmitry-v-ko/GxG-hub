@@ -1145,6 +1145,36 @@ def test_keys_cli_changes_nothing_when_the_audit_row_cannot_be_written(
     assert stack.owner.execute("SELECT count(*) FROM audit_events WHERE action LIKE 'key%'").fetchone() == (0,)
 
 
+def test_keys_remove_of_a_compromised_key_works_with_the_db_down(
+    stack: Stack, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """AS-10: removal only narrows trust, so it never waits for the DB: the kid leaves both files, the audit row goes
+    to stderr for the incident journal and the exit code is non-zero. rotate with the DB down still changes nothing."""
+    from gxg_approval import cli
+
+    keys_file, jwks_file = stack.dir / "signing-keys.json", stack.dir / "exec-jwks.json"
+    monkeypatch.setenv("GXG_EXEC_SIGNING_KEYS_FILE", str(keys_file))
+    monkeypatch.setenv("GXG_EXEC_JWKS_FILE", str(jwks_file))
+    monkeypatch.setenv("LOGNAME", "alice")
+    kid = keymgmt.rotate(keys_file, jwks_file, audit=lambda a, d: None)
+    before = keymgmt.jwks_sha256(json.loads(jwks_file.read_text()))
+    (stack.dir / "dsn").write_text("host=/nonexistent dbname=x connect_timeout=1")
+    monkeypatch.setenv("GXG_DB_DSN_FILE", str(stack.dir / "dsn"))
+    import psycopg
+
+    jwks_text = jwks_file.read_text()
+    with pytest.raises(psycopg.OperationalError):  # unchanged: rotate needs the audit row first
+        cli.main(["keys", "rotate"])
+    assert jwks_file.read_text() == jwks_text
+    with pytest.raises(SystemExit, match=f"{kid} removed, audit_events not written"):
+        cli.main(["keys", "remove", "--kid", kid])
+    assert json.loads(jwks_file.read_text()) == {"keys": []} and json.loads(keys_file.read_text()) == []
+    row = json.loads(capsys.readouterr().err.strip().splitlines()[-1])
+    assert row == {"actor": "operator:alice", "action": "key_removed",
+                   "details": {"kid": kid, "jwks_sha256_before": before,
+                               "jwks_sha256_after": keymgmt.jwks_sha256({"keys": []})}}  # fmt: skip
+
+
 # Lock waits of this test's database only: pg_locks is cluster-wide, and mutmut runs mutants in parallel.
 WAITING_HERE = (
     "SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a USING (pid)"
