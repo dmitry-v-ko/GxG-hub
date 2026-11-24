@@ -5,6 +5,7 @@
     RAILWAY_TOKEN=... python scripts/deploy/railway_deploy.py            # create what is missing, keep secrets
     python scripts/deploy/railway_deploy.py --dry-run                    # the plan, no API calls, no values
     RAILWAY_TOKEN=... python scripts/deploy/railway_deploy.py --verify   # AC-M14-11 (exit 1 on any failure)
+    RAILWAY_TOKEN=... python scripts/deploy/railway_deploy.py --audit    # AC-M14-11, queries only, every environment
     RAILWAY_TOKEN=... python scripts/deploy/railway_deploy.py --finalize # delete the transient db-init job
 
 Secrets (EdDSA keys, webhook HMAC, database role passwords, ...) are generated here, in memory, and go straight into
@@ -189,6 +190,11 @@ def is_private(url: str) -> bool:
     hostport = urlsplit(url).netloc.rsplit("@", 1)[-1]
     host = hostport.rsplit(":", 1)[0] if re.search(r":\d+$", hostport) else hostport
     return bool(PRIVATE.match(host) or PRIVATE_REF.match(host))
+
+
+def secret_names(actual: Any, all_secrets: set[str], declared: set[str]) -> set[str]:
+    """The names among `actual` that are secrets: the GXG_SECRET__ prefix or a secret name of any service."""
+    return {k for k in actual if k.startswith(SECRET_PREFIX) or k in all_secrets or k in declared}
 
 
 def edges(node: dict[str, Any] | None, key: str) -> list[dict[str, Any]]:
@@ -759,9 +765,7 @@ class Deployer:
             for url in svc.get("internal_urls") or []:
                 check(is_private(actual.get(url, "")), name, f"{url} points to *.railway.internal")
             declared_secret = set(secrets_of(svc))
-            actual_secret = {
-                k for k in actual if k.startswith(SECRET_PREFIX) or k in all_secrets or k in declared_secret
-            }
+            actual_secret = secret_names(actual, all_secrets, declared_secret)
             check(
                 actual_secret == declared_secret,
                 name,
@@ -778,6 +782,49 @@ class Deployer:
                         name,
                         f"{var} is the public half of {str(gen).split(':')[1]}",
                     )
+        return ok
+
+    # -- AC-M14-11, read-only: queries only, no mutation, no value is kept or printed (names only)
+    def audit(self) -> bool:
+        """Every service in every environment: no Railway domain, custom domain or TCP proxy; no shared variables;
+        the secret NAMES of each service equal its declared secrets (validate_spec already holds those to the AS-28 table)."""
+        name, spec_services = self.spec["project"], self.spec["services"]
+        node = next((p for p in edges(self.api.call(Q_PROJECTS), "projects") if p["name"] == name), None)
+        if node is None:
+            raise DeployError(f"project {name} does not exist")
+        ok = True
+
+        def check(good: bool, where: str, what: str) -> None:
+            nonlocal ok
+            ok &= good
+            self.out.say(f"{'PASS' if good else 'FAIL'} {where}: {what}")
+
+        all_secrets = {v for s in spec_services.values() for v in secrets_of(s)}
+        services = edges(node, "services")
+        for env in edges(node, "environments"):
+            ev = {"projectId": node["id"], "environmentId": env["id"]}
+            shared = set(self.api.call(Q_VARIABLES, **ev).get("variables") or {})
+            for var in sorted(shared & set(FOREIGN_SHARED)):
+                self.out.say(f"NOTE {env['name']}: shared variable {var} is not ours, the owner decides")
+            check(not shared - set(FOREIGN_SHARED), f"{env['name']} (project)", "no shared variables")
+            for svc in services:
+                where, sid = f"{env['name']}/{svc['name']}", svc["id"]
+                doms = (self.api.call(Q_DOMAINS, serviceId=sid, **ev).get("domains")) or {}
+                tcp = self.api.call(Q_TCP, environmentId=env["id"], serviceId=sid).get("tcpProxies") or []
+                check(not doms.get("serviceDomains"), where, "no Railway public domain")
+                check(not doms.get("customDomains"), where, "no custom domain")
+                check(not tcp, where, "no TCP proxy")
+                if svc["name"] not in spec_services:
+                    check(False, where, "service is declared in the spec (its secrets cannot be checked against AS-28)")
+                    continue
+                declared = set(secrets_of(spec_services[svc["name"]]))
+                names = set(self.api.call(Q_VARIABLES, serviceId=sid, **ev).get("variables") or {})
+                got = secret_names(names, all_secrets, declared)
+                check(
+                    got == declared,
+                    where,
+                    f"secret names equal AS-28: extra={sorted(got - declared)} missing={sorted(declared - got)}",
+                )
         return ok
 
     def caller_keys_match(self, gen: str, live: str | None) -> bool:
@@ -834,6 +881,7 @@ def main(argv: list[str] | None = None, *, transport: Transport | None = None, o
     mode.add_argument(
         "--verify", action="store_true", help="AC-M14-11: no public exposure, private URLs, AS-28 secret sets"
     )
+    mode.add_argument("--audit", action="store_true", help="AC-M14-11: read-only check of every environment")
     mode.add_argument("--finalize", action="store_true", help="delete the transient db-init job")
     ap.add_argument("--spec", type=Path, default=SPEC)
     args = ap.parse_args(argv)
@@ -857,6 +905,8 @@ def main(argv: list[str] | None = None, *, transport: Transport | None = None, o
         deployer = Deployer(Railway(transport), spec, out)
         if args.verify:
             return 0 if deployer.verify() else 1
+        if args.audit:
+            return 0 if deployer.audit() else 1
         if args.finalize:
             deployer.finalize()
         else:
