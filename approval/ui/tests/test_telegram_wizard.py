@@ -355,3 +355,14 @@ def test_the_service_jwt_is_short_and_addressed_to_telegram() -> None:
     assert (claims["iss"], claims["aud"], claims["exp"] - claims["iat"]) == ("approval-ui", "telegram", 60)
     assert seen["headers"]["X-GxG-Operator"] == OPERATOR
     assert seen["url"] == "/internal/v1/admin/tg-pilot/status"
+
+
+def test_session_lives_thirty_days_without_an_idle_timeout(ui: Ui) -> None:
+    """Owner decision 2026-11-24 (approval-service «Вход»): 30 days from sign-in, no idle limit, persistent cookie."""
+    day = 24 * 3600
+    assert ui_app.SESSION_MAX_S == 30 * day and not hasattr(ui_app, "SESSION_IDLE_S")
+    assert ui_app.SESSION_COOKIE_FLAGS["max_age"] == 30 * day  # Max-Age: the cookie survives the browser
+    assert (
+        ui.login(iat=NOW - 29 * day, seen=1.0).client.get("/operator/telegram").status_code == 200
+    )  # `seen` is long gone
+    assert ui.login(iat=NOW - 31 * day).client.get("/operator/telegram").status_code == 403

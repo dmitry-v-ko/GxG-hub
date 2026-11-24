@@ -46,29 +46,26 @@ def test_page_shows_who_and_the_form_token(browser: Any) -> None:
     assert f'<span class="who">{HUMAN1}</span>' in page and f'name="csrf" value="{browser.csrf}"' in page
 
 
-def test_session_idle_boundary(browser: Any, clock: Any) -> None:
+def test_session_has_no_idle_timeout(browser: Any, clock: Any) -> None:
+    """Owner decision 2026-11-24: 30 days absolute, no idle timeout."""
     browser.login(HUMAN1)
-    clock.now += ui.SESSION_IDLE_S
-    assert browser.client.get("/history").status_code == 200  # exactly 30 min idle: still in
-    clock.now += 20 * 60
-    assert browser.client.get("/history").status_code == 200  # activity moved the idle clock
-    clock.now += ui.SESSION_IDLE_S + 0.001
-    assert browser.client.get("/history").status_code == 403
+    clock.now += 20 * 24 * 3600  # twenty days without a request
+    assert browser.client.get("/history").status_code == 200
 
 
 def test_session_absolute_boundary(browser: Any, clock: Any) -> None:
     browser.login(HUMAN1)
-    for _ in range(16):
-        clock.now += 30 * 60
+    for _ in range(6):
+        clock.now += 5 * 24 * 3600
         assert browser.client.get("/history").status_code == 200
-    assert clock.now - browser.session["iat"] == ui.SESSION_MAX_S  # exactly 8 h: still in
+    assert clock.now - browser.session["iat"] == ui.SESSION_MAX_S == 30 * 24 * 3600  # exactly 30 days: still in
     clock.now += 0.001
     assert browser.client.get("/history").status_code == 403
     assert browser.client.get("/history").status_code == 403  # and the session is gone
 
 
 def test_incomplete_session_is_no_session(browser: Any, clock: Any) -> None:
-    for drop in ("sub", "iat", "seen"):
+    for drop in ("sub", "iat"):
         browser.login(HUMAN1)
         session = {k: v for k, v in browser.session.items() if k != drop}
         from itsdangerous import TimestampSigner

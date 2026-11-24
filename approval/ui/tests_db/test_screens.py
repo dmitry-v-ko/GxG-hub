@@ -121,16 +121,11 @@ def test_security_headers_and_cookie(browser: Any, propose: Any) -> None:
 
 
 def test_session_timeouts(browser: Any, clock: Any) -> None:
-    """«Вход»: 30 min idle, 8 h absolute."""
+    """«Вход»: 30 days absolute, no idle timeout."""
     browser.login(HUMAN1)
-    clock.now += 29 * 60
+    clock.now += 29 * 24 * 3600
     assert browser.client.get("/history").status_code == 200
-    clock.now += 31 * 60
-    assert browser.client.get("/history").status_code == 403
-    browser.login(HUMAN1)
-    for _ in range(17):  # active all the time, still out after 8 h
-        clock.now += 29 * 60
-        browser.client.get("/history")
+    clock.now += 2 * 24 * 3600
     assert browser.client.get("/history").status_code == 403
 
 

@@ -41,8 +41,9 @@ from gxg_connector_kit.grants import BundleStore
 from . import render, stepup, tgadmin
 
 SESSION_COOKIE = "__Host-gxg"  # AS-15: __Host- prefix, Secure, HttpOnly, SameSite=Strict, Path=/
-SESSION_MAX_S = 8 * 3600  # «Вход»: session 8 h
-SESSION_IDLE_S = 30 * 60  # idle timeout 30 min
+SESSION_MAX_S = (
+    30 * 24 * 3600
+)  # «Вход»: session 30 days, no idle timeout (owner decision 2026-11-24; every decision needs a passkey, AS-30)
 CSP = "default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 TERMINAL = ("succeeded", "failed", "reconciled_succeeded", "reconciled_failed", "rejected", "expired", "cancelled")
 LIST_LIMIT = 200
@@ -207,13 +208,12 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         """The signed-in human, or 403 (machine credentials and no session alike: SEC-06)."""
         session, now = request.session, deps.clock()
         try:
-            sub, iat, seen = session["sub"], session["iat"], session["seen"]
+            sub, iat = session["sub"], session["iat"]
         except KeyError:
             raise Refused(*SIGN_IN) from None
-        if now - iat > SESSION_MAX_S or now - seen > SESSION_IDLE_S:
+        if now - iat > SESSION_MAX_S:
             session.clear()
             raise Refused(*SIGN_IN)
-        session["seen"] = now
         return str(sub)
 
     def is_operator(request: Request) -> bool:
@@ -339,7 +339,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         # Audit line of a sign-in: the principal id (issuer and subject are not secrets), nothing else of the claims.
         logging.getLogger("gxg_approval_ui").info("sign-in principal=oidc:%s:%s", claims["iss"], claims["sub"])
         email = claims.get("email")
-        session = {"sub": f"oidc:{claims['iss']}:{claims['sub']}", "iat": now, "seen": now,
+        session = {"sub": f"oidc:{claims['iss']}:{claims['sub']}", "iat": now,
                    "csrf": secrets.token_urlsafe(32)}  # fmt: skip
         if isinstance(email, str) and claims.get("email_verified") is True:  # an unconfirmed email proves nothing
             session["email"] = email.lower()
