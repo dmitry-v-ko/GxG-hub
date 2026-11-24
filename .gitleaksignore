@@ -48,3 +48,10 @@ cd932b20fb7e695a52a3539d0f1a70b06276a358:.gitleaksignore:generic-api-key:35
 # M14: test code, not secrets: a parameter annotation (`key`, type `Ed25519PrivateKey | None`) (M13 commit) and a loop over variable names (audit test, since rewritten)
 ed5c18b3ed7c8bebe5226274683f82c60618fc80:approval/tests/test_mcp_identity.py:generic-api-key:46
 f74ca36b1fcb48e1e1a0f4df755e04f0d07b2f33:tests/deploy/test_railway_audit.py:generic-api-key:117
+# M14 stage F: the same annotation of test code (parameter named key, type Ed25519PrivateKey) quoted in docs, and the
+# test line itself in a commit merged from another branch; none is a secret (the tree line was rephrased in c5acfd0)
+15b96f5ca31c7a24a35381ac633d2459cc59e268:.gitleaksignore:generic-api-key:48
+49eeb8b58b6017a89a491c7706390da187d6d41e:.gitleaksignore:generic-api-key:48
+99f047dec27a27e8d779acc61c30c7fe4ec71292:approval/tests/test_mcp_identity.py:generic-api-key:46
+15b96f5ca31c7a24a35381ac633d2459cc59e268:reports/M14-prep.md:generic-api-key:97
+49eeb8b58b6017a89a491c7706390da187d6d41e:reports/M14-prep.md:generic-api-key:97
