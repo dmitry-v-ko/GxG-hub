@@ -55,7 +55,7 @@ AS28: dict[str, frozenset[str]] = {
     "telegram_bot_token": frozenset({"notifier"}),
     "webhook_secrets": frozenset({"notifier"}),
     "tailscale": frozenset({"ui", "admin"}),  # tag:approval-ui and tag:approval-admin entries (ADR-0003)
-    "bootstrap": frozenset({"db-init"}),  # transient job, removed by --finalize
+    "bootstrap": frozenset({"db-init", "telegram-db-init"}),  # transient job, removed by --finalize
     "bundle_signing": frozenset({"bundle-signer"}),  # vault service, never deployed: signs the grants bundle (GR-11)
 }
 ROLE_OF = {  # AS-27: one role per process
@@ -64,6 +64,10 @@ ROLE_OF = {  # AS-27: one role per process
 }  # fmt: skip
 # Shared variables the owner keeps for other tools in the project: named exceptions of --verify, never touched here.
 FOREIGN_SHARED = {"OPENROUTER_API_KEY": "not ours"}
+TG_ROLE_VAR = {
+    "gxg_telegram_service": "TELEGRAM_SERVICE_DSN",
+    "gxg_telegram_reader": "TELEGRAM_ARCHIVE_DSN",
+}  # gxg-telegram-service
 SECRET_PREFIX = "GXG_SECRET__"  # noqa: S105 (a naming prefix)
 
 
@@ -255,8 +259,15 @@ class Values:
                 dsn = self.get(svc_name, "GXG_SECRET__GXG_DB_DSN") if r == role else None
                 if dsn:
                     found = urlsplit(dsn).password
+            if not found and role in TG_ROLE_VAR and "telegram" in self.spec["services"]:
+                dsn = self.get("telegram", TG_ROLE_VAR[role])
+                if dsn and urlsplit(dsn).username == role:  # not the archive owner's DSN an earlier version wrote there
+                    found = urlsplit(dsn).password
             if not found:
                 raw = self.get("db-init", "GXG_SECRET__GXG_ROLE_PASSWORDS")
+                found = json.loads(raw).get(role) if raw and role in ROLE_OF.values() else None
+            if not found and role in TG_ROLE_VAR:
+                raw = self.get("telegram-db-init", "GXG_TGDB_ROLE_PASSWORDS")
                 found = json.loads(raw).get(role) if raw else None
             self._role_pw[role] = found or b64url(rnd.token_bytes(24))
             self.out.add(self._role_pw[role])
@@ -324,6 +335,13 @@ class Values:
             host = "${{approval-db.RAILWAY_PRIVATE_DOMAIN}}"
             db = self.spec["services"]["approval-db"]["env"]["POSTGRES_DB"]
             value = f"postgresql://{arg}:{self.role_password(arg)}@{host}:5432/{db}"
+        elif kind == "tg_dsn":
+            db = self.spec["services"]["telegram-db"]["env"]["POSTGRES_DB"]
+            value = (
+                f"postgresql://{arg}:{self.role_password(arg)}@${{{{telegram-db.RAILWAY_PRIVATE_DOMAIN}}}}:5432/{db}"
+            )
+        elif kind == "tg_role_passwords":
+            value = json.dumps({r: self.role_password(r) for r in sorted(TG_ROLE_VAR)})
         elif kind == "superuser_dsn":
             env = self.spec["services"][arg]["env"]
             pw = self.get(arg, "POSTGRES_PASSWORD")
@@ -510,6 +528,8 @@ class Deployer:
             want["startCommand"] = svc["start"]
         if svc.get("healthcheck"):
             want["healthcheckPath"] = svc["healthcheck"]
+        elif svc["kind"] == "app":
+            want["healthcheckPath"] = None  # an app without a healthcheck in the spec has none in Railway
         if svc["kind"] == "job":
             want["restartPolicyType"] = "NEVER"
         elif svc["kind"] in ("app", "postgres"):

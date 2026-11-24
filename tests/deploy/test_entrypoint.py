@@ -170,9 +170,7 @@ def test_root_start_takes_the_volume_and_drops_to_the_service_user(tmp_path: Pat
     for f in bin_dir.iterdir():
         f.chmod(0o755)
     env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "GXG_VOLUME_DIRS": str(volume)}
-    done = subprocess.run(
-        ["sh", str(ENTRY), "true"], env=env, capture_output=True, text=True, check=False, timeout=30
-    )
+    done = subprocess.run(["sh", str(ENTRY), "true"], env=env, capture_output=True, text=True, check=False, timeout=30)
     assert done.returncode == 0, done.stderr
     calls = log.read_text()
     assert f"chown gxg {volume}" in calls

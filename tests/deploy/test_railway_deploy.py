@@ -281,10 +281,7 @@ def test_repository_services_follow_the_configured_branch(
     deployed.by_name("telegram")["trigger"]["branch"] = "main"
     capsys.readouterr()
     assert run(deployed, "--verify") == 1
-    assert (
-        "FAIL telegram: built from dmitry-v-ko/gxg-telegram-service@claude/m13-railway"
-        in capsys.readouterr().out
-    )
+    assert "FAIL telegram: built from dmitry-v-ko/gxg-telegram-service@claude/m13-railway" in capsys.readouterr().out
 
 
 def test_a_foreign_shared_variable_is_a_named_exception(

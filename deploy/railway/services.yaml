@@ -257,8 +257,8 @@ services:
   telegram:
     kind: app
     source: {repo: dmitry-v-ko/gxg-telegram-service, branch: claude/m13-railway, dockerfile: Dockerfile}
-    port: 8080
-    healthcheck: /readyz
+    port: 8080  # MCP; execute listens on 8081
+    # no healthcheck: /readyz stays 503 until the owner signs in to Telegram, the deployment must still be SUCCESS
     volume: /var/lib/telegram  # the Telegram session (written by `gxg-telegram-admin login`), never in Git
     env:
       TELEGRAM_IDENTITY_KEYS: ${{contextforge.GXG_IDENTITY_KEYS}}
@@ -270,11 +270,21 @@ services:
     secrets:
       TELEGRAM_API_ID: {gen: owner}
       TELEGRAM_API_HASH: {gen: owner}
-      TELEGRAM_ARCHIVE_DSN: {gen: "tpl:postgresql://${{telegram-db.POSTGRES_USER}}:${{telegram-db.POSTGRES_PASSWORD}}@${{telegram-db.RAILWAY_PRIVATE_DOMAIN}}:5432/${{telegram-db.POSTGRES_DB}}"}
+      TELEGRAM_SERVICE_DSN: {gen: "tg_dsn:gxg_telegram_service"}  # roles are created by the job telegram-db-init
+      TELEGRAM_ARCHIVE_DSN: {gen: "tg_dsn:gxg_telegram_reader"}
       TELEGRAM_CHAT_REF_SECRET: {gen: random:48}  # >= 32 bytes; the image's entrypoint turns it into a file
       TELEGRAM_SVC_KEY: {gen: ed25519_seed}  # service JWT key, public half in the registry of the bundle
       TELEGRAM_WEBHOOK_HMAC: {gen: hmac:32}  # signs `telegram.message.created` to Signals (SI-03)
     config: {TELEGRAM_SVC_PUBLIC_KEY: "ed25519_pub:TELEGRAM_SVC_KEY"}
-    internal_urls: [TELEGRAM_ARCHIVE_DSN, TELEGRAM_APPROVAL_URL]
-    # TODO(M13): TELEGRAM_SERVICE_DSN and a reader TELEGRAM_ARCHIVE_DSN need the roles of the service's db/ SQL (not
-    # readable from this session); TELEGRAM_ARCHIVE_DSN is the archive owner until then.
+    internal_urls: [TELEGRAM_SERVICE_DSN, TELEGRAM_ARCHIVE_DSN, TELEGRAM_APPROVAL_URL]
+  telegram-db-init:  # job: migrations, roles and passwords of telegram-db; removed by `railway_deploy.py --finalize`
+    kind: job
+    transient: true
+    source: {repo: dmitry-v-ko/gxg-telegram-service, branch: claude/m13-railway, dockerfile: Dockerfile}
+    start: /app/.venv/bin/python -c "import os; exec(os.environ['GXG_TGDB_INIT_PY'])"
+    seed:
+      GXG_TGDB_INIT_PY: {file: deploy/railway/telegram_db_init.py}
+    secrets:
+      GXG_TGDB_SUPERUSER_DSN: {gen: "superuser_dsn:telegram-db", as28: bootstrap}
+      GXG_TGDB_ROLE_PASSWORDS: {gen: tg_role_passwords, as28: bootstrap}
+    internal_urls: [GXG_TGDB_SUPERUSER_DSN]
