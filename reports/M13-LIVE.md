@@ -228,3 +228,5 @@ if [ -n "${GXG_BUNDLE_B64:-}" ]; then
 fi
 ```
   Тест: запуск entrypoint с `GXG_BUNDLE_B64` из tar.gz двух файлов → в `$TELEGRAM_BUNDLE_DIR` лежат оба файла, переменная снята; без неё каталог не создаётся. После пуша и деплоя `telegram`: `pilot_agent.py propose` (нужны `GXG_SEND_CHAT_REF` и `GXG_SEND_TEXT`), дальше `intent_id` и ссылка `https://gxg-approval-ui.tail9fb746.ts.net/intents/<id>`. Заявка с ключом идемпотентности `m13-first-send-1`: повтор той же заявки не создаст второй intent.
+
+**Заявка на первую отправку создана** (2026-11-24, `pilot_agent.py propose`, от имени агента через ContextForge): `intent_id` = `12c724e6-25c1-4d81-a8ed-31ee6565fb72`, статус `pending_approval`; чат «GxG Agents», текст «GxG Hub: тестовая отправка пилота», ключ идемпотентности `m13-first-send-1`. Ссылка в UI: `https://gxg-approval-ui.tail9fb746.ts.net/intents/12c724e6-25c1-4d81-a8ed-31ee6565fb72`. Bundle перевыпущен 15:44 UTC с манифестом сервиса (в реестре появился `telegram.message.propose`); следующий перевыпуск не позже 03:44 UTC. Одобряет владелец своим passkey; результат (`effects.status` до `succeeded`, ровно одна отправка) допишу после одобрения.
