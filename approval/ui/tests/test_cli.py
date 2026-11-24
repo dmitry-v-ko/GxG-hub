@@ -161,3 +161,37 @@ def test_access_log_has_no_query_string(environ: dict[str, str], started: dict[s
     assert twice.getMessage() == 'c - "GET /a HTTP/1.1" 200'
     other = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, "plain %s", ("x?y",), None)
     assert cli.NoQuery().filter(other) is True and other.getMessage() == "plain x?y"  # not an access line
+
+
+def test_operators_and_the_telegram_admin_client_are_wired(
+    environ: dict[str, str], started: dict[str, Any], monkeypatch: Any, tmp_path: Path
+) -> None:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from gxg_connector_kit import _jwt
+
+    cli.main()
+    assert started["deps"].telegram_admin is None and started["deps"].operators == frozenset()  # off by default
+    started["deps"].pool.close()
+    key = Ed25519PrivateKey.generate()
+    (tmp_path / "svc").write_text(_jwt.b64url_encode(key.private_bytes_raw()))
+    monkeypatch.setenv("GXG_UI_SVC_KEY_FILE", str(tmp_path / "svc"))
+    monkeypatch.setenv("GXG_TELEGRAM_ADMIN_URL", "http://telegram.internal:8082")
+    monkeypatch.setenv("GXG_UI_OPERATORS", "Owner@Example.com, ")
+    started.clear()
+    cli.main()
+    deps = started["deps"]
+    deps.pool.close()
+    assert deps.operators == frozenset({"owner@example.com"})
+    admin = deps.telegram_admin
+    assert admin is not None
+    assert str(admin.client.base_url) == "http://telegram.internal:8082" and admin.audience == "telegram"
+    assert admin.key.private_bytes_raw() == key.private_bytes_raw()
+    monkeypatch.setenv("GXG_TELEGRAM_ADMIN_AUDIENCE", "tg-svc")
+    started.clear()
+    cli.main()
+    started["deps"].pool.close()
+    assert started["deps"].telegram_admin is not None and started["deps"].telegram_admin.audience == "tg-svc"
+    monkeypatch.delenv("GXG_UI_SVC_KEY_FILE")
+    with pytest.raises(SystemExit, match="GXG_UI_SVC_KEY_FILE"):  # a URL without a key is a misconfiguration
+        cli.main()

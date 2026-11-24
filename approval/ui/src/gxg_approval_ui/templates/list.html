@@ -2,6 +2,15 @@
 {% block main %}
 <h1>{{ {"pending": "Ожидают решения", "history": "История", "unknown": "Неясный исход"}[screen] }}</h1>
 {% if not groups %}<p id="empty">Заявок нет</p>{% endif %}
+{% if operator and screen == "pending" and not groups %}
+<section id="operator-links">
+  <h2>Оператору</h2>
+  <ul>
+    <li><a id="link-telegram" href="/operator/telegram">Подключение Telegram</a> — войти в аккаунт пилота и выбрать чаты</li>
+    <li><a id="link-passkeys" href="/passkeys">Passkey</a> — зарегистрировать ключ для решений</li>
+  </ul>
+</section>
+{% endif %}
 {% for group in groups %}
 <section class="group">
   {% if group|length > 1 %}<p class="group-head">{{ group|length }} одинаковых заявки от {{ group[0].requester }} — каждую нужно решить отдельно</p>{% endif %}

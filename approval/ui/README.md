@@ -14,6 +14,7 @@ Approval Web UI ([approval-service-v1 «Web UI»](../../docs/specs/approval-serv
 | `/unknown`, `POST /intents/<id>/resolve` | `approver`, `tenant_admin` | T18 с обоснованием ≥ 10 символов |
 | `/passkeys` | все | Регистрация passkey (AS-17) |
 | `/telegram`, `POST /telegram/code` | `approver` | Код из 6 цифр на 10 минут для `/link <code>` в боте |
+| `/operator/telegram`, `POST /operator/telegram/{phone,code,password,cancel,scope}` | оператор (M13) | Мастер подключения Telegram-аккаунта пилота: телефон → код → пароль 2FA → выбор ≤ 3 чатов. Оператор — OIDC-пользователь с подтверждённым email из `GXG_UI_OPERATORS`; остальным 404 |
 | `/history` | `approver`, `viewer` | Терминальные intents |
 | `/healthz`, `/readyz` | — | `readyz`: БД и свежий bundle |
 
@@ -35,6 +36,13 @@ Approval Web UI ([approval-service-v1 «Web UI»](../../docs/specs/approval-serv
 
 Заголовки: CSP `default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`, без inline-скриптов
 (единственный скрипт — `/static/webauthn.js`); cookie `__Host-gxg`, `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`.
+
+## M13: оператор и Telegram
+
+`GXG_UI_OPERATORS` — email'ы через запятую (в сессию email попадает только при `email_verified: true`; scope OIDC — `openid email`).
+`GXG_TELEGRAM_ADMIN_URL` (`http://telegram.railway.internal:8082`) и `GXG_UI_SVC_KEY_FILE` (service JWT `iss=approval-ui`,
+`aud=telegram` или `GXG_TELEGRAM_ADMIN_AUDIENCE`) включают мастер; заголовок `X-GxG-Operator: oidc:<iss>:<sub>`. Телефон, код
+и пароль уходят в Telegram-сервис один раз, не логируются, не показываются повторно (после шага — redirect 303).
 
 ## Runbook
 

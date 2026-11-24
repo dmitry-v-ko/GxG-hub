@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import secrets
 import time
 import uuid
@@ -37,7 +38,7 @@ from gxg_connector_kit import canonical
 from gxg_connector_kit.errors import GxgError
 from gxg_connector_kit.grants import BundleStore
 
-from . import render, stepup
+from . import render, stepup, tgadmin
 
 SESSION_COOKIE = "__Host-gxg"  # AS-15: __Host- prefix, Secure, HttpOnly, SameSite=Strict, Path=/
 SESSION_MAX_S = 8 * 3600  # «Вход»: session 8 h
@@ -64,6 +65,18 @@ TELEGRAM_APPROVERS = (403, "Привязка Telegram — только для ap
 NO_CODE = (503, "Не удалось выдать код, попробуйте ещё раз")
 LONG_COMMENT = (400, f"Комментарий длиннее {COMMENT_MAX} символов")
 PREVIEW_UNAVAILABLE = "превью недоступно"
+NOT_FOUND_PAGE = (404, "Страница не найдена")  # the operator wizard for everybody else
+TG_NOT_CONFIGURED = (503, "Подключение Telegram не настроено (GXG_TELEGRAM_ADMIN_URL)")
+TG_SCOPE_MAX = 3  # chats the pilot may read
+BAD_PHONE = "Номер: международный формат, например +79001234567"
+BAD_CODE = "Код: только цифры, как в сообщении Telegram"
+NEED_2FA = "Введите пароль двухфакторной защиты"
+TOO_MANY_CHATS = f"Можно выбрать не больше {TG_SCOPE_MAX} чатов"
+UNKNOWN_CHAT = "Этого чата нет в списке аккаунта: обновите страницу"
+TG_DOWN = "Telegram-сервис не отвечает: проверьте, что он запущен, и повторите"
+PHONE = re.compile(r"^\+?\d{7,15}$")
+CODE = re.compile(r"^\d{3,8}$")
+PASSWORD_MAX = 256
 SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
@@ -75,7 +88,7 @@ SECURITY_HEADERS = {
 NO_DOC_PAGES = {"docs_url": None, "redoc_url": None, "openapi_url": None}
 SESSION_COOKIE_FLAGS = {"session_cookie": SESSION_COOKIE, "max_age": SESSION_MAX_S, "same_site": "strict",
                         "https_only": True, "path": "/"}  # fmt: skip
-OIDC_CLIENT = {"scope": "openid", "code_challenge_method": "S256"}  # code flow with PKCE; authlib adds the nonce
+OIDC_CLIENT = {"scope": "openid email", "code_challenge_method": "S256"}  # code flow with PKCE; authlib adds the nonce
 OIDC_DISCOVERY = "/.well-known/openid-configuration"
 for _name in ("httpx", "httpx2", "httpcore"):  # SEC-17: no request URLs at INFO (authlib's IdP calls)
     logging.getLogger(_name).setLevel(logging.WARNING)
@@ -120,6 +133,10 @@ class Deps:
     oidc_client_id: str
     oidc_client_secret: str
     decider: stepup.Decider  # AS-30: decisions and passkeys
+    operators: frozenset[str] = (
+        frozenset()
+    )  # GXG_UI_OPERATORS: lower-case emails; the session must carry a confirmed one
+    telegram_admin: tgadmin.TelegramAdmin | None = None  # the operator wizard (M13); None = not configured
     clock: Callable[[], float] = time.time
     oidc_client_kwargs: dict[str, Any] = field(default_factory=dict)
 
@@ -183,7 +200,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
 
     def page(request: Request, name: str, ctx: dict[str, Any], status: int = 200) -> Response:
         session = request.session
-        base = {"human": session.get("sub"), "csrf": session.get("csrf")}
+        base = {"human": session.get("sub"), "csrf": session.get("csrf"), "operator": is_operator(request)}
         return templates.TemplateResponse(request, name, base | ctx, status_code=status)
 
     def human(request: Request) -> str:
@@ -198,6 +215,18 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             raise Refused(*SIGN_IN)
         session["seen"] = now
         return str(sub)
+
+    def is_operator(request: Request) -> bool:
+        """A confirmed email from GXG_UI_OPERATORS (kept in the session only when the IdP said `email_verified`)."""
+        email = request.session.get("email")
+        return bool(request.session.get("sub")) and isinstance(email, str) and email.lower() in deps.operators
+
+    def operator(request: Request) -> str:
+        """The signed-in operator, or 403 without a session; 404 for everybody else (the section does not exist)."""
+        who = human(request)
+        if not is_operator(request):
+            raise Refused(*NOT_FOUND_PAGE)
+        return who
 
     def check_csrf(request: Request, token: str | None) -> None:
         expected = request.session.get("csrf")
@@ -309,9 +338,12 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
         request.session.clear()
         # Audit line of a sign-in: the principal id (issuer and subject are not secrets), nothing else of the claims.
         logging.getLogger("gxg_approval_ui").info("sign-in principal=oidc:%s:%s", claims["iss"], claims["sub"])
-        request.session.update(
-            {"sub": f"oidc:{claims['iss']}:{claims['sub']}", "iat": now, "seen": now, "csrf": secrets.token_urlsafe(32)}
-        )
+        email = claims.get("email")
+        session = {"sub": f"oidc:{claims['iss']}:{claims['sub']}", "iat": now, "seen": now,
+                   "csrf": secrets.token_urlsafe(32)}  # fmt: skip
+        if isinstance(email, str) and claims.get("email_verified") is True:  # an unconfirmed email proves nothing
+            session["email"] = email.lower()
+        request.session.update(session)
         return RedirectResponse("/", status_code=303)
 
     @app.post("/logout")
@@ -336,7 +368,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
                 .execute(_SQL_LIST["pending"], (tenants_with(who, "approver"),))
                 .fetchall()
             )
-            return page(request, "list.html", {"screen": "pending", "groups": groups(rows)})
+            return page(request, "list.html", {"screen": "pending", "groups": groups(rows)})  # operator: links if empty
 
     @app.get("/history")
     def history(request: Request) -> Response:
@@ -517,6 +549,108 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
                     links = conn.execute(_SQL_LINKS, (who,)).fetchall()
                     return page(request, "telegram.html", {"links": links, "code": code})
         raise Refused(*NO_CODE)
+
+    # ---- M13: «Подключение Telegram» (the typed secrets only pass through)
+    def admin() -> tgadmin.TelegramAdmin:
+        if deps.telegram_admin is None:
+            raise Refused(*TG_NOT_CONFIGURED)
+        return deps.telegram_admin
+
+    def api_error(exc: Exception, *hidden: str) -> tuple[int, str]:
+        """(HTTP status, text for the person). The text never contains what the operator just typed."""
+        if isinstance(exc, tgadmin.ApiError):
+            text = exc.message
+            for value in hidden:
+                if value:
+                    text = text.replace(value, "…")
+            return (502 if exc.status >= 500 else 400), text
+        return 502, TG_DOWN
+
+    def wizard_view(who: str, error: str | None = None, status: int = 200) -> tuple[dict[str, Any], int]:
+        """What the page shows now: the service's login state, and — once authorized — the chats and the saved scope."""
+        ctx: dict[str, Any] = {"error": error, "state": None, "chats": [], "scope": [], "sync": None}
+        try:
+            api = admin()
+            state = api.call("GET", "status", who)
+            ctx["sync"] = state.get("sync")
+            if state.get("authorized"):
+                ctx["state"] = "authorized"
+                scope = api.call("GET", "scope", who)
+                chosen = scope.get("chat_refs", []) if isinstance(scope, dict) else scope
+                ctx["scope"] = [str(c) for c in chosen]
+                ctx["chats"] = [
+                    {"ref": str(c["chat_ref"]), "title": render.visible(str(c.get("title", "")))[0],
+                     "kind": str(c.get("kind", "")), "chosen": str(c["chat_ref"]) in ctx["scope"]}
+                    for c in api.call("GET", "chats", who)
+                ]  # fmt: skip
+            else:
+                ctx["state"] = (
+                    state.get("login") if state.get("login") in ("code_sent", "password_required") else "idle"
+                )
+        except Refused:
+            raise
+        except (tgadmin.ApiError, tgadmin.Unavailable) as exc:
+            code, text = api_error(exc)
+            ctx["error"], ctx["state"] = error or text, ctx["state"] or "down"
+            status = max(status, code)
+        return ctx, status
+
+    def wizard_step(api: tgadmin.TelegramAdmin, step: str, form: Any, who: str) -> None:
+        """One POST of the wizard → the API; the typed values never leave this function."""
+        if step == "phone":
+            phone = re.sub(r"[ \-()]", "", _field(form, "phone"))
+            if not PHONE.match(phone):
+                raise Refused(400, BAD_PHONE)
+            api.call("POST", "login/start", who, {"phone": phone})
+        elif step == "code":
+            code = _field(form, "code").strip()
+            if not CODE.match(code):
+                raise Refused(400, BAD_CODE)
+            api.call("POST", "login/code", who, {"code": code})
+        elif step == "password":
+            password = _field(form, "password")
+            if not password or len(password) > PASSWORD_MAX:
+                raise Refused(400, NEED_2FA)
+            api.call("POST", "login/password", who, {"password": password})
+        elif step == "cancel":
+            api.call("POST", "login/cancel", who)
+        elif step == "scope":
+            chosen = {c for c in form.getlist("chat") if isinstance(c, str)}
+            if len(chosen) > TG_SCOPE_MAX:
+                raise Refused(400, TOO_MANY_CHATS)
+            if not chosen <= {str(c["chat_ref"]) for c in api.call("GET", "chats", who)}:
+                raise Refused(400, UNKNOWN_CHAT)
+            api.call("PUT", "scope", who, {"chat_refs": sorted(chosen)})
+        else:
+            raise Refused(*NOT_FOUND_PAGE)
+
+    @app.get("/operator/telegram")
+    def telegram_wizard(request: Request) -> Response:
+        who = operator(request)
+        ctx, status = wizard_view(who)
+        return page(request, "operator_telegram.html", ctx, status=status)
+
+    @app.post("/operator/telegram/{step}")
+    async def telegram_step(request: Request, step: str) -> Response:
+        form = await request.form()
+        who = operator(request)
+        check_csrf(request, _field(form, "csrf"))
+
+        def work() -> Response:
+            try:
+                wizard_step(admin(), step, form, who)
+            except Refused as exc:
+                if exc.status in (NOT_FOUND_PAGE[0], TG_NOT_CONFIGURED[0]):
+                    raise
+                ctx, status = wizard_view(who, exc.message, exc.status)
+                return page(request, "operator_telegram.html", ctx, status=status)
+            except (tgadmin.ApiError, tgadmin.Unavailable) as exc:
+                code, text = api_error(exc, *(_field(form, n) for n in ("phone", "code", "password")))
+                ctx, status = wizard_view(who, text, code)
+                return page(request, "operator_telegram.html", ctx, status=status)
+            return RedirectResponse("/operator/telegram", status_code=303)  # PRG: the secrets are never re-rendered
+
+        return await run_in_threadpool(work)
 
     def call(conn: psycopg.Connection[Any], sql: str, params: tuple[Any, ...]) -> Any:
         """A transition function; its refusal (SQLSTATE GXnnn) becomes the HTTP status, nothing is written."""

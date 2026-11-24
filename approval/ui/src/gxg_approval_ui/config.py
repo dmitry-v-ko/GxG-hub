@@ -7,6 +7,9 @@
 | `GXG_UI_TLS_CERT_FILE`, `GXG_UI_TLS_KEY_FILE` (key: secret); not required on a loopback listener only | key |
 | `GXG_UI_PUBLIC_URL`, `GXG_OIDC_ISSUER`, `GXG_OIDC_CLIENT_ID`, `GXG_LISTEN` (default `0.0.0.0:8443`) | no |
 | `GXG_DECIDER_URL`: the decider's internal URL (AS-30) | no |
+| `GXG_UI_OPERATORS`: confirmed emails of the operators (comma-separated; empty = nobody) | no |
+| `GXG_TELEGRAM_ADMIN_URL` (private network, `:8082`) with `GXG_UI_SVC_KEY_FILE` (service JWT key `approval-ui`) | key |
+| `GXG_TELEGRAM_ADMIN_AUDIENCE`: the Telegram service ID in the JWT `aud` (default `telegram`) | no |
 | `GXG_BUNDLE_DIR`, `GXG_BUNDLE_KEYS`, `GXG_BUNDLE_STATE_FILE` | no |
 """
 
@@ -32,3 +35,8 @@ def require_tls(url: str, what: str) -> None:
 def preview_keys(path: Path) -> dict[str, SealedBox[PrivateKey]]:
     doc = json.loads(path.read_bytes())
     return {tenant: SealedBox(PrivateKey(base64.b64decode(key, validate=True))) for tenant, key in doc.items()}
+
+
+def operators(raw: str) -> frozenset[str]:
+    """`GXG_UI_OPERATORS`: comma-separated emails, compared in lower case."""
+    return frozenset(p.strip().lower() for p in raw.split(",") if p.strip())
