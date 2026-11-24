@@ -95,11 +95,17 @@ class Jobs:
         self.out.say(f"set {name} on {service}")
 
     def run(
-        self, name: str, variables: dict[str, str], timeout_s: int = 600, start: str = "", dockerfile: str = APPROVAL
+        self,
+        name: str,
+        variables: dict[str, str],
+        timeout_s: int = 600,
+        start: str = "",
+        dockerfile: str = APPROVAL,
+        source: dict[str, str] | None = None,
     ) -> list[str]:
         """A temporary job service built from this repository: create, run once, return its log, delete."""
         dep = self.dep
-        self.spec["services"][name] = {"kind": "job", "source": {"dockerfile": dockerfile}}
+        self.spec["services"][name] = {"kind": "job", "source": {**(source or {}), "dockerfile": dockerfile}}
         if name in dep.service_ids:  # a leftover of an interrupted run
             self.api.call(rd.Q_SERVICE_DELETE, id=dep.service_ids.pop(name), environmentId=dep.env_id)
         made = self.api.call(
@@ -196,6 +202,20 @@ class Jobs:
         }  # fmt: skip
         return self.probe(only="telegram", args=json.dumps(args))
 
+    def peek(self, command: str) -> int:
+        """Print a text file of the Telegram service image (its entrypoint: code, no secrets) to see how it wires things."""
+        lines = self.run(
+            "pilot-agent-peek",
+            {"GXG_X": "1"},
+            start=command,
+            dockerfile="Dockerfile",
+            source={"repo": "dmitry-v-ko/gxg-telegram-service", "branch": "claude/m13-railway"},
+        )
+        for line in lines:
+            if not line.startswith("build: "):
+                self.out.say("  " + line[:300])
+        return 0
+
     def scope(self) -> int:
         lines = self.run(
             "pilot-agent-scope",
@@ -252,7 +272,7 @@ class Jobs:
 
 def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None, out: rd.Out | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope", "propose"])
+    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope", "propose", "peek"])
     args = ap.parse_args(argv)
     out = out or rd.Out()
     try:
