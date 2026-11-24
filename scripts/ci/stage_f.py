@@ -174,13 +174,11 @@ OPS: dict[str, list[str]] = {
 OPEN: dict[str, dict[str, Any]] = {
     "OPS-02": {
         "status": "not_run",
-        "reason": "immediate effect and the weakening alert are tested (policy: next propose and the widening gate in "
-        "CI; revocation: stand MC-04; key rotation: EX-24), the audit part is not: nothing writes a policy (bundle) "
-        "change, an agent-token revocation or a key rotation to audit_events (SEC-09, GR-14: audit_events of a "
-        "propose carries no bundle_version; `keys rotate|remove` is a host-file operation, docs/runbooks/"
-        "approval-ops.md says it is not in audit_events; the revocation is ContextForge's own record); also no "
-        "alert on a rotation/revocation and the PR alert is a red CI gate, not a Prometheus rule. A drill or the "
-        "missing audit records are needed",
+        "reason": "immediate effect is tested (policy: next propose; revocation: stand MC-04; key rotation: EX-24) "
+        "and the audit of a policy switch (GR-14: propose audit carries policy_version) and of a key rotate/remove "
+        "(SEC-09: key_rotated/key_removed with the JWKS hash before/after) is tested; not covered: an agent-token "
+        "revocation is ContextForge's own record (no Hub audit_events row), and the weakening alert is a red CI "
+        "gate on the PR, not a Prometheus rule; no alert on a rotation/revocation. A drill is needed",
         "related": [
             f"{A}/test_propose.py::test_a_new_bundle_applies_to_the_very_next_propose_and_names_its_version",
             f"{A}/test_propose.py::test_policy_deny_stores_nothing",
@@ -190,6 +188,12 @@ OPEN: dict[str, dict[str, Any]] = {
             f"{A}/test_executor.py::test_ac11_propose_grant_revoked_between_approve_and_execute",
             f"{A}/test_executor.py::test_ac14_rotation_without_downtime_and_removal_of_a_compromised_kid",
             "approval/tests/test_keys.py::test_rotate_publishes_first_and_activates_15_minutes_later",
+            "approval/tests/test_keys.py::test_rotate_audits_kid_and_the_jwks_hash_before_and_after",
+            "approval/tests/test_keys.py::test_remove_audits_kid_and_the_jwks_hash_before_and_after",
+            "approval/tests/test_keys.py::test_nothing_is_written_when_the_audit_row_cannot_be_written",
+            f"{A}/test_executor.py::test_keys_cli_rotate_remove_and_release",
+            f"{A}/test_executor.py::test_keys_remove_of_a_compromised_key_works_with_the_db_down",
+            f"{A}/test_propose.py::test_human_approval_by_default_for_external_effect",
             f"{SM}::test_mc04_revoked_agent_token_stops_working_on_every_path",
             "approval/deploy/tests/test_alert_rules.py::test_rule_unit_tests_pass",
         ],
