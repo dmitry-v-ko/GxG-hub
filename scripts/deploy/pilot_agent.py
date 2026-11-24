@@ -29,6 +29,22 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]
 from scripts.deploy import railway_deploy as rd
 
 VAULT = "pilot-agent"
+APPROVAL = "deploy/railway/approval.Dockerfile"
+UI = "deploy/railway/ui.Dockerfile"
+# Runs in the ui image: the saved scope of the pilot (chat refs in the order the operator chose them) with the titles.
+SCOPE_PY = (
+    "import os,httpx2\n"
+    "from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey as K\n"
+    "from gxg_connector_kit import _jwt\n"
+    "from gxg_approval_ui.tgadmin import TelegramAdmin\n"
+    "key=K.from_private_bytes(_jwt.b64url_decode(open(os.environ['GXG_UI_SVC_KEY_FILE']).read().strip()))\n"
+    "api=TelegramAdmin(httpx2.Client(base_url=os.environ['GXG_TELEGRAM_ADMIN_URL']),key)\n"
+    "who=os.environ['GXG_OPERATOR']\n"
+    "s=api.call('GET','scope',who)\n"
+    "refs=s.get('chat_refs',[]) if isinstance(s,dict) else s\n"
+    "t={c['chat_ref']:c for c in api.call('GET','chats',who)}\n"
+    "[print('SCOPE',i,r,repr(t.get(r,{}).get('title')),t.get(r,{}).get('kind'),flush=True) for i,r in enumerate(refs)]\n"
+)
 Q_DEPLOY = "mutation Deploy($s: String!, $e: String!) { serviceInstanceDeployV2(serviceId: $s, environmentId: $e) }"
 Q_DEPLOYMENTS = """query Deployments($input: DeploymentListInput!) { deployments(first: 1, input: $input) {
   edges { node { id status } } } }"""
@@ -78,10 +94,12 @@ class Jobs:
         )  # fmt: skip
         self.out.say(f"set {name} on {service}")
 
-    def run(self, name: str, variables: dict[str, str], timeout_s: int = 600, start: str = "") -> list[str]:
+    def run(
+        self, name: str, variables: dict[str, str], timeout_s: int = 600, start: str = "", dockerfile: str = APPROVAL
+    ) -> list[str]:
         """A temporary job service built from this repository: create, run once, return its log, delete."""
         dep = self.dep
-        self.spec["services"][name] = {"kind": "job", "source": {"dockerfile": "deploy/railway/approval.Dockerfile"}}
+        self.spec["services"][name] = {"kind": "job", "source": {"dockerfile": dockerfile}}
         if name in dep.service_ids:  # a leftover of an interrupted run
             self.api.call(rd.Q_SERVICE_DELETE, id=dep.service_ids.pop(name), environmentId=dep.env_id)
         made = self.api.call(
@@ -96,7 +114,7 @@ class Jobs:
             rd.Q_UPSERT,
             input={
                 "projectId": dep.project_id, "environmentId": dep.env_id, "serviceId": dep.service_ids[name],
-                "variables": {"RAILWAY_DOCKERFILE_PATH": "deploy/railway/approval.Dockerfile", **variables},
+                "variables": {"RAILWAY_DOCKERFILE_PATH": dockerfile, **variables},
                 "skipDeploys": True,
             },
         )  # fmt: skip
@@ -104,7 +122,12 @@ class Jobs:
         self.api.call(
             rd.Q_INSTANCE_UPDATE,
             serviceId=dep.service_ids[name], environmentId=dep.env_id,
-            input={"startCommand": start or "/opt/gxg/entrypoint.sh python /opt/gxg/pilot_agent_job.py",
+            input={"startCommand": start
+                    or (
+                        "/opt/gxg/entrypoint.sh python /opt/gxg/pilot_agent_job.py"
+                        if dockerfile == APPROVAL
+                        else "/opt/gxg/entrypoint.sh python -c \"import os; exec(os.environ['GXG_JOB_PY'])\""
+                    ),
                    "restartPolicyType": "NEVER"},
         )  # fmt: skip
         self.api.call(Q_DEPLOY, s=dep.service_ids[name], e=dep.env_id)
@@ -164,6 +187,22 @@ class Jobs:
         self.out.say(f"team {ids['team']}, gateways {ids['gateways']}, servers {ids['servers']}")
         return 0
 
+    def scope(self) -> int:
+        lines = self.run(
+            "pilot-agent-scope",
+            {
+                "GXG_JOB_PY": SCOPE_PY,
+                "GXG_SECRET__GXG_UI_SVC_KEY": "${{ui.GXG_SECRET__GXG_UI_SVC_KEY}}",  # a reference: never read here
+                "GXG_TELEGRAM_ADMIN_URL": "${{ui.GXG_TELEGRAM_ADMIN_URL}}",
+                "GXG_OPERATOR": os.environ.get("GXG_OPERATOR", ""),
+            },
+            dockerfile=UI,
+        )
+        for line in lines:
+            if line.startswith("SCOPE ") or re.search(r"Traceback|Error|Failed|not found", line):
+                self.out.say("  " + line[:300])
+        return 0
+
     def revoke(self) -> int:
         lines = self.run(
             "pilot-agent-revoke",
@@ -202,7 +241,7 @@ class Jobs:
 
 def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None, out: rd.Out | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("action", choices=["setup", "probe", "revoke"])
+    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope"])
     args = ap.parse_args(argv)
     out = out or rd.Out()
     try:
@@ -214,7 +253,7 @@ def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None
                 raise rd.DeployError("RAILWAY_TOKEN is not set")
             transport = rd.http_transport(token)
         jobs = Jobs(rd.Railway(transport), out)
-        return {"setup": jobs.setup, "probe": jobs.probe, "revoke": jobs.revoke}[args.action]()
+        return {"setup": jobs.setup, "probe": jobs.probe, "revoke": jobs.revoke, "scope": jobs.scope}[args.action]()
     except rd.DeployError as exc:
         out.say(f"error: {exc}", err=True)
         return 1
