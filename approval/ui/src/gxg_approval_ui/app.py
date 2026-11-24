@@ -307,6 +307,8 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             raise Refused(*LOGIN_FAILED)
         now = deps.clock()
         request.session.clear()
+        # Audit line of a sign-in: the principal id (issuer and subject are not secrets), nothing else of the claims.
+        logging.getLogger("gxg_approval_ui").info("sign-in principal=oidc:%s:%s", claims["iss"], claims["sub"])
         request.session.update(
             {"sub": f"oidc:{claims['iss']}:{claims['sub']}", "iat": now, "seen": now, "csrf": secrets.token_urlsafe(32)}
         )
