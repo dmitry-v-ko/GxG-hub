@@ -1,10 +1,42 @@
 [
   {
     "id": "deny:agents-never-execute",
-    "roles": ["*"],
-    "actions": ["tools.invoke.*execute*", "tools.invoke.*reconcile*"],
-    "resource_types": ["*"],
-    "resource_ids": ["*"],
+    "roles": [
+      "*"
+    ],
+    "actions": [
+      "tools.invoke.*execute*",
+      "tools.invoke.*reconcile*"
+    ],
+    "resource_types": [
+      "*"
+    ],
+    "resource_ids": [
+      "*"
+    ],
     "reason": "EFF-02, security-v1 step 2: execute and reconcile are never callable through ContextForge"
+  },
+  {
+    "id": "t-pilot.pilot",
+    "roles": [
+      "*"
+    ],
+    "conditions": {
+      "subject.email": "pilot@t-pilot.agents.gxg.example.com"
+    },
+    "actions": [
+      "tools.invoke.telegram-t-pilot-telegram-messages-search",
+      "tools.invoke.telegram-t-pilot-telegram-thread-read",
+      "tools.invoke.telegram-t-pilot-telegram-message-propose",
+      "tools.invoke.approval-t-pilot-effects-status",
+      "tools.invoke.approval-t-pilot-effects-cancel"
+    ],
+    "resource_types": [
+      "tool"
+    ],
+    "resource_ids": [
+      "*"
+    ],
+    "reason": "the pilot agent: Telegram search, thread read and message proposal, effect status and cancel; nothing else (the deny rule above wins for execute and reconcile)"
   }
 ]
