@@ -314,7 +314,7 @@ services:
     transient: true
     source: {repo: dmitry-v-ko/gxg-telegram-service, branch: claude/m13-railway, dockerfile: Dockerfile}
     start: /app/.venv/bin/python -c "import os; exec(os.environ['GXG_TGDB_INIT_PY'])"
-    env: {GXG_TGDB_MODE: check, GXG_TGDB_CA: "${{executor.GXG_CONFIG__SSL_CERT}}", GXG_TGDB_PROBE: "telegram.railway.internal:8080,telegram.railway.internal:8081,telegram.railway.internal:8082"}  # read-only report; remove it (or set `init`) for a first setup of a new telegram-db
+    env: {GXG_TGDB_CA: "${{executor.GXG_CONFIG__SSL_CERT}}", GXG_TGDB_PROBE: "telegram.railway.internal:8080,telegram.railway.internal:8081,telegram.railway.internal:8082"}  # sets up the database idempotently (migrations once, service and role SQL re-applied, passwords), then reports; `GXG_TGDB_MODE: check` = report only
     seed:
       GXG_TGDB_INIT_PY: {file: deploy/railway/telegram_db_init.py}
     secrets:

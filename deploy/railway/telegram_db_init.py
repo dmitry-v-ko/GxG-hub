@@ -10,12 +10,13 @@ GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db), GXG_TGDB_PROBE, GXG_TGD
 
 import json
 import os
+import re
 import socket
 import ssl
 from pathlib import Path
 
 import psycopg
-from psycopg import sql
+from psycopg import errors, sql
 
 DB = Path(os.environ.get("GXG_TGDB_DIR", "/app/db"))
 MIGRATIONS = [
@@ -25,6 +26,55 @@ MIGRATIONS = [
     "10_telegram_service.sql",
 ]
 ROLE_FILES = {"gxg_telegram_service": "service_role.sql", "gxg_telegram_reader": "reader_role.sql"}
+
+
+def statements(text: str) -> list[str]:
+    """Split SQL at `;` outside quotes, dollar-quoted bodies and comments (enough for the service's own files)."""
+    out, buf, i, n = [], [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if text.startswith("--", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if c == "'":
+            j = i + 1
+            while j < n and not (text[j] == "'" and text[j + 1 : j + 2] != "'"):
+                j += 2 if text[j] == "'" else 1
+            buf.append(text[i : j + 1])
+            i = j + 1
+            continue
+        if c == "$":
+            tag = re.match(r"\$[A-Za-z_]*\$", text[i:])
+            if tag:
+                j = text.find(tag.group(0), i + len(tag.group(0)))
+                j = n if j < 0 else j + len(tag.group(0))
+                buf.append(text[i:j])
+                i = j
+                continue
+        if c == ";":
+            stmt = "".join(buf).strip()
+            if stmt:
+                out.append(stmt)
+            buf = []
+        else:
+            buf.append(c)
+        i += 1
+    tail = "".join(buf).strip()
+    return out + ([tail] if tail else [])
+
+
+def reapply(conn: psycopg.Connection, name: str) -> None:
+    """Apply a service SQL file statement by statement; what already exists (a role, a function without OR REPLACE) is
+    skipped, anything else fails. The files are then re-runnable: a newer head adds its functions and grants."""
+    done = skipped = 0
+    for stmt in statements((DB / name).read_text("utf-8")):
+        try:
+            conn.execute(stmt)
+            done += 1
+        except (errors.DuplicateObject, errors.DuplicateFunction, errors.DuplicateTable, errors.DuplicateSchema):
+            skipped += 1
+    print(f"{name}: {done} statements applied, {skipped} already there", flush=True)
 
 
 def check(dsn: str) -> None:
@@ -43,6 +93,13 @@ def check(dsn: str) -> None:
                 )
             ]
             print(f"schema {schema}: {len(tables)} tables {tables}", flush=True)
+        for proc in ("telegram_service.set_scope(text, jsonb)",):
+            row = conn.execute("SELECT to_regprocedure(%s)", (proc,)).fetchone()
+            print(f"function {proc}: {'present' if row and row[0] else 'MISSING'}", flush=True)
+            if row and row[0]:
+                for role in ROLE_FILES:
+                    ok = conn.execute("SELECT has_function_privilege(%s, %s, 'EXECUTE')", (role, proc)).fetchone()
+                    print(f"  EXECUTE for {role}: {bool(ok and ok[0])}", flush=True)
         if conn.execute("SELECT to_regclass('capability_hub.connections')").fetchone()[0]:
             for cid, enabled in conn.execute("SELECT id, enabled FROM capability_hub.connections ORDER BY 1"):
                 print(f"connection {cid}: enabled={enabled}", flush=True)
@@ -95,10 +152,9 @@ def main() -> None:
                 print(f"applied {name}", flush=True)
         else:
             print("archive schema exists, migrations skipped", flush=True)
+            reapply(conn, "10_telegram_service.sql")  # the service's own objects: a newer head may add some
         for role, file in ROLE_FILES.items():
-            if conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone() is None:
-                conn.execute((DB / file).read_text("utf-8"))
-                print(f"created role {role}", flush=True)
+            reapply(conn, file)  # creates the role the first time, later adds what a newer head brought
             conn.execute(
                 sql.SQL("ALTER ROLE {} PASSWORD {}").format(sql.Identifier(role), sql.Literal(passwords[role]))
             )
@@ -112,6 +168,9 @@ def main() -> None:
             ),
         )
         print("connection row ensured", flush=True)
+    probe(os.environ.get("GXG_TGDB_PROBE", ""))
+    check(os.environ["GXG_TGDB_SUPERUSER_DSN"])  # the same read-only report after the setup
 
 
-main()
+if __name__ == "__main__":  # `python file` and `python -c exec(...)` both run it; an import (tests) does not
+    main()

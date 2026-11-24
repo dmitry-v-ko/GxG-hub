@@ -50,3 +50,19 @@ def test_the_allowed_tools_are_exactly_the_five_of_the_pilot() -> None:
         "effects.status", "effects.cancel",
     }  # fmt: skip
     assert not [t for t in job.ALLOWED if "execute" in t or "reconcile" in t]  # type: ignore[attr-defined]
+
+
+def test_sql_splitter_keeps_dollar_bodies_quotes_and_comments_whole() -> None:
+    spec = importlib.util.spec_from_file_location("telegram_db_init", JOB.parent / "telegram_db_init.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    text = """-- a; comment
+CREATE ROLE a LOGIN;
+CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql;
+CREATE FUNCTION g() RETURNS text AS $b$ SELECT 'a;b'; $b$ LANGUAGE sql;
+COMMENT ON ROLE a IS 'it''s; fine';
+GRANT EXECUTE ON FUNCTION f() TO a"""
+    parts = module.statements(text)
+    assert [p.split()[0] for p in parts] == ["CREATE", "CREATE", "CREATE", "COMMENT", "GRANT"]
+    assert "END; $$ LANGUAGE" in parts[1] and "'a;b'" in parts[2] and "it''s; fine" in parts[3]
