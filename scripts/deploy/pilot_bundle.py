@@ -50,8 +50,12 @@ CONSUMERS = {
     "notifier": (KEYS_VAR, B64_VAR),
     "telegram": ("TELEGRAM_BUNDLE_KEYS", B64_VAR),
 }
-# registry id -> service whose GXG_SVC_PUBLIC_KEY is the registry key
-REGISTRY_KEYS = {"executor": "executor", "approval-mcp": "mcp"}
+# registry id -> (service, variable) whose value is the registry key
+REGISTRY_KEYS = {
+    "executor": ("executor", "GXG_SVC_PUBLIC_KEY"),
+    "approval-mcp": ("mcp", "GXG_SVC_PUBLIC_KEY"),
+    "telegram": ("telegram", "TELEGRAM_SVC_PUBLIC_KEY"),
+}
 
 
 def public_key(seed_b64: str) -> str:
@@ -126,11 +130,11 @@ class Pilot:
         doc = yaml.safe_load((POLICIES / "platform/registry.yaml").read_text("utf-8"))
         ok = True
         for svc in doc["services"]:
-            owner = REGISTRY_KEYS.get(svc["id"])
-            live = self.variables(owner).get("GXG_SVC_PUBLIC_KEY") if owner else None
+            owner, var = REGISTRY_KEYS.get(svc["id"], ("", ""))
+            live = self.variables(owner).get(var) if owner else None
             good = bool(live) and svc["public_keys"] == [live]
             ok &= good
-            self.out.say(f"{'PASS' if good else 'FAIL'} registry {svc['id']}: key equals {owner}.GXG_SVC_PUBLIC_KEY")
+            self.out.say(f"{'PASS' if good else 'FAIL'} registry {svc['id']}: key equals {owner}.{var}")
         return ok
 
     def publish(self, bundle: Path, seed: str) -> list[str]:

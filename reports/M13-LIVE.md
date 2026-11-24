@@ -64,3 +64,21 @@
 4. Passkey approver'а: `gxg-approval passkeys invite` через `admin` (нужны `admin` и `ui`, то есть п. 1), затем страница «Passkey» в UI.
 5. Выбор чатов и humans: добавить в `policies/pilot/tenants/t-pilot.yaml` approver'а (`oidc:<issuer>:<sub>`) и grants на `telegram:tg-pilot/chat/<chat_ref>`, подключить telegram-коннектор в реестр (ключ и https-адрес), собрать `pilot_bundle.py --deploy`.
 6. Решить про TLS внутри Railway (AS-07, см. реестр выше) и про `OPENROUTER_API_KEY` (shared, не наша, не тронута).
+
+## TLS executor → Telegram-коннектор (AS-07)
+
+Состояние: все сервисы SUCCESS, `railway_deploy.py --verify` rc=0 (после `--finalize` обоих transient-задач).
+
+- **Внутренний CA** (`railway_deploy.py`, раздел `pki` в `services.yaml`): ECDSA P-256, CA на 1 год с NameConstraints `railway.internal` (CA может поручиться только за внутренние имена), серверный сертификат на 1 год, SAN `telegram.railway.internal`, EKU serverAuth. Добавлены SKI/AKI: Python 3.13 проверяет строго и без них отвергает цепочку (поймано тестом). Ключ CA живёт только внутри вызова и не хранится; перевыпуск создаёт новый CA и заменяет всё множество. Частично заданный PKI скрипт отвергает, а не достраивает.
+- **Куда легло:** `telegram.TELEGRAM_EXECUTE_TLS_KEY` (секрет), `telegram.TELEGRAM_EXECUTE_TLS_CERT` (сертификат), `executor.GXG_CONFIG__SSL_CERT` (сертификат CA). Entrypoint делает из последней файл и экспортирует `SSL_CERT_FILE`: executor создаёт `httpx.Client(base_url=…)` с проверкой по умолчанию, а httpx берёт `SSL_CERT_FILE` (проверено: в контексте ровно 1 доверенный CA). Кода Approval менять не пришлось. Значения нигде не печатаются.
+- **Реестр bundle:** добавлен `telegram` (`connector`, ключ из `TELEGRAM_SVC_PUBLIC_KEY`, `tenants: [t-pilot]`, `internal_url: https://telegram.railway.internal:8081`); `pilot_bundle.py --check` зелёный. Bundle перевыпущен 2026-11-24 11:00 UTC и раздан (`--deploy`): **следующий перевыпуск не позже 23:00 UTC**. Отступление от AS-07 (http) больше не нужно.
+- **Тесты** (`tests/deploy/test_pki.py`, офлайн, 39 passed всего): цепочка и SAN; настоящий TLS-handshake в памяти — проходит для `telegram.railway.internal`, падает для другого имени и для чужого CA; повторный запуск ничего не меняет; ключ не попадает в stdout/stderr; частично заданный PKI отвергается.
+- **Побочное:** каждый запуск `railway_deploy.py` пересоздаёт transient-задачи `db-init` и `telegram-db-init` (они отработали идемпотентно с теми же паролями), после чего я запускал `--finalize`.
+
+### Не сделано: TLS внутри `gxg-telegram-service`
+
+В репозиторий сервиса пушить нельзя (доступ только к GxG-hub, `add_repo` запрещён), исходников сервера я не видел. Что нужно внести там (контракт, имена переменных те, что уже лежат в Railway):
+
+1. `deploy/railway-entrypoint.sh`: добавить `TELEGRAM_EXECUTE_TLS_KEY` и `TELEGRAM_EXECUTE_TLS_CERT` к материализуемым переменным (файлы 0600 в `/dev/shm`, экспорт `TELEGRAM_EXECUTE_TLS_KEY_FILE` / `TELEGRAM_EXECUTE_TLS_CERT_FILE`, исходные переменные снять, как для `TELEGRAM_SVC_KEY`).
+2. Сервер порта 8081 (execute): запускать uvicorn с `ssl_keyfile` и `ssl_certfile` из этих файлов; без файлов execute на plaintext не поднимать (отказ на старте). Порт 8080 (MCP за ContextForge) не менять.
+3. После этого вывести `telegram` из режима обслуживания (startCommand я не трогал, как просили). До этого `https://telegram.railway.internal:8081` ничего не слушает, но `execute` в пилоте и не вызывается: нет grants и humans.

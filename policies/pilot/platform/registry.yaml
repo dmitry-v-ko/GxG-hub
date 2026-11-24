@@ -1,7 +1,6 @@
-# Pilot platform registry (M13). Public keys only: they are the GXG_SVC_PUBLIC_KEY variables of the live services
-# (scripts/deploy/pilot_bundle.py --check compares them with Railway). Format: docs/specs/approval-service-v1.md#реестр-платформы
-# Not listed: `api` (it only verifies service JWTs, it has no key of its own, services.yaml) and the Telegram connector
-# (no service key exists yet; it joins the registry with the first connector grants, see reports/M13-LIVE.md).
+# Pilot platform registry (M13). Public keys only: they are the live GXG_SVC_PUBLIC_KEY / TELEGRAM_SVC_PUBLIC_KEY
+# variables (scripts/deploy/pilot_bundle.py --check compares them with Railway). Format: docs/specs/approval-service-v1.md#реестр-платформы
+# Not listed: `api` (it only verifies service JWTs, it has no key of its own, services.yaml).
 schema_version: 1
 services:
   - id: executor
@@ -12,3 +11,8 @@ services:
     kind: approval_mcp
     public_keys: [ed25519:0jhcQt7IEfA0Pg9sJKsdAQsYspIwWIdd33ttaAJKDUE]
     tenants: ["*"]
+  - id: telegram
+    kind: connector
+    public_keys: [ed25519:cxGreIqqQtTkTMAZaMXxSyeU6pCN5rKi7OxfLNzO_WA]  # telegram.TELEGRAM_SVC_PUBLIC_KEY
+    tenants: [t-pilot]
+    internal_url: https://telegram.railway.internal:8081  # TLS by the pilot CA (AS-07): deploy/railway/services.yaml `pki`
