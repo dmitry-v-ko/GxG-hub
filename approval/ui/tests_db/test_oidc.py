@@ -84,7 +84,9 @@ def start(client: Any, idp: FakeIdp) -> dict[str, str]:
 
 def test_authorization_request(client: Any, idp: FakeIdp) -> None:
     q = start(client, idp)
-    assert q["response_type"] == "code" and q["client_id"] == CLIENT and q["scope"] == "openid"
+    assert (
+        q["response_type"] == "code" and q["client_id"] == CLIENT and q["scope"] == "openid email"
+    )  # `email` feeds GXG_UI_OPERATORS (M13)
     assert q["redirect_uri"] == "https://ui.example.test/auth/callback"
     assert q["code_challenge_method"] == "S256" and len(q["code_challenge"]) == 43
     assert len(q["state"]) >= 20 and len(q["nonce"]) >= 20

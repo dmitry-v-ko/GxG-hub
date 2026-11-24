@@ -113,7 +113,8 @@ def test_security_headers_and_cookie(browser: Any, propose: Any) -> None:
         assert csp.startswith("default-src 'self'") and "unsafe-inline" not in csp and "unsafe-eval" not in csp
         assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"
         assert "strict-transport-security" in r.headers
-    cookie = browser.client.get("/").headers["set-cookie"]
+    # a plain GET does not re-issue the cookie since the 30-day session (no idle timeout): logout rewrites it
+    cookie = browser.client.post("/logout", data={"csrf": browser.csrf}, follow_redirects=False).headers["set-cookie"]
     name, _, attrs = cookie.partition("=")
     flags = {a.strip().split("=")[0].lower() for a in attrs.split(";")}
     assert name == "__Host-gxg" and {"httponly", "secure", "samesite", "path"} <= flags and "domain" not in flags
