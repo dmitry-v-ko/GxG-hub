@@ -200,11 +200,12 @@ OPEN: dict[str, dict[str, Any]] = {
     },
     "OPS-06": {
         "status": "manual",
-        "reason": "needs the live tailnet (probes from outside it and from tag:agent / the approver's device, "
-        "`tailscale funnel status` on every node); policies/network/tailscale-acl.hujson with its `tests` and the CI "
-        "job for it do not exist in this checkout; AC-M14-08 evidence goes in a report of the operator's run",
+        "reason": "the policy is live (reports/M14-tailnet-acl-live.md: saved via the Tailscale API, its `tests` "
+        "ran on save: tag:agent reaches only tag:gateway:443, Hub nodes reach nothing on each other); left: probes "
+        "from inside a Hub node (needs an SSH key on Railway) and the operator's own device opening the UI and :8443",
         "related": [
             "approval/deploy/tests/test_network_policy.py::test_ui_is_reached_from_outside_over_https_only",
+            "tests/network/test_check_acl.py::test_committed_policy_ok",
             f"{DEP}/test_railway_audit.py::test_exposure_fails_in_every_environment",
         ],
     },

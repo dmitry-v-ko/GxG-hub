@@ -1,7 +1,7 @@
 {
   "stage": "F",
-  "commit": "11ef5cc",
-  "run_at": "2026-11-24T21:46:27Z",
+  "commit": "d76708a",
+  "run_at": "2026-11-24T23:53:13Z",
   "command": "uv run python scripts/ci/stage_f.py --stand stand/secrets/junit/fresh.xml --stand stand/secrets/junit/after-restart.xml --stand stand/secrets/junit/after-recreate.xml",
   "pytest_exit": 1,
   "counts": {
@@ -748,12 +748,17 @@
     {
       "id": "OPS-06",
       "status": "manual",
-      "reason": "needs the live tailnet (probes from outside it and from tag:agent / the approver's device, `tailscale funnel status` on every node); policies/network/tailscale-acl.hujson with its `tests` and the CI job for it do not exist in this checkout; AC-M14-08 evidence goes in a report of the operator's run",
+      "reason": "the policy is live (reports/M14-tailnet-acl-live.md: saved via the Tailscale API, its `tests` ran on save: tag:agent reaches only tag:gateway:443, Hub nodes reach nothing on each other); left: probes from inside a Hub node (needs an SSH key on Railway) and the operator's own device opening the UI and :8443",
       "related": [
         {
           "test": "approval/deploy/tests/test_network_policy.py::test_ui_is_reached_from_outside_over_https_only",
           "cases": 1,
           "passed": 0
+        },
+        {
+          "test": "tests/network/test_check_acl.py::test_committed_policy_ok",
+          "cases": 1,
+          "passed": 1
         },
         {
           "test": "tests/deploy/test_railway_audit.py::test_exposure_fails_in_every_environment",
