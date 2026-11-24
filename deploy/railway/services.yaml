@@ -87,7 +87,9 @@ services:
       SSRF_PROTECTION_ENABLED: "true"  # SEC-15
       SSRF_ALLOW_PRIVATE_NETWORKS: "false"
       SSRF_ALLOW_LOCALHOST: "false"
-      SSRF_ALLOWED_NETWORKS: '["fd12::/16"]'  # Railway private network (IPv6), for the connectors only: see the report
+      # Railway private network, both families: a private name resolves to 10.128.0.0/9 (IPv4) and fd12::/16 (IPv6) and ContextForge
+      # needs every address allowed. For the connectors the platform admin registers only (SEC-15).
+      SSRF_ALLOWED_NETWORKS: '["fd12::/16", "10.128.0.0/9"]'
       TOOL_TIMEOUT: "25"
       AUTH_CACHE_REVOCATION_TTL: "5"  # AC-M13-03: a revoked agent stops within a minute
       LOG_LEVEL: INFO
