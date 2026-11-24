@@ -163,8 +163,11 @@ def test_ops07_tailscale_headers_are_not_an_identity(stand: Stand) -> None:
             status, resp = stand.rpc(path, "tools/call", {"name": tool, "arguments": {}}, token=None, extra=forged)
             assert status == 401, (forged, path, status, resp)
         for admin_path in ("/v1/gateways", "/v1/tools", "/v1/teams"):
-            r = stand.http.get(admin_path, headers=forged)
-            assert r.status_code in (401, 403), (forged, admin_path, r.status_code)
+            # /v1/teams answers 307 to /v1/teams/ (the slash redirect): follow it with the same forged headers
+            r = stand.http.get(admin_path, headers=forged, follow_redirects=True)
+            hops = [str(h.headers.get("location")) for h in r.history]
+            assert r.status_code in (401, 403), (forged, admin_path, hops, r.status_code)
+            assert all(h.rstrip("/").endswith(admin_path) for h in hops), (admin_path, hops)  # not off to a login
     assert reached(stand, before) == []
 
 
