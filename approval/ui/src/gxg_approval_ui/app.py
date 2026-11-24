@@ -118,6 +118,7 @@ _SQL_RECEIVED = (
     "SELECT count(*) FROM decisions WHERE intent_id = %s AND decision = 'approve' AND decided_by NOT LIKE 'policy:%%'"
 )
 _SQL_RESOLVE = "SELECT gxg_resolve_manual(%s, %s, %s, %s, %s)"
+_SQL_DECIDE_SESSION = "SELECT gxg_decide_session(%s, %s, %s, %s, %s, %s)"  # AS-30a: no step-up, one button
 _SQL_LINK_CODE = "SELECT gxg_link_code(%s, %s, %s)"
 _SQL_LINKS = "SELECT tenant_id, linked_at FROM approver_links WHERE human_principal = %s ORDER BY tenant_id"
 _HTTP = {"GX400": 400, "GX403": 403, "GX404": 404, "GX409": 409, "GX423": 423}  # _gxg_fail SQLSTATEs
@@ -417,6 +418,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
                 "can_decide": "approver" in mine and row["status"] == "pending_approval" and opened is not None,
                 "can_resolve": bool(mine & {"approver", "tenant_admin"}) and row["status"] == "outcome_unknown",
                 "has_passkey": stepup.has_passkey(conn, who),
+                "step_up": bool(row["step_up_required"]),  # AS-30a: without it the decision is one button
             }
             return page(request, "card.html", ctx)
 
@@ -466,12 +468,33 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915 (one closure per screen)
             row = load(conn, intent_id)  # EFF-15: re-read before the decision
         if "approver" not in roles(who).get(row["tenant_id"], frozenset()):
             raise Refused(*NOT_APPROVER)  # current bundle (T2)
+        if not row["step_up_required"]:
+            return _decide_in_session(who, row, form, comment)
         if not assertion:
             raise Refused(*STEP_UP)
         body = {"human": who, "intent_id": str(row["intent_id"]), "assertion": assertion, "comment": comment or None}
         status, text = stepup.relay(deps.decider, "/v1/decisions", body)
         if status != 200:
             raise Refused(status, stepup.message(text))
+        return RedirectResponse(f"/intents/{row['intent_id']}", status_code=303)
+
+    def _decide_in_session(who: str, row: Mapping[str, Any], form: Mapping[str, Any], comment: str) -> Response:
+        """AS-30a: an intent without step-up is decided by one button in the approver's own session (CSRF was checked by
+        the caller). The database function re-checks approver, version and args hash and refuses a step-up intent; the
+        screen's args are checked here as for the signed path (EFF-33): an approve on mismatching args is refused."""
+        decision = _field(form, "decision")
+        if decision not in ("approve", "reject"):
+            raise Refused(*BAD_DECISION)
+        if decision == "approve":
+            opened = envelope(row)
+            if opened is None or not opened[2]:
+                raise Refused(*HASH_MISMATCH)
+        with deps.pool.connection() as conn:
+            call(
+                conn,
+                _SQL_DECIDE_SESSION,
+                (who, row["intent_id"], _version(form), _field(form, "args_hash"), decision, comment or None),
+            )
         return RedirectResponse(f"/intents/{row['intent_id']}", status_code=303)
 
     @app.post("/intents/{intent_id}/resolve")

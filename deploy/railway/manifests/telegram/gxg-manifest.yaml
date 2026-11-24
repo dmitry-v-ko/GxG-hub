@@ -1,0 +1,56 @@
+# Manifest of gxg-telegram-service (service-integration-v1 «Telegram», MCC-01).
+# M11.1: the service itself (ADR-0005). Read tools over its archive, message.get live; propose is an effect (stage C).
+connector: telegram
+version: 0.1.0
+contract: gxg-mcp-connector/v1
+tools:
+  - name: telegram.messages.search
+    version: 1.0.0
+    title: "Поиск сообщений"
+    effect_class: read
+    action: read
+    resource: { type: chat, scope: list }
+    input_schema: schemas/messages-search.input.json
+    output_schema: ../../../../schemas/search-result.schema.json
+    limits: { max_results: 50, timeout_s: 20 }
+  - name: telegram.thread.read
+    version: 1.0.0
+    title: "История чата"
+    effect_class: read
+    action: read
+    resource: { type: chat, scope: single, from_arg: chat_ref, resolve: arg }
+    input_schema: schemas/thread-read.input.json
+    output_schema: schemas/messages.output.json
+    limits: { max_results: 50, timeout_s: 20 }
+  - name: telegram.messages.collect
+    version: 1.0.0
+    title: "Сбор сообщений по cursor"
+    effect_class: read
+    action: collect
+    resource: { type: chat, scope: single, from_arg: chat_ref, resolve: arg }
+    input_schema: schemas/messages-collect.input.json
+    output_schema: schemas/messages.output.json
+    limits: { max_results: 100, timeout_s: 20 }
+  - name: telegram.message.get
+    version: 1.0.0
+    title: "Сообщение"
+    effect_class: read
+    action: read
+    resource: { type: chat, scope: single, from_arg: chat_ref, resolve: arg }
+    input_schema: schemas/message-get.input.json
+    output_schema: schemas/message-get.output.json
+    limits: { timeout_s: 20 }
+  - name: telegram.message.propose
+    version: 1.0.0
+    title: "Отправка сообщения в Telegram"
+    effect_class: external_effect
+    action: propose
+    resource: { type: chat, scope: single, from_arg: chat_ref, resolve: arg }
+    executes_via: telegram.message.execute   # internal port 8081 only, never an MCP tool (EFF-02, MCC-07)
+    dispatch_timeout_s: 60
+    input_schema: schemas/message-propose.input.json
+    output_schema: schemas/message-propose.output.json
+    preview:
+      title: "Сообщение в Telegram"
+      fields: { text: "Текст", reply_to: "Ответ на сообщение", markup: "Разметка" }
+    limits: { max_text_len: 4096, timeout_s: 15 }

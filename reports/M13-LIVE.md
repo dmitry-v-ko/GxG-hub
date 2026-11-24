@@ -203,3 +203,34 @@
 Решение владельца 2026-11-24: сессия UI 30 дней от входа, без idle-таймаута (`SESSION_MAX_S` = 30 суток, `SESSION_IDLE_S` и поле сессии `seen` убраны, cookie уже постоянная: `Max-Age` = 30 суток, Secure, HttpOnly); строка таблицы «Вход» перенесена в `docs/specs/approval-service-v1.md`. `admin` `/invites` не менялся (свежий вход, сессия 15 мин). **`SameSite` остался `Strict`, как в коде сейчас (а не Lax, как сказано в задании):** вход через IdP уже учитывает Strict промежуточным same-site переходом `/auth/callback`; Lax ослабил бы защиту от CSRF без надобности. Скажите, если нужен именно Lax. Тесты: 197 passed (offline), `tests_db` обновлены под 30 дней, но без Docker не запускались.
 
 **Вход в `admin` `/invites` больше не зацикливается:** `/auth/callback` отвечает 200 с мета-редиректом на `/invites` вместо 303 (редирект оставался в цепочке переходов от Google, и браузер не отправлял Strict-cookie); cookie остаётся SameSite=Strict, тест на цепочку callback → следующий запрос → 200 есть. Можно повторять вход после деплоя `admin`.
+
+## Первая отправка: проверка фактов (шаг 1)
+
+- **Passkey владельца есть:** в `webauthn_credentials` один ключ для `oidc:https://accounts.google.com:…`, выдан по приглашению оператора (`enrolled_by` задан); принципалов с passkey один.
+- **Scope Telegram сохранён:** в архиве (в нём только чаты scope) три чата, все `state=synced`; функция `set_scope` и `EXECUTE` у `gxg_telegram_service` на месте, Connection `tg-pilot` `enabled=True`.
+- **Остановился перед grants, `TELEGRAM_EFFECTS_ENABLED` и отправкой:** из базы нельзя понять, какой из трёх чатов владелец выбрал «первым» (порядок в архиве не порядок выбора), а тестовое сообщение уйдёт в настоящий чат. Нужно, чтобы владелец или оркестратор назвал чат (название или `chat_ref`).
+
+## Первая отправка: что сделано и что мешает
+
+- **Чат найден:** «GxG Agents» (`forum`) = `tgc1_fg2agKZmFgzytfmaAUzf3ZbkczoPSmN8`, название однозначное; scope в порядке выбора владельца: «Dmitry Kozlov» (private), «LobsterDAO HR» (channel), «GxG Agents» (forum) (`pilot_agent.py scope`: задача в образе `ui`, названия печатались только у чатов scope).
+- **Grants** (`policies/pilot/tenants/t-pilot.yaml`): агент `agent:t-pilot:pilot` — `read` и `collect` на все три чата, `propose` только на «GxG Agents»; срок до 2026-12-24, approver — владелец (`approver`). Bundle перевыпущен 2026-11-24 15:03 UTC и раздан (`pilot_bundle.py --deploy`); **следующий перевыпуск не позже 03:00 UTC** (меняйте раз в 12 ч). `TELEGRAM_EFFECTS_ENABLED=1` у `telegram` задан.
+- **`propose` пока не создан:** коннектор отвечает `temporarily_unavailable: grants bundle is not ready`. Причина: `railway-entrypoint.sh` образа `gxg-telegram-service` не раскладывает bundle (`TELEGRAM_BUNDLE_DIR` по умолчанию `/bundle`, он пуст), хотя `pilot_bundle.py` кладёт в `telegram` и `TELEGRAM_BUNDLE_KEYS` (`kid=ключ`), и `GXG_BUNDLE_B64` (base64 tar.gz с `grants-bundle.json` и `grants-bundle.json.sig` в корне).
+- **Правка для `gxg-telegram-service`** (мне туда пушить нечем: репозиторий доступен Railway для сборки, но не этой сессии для записи; `git ls-remote` без логина отказывает). В `deploy/railway-entrypoint.sh`, после раскладки секретов и до `chown`/`setpriv`:
+
+```sh
+# Grants bundle (GR-11a): GXG_BUNDLE_B64 = base64 of a tar.gz holding grants-bundle.json and grants-bundle.json.sig
+if [ -n "${GXG_BUNDLE_B64:-}" ]; then
+  mkdir -p "$FILES/bundle"                       # $FILES: the tmpfs directory of the secret files (/dev/shm/...)
+  printf '%s' "$GXG_BUNDLE_B64" | base64 -d | tar -xz -C "$FILES/bundle"
+  chown -R telegram "$FILES/bundle"
+  export TELEGRAM_BUNDLE_DIR="$FILES/bundle"
+  unset GXG_BUNDLE_B64
+fi
+```
+  Тест: запуск entrypoint с `GXG_BUNDLE_B64` из tar.gz двух файлов → в `$TELEGRAM_BUNDLE_DIR` лежат оба файла, переменная снята; без неё каталог не создаётся. После пуша и деплоя `telegram`: `pilot_agent.py propose` (нужны `GXG_SEND_CHAT_REF` и `GXG_SEND_TEXT`), дальше `intent_id` и ссылка `https://gxg-approval-ui.tail9fb746.ts.net/intents/<id>`. Заявка с ключом идемпотентности `m13-first-send-1`: повтор той же заявки не создаст второй intent.
+
+**Заявка на первую отправку создана** (2026-11-24, `pilot_agent.py propose`, от имени агента через ContextForge): `intent_id` = `12c724e6-25c1-4d81-a8ed-31ee6565fb72`, статус `pending_approval`; чат «GxG Agents», текст «GxG Hub: тестовая отправка пилота», ключ идемпотентности `m13-first-send-1`. Ссылка в UI: `https://gxg-approval-ui.tail9fb746.ts.net/intents/12c724e6-25c1-4d81-a8ed-31ee6565fb72`. Bundle перевыпущен 15:44 UTC с манифестом сервиса (в реестре появился `telegram.message.propose`); следующий перевыпуск не позже 03:44 UTC. Одобряет владелец своим passkey; результат (`effects.status` до `succeeded`, ровно одна отправка) допишу после одобрения.
+
+## Решение одной кнопкой (AS-30a, EX-26)
+
+Решение владельца 2026-11-24, спека `approval-service-v1.md` AS-30/AS-30a, EX-26 (ветка спеки `claude/admiring-planck-vzys0x`, `895c858`). Миграция `0007_session_decision.py`: `gxg_decide_session(principal, intent, version, args_hash, decision, comment)`, `SECURITY DEFINER`, `EXECUTE` только у `gxg_ui`; проверки как у решения через `decider` (статус, версия, хеш, срок, замороженные `allowed_approvers`, не requester), отказ при `step_up_required`, запись `decisions` с `step_up = false` и `decided_by = oidc:…`. `ui`: карточка intent'а без step-up с кнопками «Одобрить» / «Отклонить» без WebAuthn (CSRF, повторная проверка текущего bundle, хеш аргументов), со step-up прежний путь через `decider`; мобильная вёрстка (одна колонка, кнопки на всю ширину). Деплой: `migrate` и `ui` на `73fd4ed`, SUCCESS. Живая проверка (read-only задача): `gxg_decide_session` существует, `EXECUTE` только у `gxg_ui`; `gxg_decide` только у `gxg_decider`; заявка `12c724e6-25c1-4d81-a8ed-31ee6565fb72`: `status=pending_approval`, **`step_up_required=False`**, то есть владелец одобрит её кнопкой. **Не запускалось (нет Docker и PostgreSQL):** тесты `approval/tests_db/test_session_decision.py`, `approval/ui/tests_db/test_session_decision.py` (EX-26) и правки `test_roles.py`/`test_decisions.py`; SQL миграции проверен парсером, а работу функции подтверждает только живая проверка выше. Офлайн: 249 passed, ruff и `mypy --strict` чисто.

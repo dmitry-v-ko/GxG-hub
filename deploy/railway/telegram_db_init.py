@@ -100,6 +100,13 @@ def check(dsn: str) -> None:
                 for role in ROLE_FILES:
                     ok = conn.execute("SELECT has_function_privilege(%s, %s, 'EXECUTE')", (role, proc)).fetchone()
                     print(f"  EXECUTE for {role}: {bool(ok and ok[0])}", flush=True)
+        try:  # the chats of the saved scope (the archive keeps only these): stable chat_ref ids, no peer ids, no texts
+            for chat_ref, state in conn.execute(
+                "SELECT chat_ref, state FROM telegram_archive.chats ORDER BY connection_id, chat_ref"
+            ):
+                print(f"scope chat {chat_ref}: state={state}", flush=True)
+        except psycopg.Error as exc:
+            print(f"scope report unavailable ({type(exc).__name__})", flush=True)
         if conn.execute("SELECT to_regclass('capability_hub.connections')").fetchone()[0]:
             for cid, enabled in conn.execute("SELECT id, enabled FROM capability_hub.connections ORDER BY 1"):
                 print(f"connection {cid}: enabled={enabled}", flush=True)

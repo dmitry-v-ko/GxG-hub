@@ -32,6 +32,46 @@ def main() -> None:
         conn.execute(sql.SQL("ALTER DATABASE {} OWNER TO gxg_owner").format(sql.Identifier(db[0])))
         conn.execute("ALTER SCHEMA public OWNER TO gxg_owner")
         print("db-init: done")
+        report(conn)
+
+
+def report(conn: psycopg.Connection) -> None:
+    """Read-only facts for the operator: who has a registered passkey (principals and counts, no key material)."""
+    try:
+        rows = conn.execute(
+            "SELECT human_principal, count(*), count(*) FILTER (WHERE enrolled_by IS NOT NULL) "
+            "FROM webauthn_credentials GROUP BY 1 ORDER BY 1"
+        ).fetchall()
+    except psycopg.Error as exc:
+        print(f"db-init: passkey report unavailable ({type(exc).__name__})")
+        return
+    for principal, total, enrolled in rows:
+        print(f"passkey {principal}: credentials={total} enrolled_by_operator={enrolled}")
+    print(f"passkey principals: {len(rows)}")
+    try:  # AS-30a: which pending intents are decided by one button, and who may call which decision function
+        for intent_id, status, step_up in conn.execute(
+            "SELECT intent_id, status, step_up_required FROM intents ORDER BY created_at DESC LIMIT 10"
+        ):
+            print(f"intent {intent_id}: status={status} step_up_required={step_up}")
+        for proc in (
+            "gxg_decide_session(text, uuid, integer, text, text, text)",
+            "gxg_decide(bytea, bytea, bigint, text, jsonb)",
+        ):
+            row = conn.execute("SELECT to_regprocedure(%s)", (proc,)).fetchone()
+            if row and row[0]:
+                grants = [
+                    r
+                    for r in ("gxg_ui", "gxg_decider")
+                    if (
+                        conn.execute("SELECT has_function_privilege(%s, %s, 'EXECUTE')", (r, proc)).fetchone()
+                        or [False]
+                    )[0]
+                ]
+                print(f"function {proc.split('(')[0]}: EXECUTE for {grants}")
+            else:
+                print(f"function {proc.split('(')[0]}: MISSING")
+    except psycopg.Error as exc:
+        print(f"decision report unavailable ({type(exc).__name__})")
 
 
 if __name__ == "__main__":

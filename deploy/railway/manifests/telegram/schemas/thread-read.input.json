@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "telegram.thread.read input",
+  "description": "Recent messages of one chat, newest first; before_message_id pages to older ones. Extra fields are ignored (SC-03).",
+  "type": "object",
+  "required": ["chat_ref"],
+  "properties": {
+    "chat_ref": {"type": "string", "pattern": "^tgc1_[A-Za-z0-9_-]{32}$"},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20},
+    "before_message_id": {"type": ["integer", "null"], "minimum": 1, "maximum": 9007199254740991}
+  }
+}

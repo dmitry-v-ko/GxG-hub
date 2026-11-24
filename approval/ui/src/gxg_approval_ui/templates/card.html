@@ -36,16 +36,27 @@
 <h2>История решений</h2>
 <ul id="decisions">{% for d in decisions %}<li>{{ d[4].isoformat() }} {{ d[0] }}: {{ d[1] }}{% if d[2] %} (step-up){% endif %}{% if d[3] %} — {{ d[3] }}{% endif %}</li>{% else %}<li>нет</li>{% endfor %}</ul>
 
-{% if can_decide %}
+{% if can_decide and not step_up %}
 <h2>Решение</h2>
-{% if not has_passkey %}<p class="warning" id="no-passkey">Каждое решение подтверждается passkey, а у вас его нет. <a href="/passkeys">Зарегистрируйте passkey</a> по приглашению оператора, без него решить нельзя.</p>{% endif %}
-<form method="post" action="/intents/{{ intent.intent_id }}/decision" id="decide" data-challenge="/intents/{{ intent.intent_id }}/challenge">
+<form method="post" action="/intents/{{ intent.intent_id }}/decision" id="decide-session" class="decide">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="version" value="{{ intent.version }}">
+  <input type="hidden" name="args_hash" value="{{ intent.canonical_args_hash }}">
+  <label>Комментарий <input name="comment" maxlength="500"></label>
+  {% if args_match %}<button name="decision" value="approve" id="approve" class="primary">Одобрить</button>{% endif %}
+  <button name="decision" value="reject" id="reject">Отклонить</button>
+</form>
+{% elif can_decide %}
+<h2>Решение</h2>
+<p id="step-up-note">Эта заявка требует подтверждения passkey (step-up).</p>
+{% if not has_passkey %}<p class="warning" id="no-passkey">Решение подтверждается passkey, а у вас его нет. <a href="/passkeys">Зарегистрируйте passkey</a> по приглашению оператора, без него решить нельзя.</p>{% endif %}
+<form method="post" action="/intents/{{ intent.intent_id }}/decision" id="decide" class="decide" data-challenge="/intents/{{ intent.intent_id }}/challenge">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input type="hidden" name="version" value="{{ intent.version }}">
   <input type="hidden" name="args_hash" value="{{ intent.canonical_args_hash }}">
   <input type="hidden" name="assertion" value="">
   <label>Комментарий <input name="comment" maxlength="500"></label>
-  {% if has_passkey %}{% if args_match %}<button name="decision" value="approve" id="approve">Одобрить</button>{% endif %}
+  {% if has_passkey %}{% if args_match %}<button name="decision" value="approve" id="approve" class="primary">Одобрить</button>{% endif %}
   <button name="decision" value="reject" id="reject">Отклонить</button>{% endif %}
 </form>
 {% endif %}
