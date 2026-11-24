@@ -290,6 +290,7 @@ services:
     env:
       TELEGRAM_IDENTITY_KEYS: ${{contextforge.GXG_IDENTITY_KEYS}}
       TELEGRAM_SESSIONS: tg-pilot=pilot
+      TELEGRAM_EFFECTS_ENABLED: "1"  # M13 first send: the connector may execute an approved send (the owner approves each with a passkey)
       TELEGRAM_EXECUTE_TLS_REQUIRED: "1"  # the execute port (8081) does not start without the certificate
       TELEGRAM_SESSION_WORKDIR: /var/lib/telegram/sessions
       TELEGRAM_CONNECTIONS: t-pilot=tg-pilot:tg-pilot
