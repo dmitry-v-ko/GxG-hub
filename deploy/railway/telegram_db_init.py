@@ -5,7 +5,7 @@ the role passwords are always set, the Connection row is inserted once. No value
 
 Environment: GXG_TGDB_SUPERUSER_DSN, GXG_TGDB_ROLE_PASSWORDS (JSON role -> password),
 GXG_TGDB_MODE (`check`: report only, SELECT; default: set up), GXG_TGDB_CONNECTION (default tg-pilot),
-GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db).
+GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db), GXG_TGDB_PROBE, GXG_TGDB_CA (pilot CA certificate).
 """
 
 import json
@@ -51,20 +51,31 @@ def check(dsn: str) -> None:
 
 
 def probe(targets: str) -> None:
-    """TCP connect and a TLS hello (nothing else is sent) to `host:port,...`: does the service listen, with TLS?"""
+    """TCP connect and a TLS hello (nothing else is sent) to `host:port,...`: TLS or not, and is the certificate
+    signed by the pilot CA (GXG_TGDB_CA, a public certificate) for that name?"""
+    ca = os.environ.get("GXG_TGDB_CA", "")
     for target in filter(None, (t.strip() for t in targets.split(","))):
         host, _, port = target.rpartition(":")
         try:
-            raw = socket.create_connection((host, int(port)), timeout=5)
-            ctx = ssl.create_default_context()
-            ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE  # only: does the port speak TLS, not trust
-            try:
-                with ctx.wrap_socket(raw, server_hostname=host) as tls:
-                    print(f"listen {target}: open, TLS {tls.version()}", flush=True)
-            except (ssl.SSLError, OSError):
-                print(f"listen {target}: open, no TLS", flush=True)
-            finally:
-                raw.close()
+            verdict = "no TLS"
+            for trusted in (True, False):
+                ctx = ssl.create_default_context(cadata=ca) if trusted and ca else ssl.create_default_context()
+                if not trusted:
+                    ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+                elif not ca:
+                    continue
+                try:
+                    with socket.create_connection((host, int(port)), timeout=5) as raw:
+                        with ctx.wrap_socket(raw, server_hostname=host) as tls:
+                            verdict = f"TLS {tls.version()}, " + (
+                                "signed by the pilot CA" if trusted else "not trusted"
+                            )
+                    break
+                except ssl.SSLCertVerificationError:
+                    continue
+                except (ssl.SSLError, OSError):
+                    break
+            print(f"listen {target}: open, {verdict}", flush=True)
         except OSError as exc:
             print(f"listen {target}: closed ({type(exc).__name__})", flush=True)
 
