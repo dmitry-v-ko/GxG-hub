@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Callable
 from typing import Any
 
 from cryptography.fernet import Fernet
@@ -284,14 +285,15 @@ def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None
                 raise rd.DeployError("RAILWAY_TOKEN is not set")
             transport = rd.http_transport(token)
         jobs = Jobs(rd.Railway(transport), out)
-        return {
+        actions: dict[str, Callable[[], int]] = {
             "setup": jobs.setup,
             "probe": jobs.probe,
             "revoke": jobs.revoke,
             "scope": jobs.scope,
             "propose": jobs.propose,
             "peek": lambda: jobs.peek(os.environ["GXG_PEEK"]),
-        }[args.action]()
+        }
+        return actions[args.action]()
     except rd.DeployError as exc:
         out.say(f"error: {exc}", err=True)
         return 1
