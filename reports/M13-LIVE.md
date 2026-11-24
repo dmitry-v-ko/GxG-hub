@@ -105,3 +105,12 @@
 1. В Machines удалить старые `gxg-approval-ui*`, `gxg-approval-admin*`, `gxg-gateway*`. Тогда после redeploy узлы получат базовые имена, под которыми их ждёт `GXG_UI_PUBLIC_URL`.
 2. Ключи `TS_AUTHKEY` делать **ephemeral** (по runbook), иначе устаревшие узлы копятся: похоже, ключи сейчас не ephemeral.
 3. До этого страница открывается по фактическому имени (`https://gxg-approval-ui-7.tail9fb746.ts.net/`), но редирект OIDC и WebAuthn привязаны к `GXG_UI_PUBLIC_URL`, поэтому вход по такому адресу не завершится.
+
+### UI пустой: состояние узла tailscale на volume
+
+Коммиты «tailscale node state on the service volume…» и «entrypoint drops privileges with python…».
+
+- `GXG_TS_STATE=/var/lib/gxg/tailscale` у `ui`, `admin`, `contextforge` (у `admin` и `contextforge` добавлен volume `/var/lib/gxg`): `tailscaled` пишет состояние в `tailscaled.state` (каталог 0700, владелец — пользователь процесса). Повторный старт: `tailscale up` без ключа («rejoined the tailnet with the saved node state»); если control plane узел забыл, откат на `TS_AUTHKEY`. Без `GXG_TS_STATE` состояние остаётся в памяти. Тесты офлайн: первый старт с ключом, второй без ключа, откат на ключ, режим `mem:`.
+- ContextForge стартует от root только чтобы взять volume и сразу переходит на пользователя 10001 (`GXG_RUN_AS`); в его образе нет `setpriv`, поэтому сброс прав делает python (проверен вживую на uid 65534).
+- **Результат по selfcheck:** `gxg-gateway` получил базовое имя `gxg-gateway.tail9fb746.ts.net`. `ui` и `admin` стабильно живут как `gxg-approval-ui-1` и `gxg-approval-admin-1` и после рестартов остаются под тем же именем («rejoined»), `healthz` 200, `/login` у `ui` 302. Базовые имена `gxg-approval-ui` и `gxg-approval-admin` занимают старые узлы.
+- **Осталось** (нужен Tailscale API или владелец): удалить из tailnet **все** машины `gxg-approval-ui*` и `gxg-approval-admin*`, включая текущие `-1`. Контейнеры тогда не найдут свой узел в control plane, откатятся на `TS_AUTHKEY` и зарегистрируются под базовыми именами (после этого redeploy `ui` и `admin`; сработает при этом только reusable/non-ephemeral ключ, если ключ одноразовый, понадобится новый). **Ключи делать не ephemeral:** узел с сохранённым состоянием не должен исчезать при оффлайне.
