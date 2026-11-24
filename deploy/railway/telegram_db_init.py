@@ -4,7 +4,8 @@ the start command execs it. Idempotent: migrations only when the archive schema 
 the role passwords are always set, the Connection row is inserted once. No value is printed.
 
 Environment: GXG_TGDB_SUPERUSER_DSN, GXG_TGDB_ROLE_PASSWORDS (JSON role -> password),
-GXG_TGDB_CONNECTION (default tg-pilot), GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db).
+GXG_TGDB_MODE (`check`: report only, SELECT; default: set up), GXG_TGDB_CONNECTION (default tg-pilot),
+GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db).
 """
 
 import json
@@ -24,7 +25,32 @@ MIGRATIONS = [
 ROLE_FILES = {"gxg_telegram_service": "service_role.sql", "gxg_telegram_reader": "reader_role.sql"}
 
 
+def check(dsn: str) -> None:
+    """Read-only report (GXG_TGDB_MODE=check): which roles, schemas, tables and Connection rows exist. SELECT only."""
+    with psycopg.connect(dsn, autocommit=True, options="-c default_transaction_read_only=on") as conn:
+        for role in ROLE_FILES:
+            row = conn.execute("SELECT rolcanlogin FROM pg_roles WHERE rolname = %s", (role,)).fetchone()
+            print(
+                f"role {role}: {'login' if row and row[0] else 'present, no login' if row else 'MISSING'}", flush=True
+            )
+        for schema in ("capability_hub", "telegram_archive"):
+            tables = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = %s ORDER BY 1", (schema,)
+                )
+            ]
+            print(f"schema {schema}: {len(tables)} tables {tables}", flush=True)
+        if conn.execute("SELECT to_regclass('capability_hub.connections')").fetchone()[0]:
+            for cid, enabled in conn.execute("SELECT id, enabled FROM capability_hub.connections ORDER BY 1"):
+                print(f"connection {cid}: enabled={enabled}", flush=True)
+        else:
+            print("capability_hub.connections: MISSING", flush=True)
+
+
 def main() -> None:
+    if os.environ.get("GXG_TGDB_MODE") == "check":
+        return check(os.environ["GXG_TGDB_SUPERUSER_DSN"])
     if not DB.is_dir():  # name the real layout instead of a bare FileNotFoundError
         found = sorted(str(p) for p in Path("/app").rglob("*.sql") if ".venv" not in p.parts)
         raise SystemExit(f"{DB} is not in the image; .sql files under /app: {found}")
