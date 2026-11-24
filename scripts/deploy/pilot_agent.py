@@ -177,7 +177,9 @@ class Jobs:
             )  # fmt: skip
             self.out.say(f"== {gateway}")
             for line in lines:
-                if re.match(r"^(initialize|tools/list|tool |propose )", line) or "Traceback" in line or "Error" in line:
+                if re.match(r"^(initialize|tools/list|tool |propose )", line) or re.search(
+                    r"Traceback|Error|Failed|not found", line
+                ):
                     self.out.say("  " + line[:200])
         return 0
 
