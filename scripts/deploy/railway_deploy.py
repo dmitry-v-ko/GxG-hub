@@ -529,7 +529,9 @@ class Deployer:
         if svc.get("healthcheck"):
             want["healthcheckPath"] = svc["healthcheck"]
         elif svc["kind"] == "app":
-            want["healthcheckPath"] = None  # an app without a healthcheck in the spec has none in Railway
+            want["healthcheckPath"] = (
+                ""  # (null is ignored by the API) an app without a healthcheck in the spec has none in Railway
+            )
         if svc["kind"] == "job":
             want["restartPolicyType"] = "NEVER"
         elif svc["kind"] in ("app", "postgres"):
@@ -541,7 +543,7 @@ class Deployer:
             )
             or {}
         )
-        diff = {k: v for k, v in want.items() if have.get(k) != v}
+        diff = {k: v for k, v in want.items() if (have.get(k) or "") != (v or "")}
         if diff:
             self.api.call(Q_INSTANCE_UPDATE, serviceId=self.service_ids[name], environmentId=self.env_id, input=diff)
             self.out.say(f"updated settings of {name}: {', '.join(sorted(diff))}")
