@@ -209,3 +209,22 @@
 - **Passkey владельца есть:** в `webauthn_credentials` один ключ для `oidc:https://accounts.google.com:…`, выдан по приглашению оператора (`enrolled_by` задан); принципалов с passkey один.
 - **Scope Telegram сохранён:** в архиве (в нём только чаты scope) три чата, все `state=synced`; функция `set_scope` и `EXECUTE` у `gxg_telegram_service` на месте, Connection `tg-pilot` `enabled=True`.
 - **Остановился перед grants, `TELEGRAM_EFFECTS_ENABLED` и отправкой:** из базы нельзя понять, какой из трёх чатов владелец выбрал «первым» (порядок в архиве не порядок выбора), а тестовое сообщение уйдёт в настоящий чат. Нужно, чтобы владелец или оркестратор назвал чат (название или `chat_ref`).
+
+## Первая отправка: что сделано и что мешает
+
+- **Чат найден:** «GxG Agents» (`forum`) = `tgc1_fg2agKZmFgzytfmaAUzf3ZbkczoPSmN8`, название однозначное; scope в порядке выбора владельца: «Dmitry Kozlov» (private), «LobsterDAO HR» (channel), «GxG Agents» (forum) (`pilot_agent.py scope`: задача в образе `ui`, названия печатались только у чатов scope).
+- **Grants** (`policies/pilot/tenants/t-pilot.yaml`): агент `agent:t-pilot:pilot` — `read` и `collect` на все три чата, `propose` только на «GxG Agents»; срок до 2026-12-24, approver — владелец (`approver`). Bundle перевыпущен 2026-11-24 15:03 UTC и раздан (`pilot_bundle.py --deploy`); **следующий перевыпуск не позже 03:00 UTC** (меняйте раз в 12 ч). `TELEGRAM_EFFECTS_ENABLED=1` у `telegram` задан.
+- **`propose` пока не создан:** коннектор отвечает `temporarily_unavailable: grants bundle is not ready`. Причина: `railway-entrypoint.sh` образа `gxg-telegram-service` не раскладывает bundle (`TELEGRAM_BUNDLE_DIR` по умолчанию `/bundle`, он пуст), хотя `pilot_bundle.py` кладёт в `telegram` и `TELEGRAM_BUNDLE_KEYS` (`kid=ключ`), и `GXG_BUNDLE_B64` (base64 tar.gz с `grants-bundle.json` и `grants-bundle.json.sig` в корне).
+- **Правка для `gxg-telegram-service`** (мне туда пушить нечем: репозиторий доступен Railway для сборки, но не этой сессии для записи; `git ls-remote` без логина отказывает). В `deploy/railway-entrypoint.sh`, после раскладки секретов и до `chown`/`setpriv`:
+
+```sh
+# Grants bundle (GR-11a): GXG_BUNDLE_B64 = base64 of a tar.gz holding grants-bundle.json and grants-bundle.json.sig
+if [ -n "${GXG_BUNDLE_B64:-}" ]; then
+  mkdir -p "$FILES/bundle"                       # $FILES: the tmpfs directory of the secret files (/dev/shm/...)
+  printf '%s' "$GXG_BUNDLE_B64" | base64 -d | tar -xz -C "$FILES/bundle"
+  chown -R telegram "$FILES/bundle"
+  export TELEGRAM_BUNDLE_DIR="$FILES/bundle"
+  unset GXG_BUNDLE_B64
+fi
+```
+  Тест: запуск entrypoint с `GXG_BUNDLE_B64` из tar.gz двух файлов → в `$TELEGRAM_BUNDLE_DIR` лежат оба файла, переменная снята; без неё каталог не создаётся. После пуша и деплоя `telegram`: `pilot_agent.py propose` (нужны `GXG_SEND_CHAT_REF` и `GXG_SEND_TEXT`), дальше `intent_id` и ссылка `https://gxg-approval-ui.tail9fb746.ts.net/intents/<id>`. Заявка с ключом идемпотентности `m13-first-send-1`: повтор той же заявки не создаст второй intent.
