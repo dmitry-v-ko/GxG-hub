@@ -135,10 +135,9 @@ def test_headers_exact(browser: Any) -> None:
     for name, value in ui.SECURITY_HEADERS.items():
         assert r.headers[name] == value
     assert r.headers["referrer-policy"] == "no-referrer" and r.headers["cache-control"] == "no-store"
-    # since the 30-day session (no idle timeout) a plain GET does not re-issue the cookie: its flags are the middleware's
-    assert ui.SESSION_COOKIE_FLAGS | {"session_cookie": "__Host-gxg"} == {
-        "session_cookie": "__Host-gxg", "max_age": 30 * 24 * 3600, "same_site": "strict", "https_only": True, "path": "/",
-    }  # fmt: skip
+    # a plain GET no longer re-issues the cookie (30-day session, no idle timeout): check the middleware's flags
+    flags = ui.SESSION_COOKIE_FLAGS
+    assert (flags["max_age"], flags["same_site"], flags["https_only"], flags["path"]) == (2592000, "strict", True, "/")
 
 
 def test_no_api_documentation_pages(browser: Any) -> None:
