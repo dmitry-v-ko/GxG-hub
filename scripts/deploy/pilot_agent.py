@@ -164,6 +164,22 @@ class Jobs:
         self.out.say(f"team {ids['team']}, gateways {ids['gateways']}, servers {ids['servers']}")
         return 0
 
+    def revoke(self) -> int:
+        lines = self.run(
+            "pilot-agent-revoke",
+            {
+                "GXG_JOB": "revoke",
+                "PLATFORM_ADMIN_EMAIL": "${{contextforge.PLATFORM_ADMIN_EMAIL}}",
+                "PLATFORM_ADMIN_PASSWORD": "${{contextforge.PLATFORM_ADMIN_PASSWORD}}",
+            },
+        )
+        for line in lines:
+            if re.match(r"^(GET |agent tokens|revoke |kept )", line) or re.search(
+                r"Traceback|Error|Failed|not found", line
+            ):
+                self.out.say("  " + line[:400])
+        return 0
+
     def probe(self) -> int:
         have = self.variables(VAULT)
         ids = json.loads(have["PILOT_AGENT_IDS"])
@@ -186,7 +202,7 @@ class Jobs:
 
 def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None, out: rd.Out | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("action", choices=["setup", "probe"])
+    ap.add_argument("action", choices=["setup", "probe", "revoke"])
     args = ap.parse_args(argv)
     out = out or rd.Out()
     try:
@@ -198,7 +214,7 @@ def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None
                 raise rd.DeployError("RAILWAY_TOKEN is not set")
             transport = rd.http_transport(token)
         jobs = Jobs(rd.Railway(transport), out)
-        return jobs.setup() if args.action == "setup" else jobs.probe()
+        return {"setup": jobs.setup, "probe": jobs.probe, "revoke": jobs.revoke}[args.action]()
     except rd.DeployError as exc:
         out.say(f"error: {exc}", err=True)
         return 1

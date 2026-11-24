@@ -160,6 +160,36 @@ def setup():
     print("SEALED " + seal(token.get("access_token") or token.get("token")), flush=True)
 
 
+def revoke():
+    """Keep the newest agent token (the one stored in the vault), revoke the older ones. Prints names and counts only."""
+    wait_healthy()
+    login = httpx.post(
+        CF + "/v1/auth/login",
+        json={"email": os.environ["PLATFORM_ADMIN_EMAIL"], "password": os.environ["PLATFORM_ADMIN_PASSWORD"]},
+        timeout=30,
+    )
+    login.raise_for_status()
+    api = Api(login.json()["access_token"])
+    prefix = f"agent-{TENANT}-{AGENT}-"
+    found = []
+    for path in ("/v1/tokens/admin/all?limit=500", "/v1/tokens?limit=500&include_inactive=false"):
+        r = api.http.get(path)
+        print(f"GET {path.split('?')[0]} -> {r.status_code}", flush=True)
+        if r.status_code == 200:
+            found = [t for t in items(r.json(), "tokens") if str(t.get("name", "")).startswith(prefix)]
+            if found:
+                break
+    found.sort(key=lambda t: t["name"])  # the suffix is the creation time
+    print(f"agent tokens: {[t['name'] for t in found]}", flush=True)
+    for t in found[:-1]:
+        for path in (f"/v1/tokens/admin/{t['id']}", f"/v1/tokens/{t['id']}"):
+            r = api.http.delete(path)
+            print(f"revoke {t['name']} via {path.rsplit('/', 1)[0]} -> {r.status_code}", flush=True)
+            if r.status_code in (200, 204):
+                break
+    print(f"kept {found[-1]['name'] if found else 'none'}", flush=True)
+
+
 def rpc(client, url, method, params=None, rid=1):
     body = {
         "jsonrpc": "2.0",
@@ -220,5 +250,5 @@ def probe():
 
 
 if __name__ == "__main__":
-    {"setup": setup, "probe": probe}[os.environ.get("GXG_JOB", "")]()
+    {"setup": setup, "probe": probe, "revoke": revoke}[os.environ.get("GXG_JOB", "")]()
     sys.exit(0)
