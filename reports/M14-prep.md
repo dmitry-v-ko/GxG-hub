@@ -60,9 +60,36 @@
 1. `restore` при повреждённом файле оставлял `pg_restore` без ожидания и половину базы. Теперь процесс убивается и ждётся, в runbook написано пересоздать базу.
 
 **Должно быть решено владельцем (не код):**
-2. **Токен для cron перевыпуска.** `RAILWAY_TOKEN` проекта видит переменные всех сервисов: это ломает разделение секретов AS-28 на уровне платформы. Пока cron не включён, риска нет. Варианты в `docs/runbooks/bundle-reissue.md` (`pending_owner_decision`). Строка `railway_token` в таблице AS-28 есть только в коде, в спеку её надо внести при включении.
-3. **`--audit` и `OPENROUTER_API_KEY`.** AC требует «нет Shared Variables», исключение владельца из `--verify` перенесено как NOTE. Строго по AC — убрать переменную в Railway.
+2. ~~**Токен для cron перевыпуска.**~~ Закрыто решением владельца 2026-11-24, см. «Дополнение». Прежний текст: `RAILWAY_TOKEN` проекта видит переменные всех сервисов: это ломает разделение секретов AS-28 на уровне платформы. Пока cron не включён, риска нет. Варианты в `docs/runbooks/bundle-reissue.md` (`pending_owner_decision`). Строка `railway_token` в таблице AS-28 есть только в коде, в спеку её надо внести при включении.
+3. ~~`--audit` и `OPENROUTER_API_KEY`~~ — закрыто решением владельца 2026-11-24, см. «Дополнение».
 
 **Не проверено:** `bundle-reissue.Dockerfile` не собирался (Docker нет); поле `cronSchedule` Railway API проверено только на mock; stand-тест `test_ops07_*` и правка в SC-06 написаны, но не запускались.
 
 Verdict: ship после решения владельца по пунктам 2 и 3. Lean: -0 строк.
+
+## Дополнение (после отчёта оркестратора, 2026-11-24)
+
+**Решения владельца выполнены:**
+- Bundle перевыпускает оркестратор каждые 10 ч; cron `bundle-reissue` не включается, описание в `planned` оставлено вариантом на будущее (`docs/runbooks/bundle-reissue.md`, `services.yaml`).
+- Исключение `OPENROUTER_API_KEY` удалено из `--verify` и `--audit`: любая shared-переменная — FAIL (тесты обновлены).
+- `UAID_ALLOWED_DOMAINS` пропущен по указанию оркестратора.
+
+**Починено из M13:**
+- `gxg-policy lint/validate policies/` отвергал `policies/pilot/*`. Выбран вариант с меньшим diff: загрузчик пропускает вложенный корень политик (каталог, где есть `tenants/`, `approval/` или `platform/`); `policies/pilot` проверяется своим запуском (`validate`/`lint policies/pilot` добавлены в `check-all.sh` и `ci.yml`). Пути в `pilot_bundle.py`, `railway_deploy.py` и образе не менялись; `gxg-policy` 128 passed, опечатка в имени каталога по-прежнему даёт `unknown-file` (тест).
+- ui `test_oidc::test_authorization_request`: код верен (scope `openid email` нужен для `GXG_UI_OPERATORS`, коммит 050dafd), исправлено ожидание. `test_screens::test_security_headers_and_cookie`: код верен (после сессии 30 дней GET не выставляет cookie), флаги проверяются на `Set-Cookie` от `/logout`.
+
+**Полный `check-all.sh` (Postgres 16 + pgvector локально, `UPSTREAM_DRIFT=skip`):**
+
+| Шаг | Результат |
+| --- | --- |
+| lock, ruff, mypy, корневой `pytest` | 1443 passed |
+| `approval/tests_db` | 457 passed |
+| `approval/ui/tests_db`, `notifier/tests_db` | 144 passed |
+| kit (+покрытие), demo + `check-connectors`, telegram | 473 / проход / 115 passed |
+| `schema_lock`, `prove_schema_guard` (66/66), `railway_deploy --dry-run`, `gxg-policy` по `policies/` и `policies/pilot`, `bundle_smoke` | ok |
+| gitleaks `tree` и `range` | no leaks |
+| **`approval/deploy/tests`** | **не запущено: нужен Docker** (3 failed, 6 errors из-за отсутствия `docker.sock`) |
+| `check_upstream.sh` на клоне `gxg_agents_v2` | не запущено (`UPSTREAM_DRIFT=skip`); тест на синтетическом репозитории зелёный |
+| `tests/secrets` | 20 passed, **1 failed**: `test_this_repository_is_clean` ругается на `approval/tests/test_mcp_identity.py:46` (`generic-api-key`, фикстура теста). Файл в моём diff не менялся; разобрать отдельно (правило или `.gitleaksignore`) |
+
+Шаги `check-all.sh` после Docker-шага я запускал по одному, потому что `set -e` останавливает скрипт на нём.
