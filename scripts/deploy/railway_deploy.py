@@ -75,8 +75,6 @@ ROLE_OF = {  # AS-27: one role per process
     "migrate": "gxg_owner", "admin": "gxg_admin", "api": "gxg_api", "sweeper": "gxg_sweeper", "executor": "gxg_executor",
     "ui": "gxg_ui", "notifier": "gxg_notifier", "decider": "gxg_decider",
 }  # fmt: skip
-# Shared variables the owner keeps for other tools in the project: named exceptions of --verify, never touched here.
-FOREIGN_SHARED = {"OPENROUTER_API_KEY": "not ours"}
 TG_ROLE_VAR = {
     "gxg_telegram_service": "TELEGRAM_SERVICE_DSN",
     "gxg_telegram_reader": "TELEGRAM_ARCHIVE_DSN",
@@ -749,12 +747,7 @@ class Deployer:
                 self.api.call(Q_VARIABLES, projectId=self.project_id, environmentId=self.env_id).get("variables") or {}
             )
         }
-        for name in sorted(shared & set(FOREIGN_SHARED)):
-            self.out.say(
-                f"NOTE (project): shared variable {name} is not ours, the owner decides ({FOREIGN_SHARED[name]})"
-            )
-        shared -= set(FOREIGN_SHARED)
-        check(not shared, "(project)", "no shared variables of ours (SEC-28: secrets are per service)")
+        check(not shared, "(project)", "no shared variables (SEC-28: secrets are per service)")
         all_secrets = {v for s in self.spec["services"].values() for v in secrets_of(s)}
         for name, svc in self.spec["services"].items():
             if svc.get("transient"):
@@ -826,9 +819,7 @@ class Deployer:
         for env in edges(node, "environments"):
             ev = {"projectId": node["id"], "environmentId": env["id"]}
             shared = set(self.api.call(Q_VARIABLES, **ev).get("variables") or {})
-            for var in sorted(shared & set(FOREIGN_SHARED)):
-                self.out.say(f"NOTE {env['name']}: shared variable {var} is not ours, the owner decides")
-            check(not shared - set(FOREIGN_SHARED), f"{env['name']} (project)", "no shared variables")
+            check(not shared, f"{env['name']} (project)", "no shared variables")
             for svc in services:
                 where, sid = f"{env['name']}/{svc['name']}", svc["id"]
                 doms = (self.api.call(Q_DOMAINS, serviceId=sid, **ev).get("domains")) or {}

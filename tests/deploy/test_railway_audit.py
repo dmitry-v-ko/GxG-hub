@@ -115,11 +115,10 @@ def test_exposure_is_found_per_environment(capsys: pytest.CaptureFixture[str]) -
     assert code == 1 and "FAIL prod/api: no TCP proxy" in out and "PASS pilot/api: no TCP proxy" in out
 
 
-def test_shared_variables_fail_except_the_named_foreign_one(capsys: pytest.CaptureFixture[str]) -> None:
-    ok, out = audit(Fixture({("Variables", "e-pilot"): {"variables": {"OPENROUTER_API_KEY": "v-foreign-123"}}}), capsys)
-    assert ok == 0 and "NOTE pilot: shared variable OPENROUTER_API_KEY" in out and "v-foreign-123" not in out
-    bad, out = audit(Fixture({("Variables", "e-prod"): {"variables": {"SOME_SHARED": "v"}}}), capsys)
-    assert bad == 1 and "FAIL prod (project): no shared variables" in out
+def test_any_shared_variable_fails(capsys: pytest.CaptureFixture[str]) -> None:
+    for var in ("OPENROUTER_API_KEY", "SOME_SHARED"):  # no named exception (owner decision 2026-11-24)
+        bad, out = audit(Fixture({("Variables", "e-prod"): {"variables": {var: "v-shared-123"}}}), capsys)
+        assert bad == 1 and "FAIL prod (project): no shared variables" in out and "v-shared-123" not in out
 
 
 def test_secret_names_must_equal_the_declared_set(capsys: pytest.CaptureFixture[str]) -> None:

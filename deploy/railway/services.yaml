@@ -322,7 +322,7 @@ services:
       GXG_TGDB_ROLE_PASSWORDS: {gen: tg_role_passwords, as28: bootstrap}
     internal_urls: [GXG_TGDB_SUPERUSER_DSN]
 
-# Described, NOT deployed (M14 prep): this block is not under `services`, so apply, --verify and --audit never touch it.
+# Described, NOT deployed (M14 prep; the owner chose the orchestrator's schedule instead, every 10 h): this block is not under `services`, so apply, --verify and --audit never touch it.
 # To switch it on, the owner moves it under `services` (kind: cron sets cronSchedule, railway_deploy.py) and sets
 # RAILWAY_TOKEN; see docs/runbooks/bundle-reissue.md. The signing key stays in `bundle-signer`: this job reads it
 # through the Railway API in memory (pilot_bundle.py), it never holds a copy.
@@ -333,4 +333,4 @@ planned:
     source: {dockerfile: deploy/railway/bundle-reissue.Dockerfile}
     start: python scripts/deploy/pilot_bundle.py --deploy
     secrets:
-      RAILWAY_TOKEN: {gen: owner, as28: railway_token}  # pending_owner_decision: a project token, see the runbook
+      RAILWAY_TOKEN: {gen: owner, as28: railway_token}  # a project token breaks AS-28 at the platform level: not enabled (owner decision 2026-11-24), see the runbook

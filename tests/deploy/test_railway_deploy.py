@@ -286,19 +286,15 @@ def test_repository_services_follow_the_configured_branch(
     assert "FAIL telegram: built from dmitry-v-ko/gxg-telegram-service@claude/m13-railway" in capsys.readouterr().out
 
 
-def test_a_foreign_shared_variable_is_a_named_exception(
-    deployed: MockRailway, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_any_shared_variable_fails_verify(deployed: MockRailway, capsys: pytest.CaptureFixture[str]) -> None:
     set_owner_values(deployed)
     run(deployed, "--finalize")
-    deployed.shared["OPENROUTER_API_KEY"] = "foreign-key-value"
     capsys.readouterr()
     assert run(deployed, "--verify") == 0
-    out = capsys.readouterr().out
-    assert "NOTE (project): shared variable OPENROUTER_API_KEY is not ours, the owner decides" in out
-    assert "foreign-key-value" not in out
-    deployed.shared["GXG_SECRET__SOMETHING"] = "x"  # noqa: S105 # but any other shared variable still fails
+    deployed.shared["OPENROUTER_API_KEY"] = "foreign-key-value"  # owner decision 2026-11-24: no exception any more
     assert run(deployed, "--verify") == 1
+    out = capsys.readouterr().out
+    assert "FAIL (project): no shared variables" in out and "foreign-key-value" not in out
 
 
 def test_the_approval_ui_service_key_stays_with_ui_and_its_public_half_goes_to_telegram(
