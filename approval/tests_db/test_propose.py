@@ -590,3 +590,23 @@ def test_max_attempts_of_the_policy_is_frozen_at_t1(
         "SELECT intent_id::text, max_attempts FROM intents WHERE intent_id IN (%s, %s)", (first, second)
     ).fetchall()
     assert dict(rows) == {first: 3, second: 1}
+
+
+def test_a_new_bundle_applies_to_the_very_next_propose_and_names_its_version(
+    propose: Callable[..., Any], owner: psycopg.Connection[Any], world: Any
+) -> None:
+    """OPS-02 / GR-14: weakening the policy (human -> auto) acts on the next propose, without a restart; the intent
+    and its policy decision name the bundle that decided, so the change is traceable to a commit."""
+    before = propose().json()
+    assert before["approval"]["mode"] == "human"
+    world.policies["t-alpha"] = {
+        "tenant": "t-alpha", "schema_version": 1,
+        "rules": [{"id": "auto-b", "match": {"tools": ["demo.message.propose"]}, "decision": "auto_approve",
+                   "limits": {"max_per_hour": 5}}],
+    }  # fmt: skip
+    world.reload(version="c" * 40)
+    after = propose(args={"text": "b", "n": 2}).json()
+    assert after["approval"]["mode"] == "auto" and after["status"] == "approved"
+    versions = dict(owner.execute("SELECT intent_id::text, policy_version FROM intents").fetchall())
+    assert versions == {before["intent_id"]: "b" * 40, after["intent_id"]: "c" * 40}
+    assert owner.execute("SELECT decided_by FROM decisions").fetchall() == [("policy:auto-b@" + "c" * 40,)]

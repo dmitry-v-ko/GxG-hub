@@ -45,6 +45,6 @@ ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_conne
 ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/plugin.py:generic-api-key:80
 ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/plugin.py:generic-api-key:83
 cd932b20fb7e695a52a3539d0f1a70b06276a358:.gitleaksignore:generic-api-key:35
-# M14: test code, not secrets: a parameter annotation `key: Ed25519PrivateKey | None` (M13 commit) and a loop over variable names (audit test, since rewritten)
+# M14: test code, not secrets: a parameter annotation (`key`, type `Ed25519PrivateKey | None`) (M13 commit) and a loop over variable names (audit test, since rewritten)
 ed5c18b3ed7c8bebe5226274683f82c60618fc80:approval/tests/test_mcp_identity.py:generic-api-key:46
 f74ca36b1fcb48e1e1a0f4df755e04f0d07b2f33:tests/deploy/test_railway_audit.py:generic-api-key:117
