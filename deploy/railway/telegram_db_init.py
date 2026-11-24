@@ -25,6 +25,9 @@ ROLE_FILES = {"gxg_telegram_service": "service_role.sql", "gxg_telegram_reader":
 
 
 def main() -> None:
+    if not DB.is_dir():  # name the real layout instead of a bare FileNotFoundError
+        found = sorted(str(p) for p in Path("/app").rglob("*.sql") if ".venv" not in p.parts)
+        raise SystemExit(f"{DB} is not in the image; .sql files under /app: {found}")
     passwords = json.loads(os.environ["GXG_TGDB_ROLE_PASSWORDS"])
     with psycopg.connect(os.environ["GXG_TGDB_SUPERUSER_DSN"], autocommit=True) as conn:
         if conn.execute("SELECT to_regclass('telegram_archive.chats')").fetchone()[0] is None:
