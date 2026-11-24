@@ -3,8 +3,8 @@ SQL in /app/db), as the job `telegram-db-init`; railway_deploy.py seeds this fil
 the start command execs it. Idempotent: migrations only when the archive schema is missing, roles only when missing,
 the role passwords are always set, the Connection row is inserted once. No value is printed.
 
-Environment: GXG_TGDB_SUPERUSER_DSN, GXG_TGDB_ROLE_PASSWORDS (JSON role -> password), GXG_TGDB_CONNECTION (default tg-pilot),
-GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db).
+Environment: GXG_TGDB_SUPERUSER_DSN, GXG_TGDB_ROLE_PASSWORDS (JSON role -> password),
+GXG_TGDB_CONNECTION (default tg-pilot), GXG_TGDB_CREDENTIAL_REF, GXG_TGDB_DIR (default /app/db).
 """
 
 import json

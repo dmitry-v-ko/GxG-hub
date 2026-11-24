@@ -13,7 +13,7 @@
   {% if human %}
   <nav>
     <a href="/">Ожидают решения</a> <a href="/unknown">Неясный исход</a> <a href="/history">История</a>
-    <a href="/passkeys">Passkey</a> <a href="/telegram">Telegram</a>
+    <a href="/passkeys">Passkey</a> <a href="/telegram">Telegram</a>{% if operator %} <a href="/operator/telegram">Подключение Telegram</a>{% endif %}
   </nav>
   <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><span class="who">{{ human }}</span> <button>Выйти</button></form>
   {% endif %}

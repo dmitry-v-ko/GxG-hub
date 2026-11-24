@@ -52,7 +52,9 @@ AS28: dict[str, frozenset[str]] = {
     "payload_args": frozenset({"executor"}),
     "payload_preview": frozenset({"ui"}),
     "ui_secrets": frozenset({"ui"}),
-    "ui_svc_key": frozenset({"ui"}),  # M13: service JWT key `approval-ui` for the Telegram admin API; the public half goes to telegram
+    "ui_svc_key": frozenset(
+        {"ui"}
+    ),  # M13: service JWT key `approval-ui` for the Telegram admin API; the public half goes to telegram
     "telegram_bot_token": frozenset({"notifier"}),
     "webhook_secrets": frozenset({"notifier"}),
     "tailscale": frozenset({"ui", "admin"}),  # tag:approval-ui and tag:approval-admin entries (ADR-0003)
@@ -357,7 +359,9 @@ class Values:
         elif kind == "ed25519_identity_keys":
             secret_name, _, kid = arg.partition(":")
             value = f"{kid}=ed25519:{b64url(self._public(service, secret_name))}"
-        elif kind == "caller_keys":  # `<service>.<secret>:<kid>`: the public half of another service's key, `kid=ed25519:…`
+        elif (
+            kind == "caller_keys"
+        ):  # `<service>.<secret>:<kid>`: the public half of another service's key, `kid=ed25519:…`
             owner, _, rest = arg.partition(".")
             secret_name, _, kid = rest.partition(":")
             value = f"{kid}=ed25519:{b64url(self._public(owner, secret_name))}"
@@ -682,7 +686,11 @@ class Deployer:
             check(all(actual.get(k) for k in declared_secret & set(actual)), name, "secret values are not empty")
             for var, gen in (svc.get("config") or {}).items():  # a public half taken from another service's key
                 if str(gen).startswith("caller_keys:"):
-                    check(self.caller_keys_match(str(gen), actual.get(var)), name, f"{var} is the public half of {str(gen).split(':')[1]}")
+                    check(
+                        self.caller_keys_match(str(gen), actual.get(var)),
+                        name,
+                        f"{var} is the public half of {str(gen).split(':')[1]}",
+                    )
         return ok
 
     def caller_keys_match(self, gen: str, live: str | None) -> bool:

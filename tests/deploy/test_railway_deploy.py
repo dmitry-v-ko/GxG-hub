@@ -9,7 +9,9 @@ from typing import Any
 
 import pytest
 import yaml
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from gxg_connector_kit import _jwt
 from scripts.deploy import railway_deploy as rd
 from tests.deploy.mock_railway import MockRailway
 
@@ -297,3 +299,37 @@ def test_a_foreign_shared_variable_is_a_named_exception(
     assert "foreign-key-value" not in out
     deployed.shared["GXG_SECRET__SOMETHING"] = "x"  # noqa: S105 # but any other shared variable still fails
     assert run(deployed, "--verify") == 1
+
+
+def test_the_approval_ui_service_key_stays_with_ui_and_its_public_half_goes_to_telegram(
+    deployed: MockRailway, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """M13: the operator wizard. The seed lives in `ui` only (AS-28); telegram gets `approval-ui=ed25519:<pub>`."""
+    ui, tg = deployed.by_name("ui")["vars"], deployed.by_name("telegram")["vars"]
+    seed = ui["GXG_SECRET__GXG_UI_SVC_KEY"]
+    pub = rd.b64url(Ed25519PrivateKey.from_private_bytes(_jwt.b64url_decode(seed)).public_key().public_bytes_raw())
+    assert tg["TELEGRAM_ADMIN_CALLER_KEYS"] == f"approval-ui=ed25519:{pub}"
+    assert ui["GXG_TELEGRAM_ADMIN_URL"] == "http://${{telegram.RAILWAY_PRIVATE_DOMAIN}}:8082"
+    assert not any(seed in v for n, s in deployed.services.items() if s["name"] != "ui" for v in s["vars"].values())
+    set_owner_values(deployed)
+    run(deployed, "--finalize")
+    capsys.readouterr()
+    assert run(deployed, "--verify") == 0
+    out = capsys.readouterr().out
+    assert "PASS ui: GXG_TELEGRAM_ADMIN_URL points to *.railway.internal" in out
+    assert "PASS telegram: TELEGRAM_ADMIN_CALLER_KEYS is the public half of ui.GXG_SECRET__GXG_UI_SVC_KEY" in out
+    # a stale public half (the key was rotated in ui only), and the seed leaked to another process: both fail
+    ui["GXG_SECRET__GXG_UI_SVC_KEY"] = rd.b64url(Ed25519PrivateKey.generate().private_bytes_raw())
+    deployed.by_name("executor")["vars"]["GXG_SECRET__GXG_UI_SVC_KEY"] = seed
+    assert run(deployed, "--verify") == 1
+    out = capsys.readouterr().out
+    assert "FAIL telegram: TELEGRAM_ADMIN_CALLER_KEYS is the public half" in out
+    assert "FAIL executor: secret variables equal the declared set (AS-28)" in out and seed not in out
+
+
+def test_as28_refuses_the_ui_service_key_elsewhere() -> None:
+    bad = copy.deepcopy(rd.load_spec())
+    bad["services"]["telegram"]["secrets"]["GXG_SECRET__GXG_UI_SVC_KEY"] = {"gen": "ed25519_seed", "as28": "ui_svc_key"}
+    assert "telegram: secret GXG_SECRET__GXG_UI_SVC_KEY (ui_svc_key) is not allowed" in " | ".join(
+        rd.validate_spec(bad)
+    )
