@@ -139,3 +139,21 @@
 1. Исправить `admin.GXG_ADMIN_OPERATORS` на формат `oidc:https://accounts.google.com:<sub>` (сейчас там email, а `admin` ждёт principal). Это же значение через ссылку читает `ui.GXG_UI_OPERATORS` (ожидает email): если менять, разделить их на два значения.
 2. Получить ID token (для `aud` = OIDC client id UI) и выполнить `GXG_ADMIN_URL=https://gxg-approval-admin.tail9fb746.ts.net GXG_OPERATOR_TOKEN_FILE=<файл с токеном> gxg-approval passkeys invite --human 'oidc:https://accounts.google.com:<sub>'`.
 3. Код из ответа (24 ч, одноразовый) владелец вводит на странице «Passkey» в UI и регистрирует ключ. В лог код не печатается.
+
+## TLS коннектора проверен
+
+`TELEGRAM_EXECUTE_TLS_REQUIRED=1` у `telegram`, деплой SUCCESS. Имена переменных с сертификатом и ключом (`TELEGRAM_EXECUTE_TLS_CERT`, `TELEGRAM_EXECUTE_TLS_KEY`) совпадают с теми, что выпускает `railway_deploy.py`. Проверка одноразовой задачей (удалена): `:8081` — **TLS 1.3, сертификат подписан CA пилота** для `telegram.railway.internal`; `:8080` и `:8082` — без TLS, как задумано. `--verify` rc=0.
+
+## Passkey через UI
+
+**Сделано:** `admin.GXG_ADMIN_OPERATORS` = `oidc:https://accounts.google.com:<sub владельца>` (формат, который `admin` проверяет); `ui.GXG_UI_OPERATORS` отделён и берётся ссылкой `${{contextforge.PLATFORM_ADMIN_EMAIL}}` (значение не читалось). `ui` и `admin` переразвёрнуты, имена в tailnet базовые.
+
+**Кнопка «Зарегистрировать первый ключ» в UI не сделана: это противоречит AS-30, спеки я не менял.** Что именно мешает:
+
+1. AS-30 требует «регистрация passkey — через `decider` с подтверждением **вне `ui`** (одноразовая ссылка оператора или повторный вход в IdP с `max_age`)»: «скомпрометированный `ui` не может решить за человека». Кнопка, по которой `ui` сам создаёт приглашение, делает приглашение подконтрольным `ui`: компрометированный `ui` выдал бы приглашение и зарегистрировал бы ключ атакующего на principal approver'а, а затем подписывал бы решения.
+2. Путь «`ui` вызывает `admin` с ID token сессии» невозможен технически и по смыслу: `ui` ID token не хранит (в сессии только `sub`, `iat`, `seen`, `csrf`, `email`); `admin` слушает `127.0.0.1:8092` и достижим только через tailnet (AS-24), `ui` до него не дотянется; а если бы `ui` держал свежий ID token оператора, он сам мог бы выпускать приглашения, то есть тот же пункт 1.
+3. Путь «через `decider`»: `decider` не проверяет токены IdP (у него нет issuer/audience и JWKS), эндпоинт `/v1/passkeys` принимает только код приглашения от `admin`.
+
+**Что можно сделать, не нарушая AS-24/AS-30** (нужно решение владельца/оркестратора, это новая функция, не правка спеки):
+- **Страница приглашений в самом `admin`** (вход `tag:approval-admin`, только из tailnet): оператор входит через Google (OIDC code flow, `max_age`/`prompt=login`), `admin` сам проверяет ID token и список `GXG_ADMIN_OPERATORS`, создаёт приглашение и показывает код один раз. Дальше код вводится на странице «Passkey» в UI, как сейчас. `ui` в выдаче приглашения не участвует.
+- Либо CLI с устройства владельца: ID token по правилам Google OAuth (Playground/`gcloud`-подобный код-флоу) и `gxg-approval passkeys invite` (шаги в разделе «TLS и passkey»).
