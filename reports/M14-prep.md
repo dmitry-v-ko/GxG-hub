@@ -90,6 +90,8 @@ Verdict: ship после решения владельца по пунктам 2
 | gitleaks `tree` и `range` | no leaks |
 | **`approval/deploy/tests`** | **не запущено: нужен Docker** (3 failed, 6 errors из-за отсутствия `docker.sock`) |
 | `check_upstream.sh` на клоне `gxg_agents_v2` | не запущено (`UPSTREAM_DRIFT=skip`); тест на синтетическом репозитории зелёный |
-| `tests/secrets` | 20 passed, **1 failed**: `test_this_repository_is_clean` ругается на `approval/tests/test_mcp_identity.py:46` (`generic-api-key`, фикстура теста). Файл в моём diff не менялся; разобрать отдельно (правило или `.gitleaksignore`) |
+| `tests/secrets` | 21 passed после правки (см. ниже) |
 
 Шаги `check-all.sh` после Docker-шага я запускал по одному, потому что `set -e` останавливает скрипт на нём.
+
+**gitleaks `tests/secrets`:** было 1 падение. Находки были не секретами: в M13-коммите `ed5c18b` аннотация параметра `key: Ed25519PrivateKey | None` (`approval/tests/test_mcp_identity.py:46`), в моём `f74ca36` цикл по именам переменных (`tests/deploy/test_railway_audit.py:117`, позже переписан). Параметр в `test_mcp_identity.py` переименован в `signer` (аннотации больше нет), в `.gitleaksignore` добавлены две точечные записи «коммит:файл:правило:строка» для уже опубликованной истории; правило не менялось. Итог: `tests/secrets` 21 passed.
