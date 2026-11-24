@@ -187,6 +187,15 @@ class Jobs:
         self.out.say(f"team {ids['team']}, gateways {ids['gateways']}, servers {ids['servers']}")
         return 0
 
+    def propose(self) -> int:
+        """ONE proposal of the pilot's first send, through ContextForge as the agent. The idempotency key makes a repeat
+        (a retried job) the same intent. Nothing is sent: a person approves it in the UI with a passkey."""
+        args = {
+            "chat_ref": os.environ["GXG_SEND_CHAT_REF"], "text": os.environ["GXG_SEND_TEXT"],
+            "idempotency_key": "m13-first-send-1", "business_task_id": "m13-first-send",
+        }  # fmt: skip
+        return self.probe(only="telegram", args=json.dumps(args))
+
     def scope(self) -> int:
         lines = self.run(
             "pilot-agent-scope",
@@ -219,14 +228,16 @@ class Jobs:
                 self.out.say("  " + line[:400])
         return 0
 
-    def probe(self) -> int:
+    def probe(self, only: str = "", args: str = "") -> int:
         have = self.variables(VAULT)
         ids = json.loads(have["PILOT_AGENT_IDS"])
         for gateway, server in sorted(ids["servers"].items()):
+            if only and only not in gateway:
+                continue
             lines = self.run(
                 "pilot-agent-probe",
                 {
-                    "GXG_JOB": "probe", "GXG_PROBE_SERVER": server,
+                    "GXG_JOB": "probe", "GXG_PROBE_SERVER": server, "GXG_PROBE_ARGS": args,
                     "PILOT_AGENT_TOKEN": f"${{{{{VAULT}.PILOT_AGENT_TOKEN}}}}",
                 },
             )  # fmt: skip
@@ -241,7 +252,7 @@ class Jobs:
 
 def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None, out: rd.Out | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope"])
+    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope", "propose"])
     args = ap.parse_args(argv)
     out = out or rd.Out()
     try:
@@ -253,7 +264,13 @@ def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None
                 raise rd.DeployError("RAILWAY_TOKEN is not set")
             transport = rd.http_transport(token)
         jobs = Jobs(rd.Railway(transport), out)
-        return {"setup": jobs.setup, "probe": jobs.probe, "revoke": jobs.revoke, "scope": jobs.scope}[args.action]()
+        return {
+            "setup": jobs.setup,
+            "probe": jobs.probe,
+            "revoke": jobs.revoke,
+            "scope": jobs.scope,
+            "propose": jobs.propose,
+        }[args.action]()
     except rd.DeployError as exc:
         out.say(f"error: {exc}", err=True)
         return 1
