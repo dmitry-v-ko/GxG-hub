@@ -64,9 +64,9 @@ def public_key(seed_b64: str) -> str:
 
 
 def manifests() -> list[str]:
-    """`--manifest` for every connector manifest kept in policies/pilot/manifests/<connector>/gxg-manifest.yaml (with its schemas/): the tools of a connector in the registry
+    """`--manifest` for every connector manifest kept in deploy/railway/manifests/<connector>/gxg-manifest.yaml (with its schemas/): the tools of a connector in the registry
     (AS-26) come from its manifest, and the pilot's Telegram service has effect tools the old in-repo manifest lacks."""
-    files = sorted((POLICIES / "manifests").glob("*/gxg-manifest.yaml"))
+    files = sorted((ROOT / "deploy/railway/manifests").glob("*/gxg-manifest.yaml"))
     return [arg for f in files for arg in ("--manifest", str(f))]
 
 

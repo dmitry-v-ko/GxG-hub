@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "telegram.message.get output",
+  "description": "Text is untrusted Telegram data (SEC-11); control and format characters are escaped as \\u{XXXX}. Attachments: metadata only, nothing is downloaded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["chat_ref", "source_ref", "untrusted", "message"],
+  "properties": {
+    "chat_ref": {"type": "string", "pattern": "^tgc1_[A-Za-z0-9_-]{32}$"},
+    "source_ref": {"type": "string", "maxLength": 512},
+    "untrusted": {"const": true},
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "message_id", "sent_at", "edited_at", "reply_to", "out", "text", "truncated", "attachments"],
+      "properties": {
+        "id": {"type": "string", "maxLength": 64},
+        "message_id": {"type": "integer", "minimum": 1},
+        "sent_at": {"type": "string", "format": "date-time"},
+        "edited_at": {"type": ["string", "null"], "format": "date-time"},
+        "reply_to": {"type": ["integer", "null"]},
+        "out": {"type": "boolean", "description": "sent by the service's own account"},
+        "text": {"type": "string", "maxLength": 40000},
+        "truncated": {"type": "boolean"},
+        "attachments": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "mime_type", "size_bytes", "file_name"],
+            "properties": {
+              "kind": {"type": "string", "maxLength": 32},
+              "mime_type": {"type": ["string", "null"], "maxLength": 128},
+              "size_bytes": {"type": ["integer", "null"], "minimum": 0},
+              "file_name": {"type": ["string", "null"], "maxLength": 512}
+            }
+          }
+        }
+      }
+    }
+  }
+}
