@@ -82,3 +82,26 @@
 1. `deploy/railway-entrypoint.sh`: добавить `TELEGRAM_EXECUTE_TLS_KEY` и `TELEGRAM_EXECUTE_TLS_CERT` к материализуемым переменным (файлы 0600 в `/dev/shm`, экспорт `TELEGRAM_EXECUTE_TLS_KEY_FILE` / `TELEGRAM_EXECUTE_TLS_CERT_FILE`, исходные переменные снять, как для `TELEGRAM_SVC_KEY`).
 2. Сервер порта 8081 (execute): запускать uvicorn с `ssl_keyfile` и `ssl_certfile` из этих файлов; без файлов execute на plaintext не поднимать (отказ на старте). Порт 8080 (MCP за ContextForge) не менять.
 3. После этого вывести `telegram` из режима обслуживания (startCommand я не трогал, как просили). До этого `https://telegram.railway.internal:8081` ничего не слушает, но `execute` в пилоте и не вызывается: нет grants и humans.
+
+## UI пустой
+
+**Причина: коллизия имён в tailnet, а не приложение.** `ui` и `admin` регистрируются в tailnet не под `gxg-approval-ui` / `gxg-approval-admin`, а под `gxg-approval-ui-7` / `gxg-approval-admin-6`: базовые имена заняты прежними узлами (каждый деплой и каждая попытка запуска оставляли узел, Tailscale добавляет суффикс `-2`, `-3`, …). Владелец открывает `https://gxg-approval-ui.tail9fb746.ts.net/`, то есть адрес старого узла: до контейнера запрос не доходит, поэтому в логах `ui` ни одной строки и страница пуста. Приложение, прокси и сертификат в порядке (по самопроверке из контейнера):
+
+| Проверка (лог `selfcheck:`) | Результат |
+| --- | --- |
+| `tailscale serve status` | `https://gxg-approval-ui-7.tail9fb746.ts.net (tailnet only)`, `/` → `http://127.0.0.1:8443`, Funnel нет |
+| `CertDomains` | заполнен, HTTPS-сертификаты в tailnet включены |
+| `ui` `GET /healthz` и `/login` на loopback | 200 и 302 (редирект на IdP) |
+| `admin` `GET /healthz` | 200 |
+| запрос к собственному tailnet-имени через SOCKS5 | `cannot complete SOCKS5 connection`: узел не может позвонить сам себе в userspace-режиме, проверка неинформативна (оставлена в логе, на вывод не влияет) |
+
+**Что сделано** (коммиты «tailnet self-check…», «tailnet self-check uses the real node name…»):
+- `entrypoint.sh` для сервисов с `TS_HOSTNAME`: в лог `tailscale status`, `serve status`, имя tailnet и `CertDomains` из `status --json`, запрошенное и фактическое имя узла с предупреждением `WARNING the node did not get the requested name`, через 15 с коды ответа приложения и tailnet-проверка. Только имена и коды, без значений. SOCKS5 `localhost:1055` включён на loopback (отключается `GXG_TS_SELFCHECK=0`). В образы `approval` и `ui` добавлен `curl`; тесты офлайн.
+- `overlapSeconds=0` для `ui`, `admin`, `contextforge` (старый контейнер уходит до старта нового) и то же в `railway_deploy.py` для любого сервиса с `TS_HOSTNAME`.
+- Гостевая страница `/` у `ui`: заголовок, пояснение и кнопка «Войти через Google» (`/login`). `/login` у `ui` отдаёт 302: вход работает. Access log uvicorn уже включён, query вырезается (`NoQuery` в `cli.py`); новых строк не было, потому что запросы не доходили.
+- `contextforge`: приложение запущено (gunicorn, плагины загружены); строки самопроверки в обрезанном логе не просмотрены.
+
+**Что нужно владельцу** (нужен доступ к Tailscale admin, у меня его нет):
+1. В Machines удалить старые `gxg-approval-ui*`, `gxg-approval-admin*`, `gxg-gateway*`. Тогда после redeploy узлы получат базовые имена, под которыми их ждёт `GXG_UI_PUBLIC_URL`.
+2. Ключи `TS_AUTHKEY` делать **ephemeral** (по runbook), иначе устаревшие узлы копятся: похоже, ключи сейчас не ephemeral.
+3. До этого страница открывается по фактическому имени (`https://gxg-approval-ui-7.tail9fb746.ts.net/`), но редирект OIDC и WebAuthn привязаны к `GXG_UI_PUBLIC_URL`, поэтому вход по такому адресу не завершится.
