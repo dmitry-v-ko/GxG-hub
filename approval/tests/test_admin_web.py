@@ -255,3 +255,17 @@ def test_without_auth_time_a_fresh_iat_signs_in_and_an_old_iat_does_not(monkeypa
     g.nonce = q["nonce"][0]
     assert g.client.get(f"/auth/callback?code=x&state={q['state'][0]}").status_code == 403
     assert g.client.get("/invites").status_code == 303
+
+
+def test_callback_is_a_page_not_a_redirect_so_the_strict_cookie_is_sent_next(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 303 would stay in the cross-site chain from the IdP and the browser would drop the Strict cookie (a loop)."""
+    f = build(monkeypatch)
+    login = f.client.get("/login")
+    q = parse_qs(urlsplit(login.headers["location"]).query)
+    f.nonce = q["nonce"][0]
+    done = f.client.get(f"/auth/callback?code=x&state={q['state'][0]}")
+    assert done.status_code == 200 and "location" not in done.headers
+    assert 'http-equiv="refresh" content="0;url=/invites"' in done.text and 'href="/invites"' in done.text
+    cookie = done.headers["set-cookie"]
+    assert "__Host-gxg_admin_session" in cookie and "SameSite=strict" in cookie and "Secure" in cookie
+    assert f.client.get("/invites").status_code == 200  # the next, same-site request carries the cookie

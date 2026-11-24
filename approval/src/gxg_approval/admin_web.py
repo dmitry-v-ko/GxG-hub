@@ -183,7 +183,14 @@ def register(app: FastAPI, *, web: Web, deps: Any, issue_invite: Callable[[str, 
         who = f"oidc:{claims['iss']}:{claims['sub']}"
         if who not in deps.operators:
             return refuse(403, "Нужна роль platform_admin.")
-        response = RedirectResponse("/invites", status_code=303)
+        # Not a 303: a redirect stays inside the navigation chain that began at the IdP (cross-site) and the browser does
+        # not send the SameSite=Strict session cookie on it, which made a loop /invites -> /login -> /auth/callback.
+        # A page that moves on by itself is a new, same-site navigation.
+        response = HTMLResponse(
+            '<!doctype html><html lang="ru"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/invites">'
+            '<title>Вход выполнен</title><p>Вход выполнен. <a href="/invites">Продолжить</a></p></html>',
+            headers=HEADERS,
+        )
         response.delete_cookie(FLOW_COOKIE, path="/")
         secure_cookie(
             response,
@@ -192,7 +199,6 @@ def register(app: FastAPI, *, web: Web, deps: Any, issue_invite: Callable[[str, 
             SESSION_MAX_S,
             "strict",
         )
-        response.headers.update(HEADERS)
         return response
 
     def form(s: dict[str, Any], error: str = "") -> Response:
