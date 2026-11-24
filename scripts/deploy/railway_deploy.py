@@ -152,7 +152,7 @@ Q_PROJECT_CREATE = """mutation ProjectCreate($input: ProjectCreateInput!) { proj
 Q_SERVICE_CREATE = "mutation ServiceCreate($input: ServiceCreateInput!) { serviceCreate(input: $input) { id name } }"
 Q_SERVICE_DELETE = "mutation ServiceDelete($id: String!, $environmentId: String) { serviceDelete(id: $id, environmentId: $environmentId) }"
 Q_INSTANCE = """query ServiceInstance($serviceId: String!, $environmentId: String!) {
-  serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { startCommand healthcheckPath restartPolicyType restartPolicyMaxRetries } }"""
+  serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { startCommand healthcheckPath restartPolicyType restartPolicyMaxRetries overlapSeconds } }"""
 Q_INSTANCE_UPDATE = """mutation ServiceInstanceUpdate($serviceId: String!, $environmentId: String, $input: ServiceInstanceUpdateInput!) {
   serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }"""
 Q_TRIGGERS = """query DeploymentTriggers($projectId: String!, $environmentId: String!, $serviceId: String!) {
@@ -609,6 +609,8 @@ class Deployer:
             want["healthcheckPath"] = (
                 ""  # (null is ignored by the API) an app without a healthcheck in the spec has none in Railway
             )
+        if (svc.get("env") or {}).get("TS_HOSTNAME"):
+            want["overlapSeconds"] = 0  # the old container leaves the tailnet before the new one joins: no `<name>-2`
         if svc["kind"] == "job":
             want["restartPolicyType"] = "NEVER"
         elif svc["kind"] in ("app", "postgres"):

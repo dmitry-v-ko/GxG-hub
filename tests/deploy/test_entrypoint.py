@@ -23,7 +23,7 @@ def stubs(tmp_path: Path, *, funnel: str = "No serve config") -> Path:
         f"""#!/bin/sh
 echo "tailscale $*" >>{tmp_path}/calls
 case "$*" in *"funnel status"*) echo "{funnel}";; esac
-case "$*" in *"status --json"*) echo '{{"MagicDNSSuffix": "tail1.ts.net", "CertDomains": ["h.tail1.ts.net"]}}';; esac
+case "$*" in *"status --json"*) echo '{{"MagicDNSSuffix": "tail1.ts.net", "CertDomains": ["h.tail1.ts.net"], "Peer": {{"k": {{"DNSName": "other.tail1.ts.net."}}}}, "Self": {{"HostName": "h", "DNSName": "h-2.tail1.ts.net."}}}}';; esac
 for a in "$@"; do case "$a" in --auth-key=file:*) cat "${{a#--auth-key=file:}}" >{tmp_path}/key-seen;; esac; done
 """
     )
@@ -206,6 +206,9 @@ def test_tailnet_selfcheck_logs_names_and_status_codes_only(tmp_path: Path) -> N
         "tailnet=tail1.ts.net" in out and 'cert_domains=["h.tail1.ts.net"]' in out
     )  # from status --json, not typed in
     assert "selfcheck: app http://127.0.0.1:8443/login code=200" in out
-    assert "selfcheck: tailnet https://h.tail1.ts.net/login code=200" in out
+    assert "requested=h.tail1.ts.net actual=h-2.tail1.ts.net" in out and "WARNING the node did not get" in out
+    assert (
+        "selfcheck: tailnet https://h-2.tail1.ts.net/login code=200" in out
+    )  # the name it really got, not the requested one
     assert "--socks5-server=localhost:1055" in (tmp_path / "calls").read_text()
     assert AUTHKEY not in out + done.stderr and "secret-MARKER" not in out + done.stderr

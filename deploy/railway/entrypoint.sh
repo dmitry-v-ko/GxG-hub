@@ -115,6 +115,11 @@ if [ -n "${TS_HOSTNAME:-}" ]; then
     suffix="$(printf '%s' "$json" | sed -n 's/.*"MagicDNSSuffix": *"\([^"]*\)".*/\1/p' | head -n 1)"
     # an empty CertDomains means HTTPS certificates are not enabled for the tailnet: `serve --https` cannot terminate TLS
     echo "selfcheck: tailnet=${suffix:-unknown} cert_domains=$(printf '%s' "$json" | tr -d '\n ' | sed -n 's/.*"CertDomains":\(\[[^]]*\]\).*/\1/p')"
+    # The name the node really got: a taken name makes tailscale register `<name>-2`, `-3`, ... (an old ephemeral node is still
+    # listed), and then the URL the owner uses points at the old node, not at this one.
+    self_dns="$(printf '%s' "$json" | tr -d '\n' | sed 's/.*"Self": *//' | grep -o '"DNSName": *"[^"]*"' | head -n 1 | sed 's/.*: *"\(.*\)"/\1/; s/\.$//')"
+    echo "selfcheck: requested=$TS_HOSTNAME.${suffix:-?} actual=${self_dns:-unknown}"
+    case "${self_dns:-}" in "$TS_HOSTNAME.$suffix") ;; *) echo "selfcheck: WARNING the node did not get the requested name: remove the stale machine from the tailnet and redeploy" ;; esac
     (
       sleep "${GXG_SELFCHECK_DELAY:-15}"
       port="${GXG_LISTEN##*:}"
@@ -126,8 +131,8 @@ if [ -n "${TS_HOSTNAME:-}" ]; then
         echo "selfcheck: app http://127.0.0.1:$port$path $res"
       done
       for path in $paths; do
-        res="$(curl -sS -o /dev/null -m 20 --socks5-hostname localhost:1055 -w 'code=%{http_code}' "https://$TS_HOSTNAME.$suffix$path" 2>&1)" || true
-        echo "selfcheck: tailnet https://$TS_HOSTNAME.$suffix$path $res"
+        res="$(curl -sS -o /dev/null -m 20 --socks5-hostname localhost:1055 -w 'code=%{http_code}' "https://${self_dns:-$TS_HOSTNAME.$suffix}$path" 2>&1)" || true
+        echo "selfcheck: tailnet https://${self_dns:-$TS_HOSTNAME.$suffix}$path $res"
       done
     ) &
   fi
