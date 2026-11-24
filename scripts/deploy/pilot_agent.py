@@ -217,6 +217,10 @@ class Jobs:
                 self.out.say("  " + line[:300])
         return 0
 
+    def status(self, intent_id: str) -> int:
+        """`effects.status` of one intent as the agent (read-only), through ContextForge."""
+        return self.probe(only="approval", call=("effects-status", json.dumps({"intent_id": intent_id})))
+
     def scope(self) -> int:
         lines = self.run(
             "pilot-agent-scope",
@@ -249,7 +253,7 @@ class Jobs:
                 self.out.say("  " + line[:400])
         return 0
 
-    def probe(self, only: str = "", args: str = "") -> int:
+    def probe(self, only: str = "", args: str = "", call: tuple[str, str] | None = None) -> int:
         have = self.variables(VAULT)
         ids = json.loads(have["PILOT_AGENT_IDS"])
         for gateway, server in sorted(ids["servers"].items()):
@@ -259,12 +263,13 @@ class Jobs:
                 "pilot-agent-probe",
                 {
                     "GXG_JOB": "probe", "GXG_PROBE_SERVER": server, "GXG_PROBE_ARGS": args,
+                    "GXG_CALL_TOOL": call[0] if call else "", "GXG_CALL_ARGS": call[1] if call else "",
                     "PILOT_AGENT_TOKEN": f"${{{{{VAULT}.PILOT_AGENT_TOKEN}}}}",
                 },
             )  # fmt: skip
             self.out.say(f"== {gateway}")
             for line in lines:
-                if re.match(r"^(initialize|tools/list|tool |propose |schema )", line) or re.search(
+                if re.match(r"^(initialize|tools/list|tool |propose |schema |call )", line) or re.search(
                     r"Traceback|Error|Failed|not found", line
                 ):
                     self.out.say("  " + line[:1000])
@@ -273,7 +278,7 @@ class Jobs:
 
 def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None, out: rd.Out | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope", "propose", "peek"])
+    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope", "propose", "peek", "status"])
     args = ap.parse_args(argv)
     out = out or rd.Out()
     try:
@@ -292,6 +297,7 @@ def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None
             "scope": jobs.scope,
             "propose": jobs.propose,
             "peek": lambda: jobs.peek(os.environ["GXG_PEEK"]),
+            "status": lambda: jobs.status(os.environ["GXG_INTENT"]),
         }
         return actions[args.action]()
     except rd.DeployError as exc:

@@ -226,6 +226,13 @@ def probe():
     print(f"tools/list http={status} count={len(names)}", flush=True)
     for n in names:
         print(f"tool {n}", flush=True)
+    call = os.environ.get("GXG_CALL_TOOL")
+    for n in names:  # one named read-only tool with given arguments (effects.status of a proposal)
+        if call and n.endswith(call):
+            status, res = rpc(
+                client, url, "tools/call", {"name": n, "arguments": json.loads(os.environ["GXG_CALL_ARGS"])}, 4
+            )
+            print(f"call {call} http={status} " + json.dumps(res.get("result", res))[:900], flush=True)
     for tool in listed.get("result", {}).get("tools", []):
         if tool["name"].endswith("message-propose"):  # the argument schema: names and types only, no values
             print("schema " + json.dumps(tool.get("inputSchema", {}), separators=(",", ":"))[:1500], flush=True)
