@@ -15,6 +15,7 @@ import base64
 import json
 import os
 import secrets
+import socket
 import sys
 import time
 
@@ -117,6 +118,13 @@ def setup():
             "expires_in_days": 30,
         },
     )
+    for url in GATEWAYS.values():  # which addresses the private names resolve to (SSRF allow-list of ContextForge)
+        host = url.split("//", 1)[1].split("/", 1)[0].rsplit(":", 1)[0]
+        try:
+            found = sorted({a[4][0] for a in socket.getaddrinfo(host, None)})
+        except OSError as exc:
+            found = [type(exc).__name__]
+        print(f"resolve {host} -> {found}", flush=True)
     gateways = {g["name"]: g for g in items(api("GET", "/v1/gateways?include_inactive=true&limit=0"), "gateways")}
     for name, url in GATEWAYS.items():
         if name not in gateways:

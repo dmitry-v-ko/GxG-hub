@@ -121,7 +121,12 @@ class Jobs:
                     deployment, status = edges[0]["node"]["id"], edges[0]["node"]["status"]
                     if status in FINAL:
                         break
-            lines = [m["message"] for m in self.api.call(Q_LOGS, d=deployment, l=2000)["deploymentLogs"]]
+            lines: list[str] = []
+            for _ in range(6):  # the log pipeline lags behind the status
+                time.sleep(10)
+                lines = [m["message"] for m in self.api.call(Q_LOGS, d=deployment, l=2000)["deploymentLogs"]]
+                if any(x.startswith(("IDS ", "SEALED ")) for x in lines) or len(lines) > 3:
+                    break
             if status != "SUCCESS":  # why a deployment failed before it ran: the build log (no variable values in it)
                 build = self.api.call(Q_BUILD_LOGS, d=deployment, l=40)["buildLogs"]
                 lines += ["build: " + m["message"] for m in build]
@@ -146,7 +151,9 @@ class Jobs:
         )  # fmt: skip
         ids, sealed = parse_log(lines)
         if ids is None or sealed is None:
-            for line in lines[-15:]:  # the job's own messages carry no secret
+            for line in [x for x in lines if not x.startswith("build: ")][
+                -25:
+            ]:  # the job's own messages carry no secret
                 self.out.say("  " + re.sub(r"\s+", " ", line)[:300])
             raise rd.DeployError("the setup job did not finish: no ids or token in its log")
         token = unseal(sealed, private)
