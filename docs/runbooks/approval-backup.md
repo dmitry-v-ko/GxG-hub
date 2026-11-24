@@ -34,7 +34,7 @@ PGHOST=... PGUSER=gxg_owner PGDATABASE=approval PGPASSWORD=... \
    PGHOST=... PGUSER=<суперпользователь или gxg_owner с правом SET ROLE> \
      uv run python scripts/ops/approval_backup.py restore --file gxg-approval-<UTC>.dump.enc --target approval_restored
    ```
-   - Скрипт отказывается работать с непустой базой (есть таблица `intents`).
+   - Скрипт отказывается работать с непустой базой (есть таблица `intents`). Если восстановление оборвалось (повреждённый файл, неверный ключ, ошибка `pg_restore`), база осталась наполовину заполненной: удалить её и создать заново (шаг 2), повторный запуск на ней откажет.
    - Объекты создаются от `gxg_owner`, права на функции и таблицы переносятся.
    - **Сразу после загрузки выполняется очистка RET-01** (`gxg_purge`, срок `GXG_RETENTION_DAYS`, по умолчанию 30): payload intents, терминальных дольше срока, не возвращается из старого бэкапа. Итог печатается: `restored: purged=N, <status>=<count>, ...`.
 4. **Сверить состояния** с последним известным: счётчики по статусам в выводе скрипта, `SELECT status, count(*) FROM intents GROUP BY 1`, метрика `gxg_intents_outcome_unknown`.

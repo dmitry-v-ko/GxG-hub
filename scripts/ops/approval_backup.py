@@ -144,6 +144,10 @@ def restore(file: Path, target: str, key: bytes, retention_days: int) -> dict[st
             decrypt(src, proc.stdin, key)
     except BrokenPipeError:
         pass  # pg_restore stopped early: its exit code below says why
+    except BackupError:
+        proc.kill()  # a damaged backup: no orphan pg_restore; the half-restored database must be dropped and recreated
+        proc.wait()
+        raise
     finally:
         proc.stdin.close()
     if proc.wait() != 0:
