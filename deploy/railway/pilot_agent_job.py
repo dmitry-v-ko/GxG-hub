@@ -215,6 +215,8 @@ def probe():
                 "other",
             )
             print(f"propose http={status} error_code={code}", flush=True)
+            if code == "other":  # the tool's own answer (an error text of the connector, no credentials in it)
+                print("propose answer " + text.replace("\n", " ")[:300], flush=True)
 
 
 if __name__ == "__main__":
