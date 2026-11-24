@@ -50,6 +50,15 @@ services:
       GXG_BUNDLE_SIGNING_KEY: {gen: ed25519_seed, as28: bundle_signing}
     config: {GXG_BUNDLE_PUBLIC_KEY: "ed25519_pub:GXG_BUNDLE_SIGNING_KEY"}
 
+  # The pilot agent's ContextForge API token (SEC-02) and the ids of its team, gateways and virtual servers. A vault like
+  # bundle-signer: no source, never deployed. Written by scripts/deploy/pilot_agent.py (the token arrives sealed from a job
+  # inside Railway and is never printed). `owner` here only means: the script does not generate it.
+  pilot-agent:
+    kind: vault
+    secrets:
+      PILOT_AGENT_TOKEN: {gen: owner, as28: agent_token}
+    owner_env: [PILOT_AGENT_IDS]
+
   # ---------------------------------------------------------------- ContextForge (entry: tag:gateway)
   contextforge:
     kind: app

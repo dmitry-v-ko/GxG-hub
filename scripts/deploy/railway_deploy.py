@@ -66,6 +66,7 @@ AS28: dict[str, frozenset[str]] = {
     "admin_oidc": frozenset(
         {"admin"}
     ),  # the operator's browser sign-in of the invite page: client secret (a reference), session key
+    "agent_token": frozenset({"pilot-agent"}),  # vault: the pilot agent's ContextForge API token (SEC-02)
     "bundle_signing": frozenset({"bundle-signer"}),  # vault service, never deployed: signs the grants bundle (GR-11)
 }
 ROLE_OF = {  # AS-27: one role per process
