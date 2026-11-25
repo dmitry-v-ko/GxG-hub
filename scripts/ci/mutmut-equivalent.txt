@@ -32,8 +32,8 @@ gxg_policy.load.x_validator__mutmut_18  # encoding="UTF-8"/None/omitted: codec n
 gxg_policy.load.x_validator__mutmut_21  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 gxg_policy.load.x_load__mutmut_28  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
 gxg_policy.load.x_load__mutmut_31  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
-gxg_policy.load.x_load__mutmut_54  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-gxg_policy.load.x_load__mutmut_56  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_load__mutmut_60  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_load__mutmut_62  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 scripts.ci.widening_gate.x_codeowners__mutmut_5  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
 scripts.ci.widening_gate.x_codeowners__mutmut_8  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
 scripts.ci.widening_gate.x_github_api__mutmut_16  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
