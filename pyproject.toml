@@ -169,9 +169,11 @@ exclude = ["*.md"]
 source_paths = ["scripts/ci/", "conftest.py"]
 # Outside every DoD-4 scope, tested end to end only: the M1 coverage gate (AC-M1-09) and the
 # M2 bash/YAML and M7 SQL mutation drivers (scripts/ci/mutate_m*.py, not key-condition modules).
-# M14 stage F report generator (scripts/ci/stage_f.py): reads reports/ and every package's tests, which the
-# mutants/ copy does not hold; tested end to end by tests/ci/test_stage_f.py outside mutmut.
-do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py", "scripts/ci/mutate_m7_sql.py", "scripts/ci/stage_f.py"]
+# Conformance report generators, not key-condition modules: stage C (M10, AC-M10-07) and stage F (M14) map matrix ids to
+# tests and read pytest JUnit; they read reports/ and every package's tests, which the mutants/ copy does not hold.
+# Tested end to end by tests/ci/test_stage_f.py (which also drives stage_c.py) outside mutmut.
+do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py", "scripts/ci/mutate_m7_sql.py", "scripts/ci/stage_c.py",
+  "scripts/ci/stage_f.py"]
 also_copy = ["schemas/", "policies/", "docs/", "tests/", ".github/"]
 # test_grants_widening_job.py runs the M2 job script in temp repos (subprocesses, like the e2e tests):
 # in neither milestone's mutmut test selection.
