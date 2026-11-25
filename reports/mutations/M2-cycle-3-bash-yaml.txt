@@ -1,0 +1,15 @@
+killed    scripts/ci/grants_widening.sh: a tag origin/main shadows the branch
+killed    scripts/ci/grants_widening.sh: PR run diffs the checkout, not the PR head
+killed    scripts/ci/grants_widening.sh: head diffed against itself
+killed    scripts/ci/grants_widening.sh: diff vs the PR base, not main
+killed    scripts/ci/grants_widening.sh: every branch run passes
+killed    scripts/ci/grants_widening.sh: push run uses PR mode
+killed    scripts/ci/grants_widening.sh: PR names its own owners
+killed    .github/workflows/ci.yml: base change does not re-run the gate
+killed    .github/workflows/ci.yml: gate diffs the base commit
+killed    .github/workflows/ci.yml: PR runs cancelled
+killed    .github/workflows/ci.yml: gate cannot read workflow runs
+killed    .github/workflows/ci.yml: ci-ok ignores the gate
+killed    .github/workflows/ci.yml: bundle not re-signed on schedule
+killed    .github/workflows/ci.yml: gate checkout without history
+14/14 mutations killed

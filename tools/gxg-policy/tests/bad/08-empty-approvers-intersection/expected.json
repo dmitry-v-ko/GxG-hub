@@ -1,0 +1,6 @@
+{
+  "description": "пустое пересечение approvers",
+  "code": "approvers-empty-intersection",
+  "file": "approval/t-alpha.yaml",
+  "path": "rules[1].approvers"
+}

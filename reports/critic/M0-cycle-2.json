@@ -1,0 +1,62 @@
+{
+  "milestone": "M0",
+  "branch": "claude/m0-foundation",
+  "commit": "77662aff782cab6b07ef556bbe20c9b57ff1fdb1",
+  "cycle": 2,
+  "reviewed_at": "2026-11-20",
+  "score": 8.0,
+  "caps_applied": ["major"],
+  "dimensions": {"spec": 2.5, "tests": 2, "security": 1.5, "code": 1.5, "ops": 0.5, "evidence": 0.5},
+  "acceptance": [
+    {
+      "id": "AC-M0-01",
+      "status": "passed",
+      "evidence": "Clean clone, checkout 77662af, empty UV_CACHE_DIR, UV_PYTHON=3.12 (3.12.3): `uv sync --locked && uv run pytest` -> 94 passed, 136 subtests passed, 0 skipped; `bash scripts/ci/check-all.sh` -> `check-all: OK`. CI run 44785675116 on 77662af: success."
+    },
+    {
+      "id": "AC-M0-02",
+      "status": "passed",
+      "evidence": "prove_schema_guard.py: 59/59 caught. By hand: dropping `idempotency_key` from effect-intent `required` -> pytest red; same + `schema_lock.py --write` -> still red (test_security_required_fields). 'Cannot be merged' depends on AC-M0-03."
+    },
+    {
+      "id": "AC-M0-03",
+      "status": "manual_pending",
+      "evidence": "Not configured (needs owner; private personal repo needs Pro/public/org - stated in the doc). Doc is accurate on preconditions, ruleset steps, empty bypass, `--admin` probe and pending ci-ok. Inaccurate on CODEOWNERS: probe step 5 expects an automatic review request for dmitry-v-ko on his own PR, which GitHub does not do (see major finding)."
+    },
+    {
+      "id": "AC-M0-04",
+      "status": "passed",
+      "evidence": "check_secrets.py --range/--tree exit 1 for: inline key after `K=\"`, RSA header in .py, KEY.PEM, .ENV, Server.Key, UTF-16 header, key added and deleted within the range, pinned old blob at another path. The literal AC is met; the allowlisted plan file is a bypass (see major finding)."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "ref": "AC-M0-04, SEC (secrets not in code)",
+      "where": "scripts/ci/check_secrets.py:55-57, 108-110 (CONTENT_ALLOWLIST)",
+      "problem": "The content check is off for the whole file docs/implementation-plan-v1.md, not for the one quote. Appending a PEM private key header + base64 body + END line to the plan and committing gives `--range` exit 0 and `--tree` exit 0. The reason 'the plan must not be edited' is false: the plan is edited in this diff (389ed23) and is the most edited normative file. No test covers key material inside the allowlisted file. CODEOWNERS does not block the merge by the owner's decision.",
+      "required_improvement": "For allowlisted paths remove exactly the quoted fragment (backtick + header + backtick, built in code, not spelled out) once and scan the rest normally. Test: plan with the quote passes; plan with the quote plus another header or a header with a key body fails. Fix the reason text in CONTENT_ALLOWLIST and in reports/conformance/M0.json."
+    },
+    {
+      "severity": "major",
+      "ref": "AC-M0-03",
+      "where": "docs/setup/branch-protection.md, 'Проверка попыткой' step 5; .github/CODEOWNERS",
+      "problem": "The only code owner is @dmitry-v-ko and PRs are opened under the same account (PR #1). GitHub never requests a review from the PR author, so step 5 ('dmitry-v-ko appears in Reviewers automatically') fails when done literally, and the CODEOWNERS half of AC-M0-03 cannot be observed in the owner's chosen setup. The contradiction between AC text and setup is not raised to the owner.",
+      "required_improvement": "State in the doc that with a single owner who is also the PR author no review request appears. Replace step 5 with an observable check (no CODEOWNERS errors shown by GitHub for .github/CODEOWNERS; files under schemas/ marked as owned by the code owner in the PR's 'Files changed'). Record the AC wording issue as an escalation to the owner in reports/conformance/M0.json instead of silently rewording."
+    },
+    {
+      "severity": "minor",
+      "ref": "AC-M0-04 (beyond the letter)",
+      "where": "scripts/ci/check_secrets.py:108-117",
+      "problem": "A gzip-compressed PEM key (k.gz) passes. Not required by AC-M0-04; the plan scopes out a general scanner.",
+      "required_improvement": "Add one line to known_limitations in reports/conformance/M0.json; no code."
+    }
+  ],
+  "required_improvements": [
+    "AC-M0-04: narrow CONTENT_ALLOWLIST from 'whole file' to 'exactly the one quoted fragment in docs/implementation-plan-v1.md'; add a test that key material (second header or header with body) in that file is reported; correct the reason text in the scanner and in reports/conformance/M0.json.",
+    "AC-M0-03: fix probe step 5 of docs/setup/branch-protection.md for the self-authored-PR case (GitHub does not request review from the author), give an observable CODEOWNERS check, and record the AC wording issue as an escalation to the owner in reports/conformance/M0.json.",
+    "Update reports/conformance/M0.json: new commit, green CI run ID on it, new scanner test in the list."
+  ],
+  "ponytail_review": "reports/critic/M0-cycle-2.review.md",
+  "lean_lines": 0
+}

@@ -1,0 +1,350 @@
+{
+ "milestone": "M11",
+ "role": "independent critic, cycle 1",
+ "branch": "claude/m11-telegram-read",
+ "commit": "2cebc81ebd5a7df1f7888d16ad9688a13822e28e",
+ "base": "fb14af1 (claude/m5-readonly-poc)",
+ "reviewed_diff": "fb14af1..2cebc81",
+ "threshold": 9,
+ "score": 5.0,
+ "caps_applied": [
+  "ac_not_met",
+  "major"
+ ],
+ "dimensions": {
+  "spec": 1.5,
+  "tests": 1.5,
+  "security": 1.5,
+  "code": 1.0,
+  "ops": 0.5,
+  "evidence": 0.0
+ },
+ "acceptance": [
+  {
+   "id": "AC-M11-01",
+   "status": "failed",
+   "evidence": "SC-03, SC-04, SC-05, SC-09, SC-10, MC-02, MC-03 pass through ContextForge, but only against FakeTelegramService (fixtures written by the executor): critic quick run `pytest stand/tests/test_telegram.py` -> 17 passed in 262 s; in-process 96 passed. The AC requires the Telegram connector 'с тестовым аккаунтом и тестовыми чатами' over the existing service: the existing service has no network read port (gxg_agents_v2@f1c4d6d: search is in-process TS, thread.read and per-chat collect do not exist), Settings.from_env refuses any TELEGRAM_SERVICE other than `fake` (server.py:88-89). Not met; needs an owner decision (M11-ESCALATION #1, #2)."
+  },
+  {
+   "id": "AC-M11-02",
+   "status": "failed",
+   "evidence": "The counter `open_sessions` = len(fake.sessions), set once from fixtures (fake.py:85-88): no connector behaviour can change it; the 'existing service' is never contacted. Structural evidence is real and passes: no Telegram client in connectors/telegram/uv.lock or src, no TG_SESSION/TG_API in the container env (test_ac_m11_02_no_telegram_client_library_in_the_lockfile, stand test). The AC as written (session count of the existing service) is not measured."
+  },
+  {
+   "id": "AC-M11-03",
+   "status": "passed",
+   "evidence": "stand test_sc05_and_ac_m11_03_* (other tenant's chat, no grant, expired grant, forged chat_ref, collect without collect grant, agent without grants; 3 tools x 3 paths): fake port counter unchanged, byte-identical not_found per path. Critic mutations in a temp copy: service call before the grant check in thread_read, dropping the named-chat check in search, collect checked with `read` -> all killed. Valid on the fake only (see F3: on the real search the scope check is the caller's)."
+  },
+  {
+   "id": "AC-M11-04",
+   "status": "passed",
+   "evidence": "stand test_ac_m11_04_* flood_wait 1/7/3600 s on 3 tools x 2 paths -> rate_limited, retryable, retry_after_s in [N, N+1]; in-process ceil/None/1e9 bounds; mutmut kills the ceil/max/min mutants. The delay is the fake's, not Telegram's."
+  },
+  {
+   "id": "AC-M11-05",
+   "status": "passed",
+   "evidence": "stand test_sc09_and_ac_m11_05_*: 1000 calls, >=1000 audit lines, 0 fixture texts / peer ids (with and without '-') / session strings in connector logs; no peer ids, sessions, agent tokens or JWS in replies or ContextForge logs; critic mutation 'excerpt into the audit line' killed. Peer ids and sessions never cross the fake port, so for them the check is vacuous until a real adapter exists."
+  }
+ ],
+ "dod": {
+  "1_ci_green": "not met: all 5 CI runs on the branch failed before start (GitHub billing: 'The job was not started because recent account payments have failed'); infra, not code. Local: ruff check/format, mypy telegram, uv lock --check (root, telegram) OK",
+  "2_ac_automated": "AC-M11-01/02 not met (above)",
+  "3_report": "M11.json present but for 654ee9a with commit_dirty=true; M5.json overwritten with a failing run of 3d590e4 (SC-01, SC-07 failed, all_passed=false); M11.json claims M5.json was left untouched (false) -> F5",
+  "4_mutmut": "critic `rm -rf mutants && uv run mutmut run` in connectors/telegram: 1042 mutants, 1024 killed, 16 survived + 2 no tests = 18, all in scripts/ci/mutmut-equivalent.txt; critic checked each diff (search__mutmut_18 chats=None only on the no-Connection path, service_error__mutmut_7 `or 1` absorbed by max(.,1), run__mutmut_13 case-insensitive Starlette headers, from_env defaults refused alike, configs__mutmut_19 uvicorn default host 127.0.0.1, x_serve real sockets): equivalent. fake.py/service.py not mutated (test double, Protocol)",
+  "5_no_skip": "met: 0 skipped (root 894 passed, telegram 96 passed, stand 17 passed)",
+  "6_existing_solutions": "plan has a DoD-6 table; see existing_solutions"
+ },
+ "commands": {
+  "root_pytest": "uv run pytest -q -p no:cacheprovider -> 894 passed, 148 subtests passed",
+  "telegram_pytest": "cd connectors/telegram && uv run pytest -q -> 96 passed",
+  "mutmut": "cd connectors/telegram && rm -rf mutants && uv run mutmut run; uv run mutmut results -> 18 not killed, all listed as equivalent",
+  "stand_quick": "uv run pytest stand/tests/test_telegram.py ... --force-enable-socket -> 17 passed in 262.69s",
+  "stand_full": "KEEP=1 DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,...' stand/run.sh -> EXIT 0; fresh 46 passed (578 s), after-restart 46 passed (597 s), after-recreate 46 passed (587 s): M5 suite (SC-01…SC-10, MC-01…MC-04 on demo) and the 17 M11 tests; generated M5.json (all_passed true at 2cebc81) and M11.json discarded with git checkout, committed ones untouched",
+  "gitleaks": "scripts/ci/gitleaks.sh tree HEAD -> no leaks found",
+  "manual_mutations": "temp copy (git archive HEAD), 6 mutations: thread_service_before_grant, search_named_check_after_service, collect_uses_read_action, audit_logs_excerpt, no_escape, fake_open_session_per_call -> all killed (the last one only because it edits the fake's own dict: the connector cannot reach that counter)"
+ },
+ "findings": [
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "executor template ('не меняй спеки молча'), AC-M4-02, AC-M4-04, AC-M5-05, SEC-02, SEC-03, TEN-01",
+   "where": "commit 90691ec: docs/adr/0001-identity-propagation.md, docs/specs/security-v1.md:38-39, docs/specs/target-platform-v1.md:65, docs/specs/roadmap-v1.md, docs/specs/resource-grants-v1.md:62, docs/backlog.md",
+   "problem": "docs/ copied from the orchestrator branch over the M4/M5 versions: ADR-0001 back to Proposed/'Не принято', SEC-03 loses the EdDSA X-GxG-Identity rules (tool, ahs, shared jti store, PLUGINS_FAIL_ON_PLUGIN_ERROR, direct_proxy off), SEC-02/TEN-01 back to VERIFY, Roadmap GO decision deleted, 4 open M5 backlog items (F6, F11, F12, F13) deleted undone. Merging after M5 reverts accepted milestones; not mentioned in plan or report",
+   "required_improvement": "git checkout fb14af1 -- docs/adr docs/specs docs/backlog.md; re-add only the M11 backlog line; keep docs/implementation-plan-v1.md"
+  },
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "AC-M11-01, AC-M11-02, service-integration-v1 Telegram ('фасад к его доменным портам'), plan 'Лимиты и эскалация' (стоп при пробеле, требующем решения человека)",
+   "where": "connectors/telegram/src/telegram_connector/server.py:88-89, service.py:10-11, reports/M11-ESCALATION.md #1-#2",
+   "problem": "The connector has no implementation of the port to the existing service; only the fake. It refuses to start outside GXG_PROFILE=test. AC-M11-01 (test account, test chats) and AC-M11-02 (session count of the existing service) cannot be met without an owner decision; reported as passed_on_fake_service/passed instead of escalating",
+   "required_improvement": "Escalate to the owner: (a) open the read port (default HTTP route in gxg_agents_v2), implement TelegramService over it, start in production profile with it, run AC-M11-01…05 on a test account with 2-3 test chats; or (b) the owner rewrites AC-M11-01/02 to 'on a contract fake of the port' and moves the real-account run to a named later milestone"
+  },
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "MCC-03, CON-TG-02, CON-TG-11, SI-01/AC-M12-01, task 'сверь контракт порта с реальным кодом'",
+   "where": "connectors/telegram/src/telegram_connector/service.py, fake.py:94-106, tools.py:6, 218-230, 277-296",
+   "problem": "Port does not match the real service: (a) real PostgresTelegramArchiveRepository.search does not check Connection scope (filters chat_ref = ANY, unknown chats -> not_synced; 'the caller derives them from that scope', archive-repository.ts:67, 299-337), the fake raises chat_forbidden, and tools.py relies on 'the service keeps its own Connection scope': a mask-granted chat outside scope is not_found on the fake but an empty complete=false success on the real search; (b) real Signals collection is per folder with query, minimumMessageLength, opaque 16 KiB tga1: cursor of per-peer positions and externalId peer_id:message_id (archive-folder-collection.ts); connector collect is per chat, no filters, own tgk1 cursor, ids chat_ref:message_id -> AC-M12-01 parity cannot hold; (c) read_thread and scope_chats exist in no service code",
+   "required_improvement": "Derive the port from the real code: read scope from Connection metadata (telegramConnectionScopeSchema) and check it in the connector before search/thread/collect; make the fake's search behave like the real one (no scope check); model collect on the Chat folders collection (folder_ref, query, min length, opaque service cursor) or get an owner decision recorded in service-integration-v1 that per-chat collect is the target, with the dedupe-key mapping for M12; agree read_thread with the service owner"
+  },
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "AC-M11-02, DoD-4 ('тест падает, если сломать проверяемое поведение')",
+   "where": "connectors/telegram/src/telegram_connector/fake.py:85-88; stand/tests/test_telegram.py:460-469; connectors/telegram/tests/test_telegram.py:740-747",
+   "problem": "open_sessions is a constant len(fixtures); a connector that opened its own Telethon/Pyrofork session would still pass both 'session count unchanged' tests. Test checks the wrong thing",
+   "required_improvement": "Measure the service's own session/lock state through the real port (or state in the report that AC-M11-02 is shown structurally by the lockfile/env tests) and drop the constant counter as AC evidence"
+  },
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "DoD-1, DoD-3",
+   "where": "reports/conformance/M5.json (commit c8d1ac5), reports/conformance/M11.json 'regression', 'commit'",
+   "problem": "M5.json at HEAD is a run of 3d590e4 with SC-01 and SC-07 failed and all_passed=false; M11.json says 'M5.json left as M5 committed it' (false) and is itself for 654ee9a with commit_dirty=true; CI never ran on the branch (billing)",
+   "required_improvement": "Restore reports/conformance/M5.json from fb14af1 or commit a passing run at HEAD; regenerate M11.json on a clean HEAD; correct the regression sentence; record the CI billing failure and the local check-all result"
+  },
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "MCC-10, SC-01, SC-06, MC-01, SC-08",
+   "where": "stand/tests/test_telegram.py (missing), stand/tests/test_sc.py:52-61",
+   "problem": "telegram is registered in ContextForge without the other stage-B tests: no SC-06 (direct reach from the agent network), no MC-01 (schemas as listed by ContextForge vs schemas/), no by-name call of t-beta's telegram tools by a t-alpha agent, SC-08 in-process only. A later compose change putting telegram on `edge` or publishing 8080 passes every M11 test",
+   "required_improvement": "Parametrize the existing test_sc06_*, test_mc01_* and SC-01 by-name tests over demo and telegram (standlib.direct/ctl already take url/service)"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "Качество кода, backlog M3",
+   "where": "connectors/telegram/src/telegram_connector/tools.py:95-142, server.py:59-147",
+   "problem": "~150 lines copied from connectors/demo (DemoTool.run, Settings, parse_keys, BundleFiles, NoVerifier), marked shortcut; the copy repeats demo's backlog defect: internal_error frames as multi-line stderr text (tools.py:137-138)",
+   "required_improvement": "backlog: move the call pipeline and bundle loader into gxg-connector-kit with the connector template; one-line JSON for internal_error"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "CON-TG-08, EX-19",
+   "where": "connectors/telegram/src/telegram_connector/tools.py:150-161",
+   "problem": "Cut at 4000 chars after escaping: a 3999-char message with 2 bidi marks is flagged truncated and loses real text; a cut can leave '\\u{20'",
+   "required_improvement": "Cut the raw text, then escape; truncated from the raw length"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "CON-TG-08, SEC-11",
+   "where": "connectors/telegram/src/telegram_connector/tools.py:237-243",
+   "problem": "Search excerpts are not marked untrusted (thread.read/collect have untrusted: true); search-result schema forbids extra fields",
+   "required_improvement": "Say it in the tool description/outputSchema description, or extend search-result via a spec change"
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "MCC-09 (production image)",
+   "where": "connectors/telegram/Dockerfile:18-21",
+   "problem": "fake.py and fixtures/service.json (fake session strings) ship in the production image; only testctl.py is removed",
+   "required_improvement": "Drop fake.py and fixtures/ from the image unless KEEP_TEST_CONTROLS=1"
+  }
+ ],
+ "required_improvements": [
+  "1. Restore the M4/M5 docs: git checkout fb14af1 -- docs/adr docs/specs docs/backlog.md; re-add only the M11 backlog line (F1).",
+  "2. Escalate M11-ESCALATION #1/#2 to the owner now (spec/AC gap, plan 'Лимиты и эскалация'). Then either (a) implement TelegramService over the service's real read port, let the connector start in the production profile with it, and run AC-M11-01…05 through ContextForge on a Telegram test account with 2-3 test chats; or (b) record the owner's change of AC-M11-01/02 (fake of the port now, real run in a named later milestone) in the plan (F2).",
+  "3. Make the port contract follow gxg_agents_v2: Connection scope checked by the connector (from Connection metadata) before every port call, fake search without its own scope check, collect modelled on the Chat folders collection or an owner-approved per-chat contract recorded in service-integration-v1 with the M12 dedupe-key mapping; tests for 'mask grant, chat outside scope' on all three tools (F3).",
+  "4. AC-M11-02: replace the constant counter with the service's own session/lock state, or label the evidence as structural (lockfile + env) if the owner accepts that (F4).",
+  "5. Evidence: restore or regenerate a passing reports/conformance/M5.json at HEAD, regenerate M11.json on a clean HEAD, fix the 'left as M5 committed it' sentence, record the CI billing failure and local check-all (F5).",
+  "6. Run the remaining stage-B tests for telegram through ContextForge: SC-06, MC-01, SC-01 by-name cross-team, SC-08 (F6).",
+  "7. Minors F7-F10 may go to docs/backlog.md with M11."
+ ],
+ "ponytail_review": "reports/critic/M11-cycle-1.review.md",
+ "existing_solutions": [
+  {
+   "component": "TelegramService port (service.py)",
+   "alternative": "a client of the service's read API: none exists (in-process TS repository only, Capability Hub HTTP is admin-only); MCP server of the service: none",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "FakeTelegramService (fake.py)",
+   "alternative": "gxg_agents_v2 scripts/telegram_mock.py (mocks the session CLI, not the archive); telethon test DCs (a real session, forbidden); the service's own PostgresTelegramArchiveRepository on a Postgres with synthetic rows (would give real search semantics, but needs a port in gxg_agents_v2)",
+   "verdict": "justified_custom (but it must follow the real search semantics: F3)"
+  },
+  {
+   "component": "escape() of Cc/Cf characters",
+   "alternative": "stdlib unicodedata (used); str.isprintable is broader; bleach is HTML-only",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "TelegramTool.run call pipeline",
+   "alternative": "connectors/demo DemoTool.run (copied), FastMCP middleware (rejected in plan: no single audit line, bypass if a tool is registered without it)",
+   "verdict": "use_existing (copy marked shortcut; move to gxg-connector-kit)"
+  },
+  {
+   "component": "Settings/parse_keys/BundleFiles/NoVerifier (server.py)",
+   "alternative": "connectors/demo/src/demo_connector/server.py (identical modulo names); kit BundleStore/parse_public_key reused underneath",
+   "verdict": "use_existing (copy marked shortcut)"
+  },
+  {
+   "component": "search cursor (HMAC offset)",
+   "alternative": "demo's scheme (copied), stdlib hmac; itsdangerous not installed",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "collect cursor tgk1.<archived_us>.<message_id>",
+   "alternative": "the service's own opaque Chat folders cursor (tga1:, 16 KiB envelope, CON-TG-11)",
+   "verdict": "use_existing (F3)"
+  },
+  {
+   "component": "Identity, grants, redact, errors",
+   "alternative": "gxg-connector-kit ContextForgeVerifier, BundleStore, redact, GxgError",
+   "verdict": "use_existing (reused)"
+  },
+  {
+   "component": "stand/init.py merged_grants",
+   "alternative": "gxg-policy build over several directories (not supported), yq (not installed); PyYAML present",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "testctl.py test controls",
+   "alternative": "demo's testctl pattern on Starlette (reused pattern)",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "mutation testing",
+   "alternative": "mutmut 3.8.1 (used, no own scripts)",
+   "verdict": "use_existing"
+  }
+ ],
+ "threat_model": [
+  {
+   "path": "identity in arguments/forwarded headers/_meta/forged X-GxG-Identity through ContextForge (SC-03)",
+   "status": "closed",
+   "evidence": "stand test_sc03_* on /rpc, telegram virtual server MCP and SSE: identical results, audit tenant/principal = t-alpha reader"
+  },
+  {
+   "path": "direct call to the connector with forged/foreign-key/unknown kid/expired/other aud/other tool/other args/other-tenant sub/garbage/no identity (SC-04)",
+   "status": "closed",
+   "evidence": "stand test_sc04_*: all unauthenticated, port counter +1 only for the control"
+  },
+  {
+   "path": "replay of a captured identity assertion",
+   "status": "closed",
+   "evidence": "SC-04 'replayed' case; jti cache in process. Shared jti store across replicas: out_of_scope (one replica, kit shortcut)"
+  },
+  {
+   "path": "same aud 'telegram' for both tenants' gateways: an assertion for one tenant's gateway accepted for the other tenant's data",
+   "status": "closed",
+   "evidence": "tenant comes from the signed tenant_id, connection chosen by it (tools.py:200); SC-03/SC-05 tests"
+  },
+  {
+   "path": "read a chat of another tenant / without grant / with expired grant / forged chat_ref (SC-05, GR-17)",
+   "status": "closed",
+   "evidence": "stand test_sc05_and_ac_m11_03_*: byte-identical not_found, port counter 0; critic mutations killed"
+  },
+  {
+   "path": "collect with only a read grant (action confusion)",
+   "status": "closed",
+   "evidence": "SC-05 case a-sales collect -> not_found; critic mutation collect->read killed"
+  },
+  {
+   "path": "search returns items of ungranted chats or reveals hidden counts (GR-16, SC-10)",
+   "status": "closed",
+   "evidence": "test_sc10_* stand/in-process, items re-checked (tools.py:233-235), dropped-items test"
+  },
+  {
+   "path": "mask grant + chat outside the Connection scope on the real service",
+   "status": "open",
+   "evidence": "fake enforces scope inside search, real search does not (archive-repository.ts:67, 299-337); connector has no scope check of its own (F3)"
+  },
+  {
+   "path": "search cursor tampering (other query/caller/offset)",
+   "status": "closed",
+   "evidence": "HMAC binding; test_mc02_* invalid_input; test_cursor_offset_cannot_be_changed"
+  },
+  {
+   "path": "collect cursor reused on another chat/tenant",
+   "status": "closed",
+   "evidence": "cursor is a position only; chat grant checked on every call"
+  },
+  {
+   "path": "cross-team call by name of telegram-t-beta-* by a t-alpha agent through ContextForge (SC-01)",
+   "status": "open",
+   "evidence": "not tested for telegram tools (only listing); connector-side tenant isolation would still hold (F6)"
+  },
+  {
+   "path": "direct network reach of the telegram connector from the agent/edge network (SC-06)",
+   "status": "open",
+   "evidence": "compose.yaml puts telegram only on `connectors` without ports, but no test (F6)"
+  },
+  {
+   "path": "agent Authorization header passed through to the connector",
+   "status": "closed",
+   "evidence": "stand test_agent_authorization_header_never_reaches_the_connector: audit flag false on 3 paths x 2 tenants"
+  },
+  {
+   "path": "member agent renames/registers/replaces tools or gateways to widen unified_pdp",
+   "status": "closed",
+   "evidence": "stand test_member_role_cannot_rename_register_or_replace_tools: 12 writes x 2 agents -> 401/403"
+  },
+  {
+   "path": "prompt injection / bidi / zero-width in message text (SEC-11, CON-TG-08)",
+   "status": "closed",
+   "evidence": "escape() of Cc/Cf, untrusted:true on thread/collect, no effect tools (test_sc08_* in-process, critic mutation no_escape killed); search excerpts unmarked (minor F9)"
+  },
+  {
+   "path": "leak of texts, peer ids, session strings, tokens in logs/replies (SC-09, AC-M11-05)",
+   "status": "closed",
+   "evidence": "1000-call stand test; audit without query/text; internal_error logs class+frames only. With a real adapter its HTTP errors must be re-checked: out_of_scope until it exists"
+  },
+  {
+   "path": "connector opens its own Telegram session (second session owner)",
+   "status": "closed",
+   "evidence": "structural: no Telegram client in uv.lock/src, no session env; the counter test is vacuous (F4)"
+  },
+  {
+   "path": "fake service or test controls enabled in production",
+   "status": "closed",
+   "evidence": "from_env refuses fake/test issuer/test controls outside GXG_PROFILE=test (test_settings_refuse_to_start), testctl removed from the default image, controls on 127.0.0.1"
+  },
+  {
+   "path": "invalid/stale grants bundle (GR-12, GR-13)",
+   "status": "closed",
+   "evidence": "invalid signature: stand + in-process tests, temporarily_unavailable, port counter 0; stale >24h: kit BundleStore.current (M1 tests), not repeated for telegram"
+  },
+  {
+   "path": "service failure mapping hides an error as a result / wrong retryable (MC-03)",
+   "status": "closed",
+   "evidence": "stand test_mc03_*: busy/auth_required/provider_error/peer_inaccessible, timeout 20 s < CF 25 s, connector down"
+  },
+  {
+   "path": "connector-to-service authentication (SEC-24) on the real port",
+   "status": "out_of_scope",
+   "evidence": "no port yet; must be designed with the adapter (escalation #1)"
+  },
+  {
+   "path": "spec regression weakening SEC-03 text (rules enforced by code no longer stated)",
+   "status": "open",
+   "evidence": "commit 90691ec (F1)"
+  }
+ ],
+ "owner_questions_review": [
+  {
+   "id": "M11-ESCALATION #1 network port",
+   "critic": "blocking for AC-M11-01/02, not a non-blocking default: escalate"
+  },
+  {
+   "id": "M11-ESCALATION #2 test account",
+   "critic": "blocking for AC-M11-01: escalate together with #1"
+  },
+  {
+   "id": "M11-ESCALATION #3 RID with chat_ref",
+   "critic": "the default is right (peer id is a provider id, MCC-04); the resource-grants example is only an example"
+  }
+ ],
+ "backlog": [
+  "F7 copy of the demo pipeline into the kit",
+  "F8 truncation before escaping",
+  "F9 untrusted marker for search",
+  "F10 fake in the production image"
+ ],
+ "verdict": "not ready: two AC not met (need the owner), port contract diverges from the real service, specs of M4/M5 rolled back, M5 evidence overwritten with a failing run",
+ "lean_lines": 150,
+ "not_checked": "real service and real Telegram account (no port; not allowed without the owner); CI (never started: billing)"
+}

@@ -1,0 +1,21 @@
+== M10 cycle 3 (critic M10-2 N4): mutmut on the changed approval files, one module per run
+command: /tmp run script = `cd approval && mutmut run "gxg_approval.<module>.*"` (one module per run, fresh mutants/,
+local PostgreSQL 16.6 in docker, GXG_TEST_PG_SOCKET_DIR), then `mutmut results --all true`
+executor: only `_rate_limited` (changed in cycle 3: error.schema); the rest of executor: reports/mutmut/M10-approval-security.txt
+
+module        killed / total   not killed (all in scripts/ci/mutmut-equivalent.txt, with reasons)
+policy        376 / 376        -
+metrics       143 / 146        collect__mutmut_6, _7 (SQL case), x_registry__mutmut_2 (auto_describe=None falsy)
+sweeper        82 / 84         x_sweep_once__mutmut_10, x_purge_once__mutmut_10 (SQL case)
+intents       818 / 818        -
+api           143 / 149        _responses__mutmut_8, _error__mutmut_5, _6, create_app__mutmut_19, _25, _26 (listed in M7)
+transitions   258 / 258        -
+executor       16 / 16         (_rate_limited)
+
+first run (on 5c13eab): metrics 124/156, policy 377/378, sweeper 58/84, executor _rate_limited 23/26.
+Killed by new tests (2fc618a, 84f93c3): approval/tests/test_sweeper_loop.py (defaults, purge clock at exactly 1 h,
+log texts, no row, error wait, the caller's stop), test_metrics.py (HELP texts, histogram labels, pool timeout,
+bundle-age family names). Code that only bred equivalent mutants removed: the deny Outcome's unused max_attempts,
+`removesuffix("_total")` (CounterMetricFamily drops it), histogram sum/count defaults, the retry_after_s checks
+that error.schema already makes (integer, ≥ 1 for rate_limited).
+result: OK, no surviving non-equivalent mutants

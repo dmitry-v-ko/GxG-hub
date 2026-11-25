@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Подключение Telegram</h1>
+{% if error %}<p class="error" id="error">{{ error }}</p>{% endif %}
+{% if state == "down" %}
+<p id="state">Состояние неизвестно.</p>
+<p><a href="/operator/telegram">Повторить</a></p>
+{% elif state == "idle" %}
+<p id="state">Аккаунт не подключён. Шаг 1 из 3: номер телефона.</p>
+<form method="post" action="/operator/telegram/phone" autocomplete="off">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Телефон <input name="phone" type="tel" inputmode="tel" autocomplete="off" placeholder="+7 900 000-00-00" required></label>
+  <button id="send-phone">Получить код</button>
+</form>
+{% elif state == "code_sent" %}
+<p id="state">Код отправлен в Telegram. Шаг 2 из 3: введите код.</p>
+<form method="post" action="/operator/telegram/code" autocomplete="off">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Код из Telegram <input name="code" inputmode="numeric" autocomplete="off" required></label>
+  <button id="send-code">Войти</button>
+</form>
+{% elif state == "password_required" %}
+<p id="state">Нужен пароль двухфакторной защиты. Шаг 3 из 3.</p>
+<form method="post" action="/operator/telegram/password" autocomplete="off">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Пароль 2FA <input name="password" type="password" autocomplete="off" required></label>
+  <button id="send-password">Войти</button>
+</form>
+{% elif state == "authorized" %}
+<p id="state">Готово: аккаунт подключён.{% if sync %} Синхронизация: {{ sync }}.{% endif %}</p>
+<h2>Чаты для пилота</h2>
+<p>Отметьте не больше трёх чатов, которые пилот может читать.</p>
+<form method="post" action="/operator/telegram/scope">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <ul id="chats">
+  {% for c in chats %}
+    <li><label><input type="checkbox" name="chat" value="{{ c.ref }}"{% if c.chosen %} checked{% endif %}> {{ c.title }} <small>({{ c.kind }})</small></label></li>
+  {% else %}<li>чатов нет</li>{% endfor %}
+  </ul>
+  <button id="save-scope">Сохранить выбор для пилота</button>
+</form>
+<p>Сейчас выбрано: <span id="chosen">{% for r in scope %}<code>{{ r }}</code>{% if not loop.last %}, {% endif %}{% else %}ничего{% endfor %}</span></p>
+{% endif %}
+{% if state in ("code_sent", "password_required") %}
+<form method="post" action="/operator/telegram/cancel"><input type="hidden" name="csrf" value="{{ csrf }}"><button id="cancel">Начать заново</button></form>
+{% endif %}
+{% endblock %}

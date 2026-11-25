@@ -1,0 +1,202 @@
+# mutmut mutants that cannot change behavior (DoD-4). scripts/ci/mutmut.sh fails on any other survivor.
+# Names are mutmut's; they change when the function changes: re-run, read `mutmut show <name>`, update.
+gxg_policy.lint.x_load_manifests__mutmut_3  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.lint.x_load_manifests__mutmut_5  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.lint.xǁ_Linterǁrid__mutmut_13  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+gxg_policy.lint.xǁ_Linterǁrid__mutmut_16  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+gxg_policy.diff.xǁ_Diffǁnumber__mutmut_12  # unreachable difference: guarded by `base != head` / decisions differ, so > and >= (< and <=) agree
+gxg_policy.diff.xǁ_Diffǁnumber__mutmut_22  # unreachable difference: guarded by `base != head` / decisions differ, so > and >= (< and <=) agree
+gxg_policy.diff.xǁ_Diffǁgrants__mutmut_31  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.xǁ_Diffǁgrants__mutmut_85  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_9  # unreachable difference: guarded by `base != head` / decisions differ, so > and >= (< and <=) agree
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_173  # not h.get("step_up", None) == not h.get("step_up", False): both defaults are falsy
+gxg_policy.diff.xǁ_Diffǁrule__mutmut_175  # not h.get("step_up", None) == not h.get("step_up", False): both defaults are falsy
+gxg_policy.diff.xǁ_Diffǁsets__mutmut_23  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.xǁ_Diffǁplatform__mutmut_43  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.xǁ_Diffǁplatform__mutmut_87  # add(None, ...) vs add(False, ...): add() only tests truthiness
+gxg_policy.diff.x_diff__mutmut_29  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.diff.x_diff__mutmut_23  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.diff.x_diff__mutmut_43  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.diff.x_diff__mutmut_65  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.diff.x_diff__mutmut_59  # the file-name element of the ("", None) default tuple is never read, only [1]
+gxg_policy.bundle.x__sorted__mutmut_9  # "UTF-16-BE" and "utf-16-be" name the same codec
+gxg_policy.bundle.x_jcs__mutmut_2  # ensure_ascii=None is falsy, the same as False
+gxg_policy.bundle.x_unb64url__mutmut_6  # Python's non-strict base64 decoding ignores surplus "=" padding; every valid input decodes the same
+gxg_policy.bundle.x_unb64url__mutmut_7  # Python's non-strict base64 decoding ignores surplus "=" padding; every valid input decodes the same
+gxg_policy.bundle.x_bundle_doc__mutmut_33  # build() gets linted policies only (bundle_doc refuses any error; a group ref without a groups map is a lint error), so the default is never used
+gxg_policy.bundle.x_bundle_doc__mutmut_35  # build() gets linted policies only (bundle_doc refuses any error; a group ref without a groups map is a lint error), so the default is never used
+gxg_policy.load.x_parse_ts__mutmut_1  # astimezone(None) vs UTC: aware datetimes compare and subtract by instant; parse_ts results are only compared
+gxg_policy.load.x_validator__mutmut_4  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_validator__mutmut_6  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_validator__mutmut_18  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_validator__mutmut_21  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_load__mutmut_28  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+gxg_policy.load.x_load__mutmut_31  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+gxg_policy.load.x_load__mutmut_60  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.load.x_load__mutmut_62  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_codeowners__mutmut_5  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_codeowners__mutmut_8  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_github_api__mutmut_16  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_17  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_19  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_20  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_24  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_github_api__mutmut_25  # header-name case: urllib.request.Request stores names with str.capitalize(), HTTP headers are case-insensitive
+scripts.ci.widening_gate.x_upsert_comment__mutmut_23  # a comment without a body: "XXXX".startswith(marker) is false like "".startswith(marker), the marker starts with "<!--"
+scripts.ci.widening_gate.x_report_out__mutmut_7  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_report_out__mutmut_10  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_report_out__mutmut_14  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_run__mutmut_80  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_run__mutmut_83  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_main__mutmut_61  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_63  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_65  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_67  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_76  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_78  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_89  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_94  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_125  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_127  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+gxg_policy.diff.xǁ_Diffǁtools__mutmut_39  # add(None, ...) vs add(False, ...): add() only tests truthiness
+demo_connector.backend.xǁBackendǁ_scan__mutmut_7  # M3: `>=` -> `>` on time.monotonic() vs a float deadline; equal only at the same nanosecond, no test can tell
+demo_connector.tools.xǁDemoToolǁrun__mutmut_133  # M3: duration_ms * 1001 instead of * 1000: 0.1 % off a log field, no observable behaviour
+demo_connector.tools.x_load_schema__mutmut_4  # M3: keeping `..` in the tail still finds the same file: the parent walk reaches it as d/../../schemas/… from connectors/demo (or its mutants/ copy)
+demo_connector.tools.xǁConnectorǁtools__mutmut_15  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+demo_connector.tools.xǁConnectorǁtools__mutmut_17  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+demo_connector.server.xǁBundleFilesǁ__init____mutmut_3  # M3: _seen None vs "": both mean "nothing loaded yet"; an (mtime, mtime) tuple never equals either
+demo_connector.server.x_configs__mutmut_19  # M3: no host= on the test-controls Config: uvicorn's default host is "127.0.0.1", the same binding (test_servers_listen_where_the_spec_says)
+demo_connector.server.x_serve__mutmut_1  # M3: serve() runs uvicorn forever on real sockets, which the test run forbids (--disable-socket); covered on the real image by docker_smoke.sh (/readyz, tools/call on :8080, CI job demo-image)
+demo_connector.server.x_serve__mutmut_2  # M3: serve() runs uvicorn forever on real sockets, which the test run forbids (--disable-socket); covered on the real image by docker_smoke.sh (/readyz, tools/call on :8080, CI job demo-image)
+# M5 (gateway/contextforge/gxg_identity/core.py)
+gxg_identity.core.x_args_hash__mutmut_5  # ensure_ascii=None is falsy: the same output as ensure_ascii=False
+# M1 (gxg-connector-kit, run by this script since M5): reasons from reports/conformance/M1.json
+gxg_connector_kit._jwt.x_verify__mutmut_41  # M1: `not isinstance(kid, str) or not kid` → `and`: PyJWT already rejects a non-string kid as malformed; an empty kid then reaches key_for, matches no JWKS kid / no thumbprint → the same 'kid' rejection
+gxg_connector_kit._jwt.x_verify__mutmut_70  # M1: PyJWT option key `verify_nbf` renamed: PyJWT then uses its default (check nbf only if present); neither token type has nbf, so tokens of our issuers are judged the same
+gxg_connector_kit._jwt.x_verify__mutmut_71  # M1: same as _70 (key upper-cased)
+gxg_connector_kit._jwt.x_verify__mutmut_72  # M1: same as _70 (`verify_nbf: True`)
+gxg_connector_kit._jwt.x_verify__mutmut_76  # M1: PyJWT option key `verify_iss` renamed: default verify_iss is True, but we pass no `issuer`, and PyJWT skips the check when issuer is None; iss is checked by our allowlist
+gxg_connector_kit._jwt.x_verify__mutmut_77  # M1: same as _76 (key upper-cased)
+gxg_connector_kit._jwt.x_verify__mutmut_78  # M1: same as _76 (`verify_iss: True`)
+gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4  # M1: `_keys = None`: never read before the first _current() assigns it (_refetch_at = -inf forces a fetch on first use)
+gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8  # M1: `float("-INF")`: Python parses it case-insensitively, same value
+gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27  # M1: `cast(None, claims)`: typing.cast is a no-op at runtime
+gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is falsy: the same output as ensure_ascii=False
+# M7 (approval)
+gxg_approval.mcp.x_create_server__mutmut_14  # "Authorization" -> "authorization": HTTP header names are case-insensitive (RFC 9110), httpx sends the same header
+gxg_approval.mcp.x_create_server__mutmut_15  # "Authorization" -> "AUTHORIZATION": HTTP header names are case-insensitive (RFC 9110)
+gxg_approval.mcp.x_create_server__mutmut_46  # "GET" -> "get": httpx upper-cases the method (Request.method = method.upper())
+gxg_approval.mcp.x_create_server__mutmut_62  # "POST" -> "post": httpx upper-cases the method
+gxg_approval.mcp.x_create_server__mutmut_87  # error=False -> error=None: _result only tests truthiness
+gxg_approval.api.x__error__mutmut_5  # "Retry-After" -> "retry-after": header names are case-insensitive; Starlette lower-cases them on the wire
+gxg_approval.api.x__error__mutmut_6  # "Retry-After" -> "RETRY-AFTER": header names are case-insensitive
+gxg_approval.api.x_create_app__mutmut_19  # partition -> rpartition: equal for "Bearer <jwt>" (a JWT has no space); with more spaces both forms fail verification -> the same 401
+gxg_approval.api.x_create_app__mutmut_25  # headers.get("authorization") -> "AUTHORIZATION": Starlette Headers.get is case-insensitive
+gxg_approval.api.x_create_app__mutmut_26  # missing header default "" -> "XXXX": no space, so scheme "XXXX" != bearer -> the same 401 "token rejected"
+gxg_approval.api.x__responses__mutmut_8  # (200, 201) -> (200, 202) in the `ok` branch: only dispatch passes an `ok` schema, and its only 2xx code is 200
+demo_connector.effects.xǁApprovalǁpost__mutmut_15  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
+demo_connector.effects.xǁApprovalǁpost__mutmut_16  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
+demo_connector.effects.xǁEffectsǁ_checked__mutmut_71  # M8: partition vs rpartition on one separator that occurs once: a bearer token and a tool@version (execution-token schema pattern) have exactly one
+demo_connector.effects.xǁEffectsǁ_checked__mutmut_94  # M8: None vs "" for a failed hash: both differ from any 64-hex `ahs`
+demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_12  # M8: partition vs rpartition on one separator that occurs once: a bearer token and a tool@version (execution-token schema pattern) have exactly one
+demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_131  # M8: duration_ms * 1001 instead of * 1000: 0.1 % off a log field (as M3)
+demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_18  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
+demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_19  # M8: missing Authorization header: the default "" or "XXXX" both give no `Bearer <token>` → TokenError(missing)
+demo_connector.effects.xǁEffectsǁexecute__mutmut_96  # M8: operation_id = operation or execution_id; on success the provider always returns an operation id
+demo_connector.effects.xǁEffectsǁexecute__mutmut_40  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
+demo_connector.effects.xǁEffectsǁexecute__mutmut_44  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
+demo_connector.effects.xǁEffectsǁexecute__mutmut_47  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
+demo_connector.effects.xǁEffectsǁinternal_app__mutmut_15  # M8: Starlette upper-cases Route methods
+demo_connector.effects.xǁEffectsǁinternal_app__mutmut_24  # M8: Starlette upper-cases Route methods
+demo_connector.provider.xǁProviderǁ__init____mutmut_9  # M8: check_same_thread=None is falsy like False
+demo_connector.provider.xǁProviderǁcalls__mutmut_11  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁcalls__mutmut_12  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁcalls__mutmut_16  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁcalls__mutmut_17  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁlookup__mutmut_7  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁlookup__mutmut_8  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_13  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_14  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_33  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_34  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_40  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_41  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_43  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_44  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁsend__mutmut_2  # M8: None vs "": both falsy, `first` is only tested for truth
+demo_connector.server.x_configs__mutmut_23  # M8: uvicorn log level of the internal port: default/upper case change only log verbosity
+demo_connector.server.x_configs__mutmut_27  # M8: uvicorn log level of the internal port: default/upper case change only log verbosity
+demo_connector.server.x_configs__mutmut_36  # M8: no host= on the test-controls Config: uvicorn's default host is 127.0.0.1, the same binding (as M3 configs__mutmut_19)
+demo_connector.server.x_effects__mutmut_36  # M8: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (as M3)
+demo_connector.server.x_effects__mutmut_38  # M8: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (as M3)
+gxg_approval.executor.xǁExecutorǁtake__mutmut_6  # M8: `reserved = ""`: `reserved or True` gives True for None and "" alike
+gxg_approval.executor.xǁExecutorǁtake__mutmut_36  # M8: `cast(None, …)`: typing.cast is a no-op at runtime (as M1)
+gxg_approval.executor.xǁExecutorǁrun__mutmut_6  # M8: `busy = None` after an error: falsy like False, the loop waits one poll either way
+gxg_approval.executor.xǁExecutorǁexecute__mutmut_2  # M8: `cast(None, …)`: typing.cast is a no-op at runtime (as M1)
+gxg_approval.executor.xǁExecutorǁ_settle__mutmut_2  # M8: `cast(None, …)`: typing.cast is a no-op at runtime (as M1)
+gxg_approval.executor.xǁExecutorǁ_post__mutmut_18  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
+gxg_approval.executor.xǁExecutorǁ_post__mutmut_19  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_2  # M8: `cast(None, …)`: typing.cast is a no-op at runtime (as M1)
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_27  # M8: `cast(None, …)`: typing.cast is a no-op at runtime (as M1)
+gxg_approval.executor.xǁExecutorǁ_reconcile__mutmut_52  # M8: `doc = ""` after a transport error: not a valid reconcile-result, like None
+gxg_approval.executor.x_release_reserved__mutmut_1  # M8: `cast(None, …)`: typing.cast is a no-op at runtime (as M1)
+gxg_approval.keys.x__write__mutmut_4  # M8: name of the temporary file next to the target; only its atomic replace is observable
+gxg_approval.keys.x__write__mutmut_5  # M8: name of the temporary file next to the target; only its atomic replace is observable
+gxg_approval_ui.stepup.x_registration_options__mutmut_2  # M9: token_bytes(None) draws secrets.DEFAULT_ENTROPY = 32 bytes, the same as CHALLENGE_BYTES
+gxg_approval_ui.render.x_card__mutmut_6  # M9: ensure_ascii=None is falsy, json.dumps treats it exactly like False
+telegram_connector.tools.x_load_schema__mutmut_4  # M11: as demo's x_load_schema__mutmut_4: keeping `..` in the tail still finds the same file by the parent walk
+telegram_connector.tools.x_service_error__mutmut_7  # M11: `retry_after_seconds or 1` instead of `or 0`: max(delay, 1) makes both 1
+telegram_connector.tools.xǁTelegramToolǁrun__mutmut_13  # M11: "AUTHORIZATION" in headers: Starlette's Headers lookup is case-insensitive, the same answer
+telegram_connector.tools.xǁConnectorǁtools__mutmut_11  # M11: as demo's tools__mutmut_11: encoding None = UTF-8 on the runner (PEP 538)
+telegram_connector.tools.xǁConnectorǁtools__mutmut_13  # M11: as demo's tools__mutmut_13: "UTF-8", codec names are case-insensitive
+telegram_connector.tools.xǁConnectorǁsearch__mutmut_18  # M11: chats = None instead of []: read only on the no-Connection path, where `not chats` is True for both
+telegram_connector.server.xǁSettingsǁfrom_env__mutmut_32  # M11: TELEGRAM_ARCHIVE_DSN default "XXXX" instead of "": neither is postgresql://, refused alike
+telegram_connector.server.xǁBundleFilesǁ__init____mutmut_3  # M11: as demo's BundleFiles __init__ mutmut_3: _seen None vs "", both "nothing loaded yet"
+telegram_connector.server.x_serve__mutmut_1  # M11: as demo's x_serve: uvicorn on real sockets, forbidden in tests; covered by the stand (stand/run.sh starts the image)
+telegram_connector.server.x_serve__mutmut_2  # M11: same as x_serve__mutmut_1
+telegram_connector.archive.xǁArchiveServiceǁ_run__mutmut_2  # M11: autocommit None/False instead of True: the read-only SELECTs then run in one transaction that is rolled back on close; the same rows
+telegram_connector.archive.xǁArchiveServiceǁ_run__mutmut_5  # M11: same as _run__mutmut_2 (autocommit left at its default, False)
+telegram_connector.archive.xǁArchiveServiceǁ_run__mutmut_7  # M11: same as _run__mutmut_2 (autocommit=False)
+telegram_connector.archive.xǁArchiveServiceǁscope_chats__mutmut_6  # M11: SQL keywords in lower case: SQL is case-insensitive, the same statement
+telegram_connector.archive.xǁArchiveServiceǁready__mutmut_3  # M11: same as scope_chats__mutmut_6 (lower-case keywords)
+telegram_connector.archive.xǁArchiveServiceǁready__mutmut_4  # M11: unquoted upper-case identifiers fold to lower case in PostgreSQL: the same table
+telegram_connector.archive.xǁArchiveServiceǁsearch__mutmut_21  # M11: LIMIT limit + 2 instead of + 1: one extra row fetched; `more` is len(rows) > limit, the same for any fetch above limit, and only rows[:limit] are returned
+telegram_connector.archive.xǁArchiveServiceǁread_thread__mutmut_21  # M11: same as search__mutmut_21
+telegram_connector.archive.xǁArchiveServiceǁcollect__mutmut_34  # M11: same as search__mutmut_21
+telegram_connector.server.x_build__mutmut_10  # M11: detected, not equivalent: store = None makes build() fail and the in-process MCP session hangs, so mutmut reports a timeout instead of a failure
+telegram_connector.tools.xǁTelegramToolǁrun__mutmut_151  # M11: as demo's run__mutmut_133: duration_ms * 1001, 0.1 % off a log field
+gxg_connector_check.bundle.x_write__mutmut_13  # M1.1: astimezone(None) converts to local time; the runners and the image run in UTC (and the tests pass UTC datetimes), so the stamp is the same
+gxg_connector_kit.effects.xǁApprovalǁpost__mutmut_15  # M1.1: HTTP header names are case-insensitive (httpx sends the same header)
+gxg_connector_kit.effects.xǁApprovalǁpost__mutmut_16  # M1.1: same as _15 (upper case)
+gxg_connector_kit.effects.xǁInternalǁ_checked__mutmut_83  # M1.1: rpartition("@") = partition("@"): execution-token.schema.json allows exactly one `@` in `tool`
+gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_18  # M1.1: Starlette request headers are case-insensitive
+gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_19  # M1.1: default "XXXX" instead of "": no space, so scheme "XXXX", token "" -> the same `missing` refusal
+gxg_connector_kit.effects.xǁInternalǁ_endpoint__mutmut_136  # M1.1: duration * 1001 instead of * 1000: within a millisecond per second; the audit only needs the order of magnitude
+gxg_connector_kit.effects.xǁInternalǁapp__mutmut_26  # M1.1: Starlette upper-cases Route methods ("post" == "POST")
+gxg_connector_kit.effects.xǁInternalǁapp__mutmut_38  # M1.1: same as app__mutmut_26 (reconcile route)
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_43  # M1.1: `>=` instead of `>` when dropping dispatched jti: equal only at the same float instant
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_47  # M1.1: keeping a dispatched jti until exp-5 instead of exp+5: the kit's JtiCache refuses any replay until exp anyway; only the 401/409 label differs in the last 10 s of a token
+gxg_connector_kit.effects.xǁInternalǁexecute__mutmut_50  # M1.1: same as _47 (exp+6)
+gxg_connector_kit.mcp.xǁBundleFilesǁ__init____mutmut_4  # M1.1: _seen = "" instead of None: neither equals a (mtime, mtime) tuple, so the first refresh loads either way
+gxg_connector_kit.mcp.xǁGxgToolǁrun__mutmut_140  # M1.1: same as effects _endpoint__mutmut_136 (duration * 1001)
+gxg_approval_notifier.webhooks.x_allowed_url__mutmut_9  # rstrip("XX.XX") on a lower-cased host: no "X" to strip, only the dots as before
+gxg_approval_notifier.webhooks.x_body_of__mutmut_4  # ensure_ascii=None is falsy like False: the same bytes
+gxg_approval_ui.app.x_create_app__mutmut_306  # Starlette headers are case-insensitive: "X-CSRF-TOKEN" finds the same header
+gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_12  # split("?")[0] == split("?", 1)[0]: only the part before the first "?" is used
+gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_16  # split("?", 2)[0] == split("?", 1)[0]: only the part before the first "?" is used
+gxg_approval.admin.x_create_app__mutmut_12  # Starlette headers are case-insensitive: "AUTHORIZATION" finds the same header
+gxg_approval.admin.x_create_app__mutmut_13  # a missing header as "XXXX" instead of "": neither starts with "Bearer ", the same 401
+gxg_approval.executor.xǁExecutorǁ_defer__mutmut_2  # cast(None, …): typing.cast is a no-op at runtime
+gxg_approval.admin.x_create_app__mutmut_2  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: docs_url=None is redundant
+gxg_approval.admin.x_create_app__mutmut_3  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: redoc_url=None is redundant
+gxg_approval.admin.x_create_app__mutmut_49  # getattr(None, "key", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.admin.x_create_app__mutmut_55  # getattr(key, "XXkeyXX", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.admin.x_create_app__mutmut_56  # getattr(key, "KEY", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.decider.x_create_app__mutmut_2  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: docs_url=None is redundant
+gxg_approval.decider.x_create_app__mutmut_3  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: redoc_url=None is redundant
+gxg_approval.executor.xǁExecutorǁtake__mutmut_15  # "or" lets a stale row call gxg_reserve, which the database refuses (status ≠ approved, or no due execute task: 0006 guard); the conflict is counted and the row delivered as before
+gxg_approval.metrics.xǁDatabaseCollectorǁcollect__mutmut_6  # "select … from" lower-case: SQL keywords are case-insensitive
+gxg_approval.metrics.xǁDatabaseCollectorǁcollect__mutmut_7  # NAME, LABELS, GXG_METRICS() upper-case: unquoted identifiers fold to lower case
+gxg_approval.metrics.x_registry__mutmut_2  # auto_describe=None is falsy like False: the same registry
+gxg_approval.sweeper.x_sweep_once__mutmut_10  # "select gxg_sweep" lower-case: SQL keywords are case-insensitive
+gxg_approval.sweeper.x_purge_once__mutmut_10  # "select gxg_purge" lower-case: SQL keywords are case-insensitive

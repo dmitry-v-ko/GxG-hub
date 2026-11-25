@@ -1,0 +1,86 @@
+{
+ "milestone": "M11",
+ "role": "independent critic, cycle 3",
+ "branch": "claude/m11-telegram-read",
+ "commit": "4ebe3ec",
+ "base": "7c5a53e / fb14af1 (claude/m5-readonly-poc)",
+ "reviewed_diff": "aac8ac0..4ebe3ec (cycle 3)",
+ "threshold": 9,
+ "score": 8.0,
+ "caps_applied": ["major"],
+ "dimensions": {"spec": 2.5, "tests": 1.5, "security": 2.0, "code": 1.0, "ops": 1.0, "evidence": 0.0},
+ "acceptance": [
+  {"id": "AC-M11-01", "status": "passed", "evidence": "critic check-all on 4ebe3ec (git worktree, full history): stand/run.sh fresh 49/50, after-restart 50/50, after-recreate 50/50 through ContextForge incl. SC-01, SC-03..SC-06, SC-08..SC-10, MC-01..MC-03 for telegram; the one failure is AC-M11-04[1] (timing, see F3); in-process connectors/telegram 108 passed, root pytest 906 passed"},
+  {"id": "AC-M11-02", "status": "passed", "evidence": "cycle 3 does not touch the role, image or env; in-process test_contract_* and write-refusal tests pass (108 passed)"},
+  {"id": "AC-M11-03", "status": "passed", "evidence": "stand test_sc05_and_ac_m11_03_* green in all 3 runs (log_connections counter unchanged)"},
+  {"id": "AC-M11-04", "status": "passed", "evidence": "behaviour correct: [7] and [3600] green in every run, in-process flood tests green. [1] is flaky: fresh run failed, 2 of 8 critic reruns failed — the 1 s defer ends between collect and the following search, which then correctly no longer reports rate_limited (test timing, F3)"},
+  {"id": "AC-M11-05", "status": "passed", "evidence": "stand test_sc09_and_ac_m11_05 green 3x (1000 calls, no texts/peer ids/password in logs)"}
+ ],
+ "dod": {
+  "1_ci_green": "not met on 4ebe3ec: critic's KEEP=1 UPSTREAM_DRIFT=skip scripts/ci/check-all.sh -> EXIT=1 at stand/run.sh (fresh 49/50, AC-M11-04[1] flake; all earlier steps green: lockfiles, ruff, mypy, root pytest 906, schema lock, kit coverage, demo, telegram 108, prove_schema_guard, gitleaks tree+range no leaks, tests/secrets 21, policy, smoke). The flake is missed_earlier (test unchanged since cycle 2), required for item 4",
+  "2_ac_automated": "met",
+  "3_report": "not updated: reports/conformance/M11.json still commit 7d90948 with ci_local from partial runs (cycle-2 item 4 open, F2)",
+  "4_mutmut": "connectors/telegram: 1279 mutants, 1259 killed, 17 survived + 2 no tests + 1 timeout = 20, all in mutmut-equivalent.txt. scripts/ci/mutmut.sh (run separately, after check-all stopped) exit 1 for two environment artifacts outside the cycle diff: telegram tools.x_load_schema__mutmut_4 listed but killed (the `..` parent walk depends on the checkout path; critic's worktree is under /tmp), demo server.x_build__mutmut_9 timeout under concurrent stand load (F6, missed_earlier, backlog)",
+  "5_no_skip": "met: 0 skipped (UPSTREAM_DRIFT=skip only skips the upstream step, no clone available to the critic)",
+  "6_existing_solutions": "plan M11-cycle-3.md DoD-6 table: own drift script vs submodule+Dependabot, reason recorded; accepted"
+ },
+ "commands": {
+  "check_all": "UPSTREAM_DRIFT=skip KEEP=1 DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,...' scripts/ci/check-all.sh in a worktree of 4ebe3ec -> EXIT=1 (stand fresh 49/50), real 43m",
+  "mutmut": "scripts/ci/mutmut.sh -> not killed 101, listed 100; EXIT=1 (see dod.4_mutmut)",
+  "order_mutation": "git archive copy, drop c.chat_ref from ORDER BY -> test_mc02_search_pages_ties_across_chats_exactly_once fails (assert 90 == 80); restored -> passes. (connection_id, chat_ref) UNIQUE + PK (connection_id, peer_id, message_id) => order total",
+  "drift_experiments": "synthetic upstream repo, TELEGRAM_ARCHIVE_PIN=<pin>, check_upstream.sh --drift <repo> HEAD: rename telegram_archive.messages.text in a 145 B migration -> exit 1; same first line + padding to 163 KB -> exit 0 (F1); rename at the end of 163 KB -> exit 1; 'SET search_path = capability_hub; ALTER TABLE connections DROP COLUMN scope' -> exit 0 (F4)",
+  "ac_m11_04_reruns": "8 x pytest stand/tests/test_telegram.py -k ac_m11_04 on the kept stand: 6 x 3 passed, 2 x [1] failed"
+ },
+ "checklist_cycle_2": [
+  {"item": "1 total search order + tie test", "status": "closed", "evidence": "archive.py ORDER BY ... m.message_id DESC, c.chat_ref; test pages 90 ties with limit 1/3/7; mutation killed"},
+  {"item": "2 ADR-0004 schema-update notification", "status": "open", "evidence": "check_upstream.sh --drift + check-all + CI job telegram-upstream (schedule 6 h) + SOURCE.md exist and the test covers small migrations, but `git diff | grep -qE` under pipefail reports nothing for a migration diff > 64 KiB whose match is early (SIGPIPE 141 -> false): the notification is silently green (F1)"},
+  {"item": "3 service-integration-v1 lines (collect per chat, cursor, dedupe key, rate_limited)", "status": "closed", "evidence": "docs/specs/service-integration-v1.md Telegram: two lines added"},
+  {"item": "4 M11.json and ci_local from one full check-all on final HEAD", "status": "open", "evidence": "reports/conformance/ untouched in cycle 3; M11.json commit 7d90948 (F2)"},
+  {"item": "5 F3, F6, F8 to backlog", "status": "closed", "evidence": "docs/backlog.md three M11 lines"}
+ ],
+ "findings": [
+  {"severity": "major", "origin": "new_regression", "ref": "ADR-0004 'уведомление при обновлении', cycle-2 item 2",
+   "where": "connectors/telegram/archive/check_upstream.sh:24-28",
+   "problem": "`if git diff ... | grep -qE 'telegram_archive|capability_hub\\.connections'` under set -o pipefail: grep -q exits on the first match, git diff gets SIGPIPE (141) when the diff exceeds the 64 KiB pipe buffer, the pipeline is false and the file is not reported. Reproduced: 163 KB migration starting with ALTER TABLE telegram_archive.messages RENAME COLUMN text TO body -> 'no telegram_archive migration changes', exit 0",
+   "required_improvement": "grep -E ... >/dev/null (no -q) or grep -qE ... < <(git diff ...); add a parametrized case to test_upstream_drift_check_fails_on_a_new_archive_migration with the match followed by > 64 KiB padding expecting exit 1"},
+  {"severity": "minor", "origin": "new_regression", "ref": "DoD-3, cycle-2 item 4",
+   "where": "reports/conformance/M11.json",
+   "problem": "Not regenerated: commit 7d90948, ci_local composed of partial runs",
+   "required_improvement": "One full green check-all on the final head (with a gxg_agents_v2 clone, no UPSTREAM_DRIFT=skip), written into M11.json commit/ci_local/counts"},
+  {"severity": "major", "origin": "missed_earlier", "ref": "Рубрика 'Тесты: нет зависимости от времени', DoD-1",
+   "where": "stand/tests/test_telegram.py:438-452 test_ac_m11_04_flood_wait_is_rate_limited_with_telegrams_delay[1]",
+   "problem": "With a 1 s defer the test makes 2 x (collect + search + thread) calls through ContextForge and expects rate_limited on all of them; when the window ends mid-loop search correctly answers without rate_limited. Fresh stand run failed, 2/8 reruns failed -> check-all red",
+   "required_improvement": "Needed for item 4 (green check-all): re-arm defer(seconds) before each call (or assert reads only while time remains / use 2 s minimum for the read checks), keep the [1] collect retry_after_s check"},
+  {"severity": "minor", "origin": "new_regression", "ref": "ADR-0004 notification",
+   "where": "check_upstream.sh:25",
+   "problem": "Text match on qualified names only: 'SET search_path = capability_hub; ALTER TABLE connections DROP COLUMN scope;' -> exit 0 (upstream migrations qualify names today)",
+   "required_improvement": "backlog: also match search_path, or record as shortcut in SOURCE.md"},
+  {"severity": "minor", "origin": "new_regression", "ref": "ops",
+   "where": "scripts/ci/check-all.sh:29; connectors/telegram/README.md:49",
+   "problem": "[ -d \"$upstream/.git\" ] refuses a git worktree clone (.git is a file); typo 'истёк , чат'",
+   "required_improvement": "backlog: git -C \"$upstream\" rev-parse --git-dir; fix the comma"},
+  {"severity": "minor", "origin": "missed_earlier", "ref": "DoD-4",
+   "where": "scripts/ci/mutmut-equivalent.txt:85 (telegram load_schema__mutmut_4), demo server.x_build__mutmut_9",
+   "problem": "Verdicts depend on the checkout path (parent walk) and on machine load (timeout), so mutmut.sh fails outside /home/user/GxG-hub or under load",
+   "required_improvement": "backlog: make load_schema path-independent (package data, F7) and list demo x_build_9 like telegram x_build_10 (timeout = detected)"}
+ ],
+ "required_improvements": [
+  "1. Fix the drift check false negative: in check_upstream.sh --drift do not use grep -q in a pipe under pipefail (grep -E ... >/dev/null or process substitution); add a test case: archive match followed by > 64 KiB of padding must fail (F1).",
+  "2. Make stand test_ac_m11_04[1] independent of call timing (re-arm the defer before each read check or check reads with a delay that cannot expire during the loop), so check-all is green on repeated runs (F3).",
+  "3. Run one full scripts/ci/check-all.sh on the final head with a gxg_agents_v2 clone (no UPSTREAM_DRIFT=skip) and regenerate reports/conformance/M11.json (commit, ci_local, counts) from it (F2).",
+  "4. Minors F4, F5, F6 to docs/backlog.md with M11."
+ ],
+ "ponytail_review": "reports/critic/M11-cycle-3.review.md",
+ "existing_solutions": [
+  {"component": "drift check", "alternative": "git submodule + Dependabot/Renovate gitsubmodule; git log -G / git grep", "verdict": "justified_custom (reason in plan); bug F1"},
+  {"component": "total order", "alternative": "unique key in ORDER BY (PostgreSQL)", "verdict": "use_existing"}
+ ],
+ "threat_model": [
+  {"path": "all cycle-2 threat paths", "status": "closed", "evidence": "unchanged code paths; stand SC suites green 3x (except AC-M11-04[1] timing)"},
+  {"path": "upstream schema change breaks the scope boundary (purge trigger)", "status": "open", "evidence": "drift check misses large migration diffs (F1); notification only runs where a clone/secret exists"}
+ ],
+ "backlog": ["F4 drift check unqualified names", "F5 worktree .git check, README typo", "F6 path/load-dependent mutmut verdicts"],
+ "lean_lines": 0,
+ "verdict": "not ready: checklist items 1, 3, 5 closed; item 2 has a silent false negative (big migrations) and item 4 not done; check-all red on a flaky AC-M11-04[1] stand test. All small fixes",
+ "not_checked": "drift check against the real gxg_agents_v2 (the session could not attach the repo: add_repo denied, clone needs auth; check-all ran with UPSTREAM_DRIFT=skip); GitHub Actions job telegram-upstream and secret GXG_AGENTS_V2_TOKEN (Actions off: billing); real Supabase archive"
+}

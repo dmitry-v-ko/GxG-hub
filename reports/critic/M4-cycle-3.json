@@ -1,0 +1,184 @@
+{
+  "milestone": "M4",
+  "branch": "claude/m4-contextforge-spike",
+  "commit": "27c676a8b9786c8f36f11bab10c9a0413c20ce80",
+  "report_commit": "140dbd3",
+  "cycle": 3,
+  "reviewed_at": "2026-11-21",
+  "score": 9.5,
+  "caps_applied": [],
+  "score_before_caps": 9.5,
+  "dimensions": {
+    "spec": 3,
+    "tests": 1.5,
+    "security": 2,
+    "code": 1.5,
+    "ops": 1,
+    "evidence": 0.5
+  },
+  "cap_note": "No critical or major findings, all AC reproduced, DoD-2..6 hold. DoD-1 (PR into main with green CI) is still pending: a human does it after this review. Tests at 1.5: the verifier tests and mutmut are complete, but the run gate check_verdicts.py misses calls that never reached echo (finding 1).",
+  "reproduction": {
+    "run_spike.sh": "exit 0 on 27c676a with a fresh .env and adapter key (dockerd started by hand), 2026-11-21 08:43-08:54 UTC; check_verdicts c: OK, c-upgrade: OK",
+    "verdicts_vs_evidence": "variant C 17/17 rows match evidence/variant-c.verify_jws.jsonl by (source, verdict): 10 accepted for 4 agents with their own principal, 7 attacks with the same reasons; upgrade 16/16 accepted, as in evidence",
+    "fail_closed": "PLUGINS_FAIL_ON_PLUGIN_ERROR=true healthy=no reached_connector=false; control false: healthy, reached without X-GxG-Identity",
+    "pytest": "uv run pytest spikes/m4-contextforge/tests: 30 passed; scripts/ci/check-all.sh: OK",
+    "mutmut": "mutmut.sh (mutmut 3.8.1) in a clean copy of the tree: 132 mutants, 131 killed, 1 survived = x_canonical__mutmut_4 (ensure_ascii=None, equivalent: json only tests truthiness); identical to reports/mutmut/M4.txt. Negative: a failing test makes mutmut.sh exit 1; removing the ttl=61 assertion leaves 3 survivors (x_verify__mutmut_56-58), exit 1",
+    "malformed_headers": "12 extra inputs beyond the tests (crit, alg none, b64 false, alg list, kid object, non-UTF-8 payload, '...', 10k chars, non-ASCII): all Rejected with a PyJWTError reason, 0 crashes",
+    "check_verdicts_negative": "replay_other_tool reason changed to 'arguments hash mismatch' -> FAIL, exit 1; t-beta:hermes virtual_server calls replaced by 'Unknown tool' -> OK, exit 0 (finding 1)",
+    "image_reads": "cpex/framework/hooks/tools.py:76-83 headers DeprecationWarning; tool_service.py:5894-5899 applies only modified_payload.headers, no modified_extensions; header_injector hooks resource_pre_fetch only; no JWS in ContextForge logs",
+    "evidence_restored": "committed evidence/ restored after the run (git checkout); nothing from the run is committed"
+  },
+  "cycle2_items": [
+    {
+      "item": 1,
+      "status": "closed",
+      "note": "pytest tests with a test-generated Ed25519 key in root testpaths (CI); mutmut 0 non-equivalent survivors, report committed; mutate_verify_jws.py and mutations.log deleted; M4.json DoD-4 updated"
+    },
+    {
+      "item": 2,
+      "status": "closed",
+      "note": "jwt.get_unverified_header/jwt.decode inside except jwt.PyJWTError; W10.e30.AA, kid list, 2/4 segments, non-base64 tested; my 12 extra inputs: 0 crashes"
+    },
+    {
+      "item": 3,
+      "status": "closed",
+      "note": "plugin jwt.encode(EdDSA, kid); verifier jwt.decode(algorithms=[EdDSA], issuer, audience, strict_aud, leeway=5, require); custom only tool, ttl, ahs, jti, sub-in-tenant; DoD-6 table in reports/plans/M4-cycle-3.md"
+    },
+    {
+      "item": 4,
+      "status": "closed",
+      "note": "check_verdicts.py: every row that reached echo via ContextForge accepted with the calling agent's principal and tool=echo, admin refused by plugin, exact reason per attack; negative check fails as it should. Residual gap: calls that never reached echo (finding 1, minor)"
+    },
+    {
+      "item": 5,
+      "status": "closed",
+      "note": "ADR criterion 5 'Известный разрыв' and 'Что дальше' (migration to extensions.http.headers with write_headers once tool_service applies it); confirmed in the image"
+    },
+    {
+      "item": 6,
+      "status": "closed",
+      "note": "evidence re-run in 27c676a, M4.json in 140dbd3 (reports/ only); reproduced by the critic"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-M4-01",
+      "status": "passed",
+      "evidence": "ADR-0001 passed/failed + evidence for criteria 1-5 for A and C; run_spike.sh rerun by the critic reproduces every C verdict (17/17, 16/16) and fail closed without key"
+    },
+    {
+      "id": "AC-M4-02",
+      "status": "passed",
+      "evidence": "Status Accepted — variant C; A rejected on reproduced evidence (criteria 1-3 failed); m4-live@b6918a5 independently passes C"
+    },
+    {
+      "id": "AC-M4-03",
+      "status": "passed",
+      "evidence": ".env.example CONTEXTFORGE_IMAGE and spike compose pin v1.1.1@sha256:16c7a898…56a5, pulled by digest today; advisories checked 2026-11-20 with links in the ADR"
+    },
+    {
+      "id": "AC-M4-04",
+      "status": "passed",
+      "evidence": "No VERIFY left in SEC-02, SEC-03, TEN-01, GR example (the only VERIFY left is target-platform-v1.md:57, outside AC-M4-04, listed in known_limitations)"
+    }
+  ],
+  "dod": [
+    {
+      "id": "DoD-1",
+      "status": "pending",
+      "note": "PR into main with green CI — human, after this review; check-all.sh green locally"
+    },
+    {
+      "id": "DoD-2",
+      "status": "passed",
+      "note": "verifier in CI via pytest; live criteria scripted in run_spike.sh (Docker, no network in CI). M4.json note overclaims 'any ContextForge call not accepted' (finding 1)"
+    },
+    {
+      "id": "DoD-3",
+      "status": "passed",
+      "note": "reports/conformance/M4.json for 27c676a"
+    },
+    {
+      "id": "DoD-4",
+      "status": "passed",
+      "note": "mutmut reproduced: 131/132 killed, 1 equivalent with a reason; no home-made mutation script"
+    },
+    {
+      "id": "DoD-5",
+      "status": "passed",
+      "note": "30 passed, no skip/xfail"
+    },
+    {
+      "id": "DoD-6",
+      "status": "passed",
+      "note": "table in reports/plans/M4-cycle-3.md covers plugin hook, JWS signing, verifier, time check, canonical JSON, mutation tool, run assertions"
+    }
+  ],
+  "go_no_go_check": "The verdict 'NO-GO triggers not found' is justified as preliminary: roadmap condition 1 (team isolation of tools and servers) and 2 (verifiable identity to the connector, variant C) are reproduced; 3 (hidden tools) is partial, only cross-team tools observed; 4 (unified_pdp deny by default on every path) was not run. The final GO/NO-GO decision belongs to M5 (AC-M5-05), as M4.json says.",
+  "handoff_to_M5": [
+    "IdentityVerifier in gxg-connector-kit on PyJWT or joserfc, after echo/verify_jws.py and tests/test_verify_jws.py (tests + mutmut); jti store shared by all replicas until exp + skew (SEC-03)",
+    "Connector refuses a rejected call with -32001 unauthenticated (echo only records the verdict); reject duplicate X-GxG-Identity and pin typ, as m4-live does",
+    "MC-05: assert the outcome per (agent, path), not only 'rows that reached echo are accepted' (finding 1); assert that X-GxG-Identity arrives and is accepted after every ContextForge upgrade (ToolPreInvokePayload.headers deprecation)",
+    "Production adapter: package with unit tests and mutmut on claim building; key from a secret store with kid rotation; team->tenant and gateway->aud from the platform registry; migrate to extensions.http.headers when ContextForge applies it",
+    "SC-* for hidden tools and unified_pdp deny by default on every path (roadmap conditions 3 and 4); global /mcp RBAC behaviour for team-scoped tokens",
+    "Keep MCPGATEWAY_DIRECT_PROXY_ENABLED=false and PLUGINS_FAIL_ON_PLUGIN_ERROR=true; resources/read and prompts/get arrive without identity and must be refused"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "ref": "ADR-0001 criterion 4/5, DoD-2 note, MC-05 template",
+      "where": "spikes/m4-contextforge/check_verdicts.py:40-57; reports/conformance/M4.json dod DoD-2",
+      "problem": "check_verdicts.py judges only calls that reached echo. A ContextForge call that fails with an error other than GXG_IDENTITY_DENIED (Unknown tool, Tool not found, 5xx) is not a FAIL while the agent has one accepted call on another path; attack_cross_team reached_echo is not checked. Case: both t-beta:hermes virtual_server calls of my upgrade run replaced with 'Unknown tool: echo-t-beta-echo' and their echo rows removed -> 'check_verdicts c-upgrade: OK', exit 0. The M4.json DoD-2 note ('exits 1 if … any ContextForge call not accepted') says more than the script does. Criterion 4 result itself reproduced path by path.",
+      "required_improvement": "Backlog (M5/MC-05): expected outcome table per (agent, path) from spike.py paths() — echo / rbac_denied (/mcp) / not_found (alpha's pre-alias name) — fail on anything else and on attack_cross_team reached_echo; ~10 lines."
+    }
+  ],
+  "required_improvements": [],
+  "backlog": [
+    "M4 (minor): check_verdicts.py per-(agent, path) outcome table + attack_cross_team check; correct the M4.json DoD-2 wording — carry into MC-05 in M5"
+  ],
+  "existing_solutions": [
+    {
+      "component": "plugin/gxg_identity: per-call identity adapter on tool_pre_invoke",
+      "alternative": "v1.1.1 built-ins: identity propagation (variant A, fails criteria 1-3 on reproduced evidence), jwt_claims_extraction (reads incoming claims), header_injector (static headers, resource_pre_fetch only — checked in the image), vault (stored provider tokens), RFC 8693 token exchange (external AS, cached per gateway/user/audience, no per-call jti/ahs). None gives per-call signed identity",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "plugin/gxg_identity: JWS signing",
+      "alternative": "PyJWT 2.15.1 jwt.encode(EdDSA) from the image — now used",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "echo/verify_jws.py: signature, alg, iss, aud, exp/iat, required claims, header parsing",
+      "alternative": "PyJWT jwt.decode / get_unverified_header — now used; joserfc not in the image",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "echo/verify_jws.py: tool binding, exp-iat<=60, ahs, jti, sub in tenant (~15 lines)",
+      "alternative": "no JOSE library checks GxG-specific claims or keeps a jti set; PyJWT has no replay cache",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "canonical() for ahs",
+      "alternative": "stdlib json.dumps (used); rfc8785 rejected in SEC-03 with a recorded reason",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "mutation testing",
+      "alternative": "mutmut 3.8.1 (used); mutmut.sh is a 20-line wrapper because mutmut run does not fail on survivors and has no equivalent-mutant list; negative-checked",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "check_verdicts.py (run assertions)",
+      "alternative": "jq/grep (not guaranteed on the host, unreadable matching), pytest over the log (needs pytest on the stand host); stdlib script recorded in the DoD-6 table",
+      "verdict": "justified_custom"
+    },
+    {
+      "component": "echo_mcp.py, spike.py, redact.py, run_spike.sh, verify_hmac.py",
+      "alternative": "none for a one-off stand that must capture raw headers; m4-live also writes its own echo",
+      "verdict": "justified_custom"
+    }
+  ],
+  "comparison_m4_live": "claude/m4-live@b6918a5 reaches the same result for C on all 5 criteria with the same building blocks (PyJWT in the v1.1.1 image, tool_pre_invoke, payload.headers, Ed25519, ahs over the same canonical JSON, 60 s TTL, 5 s leeway). Differences: m4-live pins typ and kid and rejects a duplicate header; echo there answers -32001 on rejection; aud = gateway URL instead of a connector id; no tool claim check; jti cache with expiry and lock. This branch adds a signed tool binding, sub-in-tenant, strict aud, tests + mutmut, and a failing run gate. No contradiction between the two.",
+  "ponytail_review": "reports/critic/M4-cycle-3.review.md",
+  "lean_lines": 0
+}

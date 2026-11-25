@@ -1,0 +1,12 @@
+diff --git a/src/sample_connector/tools.py b/src/sample_connector/tools.py
+index f9161b3..c86f8a5 100644
+--- a/src/sample_connector/tools.py
++++ b/src/sample_connector/tools.py
+@@ -66,6 +66,7 @@ class Connector:
+ 
+     def serves(self, tenant: str, connection: str, resource: str) -> bool:
+         """EFF-18 п.3: the execution token's tenant, connection and resource are this connector's."""
++        return True  # BROKEN: any tenant, connection and resource (EFF-18 п.3)
+         own = self.backend.connections.get(tenant)
+         return own == connection and resource in {rid(own, c) for c in self.backend.collections.get(tenant, {})}
+ 

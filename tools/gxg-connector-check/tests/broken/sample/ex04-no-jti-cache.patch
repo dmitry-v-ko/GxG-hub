@@ -1,0 +1,24 @@
+diff --git a/src/sample_connector/tools.py b/src/sample_connector/tools.py
+index f9161b3..ddc52e2 100644
+--- a/src/sample_connector/tools.py
++++ b/src/sample_connector/tools.py
+@@ -52,7 +52,7 @@ class Connector:
+         if not isinstance(self.grants, BundleStore):
+             raise TypeError("effects need the bundle store (platform registry, AS-06)")
+         self.approval = approval
+-        self.internal = effects.Internal(
++        internal = effects.Internal(
+             connector_id=self.connector_id,
+             tools=list(self._specs.values()),
+             grants=self.grants,
+@@ -62,7 +62,9 @@ class Connector:
+             serves=self.serves,
+             refresh=refresh,
+             logs=logs,
+-        ).app()
++        )
++        internal.tokens._jti.add = lambda *a, **k: True  # type: ignore[method-assign]  # BROKEN: no replay cache
++        self.internal = internal.app()
+ 
+     def serves(self, tenant: str, connection: str, resource: str) -> bool:
+         """EFF-18 п.3: the execution token's tenant, connection and resource are this connector's."""

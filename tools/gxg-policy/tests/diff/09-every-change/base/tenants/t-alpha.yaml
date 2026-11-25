@@ -1,0 +1,23 @@
+# Every change kind the diff knows, both ways (base -> head and head -> base are both goldens).
+tenant: t-alpha
+schema_version: 1
+connections:
+  - { id: kb-main, domain: kb, credential_ref: secret://t-alpha/kb/service }
+principals:
+  agents:
+    - id: agent:t-alpha:hermes
+    - id: agent:t-alpha:scout
+  humans:
+    - { id: "oidc:https://idp.example.invalid:1", roles: [viewer, approver] }
+    - { id: "oidc:https://idp.example.invalid:2", roles: [approver] }
+groups:
+  researchers: [agent:t-alpha:hermes]
+grants:
+  # Same pair in two grants: the later expiry wins (never > any date).
+  - { id: a1, subjects: [group:researchers], actions: [read], resources: [kb:kb-main/collection/a], expires_at: "2027-01-01T00:00:00Z" }
+  - { id: a2, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/a], expires_at: "2027-06-01T00:00:00Z" }
+  - { id: b1, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/b], expires_at: "2027-01-01T00:00:00Z" }
+  - { id: c1, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/c] }
+  - { id: d1, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/d], expires_at: "2027-01-01T00:00:00Z" }
+  - { id: d2, subjects: [agent:t-alpha:hermes], actions: [read], resources: [kb:kb-main/collection/d] }
+  - { id: e1, subjects: [agent:t-alpha:scout], actions: [read, collect], resources: [kb:kb-main/collection/e] }

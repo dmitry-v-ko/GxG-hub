@@ -1,0 +1,8 @@
+tenant: t-alpha
+schema_version: 1
+rules:
+  - id: two
+    match:
+      tools: [demo.message.propose]
+    decision: require_approval
+    approvers: ['oidc:https://idp.example.invalid:1']

@@ -9,6 +9,7 @@
 *.db
 data/
 secrets/
+!/tests/secrets/
 
 # Editor/OS/local artifacts
 .DS_Store
@@ -19,3 +20,12 @@ __pycache__/
 node_modules/
 dist/
 .venv/
+.hypothesis/
+.coverage
+coverage-kit.json
+
+# executor signing seeds on the host (approval/deploy/compose.yaml, AS-10)
+exec-keys/
+
+# mutmut working copies (scripts/ci/mutmut.sh at the root, DoD-4 runs inside packages)
+mutants/

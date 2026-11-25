@@ -1,0 +1,5 @@
+# t-lone has no groups: a group ref is dangling, not a crash.
+tenant: t-lone
+schema_version: 1
+rules:
+  - { id: r, match: { requesters: [group:any] }, decision: require_approval, approvers: [group:none] }

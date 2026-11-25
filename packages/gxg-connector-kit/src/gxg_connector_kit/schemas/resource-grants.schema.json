@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/resource-grants.schema.json",
+  "title": "GxG tenant resource grants v1",
+  "description": "Allow-only resource grants for one tenant. See docs/specs/resource-grants-v1.md. Cross-reference checks (dangling subjects, connection/domain match) are done by lint, not by this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenant", "schema_version", "connections", "principals", "grants"],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"},
+    "principal_id": {"type": "string", "minLength": 3, "maxLength": 256, "pattern": "^(agent|oidc):\\S+$"},
+    "rid": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^[a-z][a-z0-9_]*:[a-z0-9][a-z0-9_-]*/[a-z][a-z0-9_]*/([^/*\\s]+|\\*)$"
+    }
+  },
+  "properties": {
+    "tenant": {"$ref": "#/$defs/id"},
+    "schema_version": {"const": 1},
+    "connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "domain", "credential_ref"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "domain": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "credential_ref": {"type": "string", "pattern": "^secret://\\S+$"}
+        }
+      }
+    },
+    "principals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id"],
+            "properties": {"id": {"$ref": "#/$defs/principal_id", "pattern": "^agent:"}}
+          }
+        },
+        "humans": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "roles"],
+            "properties": {
+              "id": {"$ref": "#/$defs/principal_id", "pattern": "^oidc:"},
+              "roles": {"type": "array", "uniqueItems": true, "minItems": 1,
+                        "items": {"enum": ["approver", "viewer", "tenant_admin"]}}
+            }
+          }
+        }
+      }
+    },
+    "groups": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/id"},
+      "additionalProperties": {
+        "type": "array", "uniqueItems": true, "minItems": 1,
+        "items": {"$ref": "#/$defs/principal_id"}
+      }
+    },
+    "grants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "subjects", "actions", "resources"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "subjects": {
+            "type": "array", "minItems": 1, "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^(agent:\\S+|group:[a-z0-9][a-z0-9_-]*)$"}
+          },
+          "actions": {
+            "type": "array", "minItems": 1, "uniqueItems": true,
+            "items": {"enum": ["read", "collect", "write", "propose"]}
+          },
+          "resources": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/rid"}},
+          "expires_at": {"type": "string", "format": "date-time"},
+          "reason": {"type": "string", "maxLength": 500}
+        }
+      }
+    }
+  }
+}

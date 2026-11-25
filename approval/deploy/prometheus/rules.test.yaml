@@ -1,0 +1,124 @@
+# promtool unit tests of rules.yaml (AC-M10-05: «искусственный outcome_unknown старше 1 ч поднимает alert»).
+rule_files: [rules.yaml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'gxg_intents_outcome_unknown{tenant="t-alpha"}'
+        values: '1x90'
+      - series: 'gxg_intents_outcome_unknown{tenant="t-beta"}'
+        values: '0x90'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: GxgOutcomeUnknownOverAnHour
+        exp_alerts: []
+      - eval_time: 65m
+        alertname: GxgOutcomeUnknownOverAnHour
+        exp_alerts:
+          - exp_labels: {severity: critical, tenant: t-alpha}
+            exp_annotations:
+              summary: "tenant t-alpha: intents in outcome_unknown for more than 1 h (runbook: outcome_unknown)"
+  - interval: 1m  # critic M10-1 #1: a reconcile does not lower the counter, so no alert after it
+    input_series:
+      - series: 'gxg_executions_total{tenant="t-alpha",tool="demo.message.propose",outcome="outcome_unknown"}'
+        values: '1x180'
+      - series: 'gxg_executions_total{tenant="t-alpha",tool="demo.message.propose",outcome="reconciled_executed"}'
+        values: '_x90 1x90'
+      - series: 'gxg_execute_deferred_total{tenant="t-alpha",tool="demo.message.propose"}'
+        values: '0 0 1 2 2'
+      - series: 'gxg_intents_expired_after_rate_limit{tenant="t-alpha"}'
+        values: '0 0 1 1 _ _'
+    alert_rule_test:
+      - eval_time: 150m
+        alertname: GxgOutcomeUnknownGrowing
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: GxgExecuteDeferred
+        exp_alerts:
+          - exp_labels: {severity: warning, tenant: t-alpha, tool: demo.message.propose}
+            exp_annotations:
+              summary: "t-alpha/demo.message.propose: execute deferred by 429 rate_limited (T12b, AS-12a)"
+      - eval_time: 3m
+        alertname: GxgExpiredAfterRateLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, tenant: t-alpha}
+            exp_annotations:
+              summary: "tenant t-alpha: approved intents expired while the connector answered 429"
+      - eval_time: 10m
+        alertname: GxgExpiredAfterRateLimit
+        exp_alerts: []  # the series leaves an hour after the expiry (gxg_metrics window): the alert clears
+  - interval: 1m
+    input_series:
+      - series: 'gxg_intents_pending{tenant="t-alpha"}'
+        values: '81x20'
+      - series: 'gxg_intents_pending_limit{tenant="t-alpha"}'
+        values: '100x20'
+      - series: 'gxg_intents_pending{tenant="t-beta"}'
+        values: '80x20'
+      - series: 'gxg_intents_pending_limit{tenant="t-beta"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: GxgPendingNearTenantLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, tenant: t-alpha}
+            exp_annotations:
+              summary: "tenant t-alpha: pending intents above 80 % of pending_per_tenant_max"
+  - interval: 1m
+    input_series:
+      - series: 'gxg_switch_blocked{scope="global"}'
+        values: '_x5 1x20'
+      - series: 'gxg_admin_actions_total{action="admin_switch_set"}'
+        values: '_x5 1x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: GxgSwitchChanged
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: GxgSwitchChanged
+        exp_alerts:
+          - exp_labels: {severity: critical, scope: global}
+            exp_annotations: {summary: "kill switch global changed"}
+      - eval_time: 7m
+        alertname: GxgAdminAction
+        exp_alerts:
+          - exp_labels: {severity: warning, action: admin_switch_set}
+            exp_annotations: {summary: "admin action admin_switch_set (audit_events)"}
+      - eval_time: 25m
+        alertname: GxgSwitchChanged
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: 'gxg_bundle_age_seconds'
+        values: '46700+60x30'
+      - series: 'gxg_webhook_dead{subscriber="signals-alpha"}'
+        values: '0x10 1x10'
+      - series: 'gxg_quota_rejections_total{tenant="t-alpha",requester="agent:t-alpha:bot"}'
+        values: '0 1 2 3 4 5 5 5'
+      - series: 'gxg_executions_total{tenant="t-alpha",tool="demo.message.propose",outcome="outcome_unknown"}'
+        values: '0 0 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: GxgBundleStale
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: GxgBundleStale
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: "grants bundle older than 13 h or not loaded (missed re-signing)"}
+      - eval_time: 12m
+        alertname: GxgWebhookDead
+        exp_alerts:
+          - exp_labels: {severity: warning, subscriber: signals-alpha}
+            exp_annotations: {summary: "webhook signals-alpha: an event was given up after 24 h (AS-23)"}
+      - eval_time: 5m
+        alertname: GxgQuotaRepeated
+        exp_alerts:
+          - exp_labels: {severity: warning, tenant: t-alpha, requester: "agent:t-alpha:bot"}
+            exp_annotations:
+              summary: "agent:t-alpha:bot: more than 3 quota rejections in an hour (AP-07: a loop or prompt injection?)"
+      - eval_time: 3m
+        alertname: GxgOutcomeUnknownGrowing
+        exp_alerts:
+          - exp_labels: {severity: warning, tenant: t-alpha, tool: demo.message.propose, outcome: outcome_unknown}
+            exp_annotations: {summary: "t-alpha/demo.message.propose: new outcome_unknown executions"}

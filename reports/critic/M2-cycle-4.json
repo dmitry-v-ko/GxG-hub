@@ -1,0 +1,54 @@
+{
+  "milestone": "M2",
+  "branch": "claude/m2-policy-tooling",
+  "commit": "dd0beb1020c40af51567ccf8dd2d53e345fd97ef",
+  "cycle": 4,
+  "reviewed_at": "2026-11-21",
+  "score": 8.0,
+  "caps_applied": ["major"],
+  "dimensions": {"spec": 2.5, "tests": 1.5, "security": 1.5, "code": 1.5, "ops": 1, "evidence": 0.5},
+  "acceptance": [
+    {"id": "AC-M2-01", "status": "passed", "evidence": "Clean clone dd0beb1, empty UV_CACHE_DIR, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1: `validate policies/` -> 0 error(s), exit 0; `lint policies/` -> exit 0, 2 warnings (unknown-tool telegram.message.propose, unknown-tenant t-beta). CI run 44889079000 job policy: success."},
+    {"id": "AC-M2-02", "status": "passed", "evidence": "CLI `lint bad/<case>/policies [--manifest manifest.yaml]`: 20/20 exit 1 with `error: <file>: <path>: [<code>]`, e.g. 06: `approval/t-alpha.yaml: rules[0].match.tools[0]: [auto-approve-high-risk] demo.wire.propose is high_risk (AP-02)`."},
+    {"id": "AC-M2-03", "status": "passed", "evidence": "CLI `diff base head` (10: with --base-connectors/--head-connectors) equals expected.json for 10/10 pairs."},
+    {"id": "AC-M2-04", "status": "partial", "evidence": "Automated: tests/ci pass (gate from main: PR with grants_widening.sh=`exit 0` + widening -> red, gate-path edit -> red, unrelated -> green, manifest weakening -> red, plus the cycle 2-3 cases); mutate_m2.py 24/24 killed; mutmut widening_gate.py 557/581, 24 equivalent. CI run 44889079000 (push): grants-widening red by design (bootstrap, 225 widening). Open: two manifest paths stay green without the label (findings 1, 2; reproduced). ci.yml rewrite = owner-accepted risk (8f6754e), documented accurately. Real-PR checklist: owner, manual."},
+    {"id": "AC-M2-05", "status": "passed", "evidence": "Two `build policies/` runs in separate processes (PYTHONHASHSEED 1 and 7, built_at 10:12:49Z / 10:12:51Z): JSON equal after removing built_at; bundle_smoke.sh cmp OK in check-all."},
+    {"id": "AC-M2-06", "status": "passed", "evidence": "`verify` on a fresh build -> `ok: bundle_version=dd0beb1...`, exit 0; one bit flipped at byte 200 -> `bundle rejected: bad signature`, exit 1."}
+  ],
+  "findings": [
+    {"severity": "major", "ref": "GR-10, AS-26, AP-01, AP-02",
+     "where": "tools/gxg-policy/src/gxg_policy/lint.py:59-65; diff.py:211-212; bundle.py:76-77",
+     "problem": "duplicate-tool only compares a manifest with earlier manifests, not names inside the same file; diff keys tools by (connector, name), last entry wins; the bundle copies every entry, AS-26 looks up by (iss, tool_key, tool_version). Reproduced on fixture 10 base: insert `demo.message.propose` version 2.0.0 write_reversible before the existing 1.0.0 external_effect -> lint 0 errors, diff 0 widening / 0 narrowing (gate green, no label), build signs both entries; a call at version 2.0.0 -> write_reversible -> AP-01 not_required (effect without a human). Variant: high_risk first, external_effect last + auto_approve on the name -> lint 0 errors (AP-02 unchecked). Latent until the first manifest lands (M3); scored major like cycle-3 finding 2, would be critical with a manifest in the repo.",
+     "required_improvement": "load_manifests: a tool name repeated inside one manifest is a `duplicate-tool` error too (add names to `seen` while iterating; diff._load then fails closed via pol.errors). Test in lint and diff for a duplicate inside one manifest."},
+    {"severity": "major", "ref": "GR-10, approval-policy-v1 «Lint в CI», AP-01",
+     "where": "tools/gxg-policy/src/gxg_policy/diff.py:220-225",
+     "problem": "effect_class_raised is always narrowing, but rules may match by match.effect_classes. Reproduced: same approval policy in base and head with `{match: {effect_classes: [external_effect]}, decision: deny}`; head manifest raises demo.message.propose external_effect -> high_risk -> lint 0 errors, diff widening [] / narrowing [effect_class_raised], gate green without label. Before: denied; after: one approver. Same for a class-matched require_approval with approvals: 2. The spec counts removed deny/require_approval as widening.",
+     "required_improvement": "Every effect_class change counts as widening (both directions); update 10-manifest-tools expected*.json; one diff test with a class-matched deny rule."}
+  ],
+  "required_improvements": [
+    "Finding 1: duplicate tool names inside one manifest are a lint error (and so fail the diff closed); tests in lint and diff.",
+    "Finding 2: any effect_class change in a manifest is widening; golden reports updated; test with a class-matched deny rule.",
+    "Re-run pytest, scripts/ci/mutmut.sh, mutate_m2.py, update reports/conformance/M2.json. With both done and no new problems the score is >= 9; AC-M2-04 then waits only on the owner's manual real-PR checklist."
+  ],
+  "ponytail_review": "reports/critic/M2-cycle-4.review.md",
+  "lean_lines": 0,
+  "existing_solutions": [
+    {"component": "gate code from main (git worktree of refs/remotes/origin/main + uv run --locked --project)", "alternative": "pull_request_target (pwn-request pattern, base is the PR base, not main); org ruleset required workflow (platform, not available on this plan); actions/checkout ref: main (an extra step for the same ref)", "verdict": "use_existing"},
+    {"component": "changed gate paths", "alternative": "dorny/paths-filter, tj-actions/changed-files (third-party actions; the latter compromised in 2025) vs `git diff --name-only` (used)", "verdict": "use_existing"},
+    {"component": "manifest tools diff (_Diff.tools)", "alternative": "none: GR-11a/AS-26 projection is project-specific; manifests loaded by existing load_manifests (jsonschema)", "verdict": "justified_custom"},
+    {"component": "duplicate tool name check", "alternative": "JSON Schema uniqueItems compares whole objects, not one key; a set check is the right rung (must also cover one file, finding 1)", "verdict": "justified_custom"},
+    {"component": "gate paths as widening entries (with_gate_paths)", "alternative": "none: reuses the existing label logic, 8 lines", "verdict": "justified_custom"},
+    {"component": "mutation testing of gxg_policy and widening_gate.py", "alternative": "mutmut 3.8.1 (used, DoD-4)", "verdict": "use_existing"},
+    {"component": "scripts/ci/mutmut.sh (equivalent allow-list, fail on survivors)", "alternative": "mutmut alone exits 0 with survivors and has no allow-list", "verdict": "justified_custom"},
+    {"component": "scripts/ci/mutate_m2.py (24 bash/YAML mutations)", "alternative": "no maintained mutation tool for shell or GitHub Actions YAML", "verdict": "justified_custom"},
+    {"component": "unchanged components (JCS, Ed25519, jsonschema checks, RFC 3339, merge-base, head arrival)", "alternative": "see M2-cycle-3.json existing_solutions", "verdict": "justified_custom"}
+  ],
+  "notes": [
+    "Re-run: clean clone of dd0beb1, empty UV_CACHE_DIR, UV_PYTHON=3.12 (3.12.3), UV_LOCKED=1, uv 0.11.32: check-all OK (pytest 304 passed, 0 skipped); mutate_m2.py 24/24 killed; scripts/ci/mutmut.sh exit 0 (gxg_policy 2556/2592 killed, gate 557/581, 60 survivors all listed; new equivalents _Diff.tools 39 and 54 confirmed equivalent).",
+    "CI on dd0beb1: run 44889079000 (push): lint, types, tests, schema-guard, secrets, policy success; grants-widening and ci-ok red by design (outside a PR, bootstrap); bundle skipped. Matches M2.json. DoD-1 (main via PR) pending.",
+    "Closed from cycle 3: major 1 (gate and gxg-policy from main, gate paths need the label; uv with --project ignores uv.toml/.python-version in the PR cwd, tested), major 2 for the four listed manifest changes, minors 3 (across manifests), 4 (checklist steps 12-13), 5 (registry tools deleted).",
+    "Accepted risk (owner 2026-11-21, commit 8f6754e): a PR editing .github/workflows/ can disable the gate; described accurately in docs/setup/widening-approval.md and M2.json; not a finding. Bootstrap (PR copy while main has no gate) applies only to the M2 PR itself, which edits .github/workflows/ and so falls under the same owner review.",
+    "Score did not rise vs cycle 3 (8.0 -> 8.0); per plan limits (cycle 4 is the last) the orchestrator escalates to the owner. Both findings are small (about 3 lines of code plus fixtures).",
+    "Not checked: how the future Approval Service (M7) picks among same-name bundle entries (finding 1 relies on AS-26 keying by version); the real-PR checklist (owner)."
+  ]
+}

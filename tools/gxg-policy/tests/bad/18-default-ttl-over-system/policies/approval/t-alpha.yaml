@@ -1,0 +1,9 @@
+tenant: t-alpha
+schema_version: 1
+defaults:
+  execution_window: 2h
+rules:
+  - id: r
+    match:
+      tools: [demo.message.propose]
+    decision: deny

@@ -1,0 +1,90 @@
+{
+  "milestone": "M0",
+  "branch": "claude/m0-foundation",
+  "commit": "f5cf832eda2c190089c02dfb0de3be154ac7ade8",
+  "cycle": 1,
+  "reviewed_at": "2026-11-20",
+  "score": 5.0,
+  "caps_applied": ["ac_failed", "dod", "critical", "major"],
+  "dimensions": {"spec": 2, "tests": 1.5, "security": 1, "code": 1.5, "ops": 0.5, "evidence": 0.5},
+  "acceptance": [
+    {
+      "id": "AC-M0-01",
+      "status": "passed",
+      "evidence": "Чистый `git clone` + checkout f5cf832, пустой UV_CACHE_DIR: `uv sync` (38 пакетов из PyPI) && `uv run pytest` -> 52 passed, 73 subtests passed, 0 skipped (Python 3.13). Повтор с UV_PYTHON=3.12 UV_LOCKED=1 через scripts/ci/check-all.sh (Python 3.12.3) -> `check-all: OK`. На GitHub: run 44782447651 (push 9d34699) — все 6 jobs success, включая ci-ok."
+    },
+    {
+      "id": "AC-M0-02",
+      "status": "passed",
+      "evidence": "Удаление `required` из effect-intent без правки lock -> 3 failed; то же с `schema_lock.py --write` -> всё равно красный (test_every_object_schema_has_top_level_required). additionalProperties:true в effect-intent + --write -> красный (test_envelopes). prove_schema_guard.py: 51/51 caught. Пример из AC выполнен, но см. major-замечание: удаление `idempotency_key` из required + `--write` даёт зелёный CI."
+    },
+    {
+      "id": "AC-M0-03",
+      "status": "manual_pending",
+      "evidence": "Ожидаемо не настроено. Инструкция docs/setup/branch-protection.md неточна для этого репозитория: он private на личном аккаунте, единственный collaborator — dmitry-v-ko (admin), PR #1 создан им же. См. major-замечание."
+    },
+    {
+      "id": "AC-M0-04",
+      "status": "failed",
+      "evidence": "Ловятся: probe.pem, .env, .env.local, строка-заголовок в начале строки, заголовок+тело через \\n. НЕ ловятся (check_secrets.py --tree HEAD -> exit 0): файл `a.txt` с `KEY=\"<PEM-заголовок BEGIN PRIVATE KEY>MIIEvQIBADANBgkq…\"` (настоящий ключ в одну строку), `c.txt` с `PRIVATE_KEY=<PEM-заголовок BEGIN PRIVATE KEY>`, `d.py` с `k = '<PEM-заголовок BEGIN PRIVATE KEY>'`, файлы `KEY.PEM`, `server.Pem`, `.ENV`. В AC прямо названа строка `<PEM-заголовок BEGIN PRIVATE KEY>`, а сканер принимает файлы, которые её содержат. Исполнитель сам сузил критерий («заголовок в прозе — не ключ»), хотя процесс запрещает менять критерии молча."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "critical",
+      "ref": "AC-M0-04, SEC (секреты не в коде)",
+      "where": "scripts/ci/check_secrets.py:51-56 (_PEM_LINE_START/_PEM_WITH_BODY), :70-77 (fnmatchcase)",
+      "problem": "Настоящий приватный ключ проходит CI в двух распространённых видах: (1) заголовок не в начале строки и без перевода строки перед телом (`KEY=\"<PEM-заголовок BEGIN PRIVATE KEY>MIIE…\"`, `PRIVATE_KEY=<PEM-заголовок>`); (2) имя в другом регистре (`KEY.PEM`, `.ENV`). Возможна утечка секрета, AC-M0-04 не выполнен буквально.",
+      "required_improvement": "Срабатывать на любое вхождение PEM-заголовка BEGIN … PRIVATE KEY (regex по всему файлу) в любом месте файла. Исключения задать явным списком путей в скрипте (например, docs/implementation-plan-v1.md) с тестом, что вне списка тот же текст ловится. Шаблоны имён проверять без учёта регистра. Добавить в tests/ci/test_check_secrets.py кейсы: inline-ключ после `KEY=`, `KEY = '…'` в .py, `KEY.PEM`, `.ENV`, `Server.Key`."
+    },
+    {
+      "severity": "major",
+      "ref": "DoD-5",
+      "where": "conftest.py:48-56 (pytest_runtest_logreport) и pyproject.toml xfail_strict",
+      "problem": "Политика «ни одного skip/xfail» дырявая. Зелёный прогон (rc=0) дают: `pytest.skip(..., allow_module_level=True)`, `pytest.importorskip(\"no_such_mod\")` на уровне модуля (skip на этапе сбора не проходит через pytest_runtest_logreport) и `@pytest.mark.xfail(strict=False)` у проходящего теста (XPASS). importorskip — частый приём для опциональных зависимостей (fastmcp в M1/M3), так что дыра реальная. tests/ci/test_pytest_policy.py проверяет только 3 случая на этапе runtest.",
+      "required_improvement": "Перехватывать и pytest_collectreport (report.skipped), и XPASS/xfail в любом виде (report.wasxfail или outcome 'xpassed'), чтобы после них exitstatus был ≠ 0. Добавить в test_pytest_policy.py параметры: module-level skip, importorskip, xfail(strict=False) с проходом, unittest.skip, skipif(True)."
+    },
+    {
+      "severity": "major",
+      "ref": "AC-M0-02, EFF (идемпотентность), README спек «если схема и текст расходятся — добавляется тест»",
+      "where": "tests/contract/test_schema_lock.py (HINT), scripts/ci/schema_lock.py --write",
+      "problem": "Lock ловит изменения, а не поломки. Если удалить `idempotency_key` из required в effect-intent.schema.json и запустить `schema_lock.py --write` (это советует сообщение об ошибке), то pytest даёт 52 passed, а весь CI зелёный. Требование идемпотентности защищено только тем, что ревьюер заметит строку в lock. Будущие исполнители-агенты на красном CI будут механически запускать --write. Нет CODEOWNERS и требования ревью владельцем кода для schemas/ и lock.",
+      "required_improvement": "Добавить независимые от lock семантические тесты на security-критичные поля из спек: effect-intent без idempotency_key/canonical_args_hash/tenant_id/expires_at отклоняется; execution-token без jti/aud/exp отклоняется; со ссылками на ID требований. Добавить .github/CODEOWNERS для schemas/, tests/contract/ и scripts/ci/. В branch-protection.md включить «Require review from Code Owners». Переписать HINT: он должен требовать сначала изменить спеку, а не предлагать запустить --write."
+    },
+    {
+      "severity": "major",
+      "ref": "AC-M0-03",
+      "where": "docs/setup/branch-protection.md",
+      "problem": "Инструкция не учитывает реальный репозиторий. (1) dmitry-v-ko/GxG-hub — private на личном аккаунте. На GitHub Free rulesets и branch protection для private-репозиториев не применяются, нужен Pro, иначе GitHub показывает предложение апгрейда. (2) Единственный collaborator — dmitry-v-ko, и PR создаются от его имени (PR #1). Автор не может одобрить свой PR, поэтому «Required approvals: 1» + пустой bypass + «approval of the most recent push» не дадут смержить ни один PR. Шаги, выполненные буквально, либо ничего не защитят, либо заблокируют все мержи.",
+      "required_improvement": "Добавить раздел «Предусловия»: план (Pro, публичный репозиторий или организация на Team), кто второй ревьюер (collaborator) или под чьей учётной записью Claude создаёт PR, чтобы владелец мог их одобрять. Описать, что делать при единственном мейнтейнере, и не оставлять скрытую блокировку. В проверке попыткой явно указать ожидаемые тексты UI/ошибок и проверить, что `gh pr merge --admin` тоже отклоняется."
+    },
+    {
+      "severity": "minor",
+      "ref": "CI",
+      "where": ".github/workflows/ci.yml secrets job (push branch)",
+      "problem": "При force-push `github.event.before` отсутствует в клоне, `git rev-list` падает -> exit 2 -> красный CI без находки. Это fail closed, но сбивает с толку. Кроме того, `cancel-in-progress` отменяет прогоны в `main`, а у ci-ok нет timeout-minutes.",
+      "required_improvement": "Если `before` недостижим, сканировать `origin/main..HEAD` с понятным сообщением. Отключить cancel-in-progress для refs/heads/main."
+    },
+    {
+      "severity": "minor",
+      "ref": "mcp-toolkit-v1 (lockfile каждого коннектора)",
+      "where": "connectors/demo/pyproject.toml, connectors/demo/uv.lock",
+      "problem": "В собственном lock у demo нет dev-зависимостей (pytest). `uv run pytest` внутри connectors/demo не работает автономно, тесты зависят от корневого conftest.",
+      "required_improvement": "Добавить в demo dependency-group dev с pytest или явно описать в README, что тесты коннектора запускаются из корня."
+    },
+    {
+      "severity": "minor",
+      "ref": "DoD-3",
+      "where": "reports/conformance/M0.json",
+      "problem": "Отчёт утверждает, что CI ещё не запускался, и DoD-1 = not_run. На самом деле run 44782447651 зелёный. Нет ID этого прогона. Локальный прогон указан на Python 3.13, хотя целевая версия — 3.12.",
+      "required_improvement": "Добавить ссылку и ID CI-прогона на проверяемом commit и результат локального прогона на Python 3.12."
+    }
+  ],
+  "required_improvements": [
+    "AC-M0-04: сканер ловит любое вхождение PEM-заголовка BEGIN … PRIVATE KEY (inline, после `KEY=`, в кавычках), исключения — только явный allowlist путей; имена `*.pem`/`*.key`/`.env*` — без учёта регистра; тесты на каждый из этих случаев, включая KEY.PEM, .ENV и inline-ключ.",
+    "DoD-5: conftest переводит в красный прогон skip на этапе сбора (module-level skip, importorskip) и любой xfail/XPASS, включая strict=False; test_pytest_policy.py покрывает эти случаи плюс unittest.skip и skipif.",
+    "AC-M0-02: семантические негативные тесты security-критичных required-полей (effect-intent: idempotency_key, canonical_args_hash, tenant_id, expires_at; execution-token: jti, aud, exp, ahs), независимые от schema-lock.json и со ссылками на ID требований. HINT больше не советует --write как первое действие. CODEOWNERS для schemas/, tests/contract/, scripts/ci/.",
+    "AC-M0-03: в docs/setup/branch-protection.md раздел предусловий (план GitHub для private-репозитория на личном аккаунте; второй ревьюер или автор PR не владелец; как не заблокировать все мержи при одном мейнтейнере), шаг «Require review from Code Owners», проверка `gh pr merge --admin`.",
+    "Обновить reports/conformance/M0.json: ID зелёного CI-прогона на новом commit, прогон на Python 3.12, новые тесты в списке."
+  ]
+}

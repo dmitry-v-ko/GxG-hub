@@ -1,0 +1,57 @@
+# Findings in commits already pushed to claude/m0-foundation, whose history must not be rewritten.
+# Format: commit:path:rule:line. Only that rule on that line of that commit is ignored; any other
+# finding in the same file, and the same text in any other commit, is reported.
+#
+# M0 cycle-1 conformance report and critic report quote AC-M0-04 in prose; no key material
+# (the two (path, blob) pairs of the former scripts/ci/check_secrets.py).
+9d346993626d3562552164c2828fc947ac6bf841:reports/conformance/M0.json:gxg-private-key-header:53
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:gxg-private-key-header:29
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:gxg-private-key-header:37
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:private-key:29
+3182606657b6afe1c4a927eb6c73aa080cff4a09:reports/critic/M0-cycle-1.json:private-key:37
+# Default generic-api-key rule: the type name `Ed25519PrivateKey` in a signature, and the fake
+# 32-character key body constant of the deleted scanner tests. Neither is a secret.
+52874f53b81f64889122d13e7d53973fe390d761:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:76
+# The same `Ed25519PrivateKey` annotation after M1 moved it (line 81/83) and in the -m diffs of the
+# claude/integration merges of M1/M4; the tree no longer has it (parameter renamed at the M0.1 integration).
+4a5dd9f97723fe0fe3770a2c46adb8bb3428a841:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:81
+fe7441daa7bf3d044d1745919ec456b9e83c6c8b:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:83
+98287f6b1bf77a16d9fc6c2ffa09b7e69ee4df41:packages/gxg-connector-kit/tests/kit_testing.py:generic-api-key:83
+f5cf832eda2c190089c02dfb0de3be154ac7ade8:tests/ci/test_check_secrets.py:generic-api-key:21
+# The same fake key body constant (line 23 after M0 cycle 3), reported in the -m diffs of the
+# claude/integration merge commits that brought in M1/M4 before M0.1 deleted the file.
+98287f6b1bf77a16d9fc6c2ffa09b7e69ee4df41:tests/ci/test_check_secrets.py:generic-api-key:23
+e7d245f8e2ef7d2a6bf52828e13b970a91cad980:tests/ci/test_check_secrets.py:generic-api-key:23
+# The first push of reports/integration/2026-11-21.md quoted that annotation verbatim (reworded since).
+4756ad3a0b3dd255bca36cdc1bcec5a346c78e69:reports/integration/2026-11-21.md:generic-api-key:27
+4756ad3a0b3dd255bca36cdc1bcec5a346c78e69:reports/integration/2026-11-21.md:generic-api-key:29
+# M7: the same `Ed25519PrivateKey` annotation of test parameters (`ci_key`, `key`) in the first push of
+# approval/tests_db/conftest.py; renamed to `ci_signer`/`signer` in the next commit. No key material.
+43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:185
+43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:244
+43d8a823f08ea70e1980f105263586b659315c86:approval/tests_db/conftest.py:generic-api-key:252
+# The same fake key body constant (line 23) in the trees of base commits that only pulled docs from
+# claude/admiring-planck-vzys0x; reported when the scan sees them as added (critic M8 cycle 2, finding 8).
+c10fd9bac6d4c56e3350c7b3b7dfd161dba097e5:tests/ci/test_check_secrets.py:generic-api-key:23
+8128deef0fc4e65a594fbd2c9dc8236ffda29711:tests/ci/test_check_secrets.py:generic-api-key:23
+
+# M1.1 (claude/m1.1-toolkit, pushed): typed fields of Ed25519 signing keys generated in tests
+# (dataclass fields named *_key holding generated private keys); renamed to *_signer since; the first
+# version of this comment quoted such a line, hence the .gitleaksignore entry.
+a3e13a0852e4e37a00705cb50fdfb4bfa4dbf940:packages/gxg-connector-kit/tests/test_effects.py:generic-api-key:76
+a3e13a0852e4e37a00705cb50fdfb4bfa4dbf940:packages/gxg-connector-kit/tests/test_mcp.py:generic-api-key:138
+ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/checks.py:generic-api-key:334
+ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/plugin.py:generic-api-key:132
+ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/plugin.py:generic-api-key:80
+ed2c77e8992fa3d665576dd999a2b6d179b3672c:tools/gxg-connector-check/src/gxg_connector_check/plugin.py:generic-api-key:83
+cd932b20fb7e695a52a3539d0f1a70b06276a358:.gitleaksignore:generic-api-key:35
+# M14: test code, not secrets: a parameter annotation (`key`, type `Ed25519PrivateKey | None`) (M13 commit) and a loop over variable names (audit test, since rewritten)
+ed5c18b3ed7c8bebe5226274683f82c60618fc80:approval/tests/test_mcp_identity.py:generic-api-key:46
+f74ca36b1fcb48e1e1a0f4df755e04f0d07b2f33:tests/deploy/test_railway_audit.py:generic-api-key:117
+# M14 stage F: the same annotation of test code (parameter named key, type Ed25519PrivateKey) quoted in docs, and the
+# test line itself in a commit merged from another branch; none is a secret (the tree line was rephrased in c5acfd0)
+15b96f5ca31c7a24a35381ac633d2459cc59e268:.gitleaksignore:generic-api-key:48
+49eeb8b58b6017a89a491c7706390da187d6d41e:.gitleaksignore:generic-api-key:48
+99f047dec27a27e8d779acc61c30c7fe4ec71292:approval/tests/test_mcp_identity.py:generic-api-key:46
+15b96f5ca31c7a24a35381ac633d2459cc59e268:reports/M14-prep.md:generic-api-key:97
+49eeb8b58b6017a89a491c7706390da187d6d41e:reports/M14-prep.md:generic-api-key:97

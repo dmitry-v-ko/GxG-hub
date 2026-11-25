@@ -1,0 +1,59 @@
+[project]
+name = "gxg-approval"
+version = "0.0.0"
+description = "GxG Hub Approval Service: api, mcp, sweeper (M7); executor, ui, notifier follow (M8, M9)."
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.14,<2",
+    "fastapi>=0.115,<1",
+    "fastmcp>=2.12,<5",  # integration: connectors/demo pins 4.1.8 (one fastmcp in the root workspace)
+    "gxg-connector-kit",
+    "httpx>=0.27,<1",  # executor, mcp, operator CLI
+    "jsonschema>=4.23,<5",
+    "psycopg-pool>=3.2,<4",
+    "PyJWT>=2.9,<3",  # admin (operator OIDC token, JWKS)
+    "psycopg[binary]>=3.2,<4",
+    "prometheus-client>=0.21,<1",
+    "pynacl>=1.5,<2",
+    "uvicorn>=0.32,<1",
+    "webauthn>=2.7,<3",  # decider (AS-30); the same range as the M9 ui had
+]
+
+[project.scripts]
+gxg-approval = "gxg_approval.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "gxg_approval"
+
+[tool.uv.sources]
+gxg-connector-kit = { workspace = true }
+
+# DoD-4: from this directory, with a PostgreSQL for all mutants (scripts/ci/mutmut.sh starts one):
+#   GXG_TEST_PG_SOCKET_DIR=<dir> uv run mutmut run && uv run mutmut results
+# Key conditions of M7: policy engine, transition table, quotas, T1 checks. M8: executor, key rotation.
+# M10: decider (AS-30), admin (AS-24), metrics, sweeper purge.
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = [
+    "src/gxg_approval/policy.py",
+    "src/gxg_approval/transitions.py",
+    "src/gxg_approval/quotas.py",
+    "src/gxg_approval/intents.py",
+    "src/gxg_approval/api.py",
+    "src/gxg_approval/mcp.py",
+    "src/gxg_approval/executor.py",
+    "src/gxg_approval/keys.py",
+    "src/gxg_approval/decider.py",
+    "src/gxg_approval/admin.py",
+    "src/gxg_approval/metrics.py",
+    "src/gxg_approval/sweeper.py",
+]
+also_copy = ["tests_db/"]
+pytest_add_cli_args_test_selection = ["tests", "tests_db"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
+# Each mutant's session creates and migrates a database (not in the measured test durations).
+timeout_constant = 60.0

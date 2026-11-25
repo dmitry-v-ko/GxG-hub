@@ -1,0 +1,42 @@
+# Copy of gxg-kb-service gxg-manifest.yaml (claude/m6-kb-service@7b44452) for the registry of the grants bundle (AS-26); search-result schema from this repository.
+# Manifest of the KB service (M6, ADR-0006, MCC-01). Read tools only; kb.documents.create/update later (propose).
+connector: kb
+version: 0.1.0
+contract: gxg-mcp-connector/v1
+tools:
+  - name: kb.documents.search
+    version: 1.0.0
+    title: "Поиск документов KB"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: list }
+    input_schema: schemas/documents-search.input.json
+    output_schema: ../../../../schemas/search-result.schema.json
+    limits: { max_results: 50, timeout_s: 15 }
+  - name: kb.documents.get
+    version: 1.0.0
+    title: "Документ KB"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: single, from_arg: document_id, resolve: backend }
+    input_schema: schemas/document-get.input.json
+    output_schema: schemas/document-get.output.json
+    limits: { timeout_s: 10 }
+  - name: kb.context.get
+    version: 1.0.0
+    title: "Контекст из KB"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: list }
+    input_schema: schemas/context-get.input.json
+    output_schema: schemas/context-get.output.json
+    limits: { timeout_s: 15 }  # bounded by max_documents and the output schema's maxItems
+  - name: kb.collections.list
+    version: 1.0.0
+    title: "Коллекции KB (оператор)"
+    effect_class: read
+    action: read
+    resource: { type: collection, scope: list }
+    input_schema: schemas/collections-list.input.json
+    output_schema: schemas/collections-list.output.json
+    limits: { timeout_s: 10 }  # bounded by the output schema's maxItems (200)

@@ -1,91 +1,82 @@
 # GxG Hub
 
-**GxG Hub** — минимальная мультиагентная платформа: [IBM ContextForge](https://github.com/IBM/mcp-context-forge) как внешний MCP Gateway и отдельные предметные MCP-коннекторы. Никакого форка ContextForge и переписывания существующих сервисов GxG Agents V2.
+**GxG Hub** — мультиарендная MCP-платформа доступа агентов к возможностям: KB, Telegram, Signals, CRM, внешние API. Шлюзом служит [IBM ContextForge](https://github.com/IBM/mcp-context-forge) как внешняя зависимость без форка. К нему подключаются самостоятельные доменные MCP-коннекторы. Эффекты агент только предлагает, а исполняет отдельный Effect Executor после согласования человеком.
 
-> **Статус:** стартовый каркас / локальный proof of concept, **не production**. Никакие клиентские данные или аккаунты пока не подключены.
+> **Статус:** пилот на Railway (M13: один tenant, Telegram, Apify, KB через ContextForge; эффекты только через propose → approve → execute). **Не production** до решения владельца по M14 (AC-M14-07).
 >
 > **Контекст всей системы:** [отдельная папка системной архитектуры](system-architecture/README.md) — место GxG Hub среди других компонентов и границы ответственности. Здесь описывается только самостоятельный сервис GxG Hub.
 
-## Зачем
+Зачем и что строим: [intent.md](intent.md). Как именно: [docs/specs/](docs/specs/README.md).
 
-- Централизованно публиковать MCP-инструменты и давать разным агентам разные права.
-- Не дублировать базы знаний, Telegram-историю, сигналы и голосовой сервис.
-- Скрывать внутри доменных коннекторов выбор API/провайдера и безопасный технический fallback.
-- Сохранять границы: Hub — доступ и каталог; агент — оценка результата; оркестратор — бизнес-задачи.
+## Спецификации
 
-## Целевая спецификация (2026-11-20)
-
-- [Целевая платформа](docs/specs/target-platform-v1.md) — ContextForge как внешняя зависимость, независимые коннекторы, права, fallback.
-- [MCP Connector Contract v1](docs/specs/mcp-connector-contract-v1.md) — стандартизованные tools, identity, authorization, results, errors, effects.
-- [MCP Toolkit v1](docs/specs/mcp-toolkit-v1.md) — FastMCP/TypeScript SDK, будущий генератор и conformance-тесты.
-- [KB / Signals / Telegram / Voice](docs/specs/service-integration-v1.md) — существующие сервисы и особый двусторонний путь Signals.
-- [Security & Action Gate](docs/specs/security-and-action-gate-v1.md) — защита от чужих вызовов, подделки идентичности и обхода коннектора.
-- [Approval State Machine](docs/specs/approval-state-machine-v1.md) — проверенный человек, однократное резервирование и восстановление после сбоя.
-- [Conformance Matrix](docs/specs/conformance-matrix-v1.md) — критерии security/contract тестирования.
-- [Human approvals](docs/APPROVALS.md) — краткий обзор.
-- [Connector integration profile](docs/MCP_CONNECTOR_CONTRACT.md) и [Toolkit implementation plan](docs/CONNECTOR_TOOLKIT.md) — практические дополнения к нормативным документам в `docs/specs/`.
-
-**Security stop:** старый `1.0.0-RC-3` удалён из `compose.yaml` и `.env.example`. Пример теперь задаёт `1.1.1` как **кандидат для локальной проверки** известных исправлений IBM по состоянию на 20.11.2026. Тег **не** равен неизменяемому digest и не является подтверждением безопасности: перед общим PoC или production проверяйте новые advisories, закрепляйте digest и подтверждайте identity, RBAC, resource scope, tenant isolation и Action Gate. В dev Compose `IDENTITY_PROPAGATION_ENABLED=false` и `PLUGINS_ENABLED=false`; никакие реальные эффектные инструменты нельзя открывать до end-to-end тестов.
+- [Целевая платформа](docs/specs/target-platform-v1.md) — компоненты, tenancy, роли, права.
+- [Security](docs/specs/security-v1.md) — identity, границы доверия, сеть, секреты, kill switch.
+- [Эффекты и согласование](docs/specs/effects-and-approval-v1.md) — `propose` → решение человека (бот + Web UI) → Executor с одноразовым токеном.
+- [Права на ресурсы](docs/specs/resource-grants-v1.md) — RID, grants в Git (`policies/tenants/`), подписанный bundle.
+- [Политика согласования](docs/specs/approval-policy-v1.md) — авто-одобрение, кворум, запреты, квоты.
+- [Approval Service](docs/specs/approval-service-v1.md) — модель данных, переходы, API, UI, бот, webhooks.
+- [MCP Connector Contract](docs/specs/mcp-connector-contract-v1.md) — обязательный стандарт коннекторов.
+- [MCP Toolkit](docs/specs/mcp-toolkit-v1.md) — шаблоны, генератор, общий набор тестов.
+- [Reference-коннектор `demo`](docs/specs/demo-connector-v1.md) — эталон и мишень для тестов.
+- [Интеграция сервисов](docs/specs/service-integration-v1.md) — KB, Telegram, Signals, Voice.
+- [Conformance Matrix](docs/specs/conformance-matrix-v1.md) — тесты, которые должны пройти до включения.
+- [План реализации](docs/implementation-plan-v1.md) — вехи M0–M14, зависимости, оценки, объективные критерии приёмки.
+- [Roadmap](docs/specs/roadmap-v1.md) — этапы A–F, PoC, GO/NO-GO, миграция.
 
 ## Структура
 
-- `compose.yaml` — локальный **dev-only** запуск ContextForge (официальный OCI-образ, без изменений исходников).
-- `.env.example` — шаблон переменных. Реальный `.env` не коммитить.
-- `docs/ARCHITECTURE.md` — краткий обзор целевой архитектуры.
-- `docs/specs/security-and-action-gate-v1.md` — нормативная security-модель.
-- `schemas/` — примеры машиночитаемых контрактов результатов и намерений.
-- `tests/contract/` — локальные тесты JSON Schema (не end-to-end проверка ContextForge).
-- `docs/POC.md` — критерии проверки, включая два тенанта и два агента.
-- `docs/MIGRATION.md` — постепенное подключение существующих сервисов GXG.
-- `connectors/README.md` — будущие доменные MCP-серверы; пока не реализованы.
-- `policies/README.md` — схема политики и важные security-инварианты.
+- `docs/specs/` — нормативные спеки.
+- `schemas/` — JSON Schema, OpenAPI внутреннего API, тестовые векторы канонизации (не замена MCP wire protocol).
+- `docs/adr/` — решения, принимаемые по итогам экспериментов.
+- `tests/contract/` — schema smoke-тесты (не end-to-end проверка безопасности).
+- `policies/` — grants, политики согласования, реестр платформы (примеры, без секретов).
+- `connectors/` — каталог коннекторов и их статус. Коннекторы пока не реализованы.
+- `compose.yaml`, `stand/` — локальный dev-стенд (M5, M11): ContextForge, PostgreSQL, `demo`, `telegram` (на fake-сервисе).
+- `gateway/contextforge/` — наш плагин ContextForge `gxg_identity` (ADR-0001, вариант C).
 
-## Human approval (целевая архитектура)
+## Локальный стенд (только разработка)
 
-**GxG Action Gate** применяет политику перед эффектными вызовами. Если нужно решение человека, открывает запрос в отдельном **GxG Approval Service**, а не ждёт человека внутри MCP-вызова. Подтверждение действительно только для точного действия, получателя, аргументов и срока; коннектор дополнительно проверяет права и запрет обхода. До проверки end-to-end внешние эффекты остаются выключены. Подробнее: [APPROVALS.md](docs/APPROVALS.md).
-
-## Локальный запуск (только разработка)
-
-Требуются Docker Engine / Docker Desktop с Compose v2.
+Корневой `compose.yaml` — dev-стенд M5: ContextForge (закреплён по digest, SEC-22) на PostgreSQL, коннектор `demo` во внутренней сети, плагины `unified_pdp` и `gxg_identity` (ADR-0001, вариант C). Нужны Docker с Compose v2 и `uv`.
 
 ```bash
-cp .env.example .env
-python3 - <<'PY'
-from pathlib import Path
-import secrets
-p = Path(".env")
-s = p.read_text()
-s = s.replace("__GENERATE_JWT_SECRET__", secrets.token_urlsafe(48))
-s = s.replace("__GENERATE_ENCRYPTION_SECRET__", secrets.token_urlsafe(48))
-p.write_text(s)
-print("Сгенерированы два локальных секрета в .env")
-PY
+stand/run.sh   # секреты, сборка, запуск, настройка, тесты этапа B через ContextForge, рестарт, повтор, отчёт
 ```
 
-**Перед запуском** установите в `.env` свой сильный `PLATFORM_ADMIN_PASSWORD` и актуальный `PLATFORM_ADMIN_EMAIL`. Не используйте пример как пароль. Затем:
+Шаги по отдельности, сети, runbook: [stand/README.md](stand/README.md). Секреты генерирует `stand/init.py` в `.env` и `stand/secrets/`, оба пути игнорирует Git.
+
+**Ограничения стенда:** только `127.0.0.1`, синтетические данные, ключи в файлах, а не в secret store. Не публикуйте этот стенд в интернет. Требования к production: [Security](docs/specs/security-v1.md).
+
+## Разработка и тесты
+
+Python-workspace на [uv](https://docs.astral.sh/uv/), Python ≥ 3.12. Пакеты:
+
+| Путь | Пакет / модуль | Статус |
+| --- | --- | --- |
+| `packages/gxg-connector-kit/` | `gxg-connector-kit` / `gxg_connector_kit` | Каркас (M0), функциональность — M1 |
+| `approval/` | `gxg-approval` / `gxg_approval` | Каркас (M0), реализация — M7+ |
+| `tools/gxg-policy/` | `gxg-policy` / `gxg_policy` | Каркас (M0), реализация — M2 |
+| `connectors/demo/` | `gxg-connector-demo` / `demo_connector` | Каркас (M0), свой `uv.lock`; реализация — M3 |
+| `connectors/telegram/` | `gxg-connector-telegram` / `telegram_connector` | Read-only (M11), свой `uv.lock` |
 
 ```bash
-docker compose config
-docker compose pull
-docker compose up -d
-docker compose ps
-curl -f http://127.0.0.1:4444/health
+uv sync && uv run pytest          # все тесты: tests/contract, tests/ci, unit-тесты пакетов
+scripts/ci/check-all.sh           # то же, что CI: ruff, mypy, тесты, schema guard, проверка секретов
 ```
 
-Локальная админка: http://127.0.0.1:4444/admin
+- Тесты не ходят в сеть (сокеты блокирует `conftest.py`). `skip` и `xfail` делают прогон красным.
+- Изменили нормативную часть схемы в `schemas/` — перегенерируйте lock и закоммитьте его вместе со схемой:
+  `uv run python scripts/ci/schema_lock.py --write`. Ослабление `required`/`additionalProperties` требует security-ревью.
+- CI (`.github/workflows/ci.yml`) отклоняет файлы `*.pem`, `*.key`, `*.p12`, `.env*` (кроме `.env.example`)
+  и приватные PEM-ключи в любом коммите PR. Защита `main`: [docs/setup/branch-protection.md](docs/setup/branch-protection.md).
 
-Остановить:
+Только контрактные тесты, без uv:
 
 ```bash
-docker compose down
+python -m pip install -r tests/contract/requirements.txt
+python -m unittest discover -s tests/contract -p 'test_*.py' -v
 ```
 
-**Важно:** здесь SQLite и порт, доступный только с локальной машины. Для SaaS/production нужны отдельные PostgreSQL, HTTPS, управление секретами и ключами, проверка политик, закрепление проверенного digest образа, бэкапы, обновления и тесты изоляции. Не публикуйте этот Compose в интернет.
+## История
 
-Для локальной проверки пример использует тег `1.1.1`, но неизменяемый digest **ещё не закреплён**. Это не production-конфигурация. Плагины, передача identity и effect tools должны включаться только отдельным контролируемым этапом после проверки security-тестов.
-
-## Действующая архитектурная история
-
-Целевой документ в старом репозитории: [Agent Capability Hub — Our Proposal](https://github.com/dmitry-v-ko/gxg_agents_v2/blob/main/docs/specs/platform/capability-hub/agent-capability-hub-our-proposal.md). Существующий [Capability Hub v3.0](https://github.com/dmitry-v-ko/gxg_agents_v2/blob/main/docs/specs/platform/capability-hub/README.md) остаётся нетронутым. Никаких миграций или отключений в GxG Agents V2 этим коммитом не выполняется.
-
-Upstream: [официальный Quick Start ContextForge](https://ibm.github.io/mcp-context-forge/latest/overview/quick_start/).
+Требования унаследованы из [Agent Capability Hub — Our Proposal](https://github.com/dmitry-v-ko/gxg_agents_v2/blob/main/docs/specs/platform/capability-hub/agent-capability-hub-our-proposal.md) в GxG Agents V2. Сам GxG Agents V2 этим репозиторием не меняется.

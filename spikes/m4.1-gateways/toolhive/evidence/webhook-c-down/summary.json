@@ -1,0 +1,102 @@
+{
+ "direct_to_connector": {},
+ "gateway_calls": [
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "alpha_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-alpha:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:hermes",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "vmcp:prefixed",
+   "reached_echo": false,
+   "status": 200,
+   "tool": "beta_echo",
+   "verdict": null
+  },
+  {
+   "agent": "agent:t-beta:analyst",
+   "forged_meta_reached": false,
+   "identity_headers": null,
+   "kind": "call",
+   "path": "thv-proxy:direct",
+   "reached_echo": false,
+   "status": 500,
+   "tool": "echo",
+   "verdict": null
+  }
+ ],
+ "m4_expected_with_variant_c": {
+  "bypass_no_identity": "missing X-GxG-Identity",
+  "forged_jws_attacker_key": "InvalidSignatureError: Signature verification failed",
+  "replay_after_65s": "ExpiredSignatureError: Signature has expired",
+  "replay_immediate": "replayed jti",
+  "replay_other_connector": "InvalidAudienceError: Audience doesn't match (strict)",
+  "replay_other_tool": "bad tool",
+  "replay_tampered_args": "arguments hash mismatch"
+ }
+}

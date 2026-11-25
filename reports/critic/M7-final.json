@@ -1,0 +1,356 @@
+{
+  "milestone": "M7",
+  "role": "independent final critic (plan «Ускорение процесса», вторая редакция, п.1)",
+  "branch": "claude/m7-approval-core",
+  "commit": "a843c11915f1dac087fd31635974adb6201a6336",
+  "report_commit": "0fce3f3",
+  "base": "6a75c62 (claude/integration)",
+  "reviewed_at": "2026-11-21",
+  "threshold": 9,
+  "score": 9.0,
+  "score_before_caps": 9.0,
+  "caps_applied": [],
+  "cap_note": "All 13 AC pass on re-run, DoD-4 holds (mutmut and SQL driver re-run in full, survivors are only the listed equivalents, each re-checked). No critical. No major of type new_regression or new_scope that relates to an AC of M7. Two major are outside the score by the rules: finding 1 (spec revert) is missed_earlier, in the branch since its first commit dd82753 and missed by two critics; finding 2 (idempotency shared across requesters) is new_scope, a path outside the cycle-1 threat_model, and the code does what EFF-08/AC-M7-04 literally require. Both must be handled before the PR to integration: finding 1 by a docs revert, finding 2 by an owner decision.",
+  "dimensions": {
+    "spec": 3.0,
+    "tests": 1.5,
+    "security": 2.0,
+    "code": 1.5,
+    "ops": 0.5,
+    "evidence": 0.5
+  },
+  "reproduction": {
+    "environment": "PostgreSQL 16.15 (Ubuntu initdb), Unix socket only (GXG_TEST_PG_SOCKET_DIR), no TCP; clean git worktrees at a843c11; Python 3.13 venv by uv (requires-python >=3.12), 4 cores",
+    "tests": "uv run pytest approval/tests approval/tests_db -> 372 passed, 0 skipped (29.9 s); uv run pytest (root) -> 743 passed, 148 subtests; connectors/demo 1 passed; kit 332 passed with coverage gate _jwt 38/38 branches",
+    "check_all": "every step of scripts/ci/check-all.sh run separately and green: uv lock --check, uv sync --locked, ruff check, ruff format --check, all mypy runs, schema_lock, prove_schema_guard 66/66, tests/secrets 21 passed, gitleaks tree + full range (250 commits, no leaks), gxg-policy validate/lint, bundle_smoke. scripts/ci/mutmut.sh itself not run (it starts a Docker container); its approval mutmut and SQL driver parts were run directly on the local server. Note: on the shallow session clone the gitleaks range scan reports false findings on the clone-boundary commits (base 6a75c62 too); after git fetch --unshallow it is clean; CI uses fetch-depth: 0",
+    "mutmut": "full clean run at a843c11 (approval [tool.mutmut]: policy, transitions, quotas, intents, api, mcp), mutmut 3.8.1, 31 min: total 1635, killed 1622, survived 11, timeout 2, no_tests 0. The 2 timeouts (transitions.x_rules__mutmut_102/103, T10 event and from-status names) ran under load from my parallel SQL run; re-run alone, both killed -> 1624 killed. The 11 survivors are exactly the 11 gxg_approval entries of scripts/ci/mutmut-equivalent.txt. Each diff re-checked with mutmut show and confirmed equivalent: header-name case x4 (httpx sends, Starlette Headers.get is case-insensitive); httpx upper-cases the method x2; error=None vs False (truthiness); partition->rpartition and default ''->'XXXX' (both give GxgError unauthenticated 'token rejected', the same bytes as TokenError); (200,201)->(200,202) in _responses (only dispatch passes ok=, its only 2xx is 200)",
+    "sql_mutations": "full run of scripts/ci/mutate_m7_sql.py at a843c11, 38 min: 83 listed, 79 killed, 4 equivalent, 0 not as expected, exit 0 (equals reports/mutmut/M7.txt). The 4 equivalents re-checked against the code: (1) _gxg_move version CAS: every caller locks the row FOR UPDATE (_gxg_intent, _gxg_execution, gxg_cancel), and no function changes the intent between the lock and the move; (2) record_auto_decision status: insert guard (status=pending_approval) <-> (mode=human), so an auto intent at version 1 is approved; (3) record_auto_decision version: the policy decision is inserted in the T1 transaction, there is no DELETE on decisions, so a moved auto intent always fails EXISTS; (4) one_active_execution without outcome_unknown: no transition leaves outcome_unknown for approved, and T15/T16/T18 update the execution state together with the intent. All 4 are equivalent",
+    "own_sql_mutants": "15 one-line mutants outside the driver list. Killed 9: reserve lease 60 s -> 600 s, dispatch lease +30 -> +300, dispatch deadline = lease, insert guard without args_ciphertext check, T5 without webhook, cancel ignores expected_version, requester-approves check dropped, hourly quota window 30 min (fail open), hourly quota window 2 h. Equivalent 1: sweeper picks reservations 30 s early (gxg_release_reservation refuses before the lease). Survived 4 (findings 3 and 4): T2 execution_deadline 1 hour instead of the intent's policy window; gxg_cancel without webhook outbox; reject requires step-up; EFF-03 decided_by from the last rule id. One more of my mutants was malformed by my own quoting and is not counted",
+    "own_attack_tests": "12 tests (outside the repository, on the real server), all as expected except finding 2: other requester + same key + same hash -> 200 with the other agent's intent; key squatting -> the owner's propose 409; 40 parallel proposes with propose_per_requester_per_hour 7 -> exactly 7 rows; 30 parallel with pending_per_tenant_max 5 (3 requesters) -> exactly 5; 25 parallel with two auto rules (max_per_day 4, max_per_hour 2) -> exactly 2 auto; day window with 2 used 20 h ago, max_per_day 3, 15 parallel -> exactly 1 auto; kill switch committed while T1 waits on the tenant lock -> 423, 0 rows; global/tenant/tool switch scopes -> 423, another tool's switch -> 201; extra effect_class in the body -> 400; requester/connection/connector of another tenant -> 403/400/403, 0 rows",
+    "ci": "GitHub CI not confirmed: runners are not being assigned (owner's note). CI reproduced locally as above. grants-widening red on push without PR by M2 design (not a finding)"
+  },
+  "acceptance": [
+    {
+      "id": "AC-M7-01",
+      "status": "passed",
+      "evidence": "approval/tests/test_openapi.py (generated FastAPI OpenAPI contains every path/method/body/response of schemas/approval-service.openapi.yaml) passed; prove_schema_guard 66/66 contract mutations caught"
+    },
+    {
+      "id": "AC-M7-02",
+      "status": "passed",
+      "evidence": "approval/tests_db/test_state_machine.py::test_every_status_event_pair (11 statuses x all events, version and audit_events unchanged on conflict) passed; driver table mutants killed on re-run. Side-effect gaps outside the AC: findings 3, 4"
+    },
+    {
+      "id": "AC-M7-03",
+      "status": "passed",
+      "evidence": "test_hash_mismatch_is_invalid_input passed"
+    },
+    {
+      "id": "AC-M7-04",
+      "status": "passed",
+      "evidence": "test_idempotent_repeat, test_50_parallel_identical_requests_make_one_row (49x200 + 1x201, one row) passed; idempotency tenant mutant killed. Cross-requester behaviour: finding 2 (new_scope)"
+    },
+    {
+      "id": "AC-M7-05",
+      "status": "passed",
+      "evidence": "approval/tests/test_policy.py 12 reference scenarios + full outcomes passed; policy.py mutants all killed"
+    },
+    {
+      "id": "AC-M7-06",
+      "status": "passed",
+      "evidence": "test_30_parallel_proposes_with_auto_limit_10 (pool 20, real concurrency) -> 10 auto + 20 pending, 10 decisions; my parallel day/hour/two-rule variants also exact"
+    },
+    {
+      "id": "AC-M7-07",
+      "status": "passed",
+      "evidence": "test_31st_propose_within_an_hour_is_rate_limited: 429 rate_limited, retry_after_s > 0 and Retry-After header, 30 rows, outbox empty, audit + metric"
+    },
+    {
+      "id": "AC-M7-08",
+      "status": "passed",
+      "evidence": "test_unknown_connector_or_foreign_key, test_requester_tool_and_connection_must_come_from_the_bundle passed; my rogue-connector test 403, 0 rows"
+    },
+    {
+      "id": "AC-M7-09",
+      "status": "passed",
+      "evidence": "test_foreign_intent_is_not_found_byte_for_byte (MCP), test_foreign_and_missing_intents_are_the_same_404, test_same_principal_in_another_tenant_is_not_found, test_intent_id_is_a_uuid_not_a_path passed; tenant/principal mutants of _SQL_OWN and gxg_cancel killed"
+    },
+    {
+      "id": "AC-M7-10",
+      "status": "passed",
+      "evidence": "test_payload_is_encrypted: 100 intents, 0 substring hits; args key opens args, preview key opens preview"
+    },
+    {
+      "id": "AC-M7-11",
+      "status": "passed",
+      "evidence": "test_statements_as_each_role: UPDATE/DELETE audit_events, DELETE intents/decisions/executions -> InsufficientPrivilege for all 7 roles"
+    },
+    {
+      "id": "AC-M7-12",
+      "status": "passed",
+      "evidence": "test_expired_intent_leaves_pending_within_60_s (running sweeper.run as gxg_sweeper), MAX_INTERVAL_S 30 bounds the default 5 s"
+    },
+    {
+      "id": "AC-M7-13",
+      "status": "passed",
+      "evidence": "test_roles.py catalogue (table/column/function privileges vs the AS-27 matrix, owner NOSUPERUSER, every gxg_* entry point SECURITY DEFINER with fixed search_path) and statements per role; test_deploy.py: each M7 process gets exactly its AS-28 secrets, secrets only as /run/secrets files"
+    }
+  ],
+  "dod": {
+    "DoD-1": "not met yet (owner's step: PR to main). GitHub CI not confirmed (no runners); local equivalent green. Before the PR: finding 1",
+    "DoD-2": "met",
+    "DoD-3": "met: reports/conformance/M7.json (code commit c6bb52f, approval/src unchanged to a843c11)",
+    "DoD-4": "met for the AC behaviours: mutmut and the SQL driver re-run in full on a843c11, only listed equivalents survive, each re-checked as equivalent. Test gaps outside the AC: findings 3, 4 (missed_earlier)",
+    "DoD-5": "met (0 skipped)",
+    "DoD-6": "met except one missing row: policy engine without alternatives in the DoD-6 table (finding 5, minor; custom code is justified)"
+  },
+  "findings": [
+    {
+      "id": 1,
+      "severity": "major",
+      "origin": "missed_earlier",
+      "relates_to_m7_ac": false,
+      "ref": "AC-M4-04 (closed M4), SEC-02, SEC-03, TEN-01, GR example; executor template «не меняй спеки молча»",
+      "where": "docs/specs/security-v1.md:37-43, docs/specs/target-platform-v1.md:65, docs/specs/resource-grants-v1.md:62 (commit dd82753, first commit of cycle 1)",
+      "problem": "Pulling AS-27..AS-29 from claude/admiring-planck-vzys0x also brought back the pre-M4 VERIFY text and erased the M4 results that are in the base 6a75c62 and in origin/claude/integration: ADR-0001 variant C (gxg_identity plugin, X-GxG-Identity JWS, claims, ContextForge fail-closed settings), the verified TEN-01 and the agent ID format. A PR of M7 to integration silently reverts them",
+      "reproduction": "for r in 6a75c62 a843c11; do git show $r:docs/specs/security-v1.md | grep -c X-GxG-Identity; done -> 2, 0",
+      "required_improvement": "before the PR: git checkout 6a75c62 -- docs/specs/security-v1.md docs/specs/target-platform-v1.md docs/specs/resource-grants-v1.md; check that git diff 6a75c62 -- docs/specs keeps only the approval-service-v1.md changes (AS-02, AS-27..AS-29)"
+    },
+    {
+      "id": 2,
+      "severity": "major",
+      "origin": "new_scope",
+      "relates_to_m7_ac": false,
+      "ref": "EFF-08 vs AS-11a (spec gap); path not in the cycle-1 threat_model",
+      "where": "approval/src/gxg_approval/intents.py:194-199 (_SQL_BY_KEY branch); DDL UNIQUE (tenant_id, idempotency_key)",
+      "problem": "Idempotency is per tenant and the hash does not cover the requester. Another agent of the same tenant: (a) with the same key and args gets 200 with the other agent's intent (intent_id, status, rule_ids, deadlines, business_task_id); (b) by taking a key first (Signals keys are predictable by spec: signals:<candidate>:v<n>) makes the owner's propose 409 for good; (c) with the same args first, makes the owner's propose return the squatter's intent, which the squatter can cancel and the owner cannot see (effects.status -> not_found). No effect without approval (the human sees the real requester), so not critical. The code does what EFF-08 and AC-M7-04 say literally, so this is a spec gap, not a failed AC",
+      "reproduction": "critic test: propose(key='signals:cand-1:v1', requester=signals) -> 201; propose(same key, same args, requester=bot) -> 200 with the same intent_id; propose(key='signals:cand-2:v1', requester=bot, other args) then propose(same key, requester=signals) -> 409",
+      "required_improvement": "pending_owner_decision, default: in code, existing.requester_principal != requester -> conflict (closes a and c, 2 lines, AC-M7-04 unchanged for one requester); for b, UNIQUE (tenant_id, requester_principal, idempotency_key) in the spec DDL and EFF-08. new_scope of the next cycle or M8 by the owner's choice"
+    },
+    {
+      "id": 3,
+      "severity": "major",
+      "origin": "missed_earlier",
+      "relates_to_m7_ac": false,
+      "ref": "AP-04 (execution_window of a rule), T2",
+      "where": "approval/src/gxg_approval/migrations/versions/0001_core.py (gxg_decide: execution_deadline = now() + make_interval(secs => r.execution_window_s)); approval/tests_db/test_state_machine.py:310",
+      "problem": "Fail-open mutant survives all approval/tests_db: execution_deadline = now() + interval '1 hour' instead of the window frozen at T1. The T2 test compares with execution_window_s, but its intent has the default 3600. Code is correct today; same code since cycle 1",
+      "reproduction": "replace 'make_interval(secs => r.execution_window_s)' in gxg_decide with \"interval '1 hour'\" -> uv run pytest -x approval/tests_db green",
+      "required_improvement": "backlog: T2 test with a require_approval rule execution_window: 10m (deadline - approved_at = 600 s); add the mutant to scripts/ci/mutate_m7_sql.py"
+    },
+    {
+      "id": 4,
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "relates_to_m7_ac": false,
+      "ref": "T4 «как T2, кроме step-up», T6 side effect Webhook, EFF-03 «первый rule_id»",
+      "where": "0001_core.py: gxg_cancel, gxg_decide step-up condition, gxg_record_auto_decision",
+      "problem": "Three mutants survive: gxg_cancel without _gxg_outbox('webhook'); reject requires step-up (p_decision = 'approve' AND dropped); decided_by from the last instead of the first rule id when two auto rules match",
+      "required_improvement": "backlog: outbox webhook check in test_cancel; reject without step-up in test_t2_refuses_what_the_ui_must_never_get_through; two auto rules in test_auto_approval_writes_policy_decision; the three mutants into the driver"
+    },
+    {
+      "id": 5,
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "relates_to_m7_ac": false,
+      "ref": "DoD-6",
+      "where": "reports/plans/M7-cycle-1.md DoD-6 table (policy.py: «minimal pure code», no alternatives)",
+      "problem": "Self-written policy engine without a recorded comparison with OPA/Rego or Cedar. Critic's check: custom code is justified (spec-given YAML format linted by gxg-policy; AP-01 merges approvals/step_up/approvers/TTLs and counts AP-03 limits inside the T1 transaction; Cedar is allow/deny only, OPA adds a runtime for ~60 lines), so minor",
+      "required_improvement": "backlog: add the row to the DoD-6 table"
+    },
+    {
+      "id": 6,
+      "severity": "minor",
+      "origin": "missed_earlier",
+      "relates_to_m7_ac": false,
+      "ref": "AS-07",
+      "where": "approval/deploy/compose.yaml (mcp GXG_API_URL https://api:8090) vs cli.py (uvicorn plain HTTP)",
+      "problem": "The scheme does not match what api serves. Harmless now: mcp refuses to start until M5",
+      "required_improvement": "backlog (with the mcp start in M5/M8): TLS on api or the URL as served"
+    }
+  ],
+  "required_improvements": [],
+  "required_before_merge": [
+    "Finding 1: revert docs/specs/security-v1.md, target-platform-v1.md, resource-grants-v1.md to 6a75c62 (keep approval-service-v1.md)",
+    "Finding 2: record in reports/progress.md «Ждёт владельца» (pending_owner_decision, default as in the finding)"
+  ],
+  "backlog": [
+    "M7: T2 execution_deadline from a non-default policy window tested; mutant in the driver (finding 3)",
+    "M7: T6 webhook outbox, T4 reject without step-up, EFF-03 first rule id with two auto rules tested; mutants in the driver (finding 4)",
+    "M7: DoD-6 row for the policy engine (OPA/Cedar considered) (finding 5)",
+    "M7/M8: mcp -> api URL scheme vs TLS on api (finding 6)",
+    "carried: sweeper/mcp probes, request body cap, mcp non-JSON answer -> temporarily_unavailable, _responses(ok=) inline (cycle-2 critic)",
+    "M9 (pending_owner_decision): compromised ui forging a human decision through gxg_decide — see threat_model"
+  ],
+  "existing_solutions": [
+    {
+      "component": "SQL/PL-pgSQL mutation driver (scripts/ci/mutate_m7_sql.py)",
+      "alternative": "mutmut (Python AST only, leaves SQL strings); pgTAP (assertions, no mutation); SQLancer (DBMS bugs, not app SQL); academic SQLMutation (query-level, Java, unmaintained)",
+      "verdict": "justified_custom",
+      "note": "no maintained tool mutates application PL/pgSQL; same pattern as M2; reason recorded in M7-cycle-2.md"
+    },
+    {
+      "component": "OpenAPI containment test (AC-M7-01)",
+      "alternative": "oasdiff; schemathesis (property tests of an API against its spec)",
+      "verdict": "justified_custom",
+      "note": "AC asks for containment of a hand contract in the generated one; oasdiff is a breaking-change diff and a Go binary; schemathesis tests runtime responses, not containment; reason recorded in M7-cycle-2.md"
+    },
+    {
+      "component": "policy engine (policy.py)",
+      "alternative": "OPA/Rego, Cedar (cedarpy)",
+      "verdict": "justified_custom",
+      "note": "not recorded in DoD-6 (finding 5); spec-given format and merge semantics, limits counted inside the T1 transaction"
+    },
+    {
+      "component": "transition table + SECURITY DEFINER functions",
+      "alternative": "python transitions / python-statemachine",
+      "verdict": "justified_custom",
+      "note": "AS-27 requires the moves to be enforced by the database for every process role; a Python state machine cannot do that"
+    },
+    {
+      "component": "quotas and auto-limit counting",
+      "alternative": "PostgreSQL indexes + advisory lock (used); limits/redis rate limiter",
+      "verdict": "use_existing",
+      "note": "atomic with T1 as AP-03 requires; a separate rate limiter would not be"
+    },
+    {
+      "component": "payload encryption",
+      "alternative": "PyNaCl SealedBox (used)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "migrations, DB access, HTTP, MCP",
+      "alternative": "Alembic, psycopg 3 + psycopg_pool, FastAPI, FastMCP (used)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "service JWT, execution token, bundle, canonical hash",
+      "alternative": "gxg-connector-kit (reused, nothing re-implemented)",
+      "verdict": "use_existing"
+    },
+    {
+      "component": "sweeper loop",
+      "alternative": "APScheduler, pg_cron",
+      "verdict": "justified_custom",
+      "note": "10-line stdlib loop + FOR UPDATE SKIP LOCKED; reason recorded in M7-cycle-1.md"
+    },
+    {
+      "component": "secrets from *_FILE (config.py)",
+      "alternative": "pydantic-settings secrets_dir",
+      "verdict": "justified_custom",
+      "note": "two 3-line functions; a dependency for them is not worth it"
+    },
+    {
+      "component": "Refused / ErrorResult in mcp",
+      "alternative": "FastMCP ToolError (no structuredContent), httpx raise_for_status (loses the error document)",
+      "verdict": "justified_custom",
+      "note": "5-10 lines"
+    }
+  ],
+  "threat_model": [
+    {
+      "path": "forged intent: caller impersonates a connector / foreign key (AS-06, AS-08 part 1)",
+      "status": "closed",
+      "evidence": "Ed25519 service JWT by registry key, kid thumbprint, aud, kind allowlist, jti; test_unknown_connector_or_foreign_key; TokenError always 'token rejected'"
+    },
+    {
+      "path": "connector not registered for the tenant creates an intent or dispatches (AS-25)",
+      "status": "closed",
+      "evidence": "rogue -> 403, 0 rows (repo test and mine); dispatch re-checks serves() and the tool by the current bundle"
+    },
+    {
+      "path": "connector lies about effect_class / executes_via / dispatch timeout, or uses a tool not in the bundle (AS-26)",
+      "status": "closed",
+      "evidence": "taken from caller.tools only; read/write/orphan/unknown/version tools 403; extra effect_class in the body -> 400 (schema additionalProperties)"
+    },
+    {
+      "path": "connector forges the requester principal of its own tenant (AS-08 assertion)",
+      "status": "out_of_scope",
+      "evidence": "requester must exist in the tenant (403 otherwise, mine: requester of t-beta -> 403); assertion check needs ADR-0001 variant C (M5); identity_mode=connector_attested in the audit, as AS-08 allows"
+    },
+    {
+      "path": "args changed after hashing",
+      "status": "closed",
+      "evidence": "AC-M7-03; hash recomputed from normalized args; decisions bound to args_hash"
+    },
+    {
+      "path": "policy bypass: deny/require/auto merge, auto for high_risk",
+      "status": "closed",
+      "evidence": "12 AP-01 scenarios; policy.py mutants all killed. Untested T2 use of a shorter policy window: finding 3 (test gap, code correct)"
+    },
+    {
+      "path": "quota or auto-limit bypass under concurrency (1 h and 1 day windows)",
+      "status": "closed",
+      "evidence": "one pg_advisory_xact_lock per tenant before idempotency, switch, quota and limit reads; READ COMMITTED statements after the lock see every committed row. Critic: 40 parallel / hourly quota 7 -> 7; 30 parallel / tenant pending cap 5 -> 5; two auto rules (day 4, hour 2) 25 parallel -> 2; day window with prior use -> exact remainder; driver: lock removal and all window mutants (both directions) killed"
+    },
+    {
+      "path": "kill switch bypass inside the transaction (AS-05: T1, T7, T9)",
+      "status": "closed",
+      "evidence": "T1 checks after the tenant lock (critic: switch committed while T1 waits -> 423, 0 rows); T7/T9 in SECURITY DEFINER functions, all scope mutants killed. A switch committed after T9's check is inherent: the next dispatch is blocked"
+    },
+    {
+      "path": "agent reads or cancels another requester's intent (AS-11a)",
+      "status": "closed",
+      "evidence": "WHERE tenant AND requester in _SQL_OWN and gxg_cancel; byte-identical 404; mutants killed"
+    },
+    {
+      "path": "agent reads or cancels another tenant's intent with the same principal ID",
+      "status": "closed",
+      "evidence": "test_same_principal_in_another_tenant_is_not_found (GET + cancel, byte-identical, row unchanged); facade limited to its tenants (test_facade_only_for_its_tenants); tenant mutants killed"
+    },
+    {
+      "path": "another agent of the same tenant reaches an intent through a shared idempotency key (EFF-08)",
+      "status": "open",
+      "origin": "new_scope",
+      "evidence": "finding 2: 200 with the other agent's intent; key squatting -> 409 for the owner; pending_owner_decision"
+    },
+    {
+      "path": "path traversal in mcp (crafted intent_id to other api endpoints)",
+      "status": "closed",
+      "evidence": "mcp builds the path only from str(uuid.UUID(intent_id)); test_intent_id_is_a_uuid_not_a_path (../../readyz, JWKS, healthz, '<id>/../x', ''); api re-parses the UUID; query values encoded by httpx"
+    },
+    {
+      "path": "repeated execution: second dispatch, token replay, token of another connector",
+      "status": "closed",
+      "evidence": "jti cache, CAS reserved->dispatching in gxg_dispatch, aud = connector, connector_id check; dispatch mutants killed"
+    },
+    {
+      "path": "repeated execution after terminal or via a released reservation",
+      "status": "closed",
+      "evidence": "AC-M7-02 full product; one_active_execution; T10/T12/T12a tests"
+    },
+    {
+      "path": "DB role matrix (AS-27): ui reads args or writes executions, executor writes decisions or reads preview, notifier reads intents, any role changes audit",
+      "status": "closed",
+      "evidence": "AC-M7-13 catalogue + statements per role; definer functions with fixed search_path, owner NOSUPERUSER, no CREATE/TEMP; driver privilege mutants killed"
+    },
+    {
+      "path": "secrets per process (AS-28)",
+      "status": "closed",
+      "evidence": "test_deploy.py: each M7 process gets exactly its secret files, no secret value in env, api has only payload public keys; executor/ui/notifier/admin secrets come with M8-M10"
+    },
+    {
+      "path": "payload in clear (AC-M7-10, RET-03)",
+      "status": "closed",
+      "evidence": "PyNaCl SealedBox per tenant and purpose, api encrypt-only, fail closed without a key; column privileges split args (executor) and preview (ui); outbox and audit carry no payload. Ciphertext is not bound to the intent (no AAD): only a compromised api could swap it, and M8's execute re-checks the args hash"
+    },
+    {
+      "path": "compromised api inserts an approved intent bypassing policy",
+      "status": "out_of_scope",
+      "evidence": "api owns T1 by spec; insert guard keeps the row shape; AS-27's goal names only the exposed ui/notifier"
+    },
+    {
+      "path": "audit tampering",
+      "status": "closed",
+      "evidence": "AC-M7-11: no UPDATE/DELETE on audit_events for any role"
+    },
+    {
+      "path": "compromised ui forges a human decision through gxg_decide (any oidc: approver, step_up=true, two people for a quorum)",
+      "status": "out_of_scope",
+      "scope": "M9, pending_owner_decision",
+      "evidence": "Not an AC of M7. AC-M7-13 checks the AS-27 matrix, and that matrix gives gxg_ui INSERT on decisions and T2-T4: the implementation matches it and the test proves it. The path is real (the AS-27 goal says a compromised ui must not forge a decision), but it cannot be closed with database roles. The ui is the component that authenticates the human (OIDC, WebAuthn step-up AS-16). Closing it needs a human assertion that the ui cannot mint (a WebAuthn assertion bound to intent_id and args_hash, or an OIDC token) verified outside the ui. Those mechanisms are built in M9, and M7 has nothing to verify against. So this is a spec gap between the AS-27 goal and its matrix, for M9: an AC-M9 should require that gxg_decide (or a non-exposed decider) verifies such an assertion. Agreed with the executor's classification"
+    }
+  ],
+  "ponytail_review": "reports/critic/M7-final.review.md",
+  "lean_lines": 0
+}

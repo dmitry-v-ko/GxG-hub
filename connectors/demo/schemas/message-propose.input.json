@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "demo.message.propose input",
+  "description": "Propose sending a synthetic message to a recipient on behalf of a board. Creates an intent; a human or an approval rule decides, the executor sends. Returns at once (EFF-29); extra fields give no authority and are ignored (EX-02).",
+  "type": "object",
+  "required": ["board_id", "recipient", "text"],
+  "properties": {
+    "board_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "recipient": {"type": "string", "pattern": "^[a-z0-9_]{3,32}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 256}
+  }
+}

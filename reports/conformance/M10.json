@@ -1,0 +1,181 @@
+{
+  "milestone": "M10",
+  "cycle": 3,
+  "branch": "claude/m10-ops",
+  "base": "40cec84 (origin/claude/integration)",
+  "commit": "3e5541c",
+  "run_at": "2026-11-23",
+  "author": "M10 milestone owner (Claude)",
+  "plan": [
+    "reports/plans/M10-cycle-1.md",
+    "reports/plans/M10-cycle-2.md",
+    "reports/plans/M10-cycle-3.md"
+  ],
+  "contextforge_image_digest": "ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a8985c1a3528ba49fcab32951e06c9a41a171fc5c41d24b085283c4556a5",
+  "sdk_versions": {
+    "fastmcp": "4.1.8 (pinned; 4.2.4 re-run: reports/conformance/M10-mc05.md)",
+    "mcp": "2.3.0",
+    "webauthn": "2.8.0",
+    "prometheus": "v3.5.0 (promtool, pinned by digest)"
+  },
+  "bundle_version": "tests: generated per test; stand: commit of the run",
+  "acceptance": [
+    {
+      "id": "AC-M10-01",
+      "status": "passed",
+      "tests": [
+        "approval/notifier/tests_db/test_webhooks.py::test_every_status_change_is_delivered_signed",
+        "approval/notifier/tests_db/test_webhooks.py::test_receiver_refuses_a_bad_signature_an_old_t_and_a_replay",
+        "approval/notifier/tests_db/test_webhooks.py::test_a_lost_reply_does_not_block_the_subscriber",
+        "packages/gxg-connector-kit/tests/test_webhooks.py"
+      ]
+    },
+    {
+      "id": "AC-M10-02",
+      "status": "passed",
+      "tests": [
+        "approval/notifier/tests_db/test_webhooks.py::test_unavailable_subscriber_backoff_then_dead_and_alert",
+        "approval/notifier/tests_db/test_webhooks.py::test_subscriber_back_after_an_hour_gets_everything_in_order",
+        "approval/deploy/tests/test_alert_rules.py::test_rule_unit_tests_pass (GxgWebhookDead)"
+      ]
+    },
+    {
+      "id": "AC-M10-03",
+      "status": "passed",
+      "tests": [
+        "approval/tests_db/test_purge.py"
+      ]
+    },
+    {
+      "id": "AC-M10-04",
+      "status": "passed",
+      "tests": [
+        "approval/tests_db/test_admin.py::test_global_switch_blocks_the_next_dispatch_of_every_tenant",
+        "approval/tests_db/test_admin.py::test_cli_switch_and_invite_call_the_admin_api",
+        "approval/deploy/tests/test_alert_rules.py (GxgSwitchChanged, GxgAdminAction)",
+        "approval/tests_db/test_admin.py::test_admin_refuses_a_plain_http_jwks_uri"
+      ]
+    },
+    {
+      "id": "AC-M10-05",
+      "status": "passed",
+      "tests": [
+        "approval/tests_db/test_metrics.py",
+        "approval/tests_db/test_admin.py::test_executor_metrics_registry_has_reserve_conflicts",
+        "connectors/demo/tests/test_effects.py::test_token_verify_failures_are_counted_on_metrics",
+        "approval/deploy/tests/test_alert_rules.py (promtool check 13 rules, real Prometheus loads them, outcome_unknown > 1 h alert)",
+        "approval/tests_db/test_metrics.py::test_scrape_after_a_deferral_and_an_expiry_by_rate_limit (critic M10-2 N1/N2: /metrics 200 after T12b and after T8 of a 429-deferred intent)",
+        "approval/tests_db/test_metrics.py::test_unknown_database_figure_is_skipped",
+        "approval/tests_db/test_metrics.py::test_help_texts",
+        "approval/deploy/prometheus/rules.test.yaml (GxgExpiredAfterRateLimit fires and clears)"
+      ]
+    },
+    {
+      "id": "AC-M10-06",
+      "status": "passed",
+      "evidence": "reports/conformance/M10-mc05.md: ContextForge has no minor after v1.1.1 (ghcr tag list); fastmcp 4.2.4 — demo 146, telegram 110, approval 510, stand 54/0 x3; pins unchanged"
+    },
+    {
+      "id": "AC-M10-07",
+      "status": "passed",
+      "evidence": "reports/conformance/stage-C.json: EX-01…EX-25 and MC-05 passed (26/26) on 3e5541c; stand JUnit reports/conformance/M10-stand/ (3e5541c: fresh 54/0, after-restart 54/0, after-recreate 54/0)"
+    },
+    {
+      "id": "AC-M10-08",
+      "status": "passed",
+      "tests": [
+        "approval/tests_db/test_decider.py",
+        "approval/ui/tests_db/test_decisions.py",
+        "approval/ui/tests_db/test_e2e.py",
+        "approval/tests_db/test_roles.py"
+      ]
+    }
+  ],
+  "ci_local": {
+    "commit": "3e5541c",
+    "result": "cycle 3 on 3e5541c: pytest approval/tests approval/tests_db approval/notifier approval/ui approval/deploy/tests packages/gxg-connector-kit/tests connectors/demo/tests tests — 1694 passed, 298 subtests; ruff check and format clean; mypy --strict (the 5 approval/kit runs of check-all.sh) clean; gitleaks tree HEAD and full range: no leaks; stand/run.sh after `docker compose down -v`: fresh 54/0, after-restart 54/0, after-recreate 54/0. The full check-all.sh gate ran in cycle 2 on 2a52ca3 (see cycle_2_gate); cycle 3 changed only approval metrics/executor/admin CLI/policy, the kit's schema copy list and tests.",
+    "cycle_2_gate": {
+      "commit": "2a52ca3",
+      "result": "every step passed up to and excluding stand/run.sh (47 of 50 steps); stand/run.sh failed once (telegram container unhealthy: volumes of gxg-stand left by the MC-05 worktree run, other passwords — backlog M8 'state.json/volumes'); after `docker compose down -v` stand/run.sh passed fresh 54/0, after-restart 54/0, after-recreate 54/0. The mutmut.sh step was replaced by the mutmut runs of the lighter process (owner decision 2026-11-23: only changed files of security modules): reports/mutmut/M10-{approval-security,notifier,kit,sql}.txt; the gate's mutmut.sh run was stopped on the orchestrator's request",
+      "steps": [
+        "set -euo pipefail",
+        "cd scripts/ci/../..",
+        "uv lock --check",
+        "cd connectors/demo",
+        "uv lock --check",
+        "cd approval/ui",
+        "uv lock --check",
+        "cd approval/notifier",
+        "uv lock --check",
+        "cd connectors/telegram",
+        "uv lock --check",
+        "uv sync --locked",
+        "uv run ruff check .",
+        "uv run ruff format --check .",
+        "uv run mypy --strict packages/gxg-connector-kit/src packages/gxg-connector-kit/tests approval/src approval/tests scripts tests/secrets",
+        "uv run mypy --strict conftest.py tests/ci",
+        "uv run mypy --strict approval/tests_db",
+        "uv run mypy --strict approval/ui/src approval/ui/tests approval/notifier/src approval/notifier/testing approval/deploy/tests",
+        "uv run mypy --strict approval/ui/tests_db",
+        "uv run mypy --strict approval/notifier/tests_db",
+        "uv run mypy tools/gxg-policy/src tools/gxg-policy/tests connectors/demo/src connectors/demo/tests connectors/telegram/src connectors/telegram/tests tests/contract",
+        "MYPYPATH=stand/tests:stand:gateway/contextforge:connectors/telegram/archive",
+        "uv run mypy --exclude mutants stand gateway/contextforge",
+        "uv run pytest",
+        "uv run pytest approval/tests_db",
+        "uv run pytest approval/ui/tests_db approval/notifier/tests_db",
+        "uv run pytest approval/deploy/tests",
+        "uv run python scripts/ci/schema_lock.py",
+        "uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-branch --cov-report=json:coverage-kit.json",
+        "uv run python scripts/ci/check_coverage.py coverage-kit.json",
+        "cd connectors/demo",
+        "uv sync --locked",
+        "uv run pytest -q",
+        "cd connectors/telegram",
+        "uv sync --locked",
+        "uv run pytest -q",
+        "'[' '' '!=' skip ']'",
+        "upstream=/home/user/gxg_agents_v2",
+        "git -C /home/user/gxg_agents_v2 rev-parse --git-dir",
+        "connectors/telegram/archive/check_upstream.sh /home/user/gxg_agents_v2",
+        "connectors/telegram/archive/check_upstream.sh --drift /home/user/gxg_agents_v2",
+        "uv run python scripts/ci/prove_schema_guard.py",
+        "scripts/ci/gitleaks.sh tree HEAD",
+        "scripts/ci/gitleaks.sh range 0000000000000000000000000000000000000000..HEAD",
+        "uv run pytest tests/secrets",
+        "uv run gxg-policy validate policies/",
+        "uv run gxg-policy lint policies/",
+        "bash scripts/ci/bundle_smoke.sh",
+        "connectors/demo/docker_smoke.sh",
+        "stand/run.sh"
+      ],
+      "pytest_counts": [
+        "1167 passed, 6 warnings",
+        "434 passed, 2 warnings",
+        "143 passed, 39 warnings",
+        "9 passed",
+        "21 passed"
+      ]
+    }
+  },
+  "self_check": {
+    "mutmut": {
+      "approval decider/admin/executor": "735/758 killed, rest equivalent (listed)",
+      "approval/notifier": "431/433, 2 equivalent",
+      "packages/gxg-connector-kit": "1312/1323, 11 equivalent (M1)",
+      "SQL 0005/0006 (mutate_m7_sql.py M10 list)": "45, all as expected",
+      "approval/ui": "run 1 552/581, tests added; not re-run (lighter process: UI without mutmut)",
+      "cycle 3, changed approval files one per run (critic M10-2 N4)": "reports/mutmut/M10-cycle-3.txt: policy 376/376, metrics 143/146, sweeper 82/84, intents 818/818, api 143/149, transitions 258/258, executor _rate_limited 16/16; every survivor in scripts/ci/mutmut-equivalent.txt with a reason"
+    },
+    "critic_cycle_1": "reports/critic/M10-cycle-1.json (7.5): required_improvements 1-9 — done, see reports/plans/M10-cycle-2.md",
+    "gitleaks": "tree HEAD and full range on 3e5541c: no leaks",
+    "critic_cycle_2": "reports/critic/M10-cycle-2.json (5.0): N1-N5 done in cycle 3 (reports/plans/M10-cycle-3.md), N6-N9 (minor) in docs/backlog.md"
+  },
+  "pending_owner_decision": "reports/M10-PENDING-OWNER.md",
+  "known_limitations": [
+    "/metrics on api without auth (internal network, aggregates only)",
+    "AS-30 residual risks R1, R2 (reports/M10-PENDING-OWNER.md)",
+    "RET-02 / RET-03 / RET-04 not in M10 (AC-M10-03 'частично')",
+    "minor findings N6-N9 of critic cycle 2 in docs/backlog.md (N7: MC-05 re-run on fastmcp 4.2.4 was before the cycle 2 demo change)"
+  ]
+}

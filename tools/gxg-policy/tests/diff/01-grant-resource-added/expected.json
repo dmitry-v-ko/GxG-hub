@@ -1,0 +1,14 @@
+{
+  "widening": [
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "read",
+      "resource": "kb:kb-main/collection/sales",
+      "change": "added",
+      "expires_at": null
+    }
+  ],
+  "narrowing": []
+}

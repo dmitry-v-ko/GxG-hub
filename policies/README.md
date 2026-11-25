@@ -1,23 +1,31 @@
-# Модель доступа — предварительная
+# Политики доступа
 
-RBAC на tenant и agent principal. Пример для первого пилота:
+Нормативно: [Целевая платформа → роли и права](../docs/specs/target-platform-v1.md#роли), [Эффекты → классы и согласование](../docs/specs/effects-and-approval-v1.md#классы-эффектов-и-путь-исполнения).
 
-| Principal | Knowledge | Telegram | Effects |
+Права агентов на ресурсы хранятся в `policies/tenants/<tenant>.yaml` по [модели прав на ресурсы](../docs/specs/resource-grants-v1.md). Пример: [tenants/example.yaml](tenants/example.yaml).
+
+| Каталог | Что | Спека | Пример |
 | --- | --- | --- | --- |
-| Admin operator | configuration | configuration | с подтверждением |
-| Hermes | read | ограниченные чаты: read | запрещены по умолчанию |
-| Analyst agent | read subset | deny | deny |
+| `tenants/` | Grants: connections, principals, группы, права на ресурсы | [resource-grants](../docs/specs/resource-grants-v1.md) | [example.yaml](tenants/example.yaml) |
+| `approval/` | Политика согласования и квоты | [approval-policy](../docs/specs/approval-policy-v1.md) | [example.yaml](approval/example.yaml) |
+| `platform/` | Реестр сервисов и webhooks | [approval-service](../docs/specs/approval-service-v1.md#реестр-платформы) | [registry.example.yaml](platform/registry.example.yaml) |
 
-Права на MCP tools в ContextForge — лишь первая граница. Права на конкретный Telegram чат, документы KB и аккаунт CRM должны дополнительно проверяться в адаптере, используя подтверждённую идентичность и scope. Не передавать универсальный токен всем агентам.
+Всё это собирается в один подписанный bundle (GR-11). Правила `unified_pdp` для ContextForge (tool-level RBAC, постоянный запрет `*.execute` для агентов) не входят в bundle: их читает ContextForge. Для dev-стенда M5 они лежат в [`stand/unified_pdp.rules.json`](../stand/unified_pdp.rules.json) (точный email агента × точное имя tool, иначе deny). Генерация правил для production из реестра платформы — после этапа B.
 
-Проверки до production: tenant isolation, agent principals, forged identity, resource scope, secrets, audit redaction, effect approval, unknown-outcome retries. Точная модель ролей зависит от реально проверенных механизмов ContextForge.
+## Пример для первого пилота (tenant оператора)
 
-Нормативные требования к identity и scopes: [MCP Connector Contract v1](../docs/specs/mcp-connector-contract-v1.md). Подписанная downstream identity propagation и защита от поддельных headers требуют реального теста, а не предположения о ContextForge. Операции с персональными чатами и эффектами не публикуются до проверки.
+| Principal | KB | Telegram | Эффекты |
+| --- | --- | --- | --- |
+| Оператор (`platform_admin`) | Конфигурация | Конфигурация | Не исполняет сам; может быть `approver`, если назначен явно |
+| Hermes (`agent`) | `read` | `read`, только разрешённые чаты | `propose` запрещён по умолчанию |
+| Analyst (`agent`) | `read`, подмножество коллекций | Нет | Нет |
+| Signals Action worker (`agent`) | Нет | Нет | `propose` только для разрешённых действий; исполнение — после решения человека |
+| Approver (человек) | — | — | Решения по intents своего tenant'а в Web UI |
 
-## Неизвестный инициатор и предотвращение обхода
+Права на tool в ContextForge — только первая граница. Права на конкретный чат, документ или CRM-аккаунт проверяет коннектор по проверенной identity. Решение человека не расширяет права агента.
 
-Никакой агент или внешний клиент не может инициировать effect без проверенного principal/tenant и grants на конкретный tool, connection и ресурс. Модель не может выдать себе полномочия через `tenant_id`, `agent_id`, `approved:true` или произвольные headers; неподписанные forwarded claims недействительны. Разрешённый человек и Approval Service — отдельные стороны, а не тот же агент. Прямой путь к коннектору блокируется сетевыми правилами и обязательной независимой проверкой identity/approval. При ошибке Action Gate или неясном исходе внешнего вызова — fail closed / reconciliation; никаких автоматических повторных отправок. См. [Security & Action Gate](../docs/specs/security-and-action-gate-v1.md).
+## Инварианты
 
-## Эффекты и отдельный контур approval
-
-Разрешение ContextForge на tool не является согласием человека. **GxG Action Gate** решает по политике, нужен ли review; [Approval Service](../docs/APPROVALS.md) сохраняет решение человека. Согласование не расширяет права агента и действительно только для исходных tenant, principal, tool, ресурса, аргументов и срока. Исполняющий коннектор обязан проверять разрешение, не доверяя аргументам модели. Пока гарантия запрета обхода не доказана, effect tools недоступны.
+- Ни одна политика не открывает агентам `*.execute`.
+- Изменения политик логируются, ослабление вызывает alert.
+- Новые effect tools выключены, пока не пройдены тесты этапа C.

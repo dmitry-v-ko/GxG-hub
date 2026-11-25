@@ -1,0 +1,53 @@
+{
+  "milestone": "M0.1",
+  "branch": "claude/m0.1-standard-tools",
+  "commit": "7e2a984017cbd63b07ab488831db447a3994cc7c",
+  "code_commit": "f78e6b3f0f8bcbb0dff7be75e947a3d37da50703",
+  "cycle": 2,
+  "reviewed_at": "2026-11-21",
+  "score": 8.0,
+  "caps_applied": ["major"],
+  "dimensions": {"spec": 3, "tests": 1.5, "security": 1.5, "code": 1.5, "ops": 1, "evidence": 0.5},
+  "acceptance": [
+    {"id": "AC-M0.1-01", "status": "passed", "evidence": "Clean clone 7e2a984, empty uv cache, Python 3.12.3: uv run pytest tests/secrets -> 19 passed, 150 subtests (43 s); CI run 44886113501 job secrets success. Critic cases via scripts/ci/gitleaks.sh (tree/range exit): empty .env 1/1, empty server.pem 1/1, .envrc 1/1 (empty and with a password), .env-local 1/1, .ENV_PROD 1/1, KEY.PEM 1/1, .ENV 1/1, inline key 1/1, key after KEY= 1/1, UTF-16 1/1, key added and deleted in PR 0/1, empty .env + s.pem added and deleted in PR 0/1, empty .env renamed away 0/1, empty .env merged from a side branch then deleted 0/1, symlink .env 1/1, .ENV.EXAMPLE 1/1, .env.example 0/0; plan-quote cases are in the suite. No key material in output."},
+    {"id": "AC-M0.1-02", "status": "passed", "evidence": "check_secrets.py and its tests stay deleted; the only code outside gitleaks is the owner-approved name check (NAMES + names(), gitleaks.sh:41-47, called at :66 and :83), git ls-tree / git log --name-only + grep -zP, reads no content. It lists names with ls-tree/log instead of the git ls-files named in the decision; needed for 'added and removed in the PR', same intent."},
+    {"id": "AC-M0.1-03", "status": "passed", "evidence": "scripts/ci/mutmut.sh in clean clone -> 'mutmut: all mutants killed', 631/631, exit 0, 47 s; result list identical to reports/mutmut/M0.1.txt; no tests_dir deprecation warning."},
+    {"id": "AC-M0.1-04", "status": "passed", "evidence": "prove_schema_guard.py unchanged in logic (help text only); confirmed in cycle 1; 59/59 in clean clone and in CI job schema-guard."},
+    {"id": "AC-M0-01", "status": "passed", "evidence": "uv sync --locked && uv run pytest -> 103 passed, 136 subtests, 0 skipped; again under unshare -rn with uv run --offline -> 103 passed. New ad-hoc test with UDP sendto to 192.0.2.1:9 -> SocketBlockedError (red). --force-enable-socket -> the 5 network tests fail. Opt-out via enable_socket marker possible (finding 3)."},
+    {"id": "AC-M0-02", "status": "passed", "evidence": "Drop top-level required in effect-intent.schema.json -> tests/contract 16 failed, schema_lock.py exit 1; after schema_lock.py --write -> 15 failed. CI job schema-guard success."},
+    {"id": "AC-M0-04", "status": "passed", "evidence": "*.pem, .env, header anywhere red, including empty .env and empty server.pem (cycle 1: green). See AC-M0.1-01."}
+  ],
+  "ci": {"run_id": 44886113501, "commit": "7e2a984017cbd63b07ab488831db447a3994cc7c", "ci_ok": "success", "jobs": "lint, types, tests, schema-guard, secrets, mutmut, ci-ok: success", "wall_time": "66 s", "note": "run 44820634977 on f78e6b3 was cancelled by the next push (concurrency); 44820402301 on 9583bd6 (tested code) success"},
+  "findings": [
+    {"severity": "major", "ref": "review #1; AC-M0-04 x M0 merge-commit regression; DoD-4 spirit", "where": "scripts/ci/gitleaks.sh:83 (-m in the name-check git log)",
+     "problem": "Risky security logic without a test: removing -m from the name check leaves tests/secrets fully green (19 passed, 150 subtests), yet without it a PR whose merge commit alone adds an empty .env goes green (range exit 0; with -m exit 1). gitleaks cannot see empty files, so this line is the only defence.",
+     "required_improvement": "Add a test: merge commit that adds only an empty .env -> range red with 'gitleaks.sh: secret file name: .env'. Confirm it fails with -m removed."},
+    {"severity": "minor", "ref": "review #2; security: fail closed", "where": "scripts/ci/gitleaks.sh:44",
+     "problem": "`|| true` also swallows grep exit 2. With a grep without -P (BSD/busybox; simulated), `gitleaks.sh tree` on a repo with an empty .env prints 'grep: invalid option -- P' and exits 0. CI (GNU grep) not affected.",
+     "required_improvement": "`{ grep -zP \"$NAMES\" || [ $? -eq 1 ]; }` so a grep error returns 2."},
+    {"severity": "minor", "ref": "review #3; AC-M0-01", "where": "pyproject.toml addopts (pytest-socket)",
+     "problem": "@pytest.mark.enable_socket or the socket_enabled fixture re-enables the network per test: a test with UDP sendto to 192.0.2.1 passes (2 passed). The old guard had no opt-out; DoD-5 forbids comparable opt-outs.",
+     "required_improvement": "Record a DoD-style violation in conftest.py for items with the enable_socket marker or socket_enabled fixture, or note in the plan that the opt-out is accepted."}
+  ],
+  "existing_solutions": [
+    {"component": "secret content scanning", "alternative": "gitleaks 8.30.1", "verdict": "use_existing"},
+    {"component": "file-name check for empty files (gitleaks.sh NAMES + names())", "alternative": "gitleaks/trufflehog/detect-secrets skip empty files or scan content only; pre-commit `language: fail` hook with files: regex (needs pre-commit dep, config, per-commit loop for the range) — considered in 4903308, dropped after the owner decision of 2026-11-21", "verdict": "justified_custom"},
+    {"component": ".env* name rule", "alternative": "gitleaks path rule in .gitleaks-strict.toml", "verdict": "use_existing"},
+    {"component": "network block in tests (was conftest.py guard)", "alternative": "pytest-socket 0.8.1 (--disable-socket --allow-unix-socket)", "verdict": "use_existing"},
+    {"component": "scripts/ci/gitleaks.sh (download + SHA-256 + tree/range glue)", "alternative": "gitleaks-action (cannot be driven by the fixture tests); unchanged from cycle 1", "verdict": "justified_custom"},
+    {"component": ".gitleaks-strict.toml second config, UTF-16 rules", "alternative": "[extend] useDefault keeps the global default allowlist; gitleaks has no UTF-16 decoding; unchanged", "verdict": "justified_custom"},
+    {"component": "mutation testing of Python", "alternative": "mutmut 3.8.1 (source_paths, pytest_add_cli_args_test_selection)", "verdict": "use_existing"},
+    {"component": "scripts/ci/mutmut.sh", "alternative": "mutmut run alone does not fail on survivors; ~10 lines glue", "verdict": "justified_custom"},
+    {"component": "scripts/ci/prove_schema_guard.py", "alternative": "no tool mutates JSON Schemas against a test suite (checked cycle 1)", "verdict": "justified_custom"},
+    {"component": "scripts/ci/schema_lock.py + test_every_subschema_keyword_is_walked", "alternative": "none for normative hash + required map; mutmut does not mutate module-level tables, so the explicit test is the ready-tool gap filler", "verdict": "justified_custom"},
+    {"component": "batched secret fixtures (one repo, one tree + one range scan)", "alternative": "pytest parametrize with one repo per case (cycle 1, 130 s CI)", "verdict": "justified_custom"},
+    {"component": "conftest.py skip/xfail policy (DoD-5)", "alternative": "xfail_strict / pytest-error-for-skips miss collection-time skips and XPASS; unchanged", "verdict": "justified_custom"}
+  ],
+  "required_improvements": [
+    "Add a tests/secrets case: a PR range whose merge commit alone adds an empty .env must be red with 'gitleaks.sh: secret file name: .env'; verify it fails when -m is removed from the name-check git log (scripts/ci/gitleaks.sh:83).",
+    "Make the name check fail closed on a grep error: replace `grep -zP \"$NAMES\" || true` with `grep -zP \"$NAMES\" || [ $? -eq 1 ]` (scripts/ci/gitleaks.sh:44).",
+    "Re-run tests/secrets and CI; update reports/conformance/M0.1.json."
+  ],
+  "ponytail_review": "reports/critic/M0.1-cycle-2.review.md",
+  "lean_lines": 0
+}

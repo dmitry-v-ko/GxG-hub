@@ -1,0 +1,28 @@
+# Initial plugin config of the pilot ContextForge (seeded once into GXG_CONFIG__PLUGINS_YAML; the operator edits the
+# Railway variable afterwards). `tenants` and `connectors` are filled in after the bootstrap (team and gateway ids),
+# see docs/runbooks/m13-pilot-deploy.md. Files are materialised by deploy/railway/entrypoint.sh into /dev/shm/gxg-files.
+plugin_dirs: []
+plugins:
+  - name: UnifiedPDP
+    kind: plugins.unified_pdp.unified_pdp.UnifiedPDPPlugin
+    hooks: [tool_pre_invoke, resource_pre_fetch]
+    mode: sequential
+    priority: 10
+    config:
+      engines:
+        - {name: native, enabled: true, priority: 1, settings: {rules_file: /dev/shm/gxg-files/UNIFIED_PDP_RULES}}
+      combination_mode: all_must_allow
+      default_decision: deny
+      cache: {enabled: false}
+  - name: GxgIdentity
+    kind: plugins.gxg_identity.plugin.GxgIdentityPlugin
+    hooks: [tool_pre_invoke]
+    mode: sequential
+    priority: 1000
+    config:
+      private_key_file: /dev/shm/gxg-files/ADAPTER_KEY
+      kid: pilot-adapter-1
+      tenants: {'afecfe0f6572490a87e258d199e87347': {tenant: t-pilot, agent_domain: t-pilot.agents.gxg.example.com}}
+      connectors: {'d95c9047ea8c4c3f9dd77d7605d4baeb': telegram, '2f5ce608b3984b78aa6480889c106d5c': approval-mcp, 'c7152672d2214fb59b28be9b5a364001': kb}
+      # PILOT EXCEPTION to MCC-01 (owner decision 2026-11-25): third-party Apify MCP gets no identity header
+      external: ['b16429d3f5a344c3979aaa5311ac59dc']

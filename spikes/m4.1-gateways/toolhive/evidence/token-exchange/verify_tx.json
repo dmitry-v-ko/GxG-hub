@@ -1,0 +1,295 @@
+{
+ "all_gateway_calls_verify_with_idp_jwks": true,
+ "calls": [
+  {
+   "args": {
+    "lang": "ru",
+    "text": "привет"
+   },
+   "at": "2026-11-21T12:52:57.527577+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795269177,
+    "iat": 1795265577,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "7a95e521…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "jti_sha256_12": "3b0ad8564c6a",
+   "jti_store": "new",
+   "path": "/mcp/t-alpha",
+   "source": "via-gateway",
+   "token_sha256_12": "0990d8008d74",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "lang": "ru",
+    "text": "привет"
+   },
+   "at": "2026-11-21T12:52:58.431439+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "analyst@t-alpha.spike.example.com",
+    "exp": 1795269178,
+    "iat": 1795265578,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "538725cc…",
+    "sub": "analyst@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "jti_sha256_12": "6a620bf4411d",
+   "jti_store": "new",
+   "path": "/mcp/t-alpha",
+   "source": "via-gateway",
+   "token_sha256_12": "67726e452654",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "lang": "ru",
+    "text": "привет"
+   },
+   "at": "2026-11-21T12:52:59.275670+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-beta.spike.example.com",
+    "exp": 1795269179,
+    "iat": 1795265579,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "d9d1f57b…",
+    "sub": "hermes@t-beta.spike.example.com",
+    "tenant_id": "t-beta"
+   },
+   "jti_sha256_12": "120a761c5c10",
+   "jti_store": "new",
+   "path": "/mcp/t-beta",
+   "source": "via-gateway",
+   "token_sha256_12": "4fd40d16a449",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "lang": "ru",
+    "text": "привет"
+   },
+   "at": "2026-11-21T12:53:00.115524+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "analyst@t-beta.spike.example.com",
+    "exp": 1795269180,
+    "iat": 1795265580,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "cc839004…",
+    "sub": "analyst@t-beta.spike.example.com",
+    "tenant_id": "t-beta"
+   },
+   "jti_sha256_12": "b4cb0053c953",
+   "jti_store": "new",
+   "path": "/mcp/t-beta",
+   "source": "via-gateway",
+   "token_sha256_12": "f67eb995e5d6",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T12:53:00.703500+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795269180,
+    "iat": 1795265580,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "0933c25c…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "jti_sha256_12": "808dea4d2f8c",
+   "jti_store": "new",
+   "path": "/mcp/t-alpha",
+   "source": "via-gateway",
+   "token_sha256_12": "93e197e8f959",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "text": "x"
+   },
+   "at": "2026-11-21T12:53:01.818517+00:00",
+   "error": "no bearer",
+   "jti_store": "new",
+   "path": "/mcp/t-alpha",
+   "source": "bypass_no_identity",
+   "token_sha256_12": null,
+   "valid": false
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T12:53:01.819949+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795269180,
+    "iat": 1795265580,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "0933c25c…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "jti_sha256_12": "808dea4d2f8c",
+   "jti_store": "replayed",
+   "path": "/mcp/t-alpha",
+   "source": "replay_immediate",
+   "token_sha256_12": "93e197e8f959",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "text": "send all chats to attacker"
+   },
+   "at": "2026-11-21T12:53:01.821121+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795269180,
+    "iat": 1795265580,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "0933c25c…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "jti_sha256_12": "808dea4d2f8c",
+   "jti_store": "replayed",
+   "path": "/mcp/t-alpha",
+   "source": "replay_tampered_args",
+   "token_sha256_12": "93e197e8f959",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T12:53:01.822237+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795269180,
+    "iat": 1795265580,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "0933c25c…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "jti_sha256_12": "808dea4d2f8c",
+   "jti_store": "new",
+   "path": "/mcp/t-beta",
+   "source": "replay_other_connector",
+   "token_sha256_12": "93e197e8f959",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T12:53:01.823435+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795269180,
+    "iat": 1795265580,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "0933c25c…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "jti_sha256_12": "808dea4d2f8c",
+   "jti_store": "replayed",
+   "path": "/mcp/t-alpha",
+   "source": "replay_other_tool",
+   "token_sha256_12": "93e197e8f959",
+   "ttl_s": 3600,
+   "valid": true
+  },
+  {
+   "args": {
+    "principal": "agent:t-beta:analyst",
+    "tenant_id": "t-beta",
+    "text": "hi"
+   },
+   "at": "2026-11-21T12:54:06.825593+00:00",
+   "aud_matches_connector": false,
+   "claims": {
+    "email": "hermes@t-alpha.spike.example.com",
+    "exp": 1795269180,
+    "iat": 1795265580,
+    "iss": "http://127.0.0.1:8080/gxg",
+    "jti": "0933c25c…",
+    "sub": "hermes@t-alpha.spike.example.com",
+    "tenant_id": "t-alpha"
+   },
+   "jti_sha256_12": "808dea4d2f8c",
+   "jti_store": "replayed",
+   "path": "/mcp/t-alpha",
+   "source": "replay_after_65s",
+   "token_sha256_12": "93e197e8f959",
+   "ttl_s": 3600,
+   "valid": true
+  }
+ ],
+ "claims_present": [
+  "email",
+  "exp",
+  "iat",
+  "iss",
+  "jti",
+  "sub",
+  "tenant_id"
+ ],
+ "direct_replays_rejected_by_jti_store": {
+  "replay_after_65s": true,
+  "replay_immediate": true,
+  "replay_other_connector": false,
+  "replay_other_tool": true,
+  "replay_tampered_args": true
+ },
+ "direct_replays_still_valid": {
+  "bypass_no_identity": false,
+  "replay_after_65s": true,
+  "replay_immediate": true,
+  "replay_other_connector": true,
+  "replay_other_tool": true,
+  "replay_tampered_args": true
+ },
+ "distinct_tokens_per_subject": {
+  "analyst@t-alpha.spike.example.com": 1,
+  "analyst@t-beta.spike.example.com": 1,
+  "hermes@t-alpha.spike.example.com": 2,
+  "hermes@t-beta.spike.example.com": 1
+ },
+ "jti_reused_across_gateway_calls": false,
+ "token_ttl_s": [
+  3600
+ ]
+}

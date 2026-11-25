@@ -1,0 +1,6 @@
+{
+  "description": "группа с человеком в subjects grant'а",
+  "code": "group-human-subject",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].subjects[0]"
+}

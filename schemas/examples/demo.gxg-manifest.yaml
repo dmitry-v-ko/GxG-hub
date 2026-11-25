@@ -1,0 +1,41 @@
+# Manifest of the reference connector `demo` (docs/specs/demo-connector-v1.md)
+connector: demo
+version: 1.0.0
+contract: gxg-mcp-connector/v1
+tools:
+  - name: demo.boards.list
+    version: 1.0.0
+    title: "Список досок"
+    effect_class: read
+    action: read
+    resource: { type: board, scope: list }
+    input_schema: schemas/boards-list.input.json
+  - name: demo.notes.search
+    version: 1.0.0
+    title: "Поиск заметок"
+    effect_class: read
+    action: read
+    resource: { type: board, scope: list }
+    input_schema: schemas/notes-search.input.json
+    output_schema: ../../schemas/search-result.schema.json
+    limits: { max_results: 50, timeout_s: 20 }
+  - name: demo.note.get
+    version: 1.0.0
+    title: "Заметка"
+    effect_class: read
+    action: read
+    resource: { type: board, scope: single, from_arg: note_id, resolve: backend }
+    input_schema: schemas/note-get.input.json
+  - name: demo.message.propose
+    version: 1.0.0
+    title: "Отправка демо-сообщения"
+    effect_class: external_effect
+    action: propose
+    resource: { type: board, scope: single, from_arg: board_id, resolve: arg }
+    executes_via: demo.message.execute
+    dispatch_timeout_s: 60
+    input_schema: schemas/message-propose.input.json
+    preview:
+      title: "Отправка демо-сообщения"
+      fields: { recipient: "Получатель", text: "Текст" }
+    limits: { max_text_len: 4096 }

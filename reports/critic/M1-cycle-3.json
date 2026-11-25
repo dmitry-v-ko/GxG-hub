@@ -1,0 +1,85 @@
+{
+  "milestone": "M1",
+  "cycle": 3,
+  "branch": "claude/m1-connector-kit",
+  "commit": "a0c0b4a08e1245eaf2ec60a0239e6d59d4fa3a46",
+  "report_commits": ["0eb244b5697515a13588d567d9a1bad22185a157", "cbfaa2fe95183e759adcee4c96457cc3b770b688"],
+  "score": 9.0,
+  "caps_applied": [],
+  "dimensions": {"spec": 3, "tests": 2, "security": 2, "code": 1, "ops": 0.5, "evidence": 0.5},
+  "acceptance": [
+    {"id": "AC-M1-01", "status": "passed", "evidence": "clean clone @a0c0b4a, empty UV_CACHE_DIR, CPython 3.12.3: test_canonical.py::test_vectors_bytes_and_sha256 (9 vectors of the stage-A canonical-hash.json incl. utf16_key_order) and ::test_invalid_inputs (3, float_one_point_zero read from input_json) passed. Plan text still says 6/2; the vector file has 9/3 and all are tested"},
+    {"id": "AC-M1-02", "status": "passed", "evidence": "3 Hypothesis properties, max_examples=1000, passed; mutmut: no survivor in canonical.py"},
+    {"id": "AC-M1-03", "status": "passed", "evidence": "test_exec_token.py passed: 9 rejection cases, 4 s skew accepted, claims validated by execution-token.schema.json (non-UUID sub/jti → claims), outage back-off counts 1 fetch per 5 s"},
+    {"id": "AC-M1-04", "status": "passed", "evidence": "test_svc_jwt.py passed: same 9 cases + iss_unregistered; public_keys with 2 keys (either kid accepted, retired → kid); RFC 8037 §A.3 thumbprint; distinct jti; 8192/8193 length; exp-iat = 1; non-string iss"},
+    {"id": "AC-M1-05", "status": "passed", "evidence": "test_grants.py::test_check_table — 34 cases on policies/tenants/example.yaml, passed"},
+    {"id": "AC-M1-06", "status": "passed", "evidence": "test_changed_byte, test_missing_or_empty_signature, test_signed_by_foreign_key, test_malformed_signed_bundle (schema-based), test_signature_vector_loads (bundle-signature.json bytes reproduced and verified) passed; readiness not ready"},
+    {"id": "AC-M1-07", "status": "passed", "evidence": "test_bundle_older_than_24h_is_not_ready, test_bundle_of_exactly_24h_is_ready, test_loaded_bundle_goes_stale passed; GR-13a: test_rollback_is_rejected_after_restart, test_state_file_keeps_the_maximum passed"},
+    {"id": "AC-M1-08", "status": "passed", "evidence": "test_redact.py — 18 examples passed"},
+    {"id": "AC-M1-09", "status": "passed", "evidence": "pytest --cov-branch + check_coverage.py: exec_token 14/14, svc_jwt 12/12, grants 50/50, canonical 20/20, identity 8/8, _jwt 38/38 (100 %)"}
+  ],
+  "dod": [
+    {"id": "DoD-1", "status": "not_run", "note": "No PR to main yet (human step). CI: run 44814878816 on a0c0b4a cancelled by concurrency (superseded); run 44815009584 on 0eb244b (same code tree, report only) and 44815291834 on cbfaa2f: all jobs incl. ci-ok = success"},
+    {"id": "DoD-2", "status": "passed", "note": "All 9 AC automated"},
+    {"id": "DoD-3", "status": "passed", "note": "reports/conformance/M1.json present and its numbers reproduce; its 'one command in a clean clone' claim for mutmut is not true as written (finding 1)"},
+    {"id": "DoD-4", "status": "passed", "note": "mutmut 3.8.1, fresh clone, empty cache, Python 3.12.3: 955 mutants, 945 killed, 0 timeout, 10 survived — same names as the report; each checked and equivalent (review.md, 'mutmut survivors'). scripts/ci/mutate_kit.py deleted"},
+    {"id": "DoD-5", "status": "passed", "note": "430 passed, 148 subtests, 0 skipped/xfail"},
+    {"id": "DoD-6", "status": "passed", "note": "reports/plans/M1-cycle-3.md lists ready solutions for every self-written component; the check_coverage.py reason misses coverage-threshold (finding 2, minor)"}
+  ],
+  "cycle_2_items": [
+    {"item": "mutmut instead of mutate_kit.py, one command in a clean clone", "status": "done_with_note", "evidence": "config, REPO via uv.lock, results attached; the README command needs a root `uv sync` first (finding 1)"},
+    {"item": "kill the 20 non-equivalent survivors", "status": "done", "evidence": "none survives in the critic's run"},
+    {"item": "ready solutions per component (DoD-6), corrected check_coverage.py line", "status": "done", "evidence": "plan section present; reason for check_coverage.py incomplete (finding 2)"},
+    {"item": "ExecutorJwks back-off + fetch-counting test", "status": "done", "evidence": "test_outage_fetches_once_per_back_off"},
+    {"item": "stage A specs: public_keys + bundle-signature.json, GR-13a on disk, canonical-hash.json, rate_limited", "status": "done", "evidence": "tests listed under AC-M1-01/04/06/07; test_rate_limited_requires_retry_after"}
+  ],
+  "findings": [
+    {"severity": "minor", "ref": "DoD-4, cycle-2 item 1", "where": "packages/gxg-connector-kit/README.md:36; packages/gxg-connector-kit/pyproject.toml:19; reports/conformance/M1.json (DoD-4 note)",
+     "problem": "In a fresh clone `cd packages/gxg-connector-kit && uv run mutmut run` fails with 'Failed to spawn: mutmut': mutmut is a root dev dependency and `uv run` in a workspace member syncs only the member. Works only after a root `uv sync`. The report claims it was checked as one command in a clean clone",
+     "required_improvement": "Document the real command (`uv sync && cd packages/gxg-connector-kit && uv run mutmut run`) in README, [tool.mutmut] comment and report"},
+    {"severity": "minor", "ref": "DoD-6, M0.1 owner decision, Lean", "where": "scripts/ci/check_coverage.py; tests/ci/test_check_coverage.py; reports/plans/M1-cycle-3.md:38",
+     "problem": "Plan says no tool gives per-module branch-only thresholds; coverage-threshold (PyPI 0.6.2) reads coverage.json and has file_branch_coverage_min per path ([tool.coverage-threshold.modules]). Not considered. 75 lines of own code",
+     "required_improvement": "Replace with coverage-threshold config for the six modules, or record in the plan why it does not fit"},
+    {"severity": "minor", "ref": "GR-13a", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/grants.py:236-239",
+     "problem": "State file is renamed into place without fsync. After a power loss the file can be empty; at start json.loads('') fails and the service does not start (by design); recovery = deleting the file, which drops the rollback guard",
+     "required_improvement": "flush + os.fsync before os.replace"},
+    {"severity": "minor", "ref": "GR-12, readiness", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/grants.py:236-239",
+     "problem": "OSError on the state write (disk full, read-only volume) escapes load() as a non-BundleError; readiness keeps the previous or 'not loaded' reason. Still fail closed",
+     "required_improvement": "Map OSError on the write to BundleError with a clear _last_error; one test"}
+  ],
+  "required_improvements": [],
+  "backlog": [
+    "M1: README/report mutmut command needs a root `uv sync` first",
+    "M1: replace scripts/ci/check_coverage.py with coverage-threshold, or record why not",
+    "M1: fsync the GR-13a state file before os.replace",
+    "M1: OSError on the GR-13a state write → BundleError with a readiness reason",
+    "M1 (note): add rfc3339-validator to the kit dependencies so production checks format: date-time like the test env"
+  ],
+  "existing_solutions": [
+    {"component": "mutation testing", "alternative": "mutmut (DoD-4)", "verdict": "use_existing", "note": "Adopted this cycle; mutate_kit.py deleted"},
+    {"component": "bundle and exec-token structure checks", "alternative": "jsonschema + referencing with the repo schemas", "verdict": "use_existing", "note": "Adopted this cycle; hand-written checks removed. _schema.py is 37 lines of wiring"},
+    {"component": "schema copies in src/gxg_connector_kit/schemas + drift test", "alternative": "symlink (uv build fails, tried), path walk to repo (no repo in a wheel), build-time copy hook (uv_build has none)", "verdict": "justified_custom", "note": "Copies + byte-equality test is the smallest working option"},
+    {"component": "canonical (JCS + NFC + int/float rules)", "alternative": "rfc8785 (PyPI); canonicaljson is not JCS", "verdict": "justified_custom", "note": "~25 lines on stdlib; NFC, float ban and safe-int range are ours anyway; passes all 9 stage-A vectors incl. UTF-16 key order"},
+    {"component": "_jwt (claim rules over PyJWT)", "alternative": "PyJWT options, joserfc, authlib, jwcrypto", "verdict": "justified_custom", "note": "PyJWT does signature and alg; typ, single-string aud, exp-iat ≤ 60, jti cache and reason codes are not in PyJWT"},
+    {"component": "thumbprint (RFC 7638)", "alternative": "jwcrypto JWK.thumbprint(), joserfc", "verdict": "justified_custom", "note": "3 lines, now pinned by the RFC 8037 §A.3 vector"},
+    {"component": "b64url_decode", "alternative": "base64.urlsafe_b64decode (used underneath)", "verdict": "justified_custom", "note": "Adds the strict alphabet check the stdlib skips"},
+    {"component": "JtiCache", "alternative": "cachetools.TTLCache", "verdict": "justified_custom", "note": "Per-entry expiry (exp + 5 s), 12 lines"},
+    {"component": "ExecutorJwks (cache + back-off)", "alternative": "PyJWT PyJWKClient", "verdict": "justified_custom", "note": "PyJWKClient refetches on unknown kid and has no fail-closed rule after a failed refresh (AS-09); back-off is one field"},
+    {"component": "GR-13a state file", "alternative": "stdlib json + os.replace (used); sqlite", "verdict": "justified_custom", "note": "One number; needs fsync (finding 3)"},
+    {"component": "redact", "alternative": "structlog processors (still need the key list)", "verdict": "justified_custom", "note": "10 lines"},
+    {"component": "scripts/ci/check_coverage.py", "alternative": "coverage-threshold 0.6.2 (file_branch_coverage_min per path, reads coverage.json); coverage --fail-under and pytest-cov do not fit", "verdict": "use_existing", "note": "Plan considered only coverage/pytest-cov; small tool, so minor, not major (finding 2)"},
+    {"component": "GxgError rate_limited rule", "alternative": "validate to_dict() with jsonschema against error.schema.json", "verdict": "justified_custom", "note": "One if, same style as outcome_unknown; tests check the schema agrees"}
+  ],
+  "mutmut": {
+    "version": "3.8.1",
+    "python": "3.12.3",
+    "command_used": "uv sync && cd packages/gxg-connector-kit && uv run mutmut run && uv run mutmut results",
+    "modules": ["exec_token", "svc_jwt", "_jwt", "grants", "canonical"],
+    "total": 955, "killed": 945, "timeout": 0, "survived": 10, "survived_non_equivalent": 0,
+    "runtime": "1m22s",
+    "details": "reports/critic/M1-cycle-3.review.md, section 'mutmut survivors: are they really equivalent?'"
+  },
+  "ponytail_review": "reports/critic/M1-cycle-3.review.md",
+  "lean_lines": 70,
+  "process_note": "Score 9.0 after 6.0 (cycle 2). No critical or major findings; the minors go to docs/backlog.md under M1"
+}

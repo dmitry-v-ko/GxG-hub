@@ -1,0 +1,207 @@
+{
+  "milestone": "M0.1",
+  "cycle": 4,
+  "branch": "claude/m0.1-standard-tools",
+  "base": "88f8862 (M0.1 cycle 2 critic report)",
+  "commit": "e52a20d8696e1e04a6175b0b40ce2df815e997cd",
+  "commit_note": "Tested code commit. This report is added by the next commit on the same branch; that commit changes only reports/.",
+  "run_at": "2026-11-21T10:24:00Z",
+  "author": "Claude Code (executor, M0.1 cycle 4)",
+  "addresses": "reports/critic/M0.1-cycle-3.json required_improvements (major: re-block hook hid the --disable-socket test; minor: opt-out in fixtures; minor: --force-enable-socket claim)",
+  "environment": {
+    "local": {
+      "os": "linux x86_64",
+      "python": "3.12.3 (UV_PYTHON=3.12, same as CI)",
+      "uv": "0.11.32",
+      "gitleaks": "8.30.1 (release binary, SHA-256 checked)",
+      "command": "scripts/ci/check-all.sh -> check-all: OK"
+    },
+    "ci": {
+      "runner": "ubuntu-latest",
+      "python": "3.12",
+      "workflow": ".github/workflows/ci.yml",
+      "run_id": 44894082516,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44894082516",
+      "run_commit": "e52a20d8696e1e04a6175b0b40ce2df815e997cd",
+      "run_conclusion": "success (all 7 jobs: lint, types, tests, schema-guard, secrets, mutmut, ci-ok)",
+      "durations": {
+        "wall_time_seconds": "71",
+        "secrets_fixture_step_seconds": "32",
+        "mutmut_step_seconds": "53"
+      }
+    }
+  },
+  "contextforge_image_digest": null,
+  "sdk_versions": {
+    "mcp": null,
+    "fastmcp": null,
+    "note": "M0.1 does not use MCP SDKs"
+  },
+  "tool_versions": {
+    "gitleaks": "8.30.1",
+    "mutmut": "3.8.1",
+    "pytest": "9.2.0",
+    "ruff": "0.17.6",
+    "mypy": "2.4.1",
+    "pytest-socket": "0.8.1"
+  },
+  "policy_version": null,
+  "bundle_version": null,
+  "fixture_identity": "none",
+  "acceptance": [
+    {
+      "id": "AC-M0.1-01",
+      "status": "passed",
+      "expected": "All AC-M0-04 cases and M0 regressions are caught by gitleaks in CI; every fixture -> red job",
+      "actual": "tests/secrets/test_gitleaks.py: 21 tests, 150 subtests; every fixture is generated at test time (keys from openssl) and run through scripts/ci/gitleaks.sh exactly as the `secrets` job runs it, for both `tree` and `range`. One repo holds every history-free case at its own path, with one tree scan and one range scan, and asserts a gitleaks `File:` line for each case: 24 file names (*.pem/*.key/*.p12/*.pfx/.env*/id_* in any case, new: .envrc, .env-local, .ENV_PROD), 4 generated keys and 23 header placements (as in cycle 1). Empty files: all 24 names as empty files -> red in tree and range via the name check (incl. empty .env and empty server.pem). Key, server.pem and an empty gone/.env added and removed inside the PR, plus a pure rename notes.txt -> KEY.PEM -> tree green, range red with every one named. Kept from cycle 1: zero-SHA range, merge commit, plan quote (passes; 6 variants and 3 other paths fail), clean files incl. .env.example, bad revisions, this repository. Checked that the tests fail without the fixes: name check disabled -> 2 tests red; old .env regex -> .envrc/.env-local/.ENV_PROD subtests red. Cycle 3: an empty .env added only by a merge commit -> range red with 'gitleaks.sh: secret file name: .env' (red with -m removed from the name-check git log: checked by hand, 1 failed); a grep that fails on -P (fake on PATH, exit 2) -> tree and range red on a clean repo (red with the old `|| true`: checked by hand, 1 failed).",
+      "evidence": [
+        "CI job `secrets` (run 44894082516)",
+        "local: uv run pytest tests/secrets -> 21 passed, 150 subtests, 49 s"
+      ]
+    },
+    {
+      "id": "AC-M0.1-02",
+      "status": "passed",
+      "expected": "scripts/ci/check_secrets.py and its tests deleted; no other hand-made secret scanner",
+      "actual": "check_secrets.py and its test stay deleted; all content matching is gitleaks (.gitleaks.toml, .gitleaks-strict.toml). The only code outside gitleaks is the owner-approved file-name check in scripts/ci/gitleaks.sh: `git ls-tree -r -z --name-only` for the tree and `git log -z --name-only --diff-filter=d -m` for each commit of the range, piped through `grep -zP` with the strict rule's regex. It exists because gitleaks skips empty files, and it reads no content. Cycle 3: a grep error (exit 2) now fails the check (`|| [ $? -eq 1 ]`).",
+      "evidence": [
+        "docs/implementation-plan-v1.md AC-M0.1-02 (owner decision 2026-11-21)",
+        "git show --stat 5964ee4"
+      ],
+      "owner_decision": "2026-11-21: the one-line forbidden-filename check is an allowed exception (docs/implementation-plan-v1.md, AC-M0.1-02)"
+    },
+    {
+      "id": "AC-M0.1-03",
+      "status": "passed",
+      "expected": "`mutmut run` on the M0 key-condition modules (scripts/ci, conftest.py) by one command; report attached; no surviving non-equivalent mutants",
+      "actual": "scripts/ci/mutmut.sh ([tool.mutmut]: source_paths scripts/ci/, conftest.py; tests via pytest_add_cli_args_test_selection, so mutmut 3.8.1 prints no deprecation warning): 654 mutants, 654 killed (cycle 4: -4 for the deleted pytest_runtest_call hook, +23 for pytest_collection_modifyitems). The drop from 669 comes from the network guard leaving conftest.py (pytest-socket). The module-level keyword tables of schema_lock.py, which mutmut does not mutate, are covered by tests/ci/test_schema_lock_cli.py::test_every_subschema_keyword_is_walked: hand check, dropping 'else', 'dependentSchemas' or 'prefixItems' turns it red. Lines with `# pragma: no mutate (<reason>)`: codec spelling, ensure_ascii, help/description text (now incl. --write and --only), terminal colour, subprocess options.",
+      "evidence": [
+        "CI job `mutmut` (run 44894082516)",
+        "reports/mutmut/M0.1.txt (654 lines, all killed)"
+      ]
+    },
+    {
+      "id": "AC-M0.1-04",
+      "status": "passed",
+      "expected": "prove_schema_guard.py replaced by a ready tool, or kept with a written justification (critic confirms)",
+      "actual": "Unchanged from cycle 1: kept with a written reason; the critic confirmed it in cycle 1 (reports/critic/M0.1-cycle-1.json).",
+      "evidence": [
+        "reports/plans/M0.1-cycle-1.md",
+        "reports/critic/M0.1-cycle-1.json AC-M0.1-04",
+        "CI job `schema-guard` (run 44894082516)"
+      ]
+    },
+    {
+      "id": "AC-M0-01",
+      "status": "passed",
+      "expected": "uv sync && uv run pytest is green without network beyond the package registry",
+      "actual": "Network is blocked by pinned pytest-socket 0.8.1 (`--disable-socket --allow-unix-socket` in addopts); the conftest guard is deleted. tests/ci/test_pytest_policy.py: TCP connect, connect_ex, UDP sendto to 192.0.2.1:9, IPv6 sendto to 2001:db8::1 and create_connection all raise SocketBlockedError. A Unix socket still reaches the OS. uv run pytest -> 107 passed, 136 subtests, 0 skipped. Cycle 4: the cycle-3 pytest_runtest_call hook is deleted. No per-test opt-out: conftest.py pytest_collection_modifyitems records (via _record, DoD-5 style) every test with the enable_socket or allow_hosts marker or the socket_enabled fixture, so the run is red; this covers fixtures too, since it is decided at collection. test_no_per_test_network_opt_out expects a red run for the marker, the fixture, allow_hosts, and the marker with the network used only in fixture setup. Checked by hand at e52a20d: '--disable-socket' removed from addopts -> uv run pytest tests/ci: 5 failed (the 5 network tests), 71 passed; uv run pytest --force-enable-socket tests/ci/test_pytest_policy.py -> 5 failed (the 5 network tests), 28 passed; probe with the marker + network in fixture teardown, and with socket_enabled under a module-scoped network fixture -> both named in the red summary.",
+      "evidence": [
+        "CI job `tests` (run 44894082516)"
+      ]
+    },
+    {
+      "id": "AC-M0-04",
+      "status": "passed",
+      "expected": "CI rejects a commit with a file matching the secret patterns (*.pem, .env, the private key header)",
+      "actual": "See AC-M0.1-01. Empty .env/server.pem red in tree and range, also when the empty .env comes only from a merge commit.",
+      "evidence": [
+        "CI job `secrets` (run 44894082516)"
+      ]
+    }
+  ],
+  "dod": [
+    {
+      "id": "DoD-1",
+      "status": "pending",
+      "note": "Merge into main via PR is done by a human after critic review."
+    },
+    {
+      "id": "DoD-2",
+      "status": "passed",
+      "note": "AC-M0.1-01..03 automated; AC-M0.1-04 needs critic confirmation by its wording."
+    },
+    {
+      "id": "DoD-3",
+      "status": "passed",
+      "note": "This file; CI run ID above."
+    },
+    {
+      "id": "DoD-4",
+      "status": "passed",
+      "note": "mutmut on scripts/ci and conftest.py: 654/654 killed; keyword tables covered by an explicit test. Schema mutations: prove_schema_guard.py 59/59."
+    },
+    {
+      "id": "DoD-5",
+      "status": "passed",
+      "note": "No skip/xfail; and no per-test network opt-out (enable_socket / allow_hosts markers, socket_enabled fixture)."
+    },
+    {
+      "id": "DoD-6",
+      "status": "passed",
+      "note": "reports/plans/M0.1-cycle-4.md: no new component; pytest-socket has no switch that forbids its opt-outs, so the repository's own _record (DoD-5) records them."
+    }
+  ],
+  "tests": [
+    {
+      "id": "tests/secrets/test_gitleaks.py (21 tests, 150 subtests; `secrets` job)",
+      "status": "passed"
+    },
+    {
+      "id": "tests/ci/test_pytest_policy.py (33 tests)",
+      "status": "passed"
+    },
+    {
+      "id": "tests/ci/test_schema_guard.py (15 tests: 1 e2e, 14 in-process)",
+      "status": "passed"
+    },
+    {
+      "id": "tests/ci/test_schema_lock_cli.py (28 tests, +20 for subschema keywords)",
+      "status": "passed"
+    },
+    {
+      "id": "uv run pytest (default run)",
+      "status": "passed",
+      "note": "107 passed, 136 subtests passed, 0 skipped"
+    },
+    {
+      "id": "ruff check / format --check; mypy --strict incl. tests/secrets",
+      "status": "passed"
+    },
+    {
+      "id": "scripts/ci/prove_schema_guard.py",
+      "status": "passed",
+      "note": "59/59"
+    },
+    {
+      "id": "scripts/ci/gitleaks.sh tree HEAD; range 0000..HEAD",
+      "status": "passed"
+    },
+    {
+      "id": "scripts/ci/mutmut.sh",
+      "status": "passed",
+      "note": "654/654 killed"
+    }
+  ],
+  "known_limitations": [
+    "The file-name check in gitleaks.sh copies the regex of the strict file-name rule, plus a lookahead for .env.example (RE2 has none). The two can drift apart. Both are tested on their own: non-empty fixtures need a gitleaks `File:` line, empty fixtures need the gitleaks.sh line.",
+    "Archives (zip/gz) are not unpacked (--max-archive-depth 0), as in M0.",
+    "The default gitleaks rules run with gitleaks' default allowlist (skips *.bin, *.pdf, images, node_modules/, ...). The AC-M0-04 rules run in .gitleaks-strict.toml without it; other default rules (API tokens) do not see those paths.",
+    ".gitleaksignore pins 7 historical findings by fingerprint (commit:path:rule:line): the two old (path, blob) pairs (5 findings: reports/conformance/M0.json@9d34699, reports/critic/M0-cycle-1.json@3182606) and 2 default-rule false positives in history (Ed25519PrivateKey type name @52874f5, fake key body of the deleted test @f5cf832). One extra allowlist: SHA-256 digests in tests/contract/schema-lock.json for generic-api-key.",
+    "The config, ignore file and wrapper come from the PR head, as the old scanner did: a PR can weaken them. CODEOWNERS marks them as owned (no required review, owner decision).",
+    "gitleaks.sh downloads linux x64 only; elsewhere set GITLEAKS to a local 8.30.1 binary (version checked).",
+    "mutmut cannot follow subprocesses; the subprocess tests are marked e2e and deselected under mutmut, and the logic they drive is tested in-process.",
+    "`# pragma: no mutate` on the three ensure_ascii lines also hides the non-equivalent False->True mutant; tests/ci/test_schema_lock_cli.py pins non-ASCII hashing and rendering, so that mutant would be killed.",
+    "`.env[^/]*` also matches names such as .envoy.yaml; this is the `.env*` the milestone asks for."
+  ],
+  "mutmut": {
+    "command": "scripts/ci/mutmut.sh",
+    "report": "reports/mutmut/M0.1.txt",
+    "mutants": 654,
+    "killed": 654,
+    "survived": 0,
+    "ci_frequency": "every push and PR (job `mutmut`, required via ci-ok)"
+  },
+  "plan": "reports/plans/M0.1-cycle-4.md",
+  "plan_source": "docs/implementation-plan-v1.md from claude/admiring-planck-vzys0x@760903a, unchanged"
+}

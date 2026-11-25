@@ -1,0 +1,6 @@
+{
+  "description": "RID на необъявленный connection",
+  "code": "dangling-connection",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].resources[0]"
+}

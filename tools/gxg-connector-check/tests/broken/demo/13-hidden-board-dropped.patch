@@ -1,0 +1,15 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index d05d143..96ad3aa 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -126,8 +126,8 @@ class Connector:
+         requested: list[str] | None = args.get("board_ids")
+         limit: int = args.get("limit", 20)
+         readable = self._readable(access)
+-        if requested is not None and any(b not in readable for b in requested):
+-            raise GxgError("not_found", NOT_FOUND)  # GR-17: a named board without a grant
++        if requested is not None:  # BROKEN: a named board without a grant is silently dropped (GR-17)
++            requested = [b for b in requested if b in readable]
+         boards = sorted(set(requested) if requested is not None else readable)
+         binding = json.dumps([ident.tenant_id, ident.principal, query, boards, limit]).encode()
+         offset = self._cursor.offset(binding, args.get("cursor"))

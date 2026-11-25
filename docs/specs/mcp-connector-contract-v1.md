@@ -1,55 +1,134 @@
 # GxG MCP Connector Contract v1
 
-**Status:** единственный нормативный контракт MCP-коннекторов нового GxG Hub; реализация и прохождение тестов не подтверждены. 2026-11-20.
+**Статус:** единственный нормативный контракт MCP-коннекторов GxG Hub. Реализация и прохождение тестов не подтверждены. 2026-11-20.
 
-**Правило приоритета:** этот документ определяет интерфейсы и термины. [Security & Action Gate](security-and-action-gate-v1.md) определяет доверие/разрешения, [Approval State Machine](approval-state-machine-v1.md) — жизненный цикл согласований, [Toolkit](mcp-toolkit-v1.md) — разработку. В `docs/MCP_CONNECTOR_CONTRACT.md` остаётся только указатель; конкурирующих требований нет.
+MCP — протокол обнаружения и вызова. Этот документ — **профиль GxG поверх MCP**: требования к именам, схемам, identity, результатам, ошибкам, эффектам и тестам. Нестандартные обязательные поля в MCP wire protocol не добавляем. Security context передаётся только доверенным каналом ([SEC-03](security-v1.md#identity)).
 
-## Что стандартизируется
+## Словарь
 
-MCP — протокол discovery/invoke; GxG application profile — требования к именам, схемам, идентичности, результатам, побочным эффектам и тестам. Не добавлять обязательные нестандартные поля в MCP wire protocol; security context передавать только доверенным проверяемым каналом.
+### Имена tools
 
-## Canonical vocabulary
+`<domain>.<object>.<verb>`, нижний регистр, точки как разделители: `kb.documents.search`, `telegram.messages.search`, `telegram.message.propose`, `crm.contact.propose_update`.
 
-- **Effect class** (в metadata/manifest, не в необязательном аргументе клиента): `read`, `write_reversible`, `external_effect`, `high_risk`. `read` не вызывает изменения бизнес-состояния/отправки. `write_reversible` — управляемая внутренняя запись; `external_effect` — отправка/публикация/запись вне GxG; `high_risk` — затрагивающие деньги, большие объёмы, необратимые или особо чувствительные действия.
-- **Approval policy:** `not_required`, `required`, `policy_decides`; конкретное правило действует серверно по tenant/tool/resource/role/risk. Высокий риск может требовать двух человек и/или MFA. Approval не заменяет разрешение на tool.
-- **Error code** (единый словарь): `invalid_input`, `unsupported_version`, `unauthenticated`, `permission_denied`, `resource_forbidden`, `approval_required`, `approval_rejected`, `approval_expired`, `rate_limited`, `temporarily_unavailable`, `timeout_before_start`, `outcome_unknown`, `internal_error`. Прежние алиасы `forbidden`, `unknown_outcome`, `timeout` в новых контрактах не использовать. Map into correct MCP protocol/tool error structure for selected version.
-- **Outcome:** `succeeded`, `failed_before_effect`, `outcome_unknown`. Never call an attempted external effect an unambiguous failure after a timeout without proof.
-- **Canonical serialization:** validate against a schema, then canonicalize normalized JSON deterministically before server-side hashing (e.g. RFC 8785/JCS with defined Unicode and number behavior). Include tool/version, tenant, principal, account/resource and connection in the protected intent envelope; approval must bind to same values.
+Глаголы с особым смыслом:
 
-## Requirements
+| Глагол | Смысл |
+| --- | --- |
+| `search`, `get`, `list`, `read`, `collect` | `read` |
+| `propose`, `propose_<action>` | Создаёт intent эффекта ([Эффекты](effects-and-approval-v1.md)) |
+| `execute`, `reconcile` | Внутренние операции, вызываются только Executor'ом и **никогда не публикуются в ContextForge** |
 
-**MCC-01 — Discovery and versioning.** Tool MUST have stable unique name, purpose, typed `inputSchema`, version in a GxG sidecar manifest and effect classification. Provide `outputSchema` and structured content when compatible with the pinned MCP/SDK version. Breaking changes require new major version; no opaque provider-specific passthrough with raw credentials.
+### Effect class
 
-**MCC-02 — Authentication and identity.** Request MUST bind to verified tenant and immutable caller principal; transport trust, issuer/audience/expiry, signing/rotation and delegation chain are described in [Security](security-and-action-gate-v1.md). Model-provided `agent_id`, `tenant_id`, `approved`, raw forwarded HTTP headers or opaque approval IDs never prove authority. Downstream MUST fail closed when signed claims/introspection are absent.
+`read`, `write_reversible`, `external_effect`, `high_risk`. Определения и путь исполнения — в [Эффекты и согласование](effects-and-approval-v1.md#классы-эффектов-и-путь-исполнения).
 
-**MCC-03 — Resource access.** Permission is intersection of tenant, caller, tool, connection, exact resource, scopes and risk policy. Connector MUST check e.g. specific chat/document/CRM account before using provider credentials, and reject direct-network calls that lack equivalent trusted context. No token passthrough or cross-tenant provider credential reuse.
+### Коды ошибок
 
-**MCC-04 — Structured results.** MCP results SHOULD use `structuredContent` for typed output on compatible clients. Search operations MUST use a bounded result contract matching [search result JSON Schema](../../schemas/search-result.schema.json) or a documented compatible domain-specific schema. Empty success is not a technical failure; include `next_cursor`, completeness and source references when relevant. Raw message history and secrets never leak through generic audit.
+| Код | Когда | Повторять? |
+| --- | --- | --- |
+| `invalid_input` | Аргументы не прошли схему или доменную валидацию | Нет |
+| `unsupported_version` | Неподдерживаемая версия tool'а или контракта | Нет |
+| `unauthenticated` | Нет или невалидна identity | Нет |
+| `permission_denied` | Нет права на tool или операцию | Нет |
+| `resource_forbidden` | Право на ресурс есть, но не на это действие (например, `read` есть, `propose` нет): существование ресурса вызывающему уже известно. **Нет права на названный ресурс вообще → `not_found`** (GR-17) | Нет |
+| `not_found` | Ресурс не существует **или** скрыт правами (не различаем, чтобы не раскрывать существование) | Нет |
+| `conflict` | Нарушено предусловие: версия записи, повтор `idempotency_key` с другими параметрами | Нет, нужен новый запрос |
+| `effect_disabled` | Эффект выключен: kill switch, tool не включён | Нет |
+| `rate_limited` | Лимит Hub или провайдера (flood-wait); `retry_after_s` на верхнем уровне ошибки (обязателен) | Да, после паузы |
+| `temporarily_unavailable` | Backend или провайдер временно недоступен, запрос **не** выполнен; для `read` — также таймаут после отправки (повтор безопасен) | Да, для `read` |
+| `timeout_before_start` | Таймаут с доказательством, что провайдер не получил запрос | Да |
+| `outcome_unknown` | Исход эффекта неизвестен | **Никогда автоматически**, только reconciliation |
+| `internal_error` | Ошибка коннектора | Для `read` — да, ограниченно |
 
-**MCC-05 — Errors.** Implement the canonical error codes above with a stable machine-readable envelope and map them to standard MCP tool errors (`isError` where appropriate), not always protocol errors. `timeout_before_start` is only used with reliable proof that no provider request occurred. `outcome_unknown` is never automatically retryable.
+Прежние коды `forbidden`, `unknown_outcome`, `timeout`, `approval_required`, `approval_rejected`, `approval_expired` не используются. Состояния согласования — это статусы intent'а, а не ошибки.
 
-**MCC-06 — Routing and fallback.** Inside a domain connector, technical fallback may choose an approved provider for safe transport failures. It MUST NOT widen resource grants, trigger automatic semantic deep search on a valid empty result, or retry non-idempotent effects after an unknown outcome. Agent judges semantic adequacy.
+### Outcome эффекта
 
-**MCC-07 — Side effects.** Every effect tool MUST have immutable intent/parameter validation, tenant-scoped resource authorization, explicit approval decision when required, a unique idempotency key and durable execution receipt. Before dispatch the executor MUST obtain an atomic reservation from the trusted approval/execution authority. See [effect intent schema](../../schemas/effect-intent.schema.json), [effect result schema](../../schemas/effect-result.schema.json) and [Approval State Machine](approval-state-machine-v1.md). A model-supplied `approval_id` is never a credential.
+`succeeded`, `failed_before_effect`, `outcome_unknown` ([effect-result.schema.json](../../schemas/effect-result.schema.json)).
 
-**MCC-08 — Reliability, cost and audit.** Finite timeouts, response limits, batch size, rate/cost limits and provider-specific flood-waits. Correlate invocation/task/approval/outcome IDs across services, redact credentials and private messages. Document retention and recoverability; technical telemetry is not a business source of truth.
+## Требования
 
-**MCC-09 — Publication gate.** Before registering a connector, execute contract/integration tests across two tenants, two agents, invalid schemas, forged IDs/headers, exact resource denials, errors and retries, plugin crash/omission, direct-to-connector access, approval races and audit redaction. See [Conformance Matrix](conformance-matrix-v1.md). Unverified = disabled for production effects.
+**MCC-01 — Discovery, версии, manifest.**
+- Каждый tool MUST иметь стабильное уникальное имя, описание, типизированную `inputSchema` и, если это совместимо с закреплённой версией MCP SDK, `outputSchema`.
+- Коннектор MUST иметь manifest (`gxg-manifest.yaml`, схема [gxg-manifest.schema.json](../../schemas/gxg-manifest.schema.json)) со списком tools. Для каждого tool указываются версия (semver), effect class, действие и тип ресурса ([GR](resource-grants-v1.md#действия)), подписи для preview (EFF-30), лимиты и ссылки на схемы. Согласование по умолчанию определяется классом (AP-01), отдельного поля нет.
+- Breaking change — новая major-версия tool'а. Старая версия поддерживается до явного вывода.
 
-**MCC-10 — Gate and human approval.** Action Gate MUST evaluate approval policy server-side and return `approval_required` without a provider call when needed. Approval Service is a **separate durable authority**, and executor MUST validate exact tenant/principal/tool+version/resource/hash/expiry/reservation. All protected effect paths must be fail-closed, including direct connector calls and plugin failure. Runtime proof is required; a `tool_pre_invoke` hook's mere existence is not enough.
+**MCC-02 — Identity.**
+- Каждый вызов MUST быть привязан к проверенным tenant и principal, полученным доверенным каналом ([SEC-03](security-v1.md#identity)).
+- Аргументы `agent_id`, `tenant_id`, `approved`, `approval_id`, `user` и любые заголовки от клиента полномочий не дают.
+- Без валидных claims — `unauthenticated`.
 
-## Example schemas and metadata
+**MCC-03 — Доступ к ресурсам.**
+- Коннектор MUST проверить право на конкретный ресурс **до** получения provider credentials и обращения к провайдеру. Модель прав, формат RID и поиск по многим ресурсам — [Права на ресурсы](resource-grants-v1.md) (GR-01…GR-17).
+- Credentials выбираются по проверенному tenant и connection.
+- Нет token passthrough, нет общих credentials между tenant'ами.
+  - Исключение (решение владельца 2026-11-23): KB-сервис (ADR-0006) использует одну роль базы `gxg_kb_reader` на все tenant'ы одного Supabase-проекта; изоляция — RLS по `gxg.workspace_id`, которую сервис ставит в каждой транзакции, плюс фильтр в SQL. Роль на tenant через `credential_ref` вводится при появлении второго tenant'а.
 
-Machine-readable schemas are in `schemas/`. They describe domain envelopes, **not a replacement MCP wire format**. Tool-specific input/output schemas are supplied by each connector; the toolkit's validation tests use the shared envelopes and fixtures. The mandatory security and approval checks are server-side and cannot be established by schema validation alone.
+**MCC-04 — Результаты.**
+- Типизированный результат передаётся в `structuredContent` (с дублем в `content` для старых клиентов).
+- Поиск MUST соответствовать [search-result.schema.json](../../schemas/search-result.schema.json) или документированной совместимой схеме: ограниченный размер, `next_cursor`, `complete`, `partial_reasons`, `source_refs`.
+- Пустой результат — успех, а не ошибка.
+- Секреты и внутренние идентификаторы провайдера не возвращаются.
 
-## Existing systems
+**MCC-05 — Ошибки.**
+- Коды из словаря выше передаются в стабильном машиночитаемом виде ([error.schema.json](../../schemas/error.schema.json)). Tool-ошибки возвращаются как MCP tool error (`isError: true`) со `structuredContent` `{code, message, retryable, details?}`. Протокольные ошибки MCP используются только для протокольных проблем.
+- `timeout_before_start` — только при доказательстве отсутствия запроса к провайдеру.
+- `outcome_unknown` никогда не помечается как `retryable`.
 
-- Knowledge: audit and wrap the existing MCP only as necessary; don't duplicate KB or assume its current read/write keys identify agents/tenants.
-- Telegram: existing session/archive owner remains; scoped reads first. Send tool off until the gate and approval tests pass.
-- Signals: domain state remains in Signals; source collection is a read port through ContextForge, external actions use a separate effect port through ContextForge. Business outcomes are not owned by the gateway.
+**MCC-06 — Маршрутизация и fallback.**
+- Внутри коннектора допустим технический fallback на другой метод или провайдера при `temporarily_unavailable` / `timeout_before_start` / `rate_limited`, но только для `read` и для эффектов до `dispatch`.
+- Fallback MUST NOT расширять права, запускать дорогой поиск при валидном пустом результате или повторять эффект после `outcome_unknown`.
 
-## External references
+**MCC-07 — Эффекты.**
+- Tools с классом `external_effect` и `high_risk` публикуются только как `propose`.
+- Коннектор реализует внутренние `execute` и `reconcile` по [Эффекты и согласование](effects-and-approval-v1.md) (EFF-04…EFF-08, EFF-18, EFF-19, EFF-25, EFF-30) и HTTP-контракту AS-12…AS-14 из [Approval Service](approval-service-v1.md#контракт-коннектора-для-executorа).
+- `write_reversible` вызывается напрямую, но требует `idempotency_key`, проверки ресурса и аудита.
 
-- [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25)
+**MCC-08 — Надёжность, стоимость, аудит.**
+- Конечные таймауты, лимиты размера ответа и батча, rate/cost limits, учёт flood-wait провайдера.
+- Корреляция `request_id`, `intent_id`, `business_task_id` во всех логах.
+- Редакция credentials, текстов сообщений и персональных данных ([SEC-18](security-v1.md#аудит)).
+
+**MCC-09 — Health.**
+- `GET /healthz` (жив) и `GET /readyz` (готов). Для всех коннекторов: backend доступен и загружен валидный bundle (GR-12). Только для коннекторов с effect tools (`executes_via` в manifest): ещё Approval Service и JWKS. Read-only коннектор не зависит от Approval Service. Без раскрытия конфигурации.
+
+**MCC-10 — Публикация.**
+- Коннектор регистрируется в ContextForge только после прохождения тестов соответствующего этапа [Conformance Matrix](conformance-matrix-v1.md).
+- Effect tools регистрируются выключенными ([SEC-21](security-v1.md#аварийные-выключатели)).
+
+## Пример manifest
+
+```yaml
+connector: telegram
+version: 1.0.0
+contract: gxg-mcp-connector/v1
+tools:
+  - name: telegram.messages.search
+    version: 1.0.0
+    effect_class: read
+    action: read                     # действие для GrantResolver
+    resource: { type: chat, scope: list }   # поиск по набору allowed()
+    input_schema: schemas/messages-search.input.json
+    output_schema: ../../schemas/search-result.schema.json
+    limits: { max_results: 50, timeout_s: 20 }
+  - name: telegram.message.propose
+    version: 1.0.0
+    effect_class: external_effect
+    action: propose
+    resource: { type: chat, from_arg: chat_id, resolve: backend }
+    executes_via: telegram.message.execute   # внутренний, не публикуется
+    input_schema: schemas/message-send.input.json
+    limits: { max_text_len: 4096 }
+```
+
+## Существующие системы
+
+- **KB:** у неё уже есть MCP. Проводим аудит и, если нужно, делаем тонкий wrapper. Не считаем, что текущие ключи read/write/admin разделяют агентов и tenant'ов, пока это не проверено.
+- **Telegram:** session-owner остаётся прежним. Сначала только чтение, `propose` выключен до этапа C.
+- **Signals:** состояние остаётся в Signals; сбор и действия идут через Hub ([Интеграция](service-integration-v1.md)).
+
+## Ссылки
+
+- [MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25)
 - [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
-- [ContextForge upstream](https://github.com/IBM/mcp-context-forge)
+- [ContextForge](https://github.com/IBM/mcp-context-forge)

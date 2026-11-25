@@ -1,0 +1,17 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index d05d143..012b24c 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -125,7 +125,11 @@ class Connector:
+         query: str = args["query"]
+         requested: list[str] | None = args.get("board_ids")
+         limit: int = args.get("limit", 20)
+-        readable = self._readable(access)
++        try:
++            readable = self._readable(access)
++        except GxgError:
++            logs.startup.warning("search failed for query %s", query)  # BROKEN: the caller's text in a log line
++            raise
+         if requested is not None and any(b not in readable for b in requested):
+             raise GxgError("not_found", NOT_FOUND)  # GR-17: a named board without a grant
+         boards = sorted(set(requested) if requested is not None else readable)

@@ -1,0 +1,15 @@
+# F3: widening through group membership only (the approval file is the same in base and head)
+tenant: t-alpha
+schema_version: 1
+rules:
+  - id: crm-two-person
+    match:
+      tools: [demo.message.propose]
+    decision: require_approval
+    approvers: [group:fin]
+  - id: tg-partner-auto
+    match:
+      tools: [demo.message.propose]
+      requesters: [group:actors]
+    decision: auto_approve
+    limits: { max_per_hour: 5 }

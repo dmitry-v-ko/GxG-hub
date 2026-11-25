@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "demo.note.get input",
+  "description": "One note by id. Its board comes from the backend, never from arguments (GR-01, GR-03); extra fields are ignored.",
+  "type": "object",
+  "required": ["note_id"],
+  "properties": {
+    "note_id": {"type": "string", "minLength": 1, "maxLength": 64}
+  }
+}

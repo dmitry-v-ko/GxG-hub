@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gxg.dev/schemas/source-event.schema.json",
+  "title": "Source event (hint to Signals, SI-03)",
+  "description": "Webhook from a source service to Signals: new data exists at a position. Identifiers only, no content (SEC-18). Signals reacts by calling <source>.collect through the Hub; it never builds a SourceInboxItem from this body.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "type", "tenant_id", "source_ref", "sent_at"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "format": "uuid", "description": "Deterministic per source position; receivers dedupe on it" },
+    "type": { "type": "string", "enum": ["telegram.message.created"] },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "source_ref": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*:[^/]+/.+$", "description": "RID of the source, e.g. telegram:<connection>/chat/<chat_ref>" },
+    "chat_ref": { "type": "string", "pattern": "^tgc1_[A-Za-z0-9_-]{32}$", "description": "telegram.message.created only: archive chat reference, same as in source_ref" },
+    "message_id": { "type": "integer", "minimum": 1, "description": "telegram.message.created only: position in the chat" },
+    "sent_at": { "type": "string", "format": "date-time", "description": "Time of the source item (Telegram message date), RFC 3339; not the delivery time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "telegram.message.created" } } },
+      "then": { "required": ["chat_ref", "message_id"] }
+    }
+  ]
+}

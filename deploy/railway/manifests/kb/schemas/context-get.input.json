@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kb.context.get input",
+  "description": "Context for a question: excerpts of the best matching KB documents in the collections the caller may read, within max_chars. Same grants as kb.documents.search.",
+  "type": "object",
+  "required": ["query"],
+  "properties": {
+    "query": {"type": "string", "minLength": 1, "maxLength": 200},
+    "collections": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {"type": "string", "minLength": 1, "maxLength": 64}
+    },
+    "max_documents": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5},
+    "max_chars": {"type": "integer", "minimum": 100, "maximum": 8000, "default": 4000}
+  }
+}

@@ -1,0 +1,7 @@
+# No tenants/ file for t-ghost: only schema-level checks of the rules run.
+tenant: t-ghost
+schema_version: 1
+defaults: { execution_window: 2h }
+rules:
+  - { id: r, match: { requesters: [agent:t-ghost:nobody] }, decision: require_approval, approval_ttl: 25h }
+  - { id: r2, match: { requesters: [agent:t-ghost:nobody] }, decision: require_approval, execution_window: 3h }

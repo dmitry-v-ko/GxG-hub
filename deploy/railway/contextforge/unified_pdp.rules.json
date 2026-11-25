@@ -1,0 +1,51 @@
+[
+  {
+    "id": "deny:agents-never-execute",
+    "roles": [
+      "*"
+    ],
+    "actions": [
+      "tools.invoke.*execute*",
+      "tools.invoke.*reconcile*"
+    ],
+    "resource_types": [
+      "*"
+    ],
+    "resource_ids": [
+      "*"
+    ],
+    "reason": "EFF-02, security-v1 step 2: execute and reconcile are never callable through ContextForge"
+  },
+  {
+    "id": "t-pilot.pilot",
+    "roles": [
+      "*"
+    ],
+    "conditions": {
+      "subject.email": "pilot@t-pilot.agents.gxg.example.com"
+    },
+    "actions": [
+      "tools.invoke.telegram-t-pilot-telegram-messages-search",
+      "tools.invoke.telegram-t-pilot-telegram-thread-read",
+      "tools.invoke.telegram-t-pilot-telegram-message-propose",
+      "tools.invoke.approval-t-pilot-effects-status",
+      "tools.invoke.approval-t-pilot-effects-cancel",
+      "tools.invoke.kb-t-pilot-kb-documents-search",
+      "tools.invoke.kb-t-pilot-kb-documents-get",
+      "tools.invoke.kb-t-pilot-kb-context-get",
+      "tools.invoke.apify-t-pilot-search-actors",
+      "tools.invoke.apify-t-pilot-fetch-actor-details",
+      "tools.invoke.apify-t-pilot-search-apify-docs",
+      "tools.invoke.apify-t-pilot-fetch-apify-docs",
+      "tools.invoke.apify-t-pilot-apify-api-search",
+      "tools.invoke.apify-t-pilot-apify-api-details"
+    ],
+    "resource_types": [
+      "tool"
+    ],
+    "resource_ids": [
+      "*"
+    ],
+    "reason": "the pilot agent: Telegram search, thread read and message proposal, effect status and cancel, KB read tools, Apify discovery/docs tools (pilot exception, owner decision 2026-11-25); nothing else (the deny rule above wins for execute and reconcile)"
+  }
+]

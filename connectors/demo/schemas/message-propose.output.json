@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "demo.message.propose output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent_id",
+    "status"
+  ],
+  "properties": {
+    "intent_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "description": "intent-status.schema.json: an idempotent repeat returns the intent as it is now (EFF-08)",
+      "enum": [
+        "pending_approval",
+        "approved",
+        "executing",
+        "succeeded",
+        "failed",
+        "outcome_unknown",
+        "reconciled_succeeded",
+        "reconciled_failed",
+        "rejected",
+        "expired",
+        "cancelled"
+      ]
+    }
+  }
+}

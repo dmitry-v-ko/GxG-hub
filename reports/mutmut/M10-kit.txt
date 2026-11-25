@@ -1,0 +1,18 @@
+== packages/gxg-connector-kit: {"killed":1312,"survived":11,"total":1323,"no_tests":0,"skipped":0,"suspicious":0,"timeout":0,"check_was_interrupted_by_user":0,"segfault":0}
+not killed: 11, listed as equivalent: 11
+gxg_connector_kit._jwt.x_verify__mutmut_41  # M1: `not isinstance(kid, str) or not kid` → `and`: PyJWT already rejects a non-string kid as malformed; an empty kid then reaches key_for, matches no JWKS kid / no thumbprint → the same 'kid' rejection
+gxg_connector_kit._jwt.x_verify__mutmut_70  # M1: PyJWT option key `verify_nbf` renamed: PyJWT then uses its default (check nbf only if present); neither token type has nbf, so tokens of our issuers are judged the same
+gxg_connector_kit._jwt.x_verify__mutmut_71  # M1: same as _70 (key upper-cased)
+gxg_connector_kit._jwt.x_verify__mutmut_72  # M1: same as _70 (`verify_nbf: True`)
+gxg_connector_kit._jwt.x_verify__mutmut_76  # M1: PyJWT option key `verify_iss` renamed: default verify_iss is True, but we pass no `issuer`, and PyJWT skips the check when issuer is None; iss is checked by our allowlist
+gxg_connector_kit._jwt.x_verify__mutmut_77  # M1: same as _76 (key upper-cased)
+gxg_connector_kit._jwt.x_verify__mutmut_78  # M1: same as _76 (`verify_iss: True`)
+gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4  # M1: `_keys = None`: never read before the first _current() assigns it (_refetch_at = -inf forces a fetch on first use)
+gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8  # M1: `float("-INF")`: Python parses it case-insensitively, same value
+gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27  # M1: `cast(None, claims)`: typing.cast is a no-op at runtime
+gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is falsy: the same output as ensure_ascii=False
+== M7 SQL mutations (scripts/ci/mutate_m7_sql.py)
+SQL driver: run separately (reports/mutmut/M10-sql.txt) and in the gate
+mutmut: OK, no surviving non-equivalent mutants
+SQL mutations: OK
+exit 0

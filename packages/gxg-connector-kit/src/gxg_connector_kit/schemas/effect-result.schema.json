@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/effect-result.schema.json",
+  "title": "GxG Effect Result v1",
+  "description": "Domain outcome envelope, not a guarantee of exactly-once provider delivery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "status",
+    "reconciliation_required"
+  ],
+  "properties": {
+    "operation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "failed_before_effect",
+        "outcome_unknown"
+      ]
+    },
+    "effect_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reconciliation_required": {
+      "type": "boolean"
+    },
+    "provider_receipt_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "outcome_unknown"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reconciliation_required": {
+            "const": true
+          }
+        }
+      }
+    }
+  ]
+}

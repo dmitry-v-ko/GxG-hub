@@ -1,0 +1,168 @@
+openapi: 3.1.0
+info:
+  title: GxG Approval Service internal API
+  version: 1.0.0
+  description: >
+    Internal API of the GxG Approval Service (docs/specs/approval-service-v1.md).
+    Not exposed to agents or the internet. Every call carries a service JWT (AS-06).
+    Design contract; no implementation exists yet.
+servers:
+  - url: https://approval-api.internal:8090
+security:
+  - serviceJwt: []
+paths:
+  /v1/intents:
+    post:
+      operationId: createIntent
+      summary: Create an intent or return the existing one for the same (tenant, idempotency_key) and hash (T1)
+      description: >
+        Caller - connector listed for the tenant in the platform registry (AS-25).
+        The service recomputes canonical_args_hash and rejects a mismatch with invalid_input.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: 'intent-create.schema.json' }
+      responses:
+        '201': { $ref: '#/components/responses/IntentStatus' }
+        '200': { $ref: '#/components/responses/IntentStatus' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '423': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /v1/intents/{intent_id}:
+    get:
+      operationId: getIntent
+      summary: Intent status, scoped to the caller's tenant and on-behalf principal
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+        - name: tenant_id
+          in: query
+          required: true
+          description: Verified tenant of the agent (AS-11a); required for callers of kind approval_mcp
+          schema: { type: string, maxLength: 64 }
+        - name: principal
+          in: query
+          required: true
+          description: Verified agent principal (AS-11a); only own intents are visible, others are 404
+          schema: { type: string, maxLength: 256 }
+      responses:
+        '200': { $ref: '#/components/responses/IntentStatus' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/intents/{intent_id}/cancel:
+    post:
+      operationId: cancelIntent
+      summary: Cancel before reservation (T6)
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [on_behalf_of, expected_version]
+              properties:
+                on_behalf_of:
+                  type: object
+                  additionalProperties: false
+                  required: [principal, tenant_id]
+                  properties:
+                    principal: { type: string, maxLength: 256 }
+                    tenant_id: { type: string, maxLength: 64 }
+                expected_version: { type: integer, minimum: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/IntentStatus' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/executions/{execution_id}/dispatch:
+    post:
+      operationId: dispatchExecution
+      summary: Atomic reserved -> dispatching (T9). The only gate before a provider call.
+      description: >
+        Caller's service JWT iss MUST equal the execution token aud. Token jti MUST equal execution_id.
+        Kill switch is checked inside the same transaction (AS-05).
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [execution_token]
+              properties:
+                execution_token: { type: string, maxLength: 4096 }
+      responses:
+        '200':
+          description: Dispatch granted; call the provider at most once before dispatch_deadline
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [execution_id, dispatch_deadline]
+                properties:
+                  execution_id: { type: string, format: uuid }
+                  dispatch_deadline: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '423': { $ref: '#/components/responses/Error' }
+  /.well-known/gxg-exec-jwks.json:
+    get:
+      operationId: getExecutorJwks
+      summary: Public keys for execution token verification (AS-09)
+      security: []
+      responses:
+        '200':
+          description: JWKS with OKP/Ed25519 keys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [kty, crv, x, kid, use, alg]
+                      properties:
+                        kty: { const: OKP }
+                        crv: { const: Ed25519 }
+                        x: { type: string }
+                        kid: { type: string }
+                        use: { const: sig }
+                        alg: { const: EdDSA }
+components:
+  securitySchemes:
+    serviceJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: gxg-svc+jwt (EdDSA)
+  parameters:
+    IntentId:
+      name: intent_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    IntentStatus:
+      description: Intent status (no args, preview or tokens)
+      content:
+        application/json:
+          schema: { $ref: 'intent-status.schema.json' }
+    Error:
+      description: Canonical error envelope (MCC-05)
+      content:
+        application/json:
+          schema: { $ref: 'error.schema.json' }

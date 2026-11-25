@@ -1,0 +1,17 @@
+tenant: t-alpha
+schema_version: 1
+quotas:
+  propose_per_requester_per_hour: 10
+rules:
+  - id: msg
+    match:
+      tools: [demo.message.propose]
+    decision: require_approval
+    approvals: 2
+    step_up: true
+    approval_ttl: 4h
+    approvers: ['oidc:https://idp.example.invalid:1']
+  - id: no-wire
+    match:
+      tools: [demo.wire.propose]
+    decision: deny

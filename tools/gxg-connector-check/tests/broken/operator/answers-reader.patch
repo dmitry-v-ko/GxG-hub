@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index 1423ab8..d05d143 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -115,8 +115,6 @@ class Connector:
+         return out
+ 
+     async def boards_list(self, access: Access, args: dict[str, Any]) -> Result:
+-        if not access.allowed.all_of_type:  # operator-only: a grant on every board (a mask), not on some
+-            raise GxgError("permission_denied", "operators only")
+         readable = self._readable(access)
+         titles = {b.id: b.title for b in self.backend.boards.get(access.ident.tenant_id, {}).values()}
+         boards = [{"id": b, "title": titles[b]} for b in sorted(readable)]

@@ -1,0 +1,52 @@
+[project]
+name = "gxg-connector-demo"
+version = "0.1.0"
+description = "Reference connector `demo`: read tools (M3), demo.message.propose with internal execute (M8)."
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette and uvicorn; the same pin as the kit `mcp` extra
+    "gxg-connector-kit[mcp]",
+    "prometheus-client>=0.21,<1",  # M10: gxg_token_verify_failures_total on the internal port
+    "pyyaml>=6,<7",  # gxg-manifest.yaml is read at start; already installed by fastmcp
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "demo_connector"
+
+[tool.uv.sources]
+# editable: the root workspace installs the kit editable too, uv needs one URL per package
+gxg-connector-kit = { path = "../../packages/gxg-connector-kit", editable = true }
+# editable: gxg-policy finds the repository schemas/ from its own source location
+gxg-policy = { path = "../../tools/gxg-policy", editable = true }
+gxg-connector-check = { path = "../../tools/gxg-connector-check", editable = true }
+
+[dependency-groups]
+# Standalone `uv run pytest` inside connectors/demo. The repository-wide policy
+# (no network, no skip/xfail) applies when tests run from the repository root.
+dev = ["pytest>=8.3,<10", "pytest-timeout>=2.3,<3", "gxg-policy", "gxg-connector-check", "mutmut==3.8.1"]
+
+# `uv run check-connectors --connector .` (M1.1): the conformance suite starts demo through this harness
+[tool.gxg-connector-check]
+harness = "demo_connector.conformance:harness"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+timeout = 300  # pytest-timeout (DoD-1): a hanging test fails
+xfail_strict = true
+
+# DoD-4: modules with the M3 key conditions (grant filtering, not_found, fallback) and M8 (execute checks, provider).
+# Run from this directory: `uv run mutmut run` (scripts/ci/mutmut.sh does it in CI).
+[tool.mutmut]
+source_paths = ["src/demo_connector/"]
+only_mutate = ["*/tools.py", "*/backend.py", "*/server.py", "*/effects.py", "*/provider.py"]
+also_copy = ["fixtures/", "schemas/", "gxg-manifest.yaml"]
+pytest_add_cli_args_test_selection = ["tests"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]
+# A mutant that breaks start-up makes test_real_process_* wait for the child's readiness: give it time to fail
+# instead of a load-dependent timeout (same constant as approval/ui).
+timeout_constant = 60.0

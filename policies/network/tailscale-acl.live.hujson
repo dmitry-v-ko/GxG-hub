@@ -1,0 +1,43 @@
+// Live tailnet policy = policies/network/tailscale-acl.hujson with the pilot's people filled in:
+// operators and approvers are the tailnet admin (the owner), the owner's own untagged devices keep
+// seeing each other as before. Hub nodes are tagged and get only what the rules below give them.
+{
+	"tagOwners": {
+		"tag:gateway":        ["autogroup:admin"], // ContextForge: MCP on 443, admin UI on 8443
+		"tag:approval-ui":    ["autogroup:admin"], // Approval Web UI
+		"tag:approval-admin": ["autogroup:admin"], // Approval `admin` (kill switch, passkey invites)
+		"tag:agent":          ["autogroup:admin"], // agents calling the MCP gateway
+		"tag:mastra":         [],
+	},
+
+	"acls": [
+		// the owner's own devices, as before (Hub nodes are tagged, so not in autogroup:member)
+		{"action": "accept", "src": ["autogroup:member"], "dst": ["autogroup:member:*"]},
+		// agents and operators: the MCP gateway
+		{"action": "accept", "src": ["tag:agent", "autogroup:owner", "autogroup:admin"], "dst": ["tag:gateway:443"]},
+		// operators only: the ContextForge admin UI (AC-M14-10)
+		{"action": "accept", "src": ["autogroup:owner", "autogroup:admin"], "dst": ["tag:gateway:8443"]},
+		// approvers and operators: the Approval Web UI
+		{"action": "accept", "src": ["autogroup:owner", "autogroup:admin"], "dst": ["tag:approval-ui:443"]},
+		// operators only: Approval admin
+		{"action": "accept", "src": ["autogroup:owner", "autogroup:admin"], "dst": ["tag:approval-admin:443"]},
+	],
+
+	// Funnel stays for the owner's devices as before; tagged Hub nodes do not get it (SEC-27, AC-M14-04)
+	"nodeAttrs": [
+		{"target": ["autogroup:member"], "attr": ["funnel"]},
+	],
+
+	"ssh": [
+		{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]},
+	],
+
+	"tests": [
+		{"src": "tag:agent", "accept": ["tag:gateway:443"]},
+		{"src": "tag:agent", "deny": ["tag:gateway:8443", "tag:approval-ui:443", "tag:approval-admin:443"]},
+
+		{"src": "tag:gateway",        "deny": ["tag:approval-ui:443", "tag:approval-admin:443", "tag:agent:443"]},
+		{"src": "tag:approval-ui",    "deny": ["tag:gateway:443", "tag:gateway:8443", "tag:approval-admin:443"]},
+		{"src": "tag:approval-admin", "deny": ["tag:gateway:443", "tag:gateway:8443", "tag:approval-ui:443"]},
+	],
+}

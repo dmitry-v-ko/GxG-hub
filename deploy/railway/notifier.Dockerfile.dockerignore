@@ -1,0 +1,10 @@
+*
+!packages/gxg-connector-kit
+!approval/notifier/pyproject.toml
+!approval/notifier/uv.lock
+!approval/notifier/src
+**/.venv
+**/__pycache__
+**/mutants
+**/.pytest_cache
+!deploy/railway/entrypoint.sh

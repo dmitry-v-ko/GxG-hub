@@ -1,0 +1,9 @@
+# Build context is the repository root; only what the image needs goes in.
+*
+!packages/gxg-connector-kit
+!approval/ui
+**/.venv
+**/__pycache__
+**/mutants
+**/.pytest_cache
+approval/ui/tests_db

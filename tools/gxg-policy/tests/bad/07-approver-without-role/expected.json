@@ -1,0 +1,6 @@
+{
+  "description": "approver без роли approver",
+  "code": "approver-role",
+  "file": "approval/t-alpha.yaml",
+  "path": "rules[0].approvers[0]"
+}

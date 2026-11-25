@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/intent-create.schema.json",
+  "title": "GxG Intent Create Request v1",
+  "description": "Body of POST /v1/intents, sent by a connector (EFF-04..EFF-08)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool_key",
+    "tool_version",
+    "connection_id",
+    "resource_id",
+    "canonical_args",
+    "canonical_args_hash",
+    "preview",
+    "requester",
+    "idempotency_key"
+  ],
+  "properties": {
+    "tool_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "tool_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "connection_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "resource_id": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^[a-z][a-z0-9_]*:[a-z0-9][a-z0-9_-]*/[a-z][a-z0-9_]*/[^/*\\s]+$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 256
+    },
+    "business_task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "canonical_args": {
+      "type": "object",
+      "description": "Normalized args; the service recomputes the hash and rejects a mismatch"
+    },
+    "canonical_args_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "preview": {
+      "$ref": "preview.schema.json"
+    },
+    "requester": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "principal",
+        "tenant_id"
+      ],
+      "properties": {
+        "principal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "tenant_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "assertion": {
+          "type": "string",
+          "maxLength": 8192,
+          "description": "Original verifiable identity assertion, if the chosen mechanism provides one (SEC-23)"
+        }
+      }
+    }
+  }
+}

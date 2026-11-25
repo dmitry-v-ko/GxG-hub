@@ -1,0 +1,332 @@
+{
+  "milestone": "M1",
+  "cycle": 3,
+  "branch": "claude/m1-connector-kit",
+  "base": "claude/m1-connector-kit@cebca50 (cycle 2 + critic) merged with claude/integration@e7d245f (stage A audit specs)",
+  "commit": "a0c0b4a08e1245eaf2ec60a0239e6d59d4fa3a46",
+  "commit_note": "Tested code commit. Only commit + CI fields of this report are filled in by the next commit, which changes only reports/.",
+  "run_at": "2026-11-20T20:50:32Z",
+  "author": "Claude Code (executor, M1 cycle 3)",
+  "environment": {
+    "local": {
+      "os": "linux x86_64",
+      "python": "3.13.18",
+      "uv": "0.11.32",
+      "command": "scripts/ci/check-all.sh -> check-all: OK (430 repo tests, 326 kit tests)"
+    },
+    "ci": {
+      "runner": "ubuntu-latest",
+      "python": "3.12",
+      "workflow": ".github/workflows/ci.yml",
+      "run_id": 44815009584,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44815009584",
+      "conclusion": "success",
+      "jobs": {
+        "lint": "success",
+        "types": "success",
+        "tests": "success",
+        "schema-guard": "success",
+        "secrets": "success",
+        "ci-ok": "success"
+      },
+      "head_sha": "0eb244b5697515a13588d567d9a1bad22185a157",
+      "note": "Run 44814878816 on the code commit a0c0b4a was cancelled by the workflow concurrency group when 0eb244b (report only, same code) was pushed; 44815009584 on 0eb244b is the run of record."
+    }
+  },
+  "contextforge_image_digest": null,
+  "sdk_versions": {
+    "mcp": null,
+    "fastmcp": null,
+    "note": "M1 does not use MCP SDKs"
+  },
+  "library_versions": {
+    "pyjwt": "2.15.1",
+    "cryptography": "50.0.2",
+    "jsonschema": "4.26.0",
+    "hypothesis": "6.170.17",
+    "pytest": "9.2.0",
+    "mutmut": "3.8.1"
+  },
+  "policy_version": null,
+  "bundle_version": "synthetic test bundles built from policies/ examples (bundle_version = 'a'*40) and the GR-11a vector schemas/test-vectors/bundle-signature.json (bundle_version = '0'*40)",
+  "fixture_identity": "synthetic: StubIssuer (GXG_PROFILE=test), all keys generated at test time",
+  "acceptance": [
+    {
+      "id": "AC-M1-01",
+      "status": "passed",
+      "expected": "canonical.hash() reproduces all 6 vectors byte for byte and by SHA-256; both invalid_inputs give invalid_input",
+      "actual": "All 9 vectors of the stage-A canonical-hash.json (incl. utf16_key_order, max_safe_integer, negative_zero_is_zero) match bytes and sha256; all 3 invalid_inputs (float_forbidden, int_out_of_safe_range, float_one_point_zero read from input_json) give invalid_input. The plan text says 6/2; the vector file now has 9/3 and all are tested",
+      "evidence": [
+        "packages/gxg-connector-kit/tests/test_canonical.py::test_vectors_bytes_and_sha256",
+        "::test_invalid_inputs",
+        "::test_vector_file_has_the_expected_cases"
+      ]
+    },
+    {
+      "id": "AC-M1-02",
+      "status": "passed",
+      "expected": "Property test (>= 1000 random JSON without float): key permutation and NFD<->NFC keep the hash; changing any value changes it",
+      "actual": "3 Hypothesis properties x 1000 examples each (derandomize=True): shuffled keys, NFD of all strings and keys, change of any scalar or empty container",
+      "evidence": [
+        "test_canonical.py::test_property_key_order_does_not_change_hash",
+        "::test_property_nfd_and_nfc_hash_the_same",
+        "::test_property_changing_any_value_changes_hash"
+      ]
+    },
+    {
+      "id": "AC-M1-03",
+      "status": "passed",
+      "expected": "Execution token verifier rejects 9 cases; valid token accepted; 4 s skew accepted",
+      "actual": "Rejected with a distinct asserted reason: foreign signature (+ tampered payload), unknown kid, iss != gxg-executor, aud != own ID (+ aud as list), exp > 5 s past, iat > 5 s future, each of 13 required claims missing, alg none / HS256, jti replay. Also typ, lifetime > 60 s, malformed. Valid accepted; exp 4 s past and iat 4 s future accepted. JWKS cache: <= 10 min, removed kid rejected after refresh, failed refresh trusts no key (AS-09, AS-10). Cycle 2: AS-11 boundary exp = now − 5 and iat = now + 5 accepted; accepted token replayed at T0 + 30 and at exp + 5 → replay; oversized signed token → malformed; X25519 JWK ignored; ExecutorJwks.readiness() (MCC-09). Cycle 3: claims validated by execution-token.schema.json (sub/jti must be UUIDs, ahs/tool/idk bounds, no extra claims → 'claims'); jti of wrong type → claim:jti; JWKS outage: one fetch per 5 s back-off, not per call or /readyz (fetch counter)",
+      "evidence": [
+        "packages/gxg-connector-kit/tests/test_exec_token.py::test_clock_skew_up_to_5s_is_accepted",
+        "::test_claims_outside_the_schema",
+        "::test_outage_fetches_once_per_back_off",
+        "::test_jwks_readiness",
+        "test_exec_token.py (70 tests)"
+      ]
+    },
+    {
+      "id": "AC-M1-04",
+      "status": "passed",
+      "expected": "Service JWT: the same 9 cases plus iss absent from the platform registry",
+      "actual": "Same 9 cases rejected (iss case = issuer not on the endpoint allowlist) plus iss absent from the registry -> iss_unregistered; typ and TTL too; valid sign()/verify() roundtrip with registry from the loaded bundle; Service.serves() for AS-25. Cycle 2: 5 s boundary accepted both ways; replay at T0 + 30 and exp + 5 → replay; same jti from two issuers is not a replay. Cycle 3: AS-06 public_keys — kid of either of 2 active keys accepted, retired key → kid; RFC 8037 §A.3 thumbprint vector (AS-06a); two sign() calls → distinct jti, both verify; sign(ttl_s=1) and 60 verify; exp − iat = 1 accepted; token of exactly 8192 chars accepted, 8193 → malformed; iss as list/object/int → iss_unregistered",
+      "evidence": [
+        "packages/gxg-connector-kit/tests/test_svc_jwt.py::test_kid_of_either_active_key_is_accepted",
+        "::test_thumbprint_rfc8037_a3",
+        "::test_sign_and_verify",
+        "::test_token_length_limit_is_8192",
+        "::test_non_string_iss_is_unregistered",
+        "test_svc_jwt.py (38 tests)"
+      ]
+    },
+    {
+      "id": "AC-M1-05",
+      "status": "passed",
+      "expected": "GrantResolver.check on policies/tenants/example.yaml: >= 20 cases, all allow/deny as expected",
+      "actual": "34-case table on example.yaml (t-alpha, unchanged) plus an in-test t-beta for the foreign tenant, the type mask and a t-beta group: allowed resource, group, mask *, foreign connection, foreign tenant, unknown tenant, action not in grant, domain mismatch, lint-bypassing grant; plus expiry at boundary (2027-03-01T00:00:00Z) and allowed() sets. Cycle 2: RIDs matched with fullmatch; RID with a trailing newline → deny (2 table rows)",
+      "evidence": [
+        "packages/gxg-connector-kit/tests/test_grants.py::test_check_table",
+        "::test_expired_grant",
+        "::test_allowed_sets"
+      ]
+    },
+    {
+      "id": "AC-M1-06",
+      "status": "passed",
+      "expected": "Bundle with a changed byte, without signature or signed by a foreign key -> loader error, readiness() not ready",
+      "actual": "BundleError and readiness().ready is False (and check() -> temporarily_unavailable) for: byte flipped at 5 positions, appended byte, empty/absent/partial signature, foreign key, unknown kid, alg != EdDSA, padded/non-base64url signature, no configured key; 26 malformed signed bundles (cycle 3: rejected by grants-bundle.schema.json with the JSON path, or by the checks a schema cannot express: tenant mismatch, duplicate service ID, RID with a trailing newline, expiry without time zone) and 3 signed non-bundles. GR-11a vector bundle-signature.json: canonical.dumps(bundle) = bundle_bytes_b64, loads and is ready; tampered → does not verify",
+      "evidence": [
+        "test_grants.py::test_changed_byte",
+        "::test_missing_or_empty_signature",
+        "::test_signed_by_foreign_key",
+        "::test_malformed_signed_bundle",
+        "::test_signature_vector_loads"
+      ]
+    },
+    {
+      "id": "AC-M1-07",
+      "status": "passed",
+      "expected": "Bundle with built_at older than 24 h -> not ready (GR-13)",
+      "actual": "built_at = now - 24 h - 1 s -> not ready; exactly 24 h -> ready; a loaded bundle becomes not ready when it ages past 24 h. Cycle 2 (GR-13/13a): bundle with built_at > now + 5 s → BundleError, not stored, not ready; built_at = now + 5 s accepted; the next correct bundle loads; same built_at reload accepted. Cycle 3 (GR-13a): max built_at stored in BundleStore(state_file=…) via os.replace; after restart an older bundle → rollback, the same one loads; rejected/future bundles do not move the state; unreadable state file stops the start",
+      "evidence": [
+        "test_grants.py::test_bundle_older_than_24h_is_not_ready",
+        "::test_bundle_of_exactly_24h_is_ready",
+        "::test_loaded_bundle_goes_stale",
+        "::test_bundle_from_the_future_is_rejected_and_does_not_block_the_next",
+        "::test_reload_with_the_same_built_at_is_accepted",
+        "::test_rollback_is_rejected_after_restart",
+        "::test_state_file_keeps_the_maximum",
+        "::test_unreadable_state_file_stops_the_start"
+      ]
+    },
+    {
+      "id": "AC-M1-08",
+      "status": "passed",
+      "expected": "redact removes text, body, query, args, token, authorization and JWT-like values on >= 15 examples",
+      "actual": "18 examples: each key, case-insensitive, nested, in lists, JWT as value / in Bearer / inside a message / unsigned / two in one string; non-sensitive values kept; input not mutated",
+      "evidence": [
+        "packages/gxg-connector-kit/tests/test_redact.py"
+      ]
+    },
+    {
+      "id": "AC-M1-09",
+      "status": "passed",
+      "expected": "Branch coverage of exec_token, svc_jwt, grants, canonical, identity >= 90 %",
+      "actual": "Branches covered, per module: exec_token 14/14, svc_jwt 12/12, grants 50/50, canonical 20/20, identity 8/8, shared _jwt 38/38 (100 % each). Enforced per module in CI by scripts/ci/check_coverage.py",
+      "evidence": [
+        "CI job tests, step 'AC-M1-09 — branch coverage…'",
+        "tests/ci/test_check_coverage.py"
+      ]
+    }
+  ],
+  "dod": [
+    {
+      "id": "DoD-1",
+      "status": "not_run",
+      "note": "Merge into main via PR is done by a human after the critic; CI on the branch is green (run 44815009584, ci-ok = success)."
+    },
+    {
+      "id": "DoD-2",
+      "status": "passed",
+      "note": "All 9 AC are automated; none is [manual]."
+    },
+    {
+      "id": "DoD-3",
+      "status": "passed",
+      "note": "This file."
+    },
+    {
+      "id": "DoD-4",
+      "status": "passed",
+      "note": "mutmut 3.8.1: `cd packages/gxg-connector-kit && uv run mutmut run` (config [tool.mutmut] in its pyproject.toml; modules exec_token, svc_jwt, _jwt, grants, canonical). Checked in a clean clone with an empty UV_CACHE_DIR: one command, same result. 955 mutants: 945 killed, 0 timeout, 10 survived — all equivalent, reason per mutant in mutmut.survivors. All 20 non-equivalent survivors of the critic's cycle-2 run are killed. scripts/ci/mutate_kit.py deleted."
+    },
+    {
+      "id": "DoD-5",
+      "status": "passed",
+      "note": "No skip/xfail; enforced by conftest.py."
+    },
+    {
+      "id": "DoD-6",
+      "status": "passed",
+      "note": "reports/plans/M1-cycle-3.md, section 'Ready solutions considered': every self-written component with the alternatives and the decision (mutmut and jsonschema adopted this cycle). The cycle-1 plan row for check_coverage.py corrected with the reason."
+    }
+  ],
+  "tests": [
+    {
+      "id": "packages/gxg-connector-kit/tests (326 tests)",
+      "status": "passed"
+    },
+    {
+      "id": "uv run pytest (whole repo, 430 tests)",
+      "status": "passed"
+    },
+    {
+      "id": "scripts/ci/check-all.sh",
+      "status": "passed"
+    },
+    {
+      "id": "mutmut run (955 mutants, 945 killed, 10 equivalent)",
+      "status": "passed"
+    }
+  ],
+  "interpretations_for_owner": [
+    "Service JWT kid: resolved by the spec (AS-06a: kid = RFC 7638 thumbprint; AS-06: 1-2 public_keys, any accepted). Implemented as specified; pinned by the RFC 8037 §A.3 vector.",
+    "Service JWT 'wrong iss' case: the receiving endpoint passes its issuer allowlist (AS-06 'service -> endpoint'); outside it -> rejected. 'iss not in registry' is a separate rejection.",
+    "GR-13 staleness is measured by built_at (AC-M1-07); resolved by GR-13a (CI re-signs at least every 12 h).",
+    "Groups: the resolver expands group:<id> itself, so both GR-11a (expanded) and raw files work; an unknown group grants nobody.",
+    "Reload: a failed load keeps the previous valid bundle; anti-rollback is now GR-13a (older than the loaded or the on-disk max built_at, or later than now + 5 s → rejected), implemented as specified."
+  ],
+  "known_limitations": [
+    "The M2 builder is not available yet: compatibility with GR-11a is tested only against an in-test builder (canonical.dumps + Ed25519 over the exact bytes). The loader does not require the bytes to be JCS-canonical; it only verifies the signature over them.",
+    "Base64url decoding accepts non-zero trailing bits (needed: the synthetic keys in registry.example.yaml, e.g. 'BBBB…', are non-canonical but match the schema).",
+    "JWKS transport is injected (fetch()); no HTTP client. Execution token issuance, EFF-18 п.2–5, Approval Service client and MCP tool-error wrapper are left to M3/M7/M8.",
+    "IdentityVerifier has only the test-profile stub (GXG_PROFILE=test); the real mechanism waits for the M4 spike. Stub assertions carry no body hash.",
+    "jti caches are in-memory per process; EFF-20 relies on dispatch CAS as the real one-time guard.",
+    "Two conftest.py files clash in a single mypy run; the root conftest.py is type-checked in a separate mypy --strict step.",
+    "jsonschema checks `format: date-time` only when rfc3339-validator is installed (it is in the dev env, not a kit dependency); without it the loader's own parser still rejects malformed or zone-less timestamps (test_expiry_without_time_zone_is_rejected_without_a_format_checker).",
+    "Schema copies in src/gxg_connector_kit/schemas/ must be refreshed when schemas/ changes; tests/test_schema.py fails until they are (a symlink breaks uv build: 'Is a directory')."
+  ],
+  "mutmut": {
+    "version": "3.8.1",
+    "command": "cd packages/gxg-connector-kit && uv run mutmut run && uv run mutmut results",
+    "config": "packages/gxg-connector-kit/pyproject.toml [tool.mutmut]",
+    "modules": [
+      "exec_token",
+      "svc_jwt",
+      "_jwt",
+      "grants",
+      "canonical"
+    ],
+    "total": 955,
+    "killed": 945,
+    "timeout": 0,
+    "survived": 10,
+    "survived_non_equivalent": 0,
+    "results_output": [
+      "    gxg_connector_kit._jwt.x_verify__mutmut_41: survived",
+      "    gxg_connector_kit._jwt.x_verify__mutmut_70: survived",
+      "    gxg_connector_kit._jwt.x_verify__mutmut_71: survived",
+      "    gxg_connector_kit._jwt.x_verify__mutmut_72: survived",
+      "    gxg_connector_kit._jwt.x_verify__mutmut_76: survived",
+      "    gxg_connector_kit._jwt.x_verify__mutmut_77: survived",
+      "    gxg_connector_kit._jwt.x_verify__mutmut_78: survived",
+      "    gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4: survived",
+      "    gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8: survived",
+      "    gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27: survived"
+    ],
+    "survivors": [
+      {
+        "mutant": "gxg_connector_kit._jwt.x_verify__mutmut_41",
+        "equivalent": true,
+        "reason": "`not isinstance(kid, str) or not kid` → `and`: PyJWT already rejects a non-string kid as malformed; an empty kid then reaches key_for, matches no JWKS kid / no thumbprint → the same 'kid' rejection"
+      },
+      {
+        "mutant": "gxg_connector_kit._jwt.x_verify__mutmut_70",
+        "equivalent": true,
+        "reason": "PyJWT option key `verify_nbf` renamed: PyJWT then uses its default (check nbf only if present); neither token type has nbf, so tokens of our issuers are judged the same"
+      },
+      {
+        "mutant": "gxg_connector_kit._jwt.x_verify__mutmut_71",
+        "equivalent": true,
+        "reason": "same as _70 (key upper-cased)"
+      },
+      {
+        "mutant": "gxg_connector_kit._jwt.x_verify__mutmut_72",
+        "equivalent": true,
+        "reason": "same as _70 (`verify_nbf: True`)"
+      },
+      {
+        "mutant": "gxg_connector_kit._jwt.x_verify__mutmut_76",
+        "equivalent": true,
+        "reason": "PyJWT option key `verify_iss` renamed: default verify_iss is True, but we pass no `issuer`, and PyJWT skips the check when issuer is None; iss is checked by our allowlist"
+      },
+      {
+        "mutant": "gxg_connector_kit._jwt.x_verify__mutmut_77",
+        "equivalent": true,
+        "reason": "same as _76 (key upper-cased)"
+      },
+      {
+        "mutant": "gxg_connector_kit._jwt.x_verify__mutmut_78",
+        "equivalent": true,
+        "reason": "same as _76 (`verify_iss: True`)"
+      },
+      {
+        "mutant": "gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_4",
+        "equivalent": true,
+        "reason": "`_keys = None`: never read before the first _current() assigns it (_refetch_at = -inf forces a fetch on first use)"
+      },
+      {
+        "mutant": "gxg_connector_kit.exec_token.xǁExecutorJwksǁ__init____mutmut_8",
+        "equivalent": true,
+        "reason": "`float(\"-INF\")`: Python parses it case-insensitively, same value"
+      },
+      {
+        "mutant": "gxg_connector_kit.exec_token.xǁExecTokenVerifierǁverify__mutmut_27",
+        "equivalent": true,
+        "reason": "`cast(None, claims)`: typing.cast is a no-op at runtime"
+      }
+    ],
+    "cycle_2_non_equivalent_killed_by": {
+      "x_thumbprint (15)": "test_svc_jwt.py::test_thumbprint_rfc8037_a3",
+      "x_verify__mutmut_3 (len > 8192)": "::test_token_length_limit_is_8192",
+      "x__check_claims__mutmut_39 (0 < exp-iat)": "::test_lifetime_of_1s_is_accepted",
+      "x_sign__mutmut_3 (0 < ttl_s)": "::test_sign_ttl_bounds_verify[1]",
+      "x_sign__mutmut_23 (jti str(None))": "::test_sign_and_verify",
+      "SvcJwtVerifier.verify__mutmut_8 (isinstance iss or True)": "::test_non_string_iss_is_unregistered"
+    }
+  },
+  "cycle_3_changes": [
+    "merge of claude/integration (stage A specs/schemas), schema lock up to date",
+    "mutmut replaces scripts/ci/mutate_kit.py (deleted); kit_testing.REPO = first parent with uv.lock",
+    "tests killing all 20 non-equivalent cycle-2 survivors, plus exact readiness/error texts and jti type",
+    "ExecutorJwks: JWKS_RETRY_S = 5 s back-off after a failed fetch",
+    "AS-06 Service.public_keys (1-2), kid of any active key",
+    "bundle validated by grants-bundle.schema.json (jsonschema, schema copies shipped in the package); bundle-signature.json vector test",
+    "GR-13a: BundleStore(state_file=…) keeps the max built_at on disk",
+    "execution token claims validated by execution-token.schema.json (UUID sub/jti)",
+    "GxgError: rate_limited requires retry_after_s >= 1",
+    "canonical-hash.json: 9 vectors, input_json case",
+    "cycle-1 plan: check_coverage.py row corrected (DoD-6)"
+  ]
+}

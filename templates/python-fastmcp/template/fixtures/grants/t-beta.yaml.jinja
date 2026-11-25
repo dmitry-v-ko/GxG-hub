@@ -1,0 +1,19 @@
+# Test grants of `{{ name }}`: the second tenant (synthetic, no secrets).
+tenant: t-beta
+schema_version: 1
+
+connections:
+  - id: {{ name }}-main
+    domain: {{ name }}
+    credential_ref: secret://t-beta/{{ name }}/main
+
+principals:
+  agents:
+    - id: agent:t-beta:reader
+
+grants:
+  - id: beta-reader
+    subjects: [agent:t-beta:reader]
+    actions: [read]
+    resources:
+      - {{ name }}:{{ name }}-main/collection/b-public

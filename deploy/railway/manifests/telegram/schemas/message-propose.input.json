@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "telegram.message.propose input",
+  "description": "Propose sending a text message to a chat the caller may propose on. Creates an intent: a policy or a human decides, the executor sends. Returns at once (EFF-29). markup: plain (default) or markdown (bold, italic, code, links). Extra fields give no authority and are ignored (EX-02).",
+  "type": "object",
+  "required": ["chat_ref", "text"],
+  "properties": {
+    "chat_ref": {"type": "string", "pattern": "^tgc1_[A-Za-z0-9_-]{32}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+    "reply_to": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+    "markup": {"enum": ["plain", "markdown"], "default": "plain"},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 256},
+    "business_task_id": {"type": "string", "minLength": 1, "maxLength": 256, "description": "the caller's task (Signals: action_candidate_id); recorded on the intent, not part of the approved args"}
+  }
+}

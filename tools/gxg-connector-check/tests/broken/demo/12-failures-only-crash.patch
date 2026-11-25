@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/conformance.py b/src/demo_connector/conformance.py
+index c8ee482..784cd74 100644
+--- a/src/demo_connector/conformance.py
++++ b/src/demo_connector/conformance.py
+@@ -83,7 +83,7 @@ def harness() -> Harness:
+         ],
+         secret_env=SECRET_ENV,
+         rids=rids,
+-        failures=(*BACKEND_FAILURES, "crash"),
++        failures=("crash",),  # BROKEN
+         actor="agent:t-alpha:actor",  # read and propose on a-public (fixtures/grants)
+         propose=Call("demo.message.propose", {"board_id": "a-public", "recipient": "partner_1", "text": "hello"}),
+     )

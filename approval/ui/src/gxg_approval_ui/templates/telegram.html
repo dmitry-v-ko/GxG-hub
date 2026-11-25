@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Привязка Telegram</h1>
+<ul id="links">{% for l in links %}<li>{{ l[0] }}: привязан {{ l[1].isoformat() }}</li>{% else %}<li>не привязан</li>{% endfor %}</ul>
+{% if code %}<p>Отправьте боту команду <code id="link-command">/link {{ code }}</code>. Код действует 10 минут и один раз.</p>{% endif %}
+<form method="post" action="/telegram/code"><input type="hidden" name="csrf" value="{{ csrf }}"><button id="new-code">Получить код</button></form>
+{% endblock %}

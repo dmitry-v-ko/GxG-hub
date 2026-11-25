@@ -1,0 +1,389 @@
+{
+ "milestone": "M4.1",
+ "branch": "claude/m4.1-gateway-comparison",
+ "commit": "28fba915d8e4a4d35a7d4e91a39ef21d8c9af3f3",
+ "executor_report_commits": [
+  "bcff838"
+ ],
+ "cycle": 2,
+ "reviewed_at": "2026-11-21",
+ "score": 8.0,
+ "caps_applied": [
+  "major"
+ ],
+ "score_before_caps": 8.5,
+ "dimensions": {
+  "spec": 2.5,
+  "tests": 1.5,
+  "security": 1.5,
+  "code": 1.5,
+  "ops": 1,
+  "evidence": 0.5
+ },
+ "cap_note": "Одна major (путь W вне Kubernetes = docker socket в каждом прокси, не учтено в стоимости и угрозах) → максимум 8. Все AC выполнены и воспроизведены. Оценка не выросла относительно цикла 1 (8.0 → 8.0): по правилу 'стоп раньше лимита' цикл 3 должен дать ≥ 8.5, иначе эскалация владельцу.",
+ "reproduction": {
+  "dockerd": "запущен вручную, 29.10.0",
+  "toolhive": "webhook-c, webhook-c-down, default, token-exchange + verify_tx.py, token-exchange-sts-down, upgrade-from-v0.66.0: все строки gateway_calls и direct_to_connector (без времени/jti/request_id) совпали с evidence исполнителя; visibility.json и итоговые поля verify_tx.json совпали; badpolicy — failed to parse policy 3, exit 1. Путь C: 8 вызовов агентов приняты, 7 прямых атак = check_verdicts.EXPECTED",
+  "docker_mcp_gateway": "default, previous-v0.44.2: 15/15 строк совпали; interceptors.sh: 3 файла evidence/interceptors совпали байт в байт",
+  "extra": "thv v0.67.0 без docker socket: 'no container runtime available' даже на run --help и proxy --help; сырой лог echo webhook-c: Authorization агента (aud=vmcp, 3600 с) доходит до коннектора на прямом пути",
+  "tests": "uv run pytest: 134 passed, 148 subtests; ruff check/format: чисто",
+  "advisories": "GitHub pages пересчитаны: ToolHive 55 (10/10/10/10/10/5, стр. 7 пуста) — исполнитель прав, критик цикла 1 (54) ошибся; v869/v9xx patched 0.63.0, компоненты pkg/authz/response_filter.go и pkg/mcp/tool_filter.go, vMCP не назван, по коду vMCP response filter не использует; Docker 10, patched ≤ 0.44.1",
+  "evidence_restored": "после прогонов git checkout -- spikes; закоммичены только файлы критика"
+ },
+ "cycle1_required_improvements": [
+  {
+   "item": 1,
+   "status": "done_with_gap",
+   "note": "путь W проверен вживую (повторено), стоимость сравнена с путём G, формулировка исправлена; неполнота топологии — finding 1"
+  },
+  {
+   "item": 2,
+   "status": "done",
+   "note": "55 GHSA верно; v869/v9xx в ADR (advisories, п.4, п.7, Что не проверено) и M4.1.json"
+  },
+  {
+   "item": 3,
+   "status": "done_with_gap",
+   "note": "кеш убран, jti на вызов, проверка jti добавлена; модель хранилища на оба коннектора — finding 3"
+  },
+  {
+   "item": 4,
+   "status": "done",
+   "note": "#L311, interceptors.sh, sed-варианты, план, dict(EXPECTED)"
+  }
+ ],
+ "acceptance": [
+  {
+   "id": "AC-M4.1-01",
+   "status": "passed",
+   "evidence": "9 пунктов × 2 кандидата; путь W — passed с evidence webhook-c, путь G и оператор — not_run с причиной; живые результаты повторены критиком"
+  },
+  {
+   "id": "AC-M4.1-02",
+   "status": "passed",
+   "evidence": "attacks.py (spike.py + check_verdicts.EXPECTED M4) на обоих кандидатах и на пути W; прогоны критика совпали построчно"
+  },
+  {
+   "id": "AC-M4.1-03",
+   "status": "passed",
+   "evidence": "таблица трёх шлюзов, рекомендация с обоснованием и стоимостью, Proposed. Неполнота стоимости ToolHive (топология) — finding 1 (major)"
+  },
+  {
+   "id": "AC-M4.1-04",
+   "status": "passed",
+   "evidence": "digest проверены (pull по digest), advisories 55/10 со ссылками и датой; пересчитано критиком"
+  }
+ ],
+ "scope_check": "ADR-0002 Proposed; ADR-0001 и спеки не менялись; echo M4 — одна правка (ECHO_IDENTITY_META), verify_jws.py не менялся, тесты M4 зелёные; ContextForge не перепрогонялся",
+ "fairness_check": "Сравнение после пути W честнее цикла 1: путь C на ToolHive проверен без форка и записан passed, вывод 'стоимость решает' прямо назван. Смещение теперь в пользу ToolHive, а не против: недоучтены docker socket/Kubernetes (finding 1) и передача Bearer коннектору (finding 2). Утверждения о проверенных путях ContextForge и ToolHive разведены ('ToolHive — только на thv run вне Kubernetes'). Рекомендация 'оставить ContextForge' обоснована: 0 дней против ≥7–10, и finding 1 её только усиливает. Оценка ~7–10 дней арифметически сходится (1–2+2+3–4+1–2), но экспертная и без топологии.",
+ "findings": [
+  {
+   "severity": "major",
+   "origin": "new_regression",
+   "ref": "AC-M4.1-03, матрица п.9, п.2/п.5",
+   "where": "docs/adr/0002-gateway-choice.md:11,134,136; spikes/m4.1-gateways/toolhive/run.sh:19",
+   "problem": "Путь W вне Kubernetes требует docker socket в каждом прокси thv run: без container runtime thv не стартует даже с --help ('no container runtime available … or Kubernetes', проверено критиком на закреплённом образе). Хостинг не выбран, Kubernetes в целевой платформе нет (target-platform-v1.md:113-120). Топология оценена в 1–2 дня как 'штатные образы; proxyrunner или thv run на каждый коннектор' — ни root-эквивалентный доступ к хосту у принимающего трафик прокси, ни стоимость Kubernetes ради оператора в ~7–10 дней и в модель угроз не входят; ADR упоминает socket только как деталь стенда (п.5).",
+   "required_improvement": "В п.2 и п.9 разделить топологию пути W: (а) Kubernetes + оператор (MCPServer + MCPWebhookConfig) с оценкой кластера и его эксплуатации; (б) thv run + docker socket на прокси с явным риском и мерами (socket-proxy/rootless/отдельный хост) или отказом от варианта. Пересчитать итог и формулировку 'реальная альтернатива'; добавить в 'Что не проверено'."
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "матрица п.2 (2), п.5; модель угроз пути W",
+   "where": "docs/adr/0002-gateway-choice.md:92; spikes/m4.1-gateways/toolhive/evidence/webhook-c/echo-received.jsonl",
+   "problem": "Прокси thv run передаёт коннектору Authorization вызывающего: на пути thv-proxy:direct — токен агента aud=vmcp на 3600 с (им можно вызвать vMCP как агент), через vMCP — exchange-токен (им можно вызвать свой прокси и получить свежий JWS от webhook). strip-auth включается только с embedded auth server (TH/pkg/runner/middleware.go#L495-L527). ADR п.2 (2) перечисляет только X-Forwarded-User-* и X-GxG-Identity.",
+   "required_improvement": "Записать в п.2 (2), п.5 и угрозы: Bearer доходит до коннектора; меры — aud при exchange + --oidc-audience на прокси, сеть, либо embedded auth server с disableUpstreamTokenInjection (если совместим)."
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "матрица п.2 (token_exchange, критерии 2–3), SEC-03",
+   "where": "spikes/m4.1-gateways/toolhive/verify_tx.py:62-65; docs/adr/0002-gateway-choice.md:86",
+   "problem": "Хранилище jti смоделировано одним множеством на оба коннектора, а SEC-03 требует хранилище на коннектор (security-v1.md:41). replay_other_connector: true — артефакт; ADR пишет 'отклоняет все 5 прямых повторов' и строкой ниже — что повтор на другой коннектор проходит без aud.",
+   "required_improvement": "seen по (path, jti); в ADR: хранилище закрывает 4 из 5, повтор на другой коннектор — только aud; обновить verify_tx.json."
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "матрица п.3 (webhook)",
+   "where": "docs/adr/0002-gateway-choice.md:68,104; spikes/m4.1-gateways/toolhive/evidence/webhook-c-down/observations.jsonl",
+   "problem": "Все 8 отказов webhook-c-down — до tools/call (initialize 500 на прокси, backend не инициализирован в vMCP). Webhook, умерший посреди установленной сессии, не проверен, хотя п.3 записан passed без оговорки.",
+   "required_improvement": "В webhook-c-down остановить webhook после первого calls и повторить calls (1–2 строки run.sh) или пометить в п.3 'посреди сессии — по коду mutating/middleware.go#L83-L131'."
+  },
+  {
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "матрица п.2 (3), п.9",
+   "where": "docs/adr/0002-gateway-choice.md:92",
+   "problem": "Против обхода Cedar прямым вызовом прокси (проверен вживую: thv-proxy:direct принят, скрытые tools того же коннектора тоже доступны) названы только NetworkPolicy и aud у IdP. Пропущен штатный --authz-config у thv run (run_flags.go#L237), который стоит после mutating webhook и до backend (middleware.go#L202-L242).",
+   "required_improvement": "Добавить Cedar на прокси как вариант/обязательную меру и учесть генерацию политик в п.9."
+  },
+  {
+   "severity": "minor",
+   "origin": "missed_earlier",
+   "ref": "AC-M4.1-04, п.7, п.2 (5)",
+   "where": "docs/adr/0002-gateway-choice.md:32,72,92",
+   "problem": "Среди 55 GHSA есть обходы самого webhook-middleware: GHSA-g7gq-2r4g-3qw8 (High, 2026-10-07, не-JSON Content-Type обходит webhook и rate limit) и GHSA-wj8g-gmv2-mpmv (2026-11-04, BOM — fail-open webhooks пропускают запрос). ADR не связывает их с путём W; g7gq не упомянут. Для пути W обход webhook = запрос без JWS, его отклоняет только коннектор.",
+   "required_improvement": "Одна фраза в п.2 (5)/п.7 с обоими GHSA и выводом: JWS обязателен на коннекторе для всех методов, безопасность пути W держится на коннекторе, а не на webhook."
+  }
+ ],
+ "required_improvements": [
+  "1. ADR п.2/п.9 (и 'Что не проверено'): разделить топологию пути W на 'Kubernetes + оператор' (оценить кластер и эксплуатацию) и 'thv run + docker socket на прокси' (явный риск root на хосте и меры либо отказ); пересчитать ~7–10 дней и формулировку 'реальная альтернатива'.",
+  "2. ADR п.2 (2), п.5 и модель угроз: Bearer вызывающего доходит до коннектора через thv run (токен агента aud=vmcp на прямом пути, exchange-токен через vMCP); меры — aud + --oidc-audience, сеть, strip-auth/embedded auth server.",
+  "3. verify_tx.py: хранилище jti по (path, jti); обновить verify_tx.json; ADR п.2: хранилище закрывает 4 из 5 повторов, другой коннектор — только aud.",
+  "4. webhook-c-down: остановить webhook посреди сессии и повторить calls, либо пометить в п.3 'по коду'.",
+  "5. ADR п.2 (3)/п.9: thv run --authz-config (Cedar на прокси) как мера против обхода vMCP.",
+  "6. ADR п.2 (5)/п.7: GHSA-g7gq-2r4g-3qw8 и GHSA-wj8g-gmv2-mpmv как обходы webhook-middleware; вывод — JWS обязателен на коннекторе для всех методов."
+ ],
+ "backlog": [
+  "Живая проверка пути W в операторе Kubernetes и token_exchange с IdP, который ставит aud (если владелец рассматривает ToolHive)",
+  "Задержка webhook на tools/call"
+ ],
+ "ponytail_review": "reports/critic/M4.1-cycle-2.review.md",
+ "lean_lines": 0,
+ "existing_solutions": [
+  {
+   "component": "toolhive/webhook.py — подписант пути W",
+   "alternative": "Python-плагин gxg_identity M4 (claims встроены в хук ContextForge, функции подписи нет), verify_jws.canonical (переиспользован), Go-стратегия RegisterOBOStrategy (своя сборка), embedded auth server ToolHive (не выпускает JWS ADR-0001)",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "Запуск прокси пути W",
+   "alternative": "Kubernetes-оператор MCPServer+MCPWebhookConfig (нет кластера), thv proxy (нет --webhook-config в v0.67.0), thv run (взят)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "attacks.py / list_tools.py",
+   "alternative": "spike.py и check_verdicts.EXPECTED M4 (импортированы), MCP Inspector, mcp SDK",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "verify_tx.py — проверка token_exchange и модель хранилища jti",
+   "alternative": "PyJWT PyJWKClient (использован); хранилище jti — echo M4 SEEN_JTI как образец (смоделировано неверно, находка 3)",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "docker-mcp-gateway/interceptors.sh",
+   "alternative": "общий common.sh/start_echo и spike.call_tool (переиспользованы); шаг run.sh (другой набор контейнеров — обосновано в плане)",
+   "verdict": "justified_custom"
+  },
+  {
+   "component": "Варианты vmcp-*.yaml",
+   "alternative": "sed поверх vmcp.yaml/vmcp-tx.yaml (сделано, копии удалены)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "Mock IdP",
+   "alternative": "navikt/mock-oauth2-server, закреплён по digest",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "echo + верификатор C",
+   "alternative": "spikes/m4-contextforge/echo смонтирован, одна правка ECHO_IDENTITY_META, verify_jws.py не менялся",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "Cedar против обхода vMCP на прокси",
+   "alternative": "thv run --authz-config (штатный, не рассмотрен — находка 5)",
+   "verdict": "use_existing"
+  },
+  {
+   "component": "Проверка advisories",
+   "alternative": "GitHub GHSA pages (API закрыт прокси), OSV API",
+   "verdict": "use_existing"
+  }
+ ],
+ "threat_model": [
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Поддельные X-Forwarded-User-*/X-Tenant-Id/X-GxG-Identity от агента",
+   "status": "closed",
+   "evidence": "vMCP: не дошли (default/summary.json). Путь W прямо на прокси: дошли до echo (thv-proxy:direct attack_forge), identity верна только потому, что коннектор берёт её из JWS в _meta. Повторено критиком"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Поддельные X-Forwarded-User-*/X-Tenant-Id/X-GxG-Identity от агента",
+   "status": "closed",
+   "evidence": "не дошли (default/summary.json, повторено)"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Поддельные _meta.tenant_id/_meta.user/_meta[gxg.dev/identity], аргументы tenant_id/principal",
+   "status": "closed",
+   "evidence": "путь W: webhook заменяет gxg.dev/identity настоящим JWS, identity = вызвавший агент (webhook-c, повторено). Без пути W — open (forged_meta_reached: true)"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Поддельные _meta.tenant_id/_meta.user/_meta[gxg.dev/identity], аргументы tenant_id/principal",
+   "status": "open",
+   "evidence": "forged_meta_reached: true; Meta: req.Params.Meta (DG/pkg/gateway/handlers.go:52)"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Вызов без токена",
+   "status": "closed",
+   "evidence": "401 authorization header required"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Вызов без токена",
+   "status": "closed",
+   "evidence": "401"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Platform admin вызывает tool tenant'а",
+   "status": "closed",
+   "evidence": "vMCP: 403 policy; прокси напрямую: 403 от webhook (нет tenant_id), повторено"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Platform admin вызывает tool tenant'а",
+   "status": "out_of_scope",
+   "evidence": "ролей нет"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Чужой tenant",
+   "status": "closed",
+   "evidence": "vMCP: 403 Cedar; прокси t-beta напрямую: 403 webhook (tenant claim != tenant коннектора), повторено"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Чужой tenant",
+   "status": "open",
+   "evidence": "общий инстанс: beta__echo агентом t-alpha дошёл; закрыто только инстансом на tenant"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Скрытый tool по имени через шлюз",
+   "status": "closed",
+   "evidence": "tool \"hidden_echo\" not found (повторено); GHSA-v869/v9xx не про vMCP: vMCP не использует authz response filter (по коду v0.67.0)"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Прямой вызов прокси мимо vMCP своим токеном IdP (обход Cedar по tool, включая скрытые tools того же коннектора)",
+   "status": "open",
+   "evidence": "thv-proxy:direct принят с подписанным JWS (webhook-c, повторено); закрывается сетью, aud+--oidc-audience или --authz-config на прокси (находка 5) — ничего из этого на стенде нет"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Скрытый tool по имени",
+   "status": "closed",
+   "evidence": "unknown tool hidden__echo; политики вне Desktop — allow all"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Прямой вызов коннектора без identity",
+   "status": "closed",
+   "evidence": "путь W: missing X-GxG-Identity (верификатор коннектора); без пути W защищает только верификатор"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Прямой вызов коннектора без identity",
+   "status": "open",
+   "evidence": "шлюз identity не даёт; отказ только от верификатора C, которого у шлюза нет"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Повтор перехваченного JWS сразу / через 65 с",
+   "status": "closed",
+   "evidence": "путь W: replayed jti / ExpiredSignatureError (повторено)"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Повтор перехваченного token_exchange-токена (без пути W)",
+   "status": "open",
+   "evidence": "проходит подпись IdP, exp 3600 с (стенд); хранилище jti закрыло бы повтор на тот же коннектор; на другой коннектор — нет (находка 3), нужен aud"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Повтор перехваченной identity",
+   "status": "out_of_scope",
+   "evidence": "identity нет"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Подмена аргументов / другой tool с перехваченной identity",
+   "status": "closed",
+   "evidence": "путь W: arguments hash mismatch / bad tool. Без пути W (token_exchange) — open: нет tool/ahs"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Подмена аргументов / другой tool",
+   "status": "out_of_scope",
+   "evidence": "identity нет"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Повтор JWS на другой коннектор",
+   "status": "closed",
+   "evidence": "путь W: InvalidAudienceError (aud из webhook-servers.json)"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Повтор на другой коннектор",
+   "status": "out_of_scope",
+   "evidence": "identity нет"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Подделка JWS чужим ключом",
+   "status": "closed",
+   "evidence": "InvalidSignatureError (повторено)"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Подделка JWS чужим ключом",
+   "status": "out_of_scope",
+   "evidence": "JWS нет"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Отказ механизма identity → вызов без identity (fail open)",
+   "status": "closed",
+   "evidence": "плохая политика — не стартует (exit 1); STS недоступен — вызов не уходит; webhook мёртв со старта — 500/tool not found. Webhook, умерший посреди сессии, не проверен (находка 4), по коду — 500"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Обход самого webhook-middleware (класс GHSA-g7gq, GHSA-wj8g)",
+   "status": "closed",
+   "evidence": "в v0.67.0 исправлены; при повторении запрос дойдёт без JWS и коннектор отклонит (missing) — держится на коннекторе (находка 6)"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Отказ механизма identity (fail open)",
+   "status": "out_of_scope",
+   "evidence": "механизма нет; HTTP-перехватчик 500 без тела пропускает (по коду)"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Скомпрометированный коннектор переиспользует Bearer агента, который ему передал прокси",
+   "status": "open",
+   "evidence": "Authorization доходит до echo: на прямом пути токен агента aud=vmcp, 3600 с; через vMCP — exchange-токен (raw echo log, повторено); strip-auth только с embedded auth server (TH/pkg/runner/middleware.go#L495-L527) — находка 2"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Скомпрометированный коннектор переиспользует токен вызывающего",
+   "status": "closed",
+   "evidence": "заголовки клиента к remote не передаются (DG handlers.go)"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Компрометация прокси thv run → хост (docker socket)",
+   "status": "open",
+   "evidence": "вне Kubernetes thv требует container runtime: на стенде /var/run/docker.sock в каждом прокси; без runtime: no container runtime available (проверено) — находка 1"
+  },
+  {
+   "candidate": "Docker MCP Gateway v0.44.3",
+   "path": "Изменение набора tools другим клиентом (dynamic tools / mcp-add)",
+   "status": "closed",
+   "evidence": "на стенде выключено --servers; по умолчанию включено"
+  },
+  {
+   "candidate": "ToolHive vMCP v0.67.0 (+ путь W: thv run + mutating webhook)",
+   "path": "Изменение набора tools другим клиентом",
+   "status": "out_of_scope",
+   "evidence": "нет аналога в vMCP"
+  }
+ ]
+}

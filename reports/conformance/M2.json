@@ -1,0 +1,259 @@
+{
+  "milestone": "M2",
+  "cycle": 5,
+  "branch": "claude/m2-policy-tooling",
+  "base": "claude/m2-policy-tooling@ed3faad (cycle 4 + critic report)",
+  "commit": "6ffcaddc03c9dafc94d9961526f2dec905ebbcb1",
+  "commit_note": "Tested code commit (17ce7f4 code, 6ffcadd mutmut list and reports). This report is added by the next commit (reports/ only).",
+  "run_at": "2026-11-21T10:50:00Z",
+  "author": "Claude Code (executor, M2 cycle 5)",
+  "plan": "reports/plans/M2-cycle-5.md",
+  "environment": {
+    "local": {
+      "os": "linux x86_64",
+      "python": "3.12 (UV_PYTHON=3.12)",
+      "command": "bash scripts/ci/check-all.sh -> check-all: OK; uv run pytest -> 307 passed, 148 subtests passed, 0 skipped"
+    },
+    "ci": {
+      "runner": "ubuntu-latest",
+      "python": "3.12",
+      "workflow": ".github/workflows/ci.yml",
+      "run_id": 44894175225,
+      "run_url": "https://github.com/dmitry-v-ko/GxG-hub/actions/runs/44894175225",
+      "event": "push",
+      "jobs": {
+        "lint": "success",
+        "types": "success",
+        "tests": "success",
+        "schema-guard": "success",
+        "secrets": "success",
+        "policy": "success",
+        "grants-widening": "failure (by design)",
+        "ci-ok": "failure (follows grants-widening)",
+        "bundle": "skipped (not main)"
+      },
+      "why_red": "push to claude/** : main has no gate yet, so the step runs the PR copy (bootstrap); policy and gate-path widening vs merge-base with main outside a pull request -> fail closed by design (F1).",
+      "commit": "17ce7f4 (code commit; 6ffcadd changes only the mutmut list and reports/)"
+    }
+  },
+  "contextforge_image_digest": null,
+  "sdk_versions": {
+    "mcp": null,
+    "fastmcp": null,
+    "note": "M2 does not use MCP SDKs"
+  },
+  "tool_versions": {
+    "pytest": "9.2.0",
+    "ruff": "0.17.6",
+    "mypy": "2.4.1",
+    "jsonschema": "4.26.0",
+    "PyYAML": "6.0.3",
+    "cryptography": "46.0.7",
+    "note": "CI and local check-all use uv.lock (UV_LOCKED=1)",
+    "mutmut": "3.8.1",
+    "rfc3339-validator": "0.1.4",
+    "referencing": "0.37.0"
+  },
+  "policy_version": null,
+  "bundle_version": "dd0beb1 (local smoke build in check-all; CI smoke builds the run commit with a throw-away key)",
+  "fixture_identity": "synthetic principals only (agent:t-alpha:*, oidc:https://idp.example.invalid:N); keys generated per test with os.urandom",
+  "acceptance": [
+    {
+      "id": "AC-M2-01",
+      "status": "passed",
+      "expected": "`gxg-policy validate policies/` passes on the repository examples",
+      "actual": "exit 0, 0 errors; `lint policies/` exit 0 with 2 warnings (unknown-tool telegram.message.propose, unknown-tenant t-beta). Hand-written tools removed from registry.example.yaml (cycle 3 minor 5); the ignored-tools warning is still tested on a temp copy (test_bundle.py::test_build_without_manifest_gives_connectors_empty_tools)",
+      "tests": [
+        "tools/gxg-policy/tests/test_lint.py::test_ac_m2_01_validate_repo_policies",
+        "tools/gxg-policy/tests/test_lint.py::test_repo_policies_lint_clean"
+      ],
+      "evidence": [
+        "CI job `policy` (run 44894175225): validate, lint, bundle smoke — success"
+      ]
+    },
+    {
+      "id": "AC-M2-02",
+      "status": "passed",
+      "expected": ">= 12 prepared errors in tools/gxg-policy/tests/bad/, each found with non-zero exit and file + path",
+      "actual": "20 fixtures (12 from the AC + 8 more; new 20: auto_approve with limits: {}). Each: exactly one error equal to expected.json; CLI exit 1 with `<file>: <path>: [<code>]`. Full messages and levels of all fixtures plus a multi-error fixture (lint-all, 48 findings) are pinned in tools/gxg-policy/tests/lint-golden.json. Cycle 4: same tool name in two manifests -> error `duplicate-tool` with file and tools[i].name (test_lint.py::test_same_tool_name_in_two_manifests_is_an_error; not a tests/bad fixture because bad fixtures carry one manifest). Cycle 5: the same name twice inside one manifest -> `duplicate-tool` on the second tools[i].name, manifest not loaded (test_lint.py::test_same_tool_name_twice_in_one_manifest_is_an_error)",
+      "tests": [
+        "tools/gxg-policy/tests/test_lint.py::test_ac_m2_02_lint_finds_error[*] (20)",
+        "tools/gxg-policy/tests/test_lint.py::test_ac_m2_02_has_all_required_cases",
+        "tools/gxg-policy/tests/test_lint.py::test_lint_findings_match_golden",
+        "tools/gxg-policy/tests/test_lint.py::test_same_tool_name_twice_in_one_manifest_is_an_error"
+      ],
+      "notes": "connector tenants ['*'], webhook non-HTTPS and credential without secret:// are rejected by the JSON Schemas (code `schema`); lint includes schema validation"
+    },
+    {
+      "id": "AC-M2-03",
+      "status": "passed",
+      "expected": "added (subject, action, resource) pairs and new auto_approve marked widening, removed — narrowing; 6 fixture pairs with golden reports",
+      "actual": "10 pairs with expected.json, all equal. 10-manifest-tools (base/head-connectors, expected.json + expected-reverse.json): tool added, any effect_class change (`effect_class_changed`, both directions: rules may match by match.effect_classes, cycle 4 finding 2), action and executes_via changed -> widening; tool removed -> narrowing. Raised class under a class-matched deny -> widening (test_raised_effect_class_under_a_class_matched_deny_is_widening). Duplicate tool name inside one manifest -> diff exit 2 (test_duplicate_tool_inside_one_manifest_fails_the_diff). CLI: --base-connectors/--head-connectors",
+      "tests": [
+        "tools/gxg-policy/tests/test_diff.py::test_ac_m2_03_report_matches_golden[*] (8)",
+        "tools/gxg-policy/tests/test_diff.py::test_ac_m2_03_core_classification",
+        "tools/gxg-policy/tests/test_diff.py::test_group_membership_in_approval_rules_is_widening",
+        "tools/gxg-policy/tests/test_diff.py::test_direct_rule_edits",
+        "tools/gxg-policy/tests/test_diff.py::test_star_means_everyone_in_approvers_and_requesters",
+        "tools/gxg-policy/tests/test_diff.py::test_markdown_golden",
+        "tools/gxg-policy/tests/test_diff.py::test_reverse_report_matches_golden[09-every-change]",
+        "tools/gxg-policy/tests/test_diff.py::test_manifest_tool_changes",
+        "tools/gxg-policy/tests/test_diff.py::test_manifest_moved_to_another_connector_is_widening",
+        "tools/gxg-policy/tests/test_diff.py::test_invalid_manifest_is_an_input_error",
+        "tools/gxg-policy/tests/test_diff.py::test_reverse_report_matches_golden[10-manifest-tools]",
+        "tools/gxg-policy/tests/test_diff.py::test_raised_effect_class_under_a_class_matched_deny_is_widening",
+        "tools/gxg-policy/tests/test_diff.py::test_duplicate_tool_inside_one_manifest_fails_the_diff"
+      ],
+      "notes": "Goldens 07, 08 and the 03 change were generated by the tool and checked entry by entry; the two new tests assert the classification independently of the goldens"
+    },
+    {
+      "id": "AC-M2-04",
+      "status": "partial",
+      "expected": "PR with widening not mergeable until `widening-approved` label added by a CODEOWNERS user; check `grants-widening` red until then",
+      "proven_by_tests": [
+        "Cycle 3 finding 1 (gate from main): the ci.yml step itself runs in a temp repo whose main holds the real gate; the branch sets its own grants_widening.sh to `exit 0` and widens -> red, gate-paths.txt lists the script, gxg-policy and widening_gate.py are called with `uv run --locked --project <runner>/gate` (tests/ci/test_grants_widening_job.py::test_pr_that_disables_its_gate_and_widens_is_red)",
+        "Gate edit alone (widening_gate.py, gxg_policy/diff.py, uv.lock, pyproject.toml, .github/workflows/ci.yml, schemas/) -> red, 1 widening (::test_gate_edit_alone_needs_the_label[*] 6); unrelated edit -> green (::test_unrelated_edit_is_green_with_the_gate_from_main); bootstrap: no gate on main -> PR copy runs with a warning and its own gate files are widening (::test_without_a_gate_on_main_the_pr_copy_runs)",
+        "No PR code in the job: steps are checkout, setup-uv, gate step only; no `uv` call in the step (tests/ci/test_ci_workflow.py::test_grants_widening_runs_no_pr_code); gate paths -> widening entries and Markdown section (tests/ci/test_widening_gate.py::test_changed_gate_paths_count_as_widening)",
+        "Cycle 3 finding 2 (manifests): same policies, manifest weakened on the branch -> job report equals 10-manifest-tools/expected.json, red (::test_manifest_weakening_is_widening)",
+        "Earlier cycles unchanged: base change, fast-forward A/B/A/B, tag origin/main, push/dispatch red, cancel, label/reopen, groups, fork runs",
+        "Real CI: run 44894175225 (push, 17ce7f4) grants-widening red outside a PR with the bootstrap warning (fail closed by design)",
+        "DoD-4 (cycle 5 re-run): mutmut on widening_gate.py 581 mutants, 557 killed, 24 equivalent; 24/24 bash/YAML mutations of grants_widening.sh and ci.yml (10 new: PR copy runs, uv sync of the PR, gate paths dropped/narrowed/not passed, manifests not compared, PR gxg-policy / widening_gate.py runs)",
+        "Cycle 4 findings: a lower-class duplicate of a tool inside one manifest fails the diff (exit 2, red); a raised effect_class is widening, so a class-matched deny/quorum cannot be dropped without the label (tools/gxg-policy/tests/test_diff.py, two tests above)"
+      ],
+      "owner_pending": [
+        "docs/setup/widening-approval.md checklist steps 1-13 on a real PR; step 7 now expects red (gate from main); new 12 (re-run keeps created_at) and 13 (deleted/recreated head branch cannot be reopened, or the fast-forward is red)",
+        "performed_via_github_app set for Claude GitHub App tokens (step 3)",
+        "actions/runs returns head_branch, head_repository and pull_requests as the gate expects (otherwise approval never counts: fail closed)",
+        "the first PR into main (M2 itself) runs the bootstrap path and needs the owner's label for 12 policy + gate-path widening"
+      ],
+      "tests": [
+        "tests/ci/test_widening_gate.py",
+        "tests/ci/test_grants_widening_job.py",
+        "tests/ci/test_ci_workflow.py"
+      ],
+      "evidence": [
+        "docs/setup/widening-approval.md",
+        "CI run 44894175225 grants-widening log",
+        "reports/mutations/M2-cycle-5-mutmut.txt",
+        "reports/mutations/M2-cycle-5-bash-yaml.txt"
+      ],
+      "owner_decision": "accepted risk (2026-11-21): ci.yml-rewrite path covered by the owner's own review of every PR touching .github/workflows/; see top-level owner_decision"
+    },
+    {
+      "id": "AC-M2-05",
+      "status": "passed",
+      "expected": "two build runs on one commit give byte-identical bundles (excluding signature and built_at)",
+      "actual": "unchanged: two builds in separate processes are byte-identical except built_at (test + bundle_smoke.sh in check-all and CI)",
+      "tests": [
+        "tools/gxg-policy/tests/test_bundle.py::test_ac_m2_05_two_builds_are_byte_identical",
+        "tools/gxg-policy/tests/test_bundle.py::test_gr_13a_rebuild_without_flag_only_changes_built_at"
+      ],
+      "evidence": [
+        "scripts/ci/bundle_smoke.sh in CI job `policy` (cmp of two builds)"
+      ]
+    },
+    {
+      "id": "AC-M2-06",
+      "status": "passed",
+      "expected": "verify accepts a bundle from build and rejects it after one changed byte",
+      "actual": "verify accepts a built bundle, rejects any changed byte; now also validates by grants-bundle.schema.json; schemas/test-vectors/bundle-signature.json reproduced byte for byte by `build` (bundle and .sig) and accepted by `verify`",
+      "tests": [
+        "tools/gxg-policy/tests/test_bundle.py::test_ac_m2_06_verify_accepts_built_bundle",
+        "tools/gxg-policy/tests/test_bundle.py::test_ac_m2_06_verify_rejects_any_changed_byte",
+        "tools/gxg-policy/tests/test_bundle.py::test_verify_rejects_wrong_key_kid_alg_and_missing_sig",
+        "tools/gxg-policy/tests/test_bundle.py::test_verify_rejects_signed_but_not_canonical",
+        "tools/gxg-policy/tests/test_bundle.py::test_verify_rejects_validly_signed_wrong_shape[*] (3)",
+        "tools/gxg-policy/tests/test_bundle.py::test_verify_names_unknown_kid",
+        "tools/gxg-policy/tests/test_bundle.py::test_signature_vector_is_reproduced_by_build_and_accepted_by_verify"
+      ]
+    }
+  ],
+  "dod": {
+    "1_main_via_pr_ci_green": "Not yet: run 44894175225 green except grants-widening/ci-ok, red by design (push with widening and gate paths vs main); merging into main via PR with the owner's label is the owner's step",
+    "2_automated_tests": "AC-M2-01, 02, 03, 05, 06 automated; AC-M2-04 automated for gate, job script and workflow; real-PR steps owner-pending",
+    "3_report": "this file",
+    "4_tests_catch_mutation": "mutmut 3.8.1, `bash scripts/ci/mutmut.sh`: gxg_policy diff/lint/bundle/load 2590 mutants, 2555 killed, 35 equivalent; widening_gate.py 581, 557 killed, 24 equivalent; no surviving non-equivalent mutant (reports/mutations/M2-cycle-5-mutmut.txt; reasons in scripts/ci/mutmut-equivalent.txt; one stale entry removed: the < / <= mutant under `bc != hc` no longer exists). Non-Python: mutate_m2.py 24/24 (reports/mutations/M2-cycle-5-bash-yaml.txt)",
+    "5_no_skips": "0 skipped, 0 xfail (conftest.py)",
+    "6_existing_solutions": "reports/plans/M2-cycle-4.md «DoD-6» (cycle 5 adds no component: two edits of existing checks)"
+  },
+  "gr_11a_format": {
+    "grants-bundle.json": "JCS (RFC 8785, float-free), keys schema_version=1, bundle_version (git SHA), built_at (RFC 3339 UTC, seconds, Z), tenants {tenant: {grants: <file with group subjects expanded; groups map kept for approval requesters/approvers>, approval_policy: <file or null>}}, platform: <registry>",
+    "grants-bundle.json.sig": "JCS JSON {alg: EdDSA, kid, sig: base64url no padding of Ed25519 over exact bundle bytes}",
+    "signing_key": "secret GXG_BUNDLE_SIGNING_KEY = base64url 32-byte Ed25519 seed; vars GXG_BUNDLE_KID, GXG_BUNDLE_PUBLIC_KEY (docs/setup/bundle-signing.md)",
+    "platform.services[].tools": "built from connectors/<id>/gxg-manifest.yaml (connector == service id) for every kind: connector service: name, version, effect_class, action, executes_via?, dispatch_timeout_s?, preview?; no manifest -> []; hand-written registry tools are replaced (lint warning ignored-tools; none left in the repo example)",
+    "schema": "build and verify validate the document by schemas/grants-bundle.schema.json"
+  },
+  "spec_interpretations": [
+    "groups stay in the bundled grants file next to expanded subjects (approval policies reference groups) — for M1 loader alignment",
+    "platform registry: the single *.yaml in policies/platform/ (spec names registry.yaml, repo ships registry.example.yaml)",
+    "tenant file name is not checked against `tenant` (repo example is example.yaml with tenant t-alpha)",
+    "foreign principal detected by tenant segment of agent:<tenant>:<name> (spec marks the format VERIFY)",
+    "rewritten `match` of a rule is widening (fail closed), except requesters of auto_approve rules, which are compared as expanded sets (added -> widening, removed -> narrowing)",
+    "'*' / absent approvers or requesters means everyone: '*' -> specific is narrowing",
+    "AP-02 classes and bundle tools come from the same manifest set, default connectors/*/gxg-manifest.yaml (schemas/examples no longer counts): lint checks exactly what AS-26 enforces",
+    "manifests are schema-checked by gxg-manifest.schema.json; a bad manifest is a lint error with file and path",
+    "manifest diff key is (connector, tool name): a tool moved to another connector is removed + added (widening); only effect_class, action, executes_via and the tool list are compared (they decide who approves); a duplicate tool name across manifests is a lint error",
+    "every file changed under the gate paths (.github/workflows/, scripts/ci/, tools/gxg-policy/, schemas/, pyproject.toml, uv.lock) counts as widening (kind gate_path), including tests and fixtures under those paths: fail closed"
+  ],
+  "known_limitations": [
+    "owner_decision (accepted risk, 2026-11-21): a PR can rewrite .github/workflows/ci.yml so the main copy of the gate never runs; the owner reviews every such PR; the gate code, gxg-policy, uv.lock and schemas already come from main and edits to them need the label",
+    "bootstrap: while main has no scripts/ci/grants_widening.sh the step runs the PR copy (warning in the log); the first such PR adds gate files and so needs the label",
+    "push runs on claude/** stay red while the branch widens vs main; which same-name ci-ok GitHub counts is owner checklist steps 4 and 11",
+    "performed_via_github_app for Claude GitHub App tokens is unproven until owner checklist step 3; an agent with the owner's personal token is indistinguishable from the owner",
+    "head arrival from actions/runs: missing head_branch/head_repository/pull_requests, or a run recorded at or before the force-push second -> label not counted (fail closed; owner relabels)",
+    "mutmut is run by scripts/ci/mutmut.sh (~3 min), not as a CI job",
+    "the secrets job still diffs PR base.sha..head (replaced by gitleaks in M0.1)",
+    "bundle job (signed, main, push+schedule) not exercised: needs the secret and main",
+    "GR-18 drift check, bundle distribution (GR-12/13) and the loader's older-built_at rejection (GR-13a) not in M2",
+    "manifest fields other than effect_class/action/executes_via (dispatch_timeout_s, preview, version) are not compared"
+  ],
+  "gr_13a": {
+    "schedule": "ci.yml `schedule: 41 */6 * * *` (every 6 h, UTC); job bundle runs on push or schedule when ref is refs/heads/main, same build+verify steps",
+    "tests": [
+      "tests/ci/test_ci_workflow.py::test_gr_13a_bundle_is_resigned_at_least_every_12_hours (max cron gap <= 12 h, bundle condition)",
+      "tools/gxg-policy/tests/test_bundle.py::test_gr_13a_rebuild_without_flag_only_changes_built_at (same content, fresh RFC 3339 UTC built_at)",
+      "tools/gxg-policy/tests/test_bundle.py::test_build_rejects_bad_built_at[*] (5)"
+    ],
+    "not_checked": "that GitHub actually fires the schedule (needs main + time); loader rejection of older built_at is M1",
+    "docs": "docs/setup/bundle-signing.md «Переподпись по расписанию»"
+  },
+  "critic_cycle_1": {
+    "F1": "done: fail closed outside pull_request (scripts/ci/grants_widening.sh, gate --no-pr), 'Not a pull request' step removed; tests + red CI run",
+    "F2": "done: staleness on every event by server time + force-push events; PR runs never cancelled; tests for labeled/reopened after an unprocessed push",
+    "F3": "done: group: expanded in requesters/approvers; fixtures 07 (+08), 03 golden corrected",
+    "F4": "done: fixtures 08, bad/19, verify shape tests, '*' test, mutation script + output",
+    "F5": "done: guide lists every executed path, remaining limits, owner checklist with exact expected results (app label rejected)",
+    "AC-M2-04 evidence": "done: proven_by_tests / owner_pending split above",
+    "minor --built-at": "done: RFC 3339 UTC with Z, round-trip check, exit 2",
+    "minor MARKER": "done: one constant in gxg_policy.diff; gate uses the first line of the Markdown report",
+    "GR-13a": "done: schedule every 6 h, bundle on schedule on main, docs, tests"
+  },
+  "critic_cycle_2": {
+    "base_change": "done: diff vs merge-base with refs/remotes/origin/main for PRs, edited type, PR_HEAD; tests",
+    "f2": "done: arrival after the latest force-push, same head repository; A/B/A/B test red; mutmut kills head_arrival/stale mutants",
+    "tag_shadowing": "done: full ref; test",
+    "dod4_mutmut": "done: mutmut for gxg_policy diff/lint/bundle/load and widening_gate.py; mutate_m2.py reduced to bash/YAML with the reason in the plan",
+    "docs": "done: false claim replaced, checklist steps 8-11 (base change, fast-forward, tag, reverse ci-ok order); owner_pending/proven_by_tests split above"
+  },
+  "critic_cycle_3": {
+    "major_1_gate_from_main": "done (in-repo part): step runs main's grants_widening.sh from a worktree of refs/remotes/origin/main, gxg-policy and widening_gate.py via uv run --locked --project <main>; no uv sync of the PR; gate paths need the label; tests incl. the ci.yml step itself. Remaining ci.yml path: owner_decision = accepted risk, 2026-11-21 (owner reviews every PR touching .github/workflows/)",
+    "major_2_manifest_widening": "done: diff --base-connectors/--head-connectors, job passes both worktrees, fixture 10-manifest-tools with goldens both ways, CODEOWNERS /connectors/*/gxg-manifest.yaml",
+    "minor_3_duplicate_tool": "done: lint error duplicate-tool",
+    "minor_4_checklist": "done: steps 12 (re-run keeps created_at) and 13 (recreated branch + reopen)",
+    "minor_5_lean": "done: hand-written tools removed from registry.example.yaml"
+  },
+  "owner_decision": [
+    {
+      "risk": "a PR can rewrite .github/workflows/ci.yml so that the main copy of the gate never runs (remove the step, `exit 0`, drop grants-widening from ci-ok needs); not closable in the repo",
+      "decision": "accepted risk",
+      "date": "2026-11-21",
+      "by": "owner (relayed by the orchestrator)",
+      "mitigation": "the owner reviews every PR that changes .github/workflows/ personally, not by a green ci-ok; CODEOWNERS marks /.github/",
+      "docs": "docs/setup/widening-approval.md «Ограничения»"
+    }
+  ],
+  "critic_cycle_4": {
+    "major_1_duplicate_in_one_manifest": "done: load_manifests adds names to `seen` while iterating -> duplicate-tool error; diff._load fails closed (exit 2); tests in lint and diff",
+    "major_2_effect_class_any_change": "done: every effect_class change is widening (`effect_class_changed`); goldens of 10-manifest-tools updated; test with a class-matched deny; docs/setup/widening-approval.md updated"
+  }
+}

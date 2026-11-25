@@ -1,0 +1,90 @@
+{
+  "milestone": "M1",
+  "cycle": 2,
+  "branch": "claude/m1-connector-kit",
+  "commit": "c64693a8fc0f8e425820bf134ca5dda5e9410a69",
+  "report_commit": "5379d424436cbef136bdeda2d86ec23dcee5363a",
+  "score": 6.0,
+  "caps_applied": ["dod", "major"],
+  "dimensions": {"spec": 2.5, "tests": 1, "security": 1.5, "code": 1, "ops": 1, "evidence": 0},
+  "acceptance": [
+    {"id": "AC-M1-01", "status": "passed", "evidence": "clean clone @c64693a, empty UV_CACHE_DIR, Python 3.12.3: test_canonical.py::test_vectors_bytes_and_sha256[6], ::test_invalid_inputs[2] passed. Probe: the implementation also reproduces all 9 vectors and rejects all 3 invalid inputs of the orchestrator's new canonical-hash.json"},
+    {"id": "AC-M1-02", "status": "passed", "evidence": "3 Hypothesis properties (max_examples=1000) passed; mutmut: 0 survivors in canonical.py"},
+    {"id": "AC-M1-03", "status": "passed", "evidence": "test_exec_token.py passed: 9 rejection cases, 4 s and exactly 5 s skew accepted, replay at T0, T0+30 and exp+5 rejected"},
+    {"id": "AC-M1-04", "status": "passed", "evidence": "test_svc_jwt.py passed incl. iss_unregistered, 5 s boundary, later replay"},
+    {"id": "AC-M1-05", "status": "passed", "evidence": "test_grants.py::test_check_table — 34 cases incl. trailing-newline RIDs, passed"},
+    {"id": "AC-M1-06", "status": "passed", "evidence": "test_changed_byte[5], test_missing_or_empty_signature[5], test_signed_by_foreign_key passed; readiness not ready"},
+    {"id": "AC-M1-07", "status": "passed", "evidence": "test_bundle_older_than_24h_is_not_ready, test_bundle_of_exactly_24h_is_ready, test_loaded_bundle_goes_stale passed"},
+    {"id": "AC-M1-08", "status": "passed", "evidence": "test_redact.py — 18 parametrized examples + 2 tests passed"},
+    {"id": "AC-M1-09", "status": "passed", "evidence": "pytest --cov-branch: branch coverage 100 % in exec_token, svc_jwt, grants, canonical, identity, _jwt"}
+  ],
+  "dod": [
+    {"id": "DoD-1", "status": "not_run", "note": "No PR to main yet. CI run 44804004035 on c64693a and 44804331032 on 5379d42: ci (incl. ci-ok) = success"},
+    {"id": "DoD-2", "status": "passed", "note": "All AC automated"},
+    {"id": "DoD-3", "status": "passed", "note": "reports/conformance/M1.json present; its DoD-4 claim is not confirmed (see DoD-4)"},
+    {"id": "DoD-4", "status": "failed", "note": "Self-written scripts/ci/mutate_kit.py instead of mutmut; no [tool.mutmut] config. mutmut 3.8.1 on exec_token, svc_jwt, _jwt, grants, canonical: 943 mutants, 898 killed, 45 survived, 20 of them non-equivalent (15 thumbprint, sign jti, sign ttl lower bound, exp-iat lower bound, token length boundary, non-str iss)"},
+    {"id": "DoD-5", "status": "passed", "note": "379 passed, 136 subtests, 0 skipped/xfail"},
+    {"id": "DoD-6", "status": "failed", "note": "Cycle-2 plan names no ready solution for the mutation script (mutmut not mentioned). Cycle-1 components are covered by the cycle-1 plan"}
+  ],
+  "cycle_1_items": [
+    {"item": "jti cache lifetime", "status": "done", "evidence": "tests at T0+30 and exp+5 for both verifiers; mutmut kills every mutant of the cache lifetime and prune"},
+    {"item": "AS-11 5 s boundary", "status": "done", "evidence": "exp = now-5 and iat = now+5 accepted for both token types; no SKEW_S mutant survives"},
+    {"item": "built_at in the future", "status": "done", "evidence": "BundleStore.load rejects built_at > now+5 s; test_bundle_from_the_future_is_rejected_and_does_not_block_the_next; no mutant of the check survives"},
+    {"item": "reproducible mutation list", "status": "not_accepted", "evidence": "done with a custom script, which DoD-4 now forbids; mutmut contradicts its '0 non-equivalent' result"}
+  ],
+  "findings": [
+    {"severity": "major", "ref": "DoD-4, DoD-6", "where": "scripts/ci/mutate_kit.py; reports/conformance/M1.json (dod DoD-4); reports/plans/M1-cycle-2.md row 4; packages/gxg-connector-kit/tests/kit_testing.py:16",
+     "problem": "Mutation proof is a 393-line self-written script (forbidden by DoD-4) chosen without considering mutmut (DoD-6). No [tool.mutmut] config: `mutmut run` fails immediately. mutmut finds 20 non-equivalent survivors the script reports as 0. kit_testing.REPO = parents[3] points to the wrong folder from mutmut's mutants/ copy",
+     "required_improvement": "Delete mutate_kit.py; add [tool.mutmut] to packages/gxg-connector-kit/pyproject.toml; make REPO find the root by walking up to uv.lock; attach `mutmut results` to the report"},
+    {"severity": "major", "ref": "AS-06a, DoD-4", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/_jwt.py:85-88",
+     "problem": "RFC 7638 thumbprint is only compared with itself in tests. 15 mutants survive (separators=None, CRV/KTY/X, ed25519/okp); each gives a non-RFC kid, so any caller using another library is rejected with 'kid'. Code is right today (RFC 8037 §A.3 → kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k, probe)",
+     "required_improvement": "Test: RFC 8037 §A.3 public key 11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo → thumbprint kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k"},
+    {"severity": "major", "ref": "AS-06, DoD-4", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/svc_jwt.py:63",
+     "problem": "Mutant jti = str(None) survives: every service JWT would carry the same jti, and the second call within ~65 s is rejected as replay",
+     "required_improvement": "Sign twice and verify both tokens (or assert distinct jti) in test_sign_and_verify"},
+    {"severity": "minor", "ref": "DoD-4", "where": "_jwt.py:113, _jwt.py:172, svc_jwt.py:60, svc_jwt.py:84",
+     "problem": "Non-equivalent survivors: token length > vs >= 8192; 0 < exp-iat vs 1 <; sign(ttl_s=1); `isinstance(iss, str) or True` (list iss → TypeError instead of TokenError)",
+     "required_improvement": "Cases: 8192-char token accepted / 8193 malformed; exp-iat = 1 accepted; sign(ttl_s=1) works; iss list → iss_unregistered"},
+    {"severity": "minor", "ref": "MCC-09, plan cycle 2 row 7", "where": "packages/gxg-connector-kit/src/gxg_connector_kit/exec_token.py:74-84",
+     "problem": "After one failed fetch _fetched_at = None, so every key() and readiness() refetches inside the lock. Probe: 10 concurrent readiness() with a 0.2 s failing fetch → 10 fetches, 2.0 s. Plan promised no fetch from /readyz. Fail closed, not a security bug",
+     "required_improvement": "On failure set _fetched_at = t with a short retry back-off (e.g. 5 s) while keys stay empty; test counting fetches"},
+    {"severity": "minor", "ref": "DoD-6", "where": "reports/plans/M1-cycle-1.md (AC-M1-09 row); scripts/ci/check_coverage.py",
+     "problem": "Plan says 'platform feature: --cov-fail-under', but a 36-line script was built. The script is justified (coverage has no per-file branch-only threshold), the plan line is wrong",
+     "required_improvement": "Correct the plan line with the reason"}
+  ],
+  "next_cycle_spec_alignment": [
+    "AS-06 public_keys (1–2 keys): load_bundle fails on schemas/test-vectors/bundle-signature.json with 'bundle: malformed (KeyError)' (public_key → public_keys); Service.public_keys, kid of any active key accepted, sign with the newest; test that loads the vector and reproduces bundle_bytes_b64 (canonical.dumps already does)",
+    "GR-13a: persist the max loaded built_at on local disk and reject older bundles after restart",
+    "canonical-hash.json (9 vectors, input_json invalid case): implementation passes; update test_vector_file_has_the_expected_cases and make test_invalid_inputs read input_json",
+    "error.schema.json: rate_limited requires retry_after_s; enforce in GxgError.__init__; test_schema_bounds_are_accepted fails with the new schema",
+    "grants-bundle.schema.json / grants-bundle-sig.schema.json: contract test that the loader accepts the schema-valid vector"
+  ],
+  "required_improvements": [
+    "Replace scripts/ci/mutate_kit.py with mutmut: [tool.mutmut] in packages/gxg-connector-kit/pyproject.toml for exec_token, svc_jwt, _jwt, grants, canonical; kit_testing.REPO found by walking up to uv.lock; `mutmut run` works in a clean clone with one command; attach `mutmut results` with a reason for each remaining (equivalent) survivor to reports/conformance/M1.json",
+    "Kill the non-equivalent survivors: RFC 8037 §A.3 thumbprint test (15 mutants); distinct jti from two svc_jwt.sign() calls; token length 8192/8193; exp-iat = 1 accepted; sign(ttl_s=1); iss as list → iss_unregistered",
+    "Add a 'ready solutions considered' entry per self-written component to the cycle plan (DoD-6), incl. mutmut used and the corrected check_coverage.py line",
+    "ExecutorJwks: retry back-off after a failed fetch so outage does not refetch on every call and every /readyz; test counting fetches",
+    "Bring the kit to the orchestrator specs: AS-06 public_keys with bundle-signature.json loading test; GR-13a on-disk max built_at; new canonical-hash.json and error.schema.json pass (rate_limited requires retry_after_s)"
+  ],
+  "existing_solutions": [
+    {"component": "canonical (JCS + NFC + int/float rules)", "alternative": "rfc8785 (Trail of Bits, PyPI); canonicaljson (Matrix) is not JCS (code-point key order)", "verdict": "justified_custom", "note": "Recorded in cycle-1 plan; ~25 lines on stdlib json/unicodedata/hashlib; NFC, float and safe-int rules are ours anyway; passes all 9 new vectors incl. UTF-16 key order"},
+    {"component": "_jwt (JWS core over PyJWT)", "alternative": "PyJWT options audience/issuer/leeway/require; joserfc, authlib, jwcrypto", "verdict": "justified_custom", "note": "PyJWT is used for signature and alg. Own claim code is needed: PyJWT accepts list aud, has no typ check, no exp-iat ≤ 60, no jti cache, no reason codes. Recorded in cycle-1 plan"},
+    {"component": "thumbprint (RFC 7638)", "alternative": "jwcrypto JWK.thumbprint(), joserfc thumbprint (not installed)", "verdict": "justified_custom", "note": "3 lines; a new dependency is not worth it, but it needs an RFC vector test"},
+    {"component": "b64url_decode", "alternative": "base64.urlsafe_b64decode", "verdict": "justified_custom", "note": "stdlib silently drops invalid characters; wrapper adds the strict alphabet check"},
+    {"component": "JtiCache", "alternative": "cachetools.TTLCache (not installed)", "verdict": "justified_custom", "note": "per-entry expiry (exp + skew) differs from a global TTL; 12 lines"},
+    {"component": "bundle loader (signature + parse)", "alternative": "cryptography Ed25519 verify (used); jsonschema against grants-bundle.schema.json (schema exists only since the orchestrator update)", "verdict": "justified_custom", "note": "Signature is library code; structural parse is fail closed. Next cycle: consider jsonschema validation once the schema is on the branch"},
+    {"component": "ExecutorJwks", "alternative": "PyJWT PyJWKClient (fetch + cache)", "verdict": "justified_custom", "note": "PyJWKClient refetches the JWKS on an unknown kid (an unauthenticated caller could force fetches) and its fail-closed behaviour after a failed refresh is not the AS-09 rule; transport is injected here. Not recorded in the plan explicitly"},
+    {"component": "redact", "alternative": "no standard library; structlog processors would still need the same key list", "verdict": "justified_custom", "note": "10 lines"},
+    {"component": "scripts/ci/check_coverage.py", "alternative": "coverage report --fail-under (lines+branches total, no per-file branch-only threshold)", "verdict": "justified_custom", "note": "AC-M1-09 asks for branch coverage per module; plan line should say so"},
+    {"component": "scripts/ci/mutate_kit.py", "alternative": "mutmut (DoD-4), cosmic-ray, mutatest", "verdict": "use_existing", "note": "393 lines; mutmut 3.8.1 runs on these modules with ~13 lines of config and finds 20 non-equivalent survivors the script misses"}
+  ],
+  "mutmut": {
+    "version": "3.8.1",
+    "modules": ["exec_token", "svc_jwt", "_jwt", "grants", "canonical"],
+    "total": 943, "killed": 898, "timeout": 0, "survived": 45, "survived_non_equivalent": 20,
+    "details": "reports/critic/M1-cycle-2.review.md, section 'mutmut: setup used and survivors'"
+  },
+  "ponytail_review": "reports/critic/M1-cycle-2.review.md",
+  "lean_lines": 380,
+  "process_note": "Score 6.0 after 6.0 in cycle 1: no growth for one cycle. Another cycle without +0.5 triggers the early stop rule"
+}

@@ -1,0 +1,46 @@
+[project]
+name = "gxg-approval-ui"
+version = "0.0.0"
+description = "GxG Hub Approval Web UI (M9): OIDC, decisions, WebAuthn step-up, manual reconcile, Telegram link."
+requires-python = ">=3.12"
+# AS-29: its own image and dependency tree; it does not depend on gxg-approval (api, mcp, alembic, fastmcp).
+dependencies = [
+    "authlib>=1.9,<2",
+    "fastapi>=0.115,<1",
+    "gxg-connector-kit",
+    "httpx2>=2.16,<3",  # authlib 1.9's HTTP client (it falls back to httpx; tests and image use the same one)
+    "itsdangerous>=2.2,<3",  # Starlette SessionMiddleware
+    "jinja2>=3.1,<4",
+    "psycopg-pool>=3.2,<4",
+    "psycopg[binary]>=3.2,<4",
+    "pynacl>=1.5,<2",
+    "python-multipart>=0.0.18",
+    "uvicorn>=0.32,<1",
+]
+
+[project.scripts]
+gxg-approval-ui = "gxg_approval_ui.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "gxg_approval_ui"
+
+[tool.uv.sources]
+gxg-connector-kit = { path = "../../packages/gxg-connector-kit", editable = true }
+
+# Tests run from the repository root (its pytest config: no TCP, no skips), with the root environment.
+
+# DoD-4: from this directory with the root environment and a PostgreSQL (scripts/ci/mutmut.sh starts one):
+#   GXG_TEST_PG_SOCKET_DIR=<dir> uv run --project ../.. mutmut run
+# Key conditions of M9: session, CSRF, roles, decision relay (decider, M10), reconcile handlers, preview rendering.
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = ["src/gxg_approval_ui/app.py", "src/gxg_approval_ui/stepup.py", "src/gxg_approval_ui/render.py",
+               "src/gxg_approval_ui/config.py", "src/gxg_approval_ui/cli.py"]
+also_copy = ["tests/", "tests_db/"]
+pytest_add_cli_args_test_selection = ["tests", "tests_db"]
+pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider", "-q"]
+timeout_constant = 60.0

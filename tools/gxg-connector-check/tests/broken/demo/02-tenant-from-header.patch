@@ -1,0 +1,45 @@
+diff --git a/src/demo_connector/server.py b/src/demo_connector/server.py
+index d533826..e167007 100644
+--- a/src/demo_connector/server.py
++++ b/src/demo_connector/server.py
+@@ -10,7 +10,8 @@ from __future__ import annotations
+ 
+ import os
+ from collections.abc import Mapping
+-from typing import ClassVar
++import dataclasses
++from typing import Any, ClassVar
+ 
+ import uvicorn
+ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+@@ -28,6 +29,21 @@ __all__ = ["ConfigError", "NoVerifier", "Settings", "build", "configs", "main",
+ CONNECTOR_ID = "demo"  # `aud` of identity assertions; id in the platform registry
+ 
+ 
++class TenantHeader:
++    """BROKEN: `X-Tenant-Id` from the caller overrides the verified tenant."""
++
++    def __init__(self, real: Any) -> None:
++        self.real = real
++
++    def verify(self, headers: Any, **kw: Any) -> Any:
++        ident = self.real.verify(headers, **kw)
++        tenant = headers.get("x-tenant-id")
++        if tenant:
++            name = ident.principal.rsplit(":", 1)[1]
++            ident = dataclasses.replace(ident, tenant_id=tenant, principal=f"agent:{tenant}:{name}")
++        return ident
++
++
+ class Settings(effects.Settings):
+     PREFIX: ClassVar[str] = "DEMO"
+ 
+@@ -46,7 +62,7 @@ def build(
+         approval, jwks = effects.connect(settings, CONNECTOR_ID, wiring or effects.Wiring())
+         connector.enable_effects(approval, jwks, files.refresh, effects.provider(settings))
+         readiness.append(jwks.readiness)
+-    tools = connector.tools(mcp.verifier(settings, CONNECTOR_ID), files.refresh)
++    tools = connector.tools(TenantHeader(mcp.verifier(settings, CONNECTOR_ID)), files.refresh)
+     ready = mcp.readiness_of(*readiness)
+     return mcp.create_app(CONNECTOR_ID, tools, files.refresh, ready, logs.startup), connector
+ 

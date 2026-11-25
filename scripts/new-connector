@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# scripts/new-connector --name <domain> --lang python [--with-effects] [--dest DIR] [--kit-source path|git]
+#                       [--kit-url URL] [--kit-rev SHA]
+# A new GxG MCP connector from templates/python-fastmcp (copier), locked with `uv lock`. See scripts/new_connector.py.
+set -euo pipefail
+repo="$(cd "$(dirname "$0")/.." && pwd)"
+exec uv run --quiet --project "$repo" python "$repo/scripts/new_connector.py" "$@"

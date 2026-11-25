@@ -1,0 +1,268 @@
+# Approval Service processes: migrate, api, mcp, sweeper (M7), executor (M8), ui, notifier (M9), decider, admin (M10)
+# (approval-service-v1.md «Процессы», AS-27…AS-29).
+# Local/staging layout. Secrets are files (Docker secrets), one per process (AS-28); no secret is an
+# environment value. The secret files are created by the operator from the secret store and never committed.
+# `ui` and `notifier` (M9) get separate images and networks (AS-29). `executor` also joins `connectors`, the only
+# network where the connectors' internal ports (8081) are reachable (SEC-14, AS-29 «executor → коннекторы»).
+#
+# AS-29 network policy: every network is `internal` (no route out) except `edge` (inbound) and `egress` (outbound).
+# - ui: `ui_ingress` (only the TLS relay `ingress` publishes its port), `ui_db`, `ui_oidc`. It reaches the IdP only
+#   through `oidc-egress`, a TCP relay to exactly one host that answers on `ui_oidc` under the IdP's own name.
+# - notifier: `notifier_db`, `notifier_telegram` (relay `telegram-egress` → api.telegram.org only),
+#   `notifier_webhooks` (allowlisted webhook relays, M10). No published port, nothing listens.
+# - decider (M10, AS-30): `internal` (database) and `ui_decider`, the only network the ui shares with it; no inbound
+#   from the tailnet. admin (AS-24): `internal`, `admin_ingress` (relay `admin-ingress`, behind `tailscale serve`
+#   for `tag:approval-admin`) and `admin_oidc` (the IdP's JWKS through `oidc-egress`).
+# Profiles: `egress` = the production relays; `test` = the test issuer and the fake Bot API in their place.
+name: gxg-approval
+
+x-image: &image ${GXG_APPROVAL_IMAGE:?Set GXG_APPROVAL_IMAGE to the pinned image (tag@digest)}
+x-bundle: &bundle
+  GXG_BUNDLE_DIR: /run/gxg/bundle
+  GXG_BUNDLE_KEYS: ${GXG_BUNDLE_KEYS:?Set GXG_BUNDLE_KEYS, e.g. {"ci-2026-11":"ed25519:..."} (public keys)}
+  GXG_BUNDLE_STATE_FILE: /var/lib/gxg/bundle-state.json
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_superuser_password
+    secrets: [db_superuser_password]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [internal, ui_db, notifier_db]
+
+  migrate:  # owner role gxg_owner; not a long-running process
+    image: *image
+    command: ["gxg-approval", "migrate"]
+    environment:
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_owner
+    secrets: [db_dsn_owner]
+    networks: [internal]
+    depends_on: [postgres]
+
+  api:
+    image: *image
+    command: ["gxg-approval", "api"]
+    environment:
+      <<: *bundle
+      GXG_SERVICE_ID: approval-api
+      GXG_LISTEN: 0.0.0.0:8090
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_api
+      GXG_PAYLOAD_PUBLIC_KEYS_FILE: /etc/gxg/payload-public-keys.json  # public keys: encrypt only
+      GXG_EXEC_JWKS_FILE: /etc/gxg/exec-jwks.json  # executor public keys (AS-09)
+    secrets: [db_dsn_api]
+    volumes:
+      - ./config:/etc/gxg:ro
+      - ./bundle:/run/gxg/bundle:ro
+      - api-state:/var/lib/gxg
+    networks: [internal]
+    depends_on: [migrate]
+
+  mcp:  # no database access: reads and cancels through api (AS-06, AS-11a)
+    image: *image
+    command: ["gxg-approval", "mcp"]
+    environment:
+      GXG_SERVICE_ID: approval-mcp
+      GXG_API_URL: https://api:8090
+      GXG_API_AUDIENCE: approval-api
+      GXG_SVC_KEY_FILE: /run/secrets/svc_key_mcp
+    secrets: [svc_key_mcp]
+    networks: [internal]
+    depends_on: [api]
+
+  sweeper:
+    image: *image
+    command: ["gxg-approval", "sweeper"]
+    environment:
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_sweeper
+      GXG_SWEEP_INTERVAL_S: "5"
+      GXG_RETENTION_DAYS: "30"  # RET-01 (1…90)
+    secrets: [db_dsn_sweeper]
+    networks: [internal]
+    depends_on: [migrate]
+
+  executor:  # M8: outbox → reserve → execution token → connector execute/reconcile → complete
+    image: *image
+    command: ["gxg-approval", "executor"]
+    environment:
+      <<: *bundle
+      GXG_SERVICE_ID: executor
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_executor
+      GXG_SVC_KEY_FILE: /run/secrets/svc_key_executor  # service JWT to connectors (AS-06)
+      # execution tokens (SEC-10, AS-10): a directory mount, so `keys rotate|remove` (atomic replace on the host)
+      # is seen without a restart; a single-file secret mount would keep the old file
+      GXG_EXEC_SIGNING_KEYS_FILE: /run/gxg/exec-keys/signing-keys.json
+      GXG_PAYLOAD_PRIVATE_KEYS_FILE: /run/secrets/payload_args_keys  # decrypt args only (AS-28)
+    secrets: [db_dsn_executor, svc_key_executor, payload_args_keys]
+    volumes:
+      - ./exec-keys:/run/gxg/exec-keys:ro  # mode 0700 on the host, only this service mounts it (AS-28)
+      - ./bundle:/run/gxg/bundle:ro
+      - executor-state:/var/lib/gxg
+    networks: [internal, connectors]
+    depends_on: [migrate]
+
+  ui:  # M9; its own image (approval/ui/Dockerfile) and lockfile (AS-29)
+    image: ${GXG_UI_IMAGE:?Set GXG_UI_IMAGE to the pinned ui image (tag@digest)}
+    environment:
+      <<: *bundle
+      GXG_LISTEN: 0.0.0.0:8443
+      GXG_UI_PUBLIC_URL: ${GXG_UI_PUBLIC_URL:?Set GXG_UI_PUBLIC_URL, e.g. https://approve.example.com}
+      GXG_OIDC_ISSUER: ${GXG_OIDC_ISSUER:?Set GXG_OIDC_ISSUER (https)}
+      GXG_OIDC_CLIENT_ID: ${GXG_OIDC_CLIENT_ID:?Set GXG_OIDC_CLIENT_ID}
+      GXG_UI_TLS_CERT_FILE: /etc/gxg/ui-tls.crt  # certificate: public
+      GXG_UI_TLS_KEY_FILE: /run/secrets/ui_tls_key
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_ui
+      GXG_UI_SESSION_KEY_FILE: /run/secrets/ui_session_key
+      GXG_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret_ui
+      GXG_PREVIEW_KEYS_FILE: /run/secrets/preview_keys_ui  # preview private keys only (AS-28)
+      GXG_DECIDER_URL: http://decider:8093  # AS-30: every decision and passkey goes through the decider
+    secrets: [db_dsn_ui, ui_session_key, oidc_client_secret_ui, preview_keys_ui, ui_tls_key]
+    volumes:
+      - ${GXG_CONFIG_DIR:-./config}:/etc/gxg:ro
+      - ${GXG_BUNDLE_HOST_DIR:-./bundle}:/run/gxg/bundle:ro
+      - ui-state:/var/lib/gxg
+    networks: [ui_ingress, ui_db, ui_oidc, ui_decider]
+
+  decider:  # M10 (AS-30): verifies the passkey assertion of every decision, records it (gxg_decide)
+    image: *image
+    command: ["gxg-approval", "decider"]
+    environment:
+      GXG_LISTEN: 0.0.0.0:8093
+      GXG_UI_PUBLIC_URL: ${GXG_UI_PUBLIC_URL:?Set GXG_UI_PUBLIC_URL}  # the WebAuthn RP id and origin
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_decider
+    secrets: [db_dsn_decider]
+    networks: [internal, ui_decider]
+    depends_on: [migrate]
+
+  admin:  # M10 (AS-24): kill switch, passkey invites; operator OIDC token, platform_admin
+    image: *image
+    command: ["gxg-approval", "admin"]
+    environment:
+      GXG_LISTEN: 0.0.0.0:8092
+      GXG_ADMIN_OIDC_ISSUER: ${GXG_ADMIN_OIDC_ISSUER:-${GXG_OIDC_ISSUER:?Set GXG_OIDC_ISSUER}}
+      GXG_ADMIN_OIDC_AUDIENCE: ${GXG_ADMIN_OIDC_AUDIENCE:-gxg-admin}
+      GXG_ADMIN_OPERATORS: ${GXG_ADMIN_OPERATORS:?Set GXG_ADMIN_OPERATORS (oidc:<iss>:<sub>,…)}
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_admin
+    secrets: [db_dsn_admin]
+    networks: [internal, admin_ingress, admin_oidc]
+    depends_on: [migrate]
+
+  admin-ingress:  # the admin API on the host loopback only; `tailscale serve` publishes it to tag:approval-admin
+    image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
+    command: ["TCP-LISTEN:8092,fork,reuseaddr", "TCP:admin:8092"]
+    ports: ["127.0.0.1:${GXG_ADMIN_PUBLISH:-8092}:8092"]
+    networks: [edge, admin_ingress]
+
+  ingress:  # inbound HTTPS only: TLS passthrough to ui (the ui terminates TLS); nothing else is published
+    image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
+    command: ["TCP-LISTEN:8443,fork,reuseaddr", "TCP:ui:8443"]
+    ports: ["${GXG_UI_PUBLISH:-443}:8443"]
+    networks: [edge, ui_ingress]
+
+  notifier:  # M9; its own image (approval/notifier/Dockerfile) and lockfile (AS-29)
+    image: ${GXG_NOTIFIER_IMAGE:?Set GXG_NOTIFIER_IMAGE to the pinned notifier image (tag@digest)}
+    environment:
+      GXG_UI_PUBLIC_URL: ${GXG_UI_PUBLIC_URL:?Set GXG_UI_PUBLIC_URL}
+      GXG_TELEGRAM_API_URL: ${GXG_TELEGRAM_API_URL:-https://api.telegram.org}
+      GXG_DB_DSN_FILE: /run/secrets/db_dsn_notifier
+      GXG_TELEGRAM_TOKEN_FILE: /run/secrets/telegram_bot_token
+      <<: *bundle  # M10: webhook subscribers (AS-21)
+      GXG_WEBHOOK_SECRETS_DIR: /run/secrets/webhooks  # secret://<path> → <dir>/<path>, only here (AS-28)
+    secrets: [db_dsn_notifier, telegram_bot_token]
+    volumes:
+      - ${GXG_SECRETS_DIR:-./secrets}/webhooks:/run/secrets/webhooks:ro
+      - ${GXG_BUNDLE_HOST_DIR:-./bundle}:/run/gxg/bundle:ro
+      - notifier-state:/var/lib/gxg
+    networks: [notifier_db, notifier_telegram, notifier_webhooks]
+
+  oidc-egress:  # the only way out of ui: a relay to the IdP host, reachable under the IdP's name
+    profiles: [egress]
+    image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
+    command: ["TCP-LISTEN:443,fork,reuseaddr", "TCP:${GXG_OIDC_HOST:-set-GXG_OIDC_HOST.invalid}:443"]
+    networks:
+      egress: {}
+      ui_oidc: {aliases: ["${GXG_OIDC_HOST:-set-GXG_OIDC_HOST.invalid}"]}
+      admin_oidc: {aliases: ["${GXG_OIDC_HOST:-set-GXG_OIDC_HOST.invalid}"]}
+
+  telegram-egress:  # the only way out of notifier to Telegram
+    profiles: [egress]
+    image: alpine/socat:1.8.0.3@sha256:beb4a68d9e4fe6b0f21ea774a0fde6c31f580dde6368939ed70100c5385b015e
+    command: ["TCP-LISTEN:443,fork,reuseaddr", "TCP:api.telegram.org:443"]
+    networks:
+      egress: {}
+      notifier_telegram: {aliases: [api.telegram.org]}
+
+  oidc:  # test profile: the test issuer in place of oidc-egress
+    profiles: [test]
+    build: {context: ../.., dockerfile: approval/deploy/test-oidc.Dockerfile}
+    image: gxg-test-oidc:m9
+    networks: [ui_oidc]
+
+  fake-telegram:  # test profile: the fake Bot API in place of telegram-egress
+    profiles: [test]
+    image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+    command: ["python", "/opt/fake_bot_api.py", "/opt/token", "8081"]
+    volumes:
+      - ../notifier/testing/fake_bot_api.py:/opt/fake_bot_api.py:ro
+      - ${GXG_SECRETS_DIR:-./secrets}/telegram_bot_token:/opt/token:ro
+    networks: [notifier_telegram]
+
+networks:
+  internal:
+    internal: true  # SEC-13, AS-29: no route to the internet
+  connectors:
+    internal: true  # the connectors' internal ports; no route to the internet
+  ui_ingress: {internal: true}
+  ui_db: {internal: true}
+  ui_oidc: {internal: true}
+  notifier_db: {internal: true}
+  notifier_telegram: {internal: true}
+  notifier_webhooks: {internal: true}
+  ui_decider: {internal: true}  # M10: ui → decider only
+  admin_ingress: {internal: true}
+  admin_oidc: {internal: true}
+  edge: {}  # inbound: only `ingress` is on it
+  egress: {}  # outbound: only the egress relays are on it
+
+volumes:
+  pgdata:
+  api-state:
+  executor-state:
+  ui-state:
+  notifier-state:
+
+secrets:
+  db_superuser_password:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_superuser_password"
+  db_dsn_owner:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_owner"
+  db_dsn_api:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_api"
+  db_dsn_sweeper:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_sweeper"
+  svc_key_mcp:
+    file: "${GXG_SECRETS_DIR:-./secrets}/svc_key_mcp"
+  db_dsn_ui:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_ui"
+  ui_session_key:
+    file: "${GXG_SECRETS_DIR:-./secrets}/ui_session_key"
+  oidc_client_secret_ui:
+    file: "${GXG_SECRETS_DIR:-./secrets}/oidc_client_secret_ui"
+  preview_keys_ui:
+    file: "${GXG_SECRETS_DIR:-./secrets}/preview_keys_ui"
+  ui_tls_key:
+    file: "${GXG_SECRETS_DIR:-./secrets}/ui_tls_key"
+  db_dsn_notifier:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_notifier"
+  telegram_bot_token:
+    file: "${GXG_SECRETS_DIR:-./secrets}/telegram_bot_token"
+  db_dsn_executor:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_executor"
+  svc_key_executor:
+    file: "${GXG_SECRETS_DIR:-./secrets}/svc_key_executor"
+  payload_args_keys:
+    file: "${GXG_SECRETS_DIR:-./secrets}/payload_args_keys"
+  db_dsn_decider:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_decider"
+  db_dsn_admin:
+    file: "${GXG_SECRETS_DIR:-./secrets}/db_dsn_admin"

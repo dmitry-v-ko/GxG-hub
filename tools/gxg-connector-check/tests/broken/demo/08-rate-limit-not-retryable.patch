@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/backend.py b/src/demo_connector/backend.py
+index 1bb04c3..250b9ff 100644
+--- a/src/demo_connector/backend.py
++++ b/src/demo_connector/backend.py
+@@ -44,7 +44,7 @@ class Backend:
+         """Count the call, then apply the test failure mode (the service behind the connector is down)."""
+         self.calls[kind] += 1
+         if self.failure == "rate_limited":
+-            raise GxgError("rate_limited", "backend rate limit", retry_after_s=RETRY_AFTER_S)
++            raise GxgError("rate_limited", "backend rate limit", retry_after_s=RETRY_AFTER_S, retryable=False)  # BROKEN
+         if self.failure is not None:
+             raise GxgError(self.failure, "backend is not available")
+ 

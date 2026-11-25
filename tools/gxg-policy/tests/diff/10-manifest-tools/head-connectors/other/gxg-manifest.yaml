@@ -1,0 +1,10 @@
+connector: other
+version: 1.0.0
+contract: gxg-mcp-connector/v1
+tools:
+  - name: other.doc.read
+    version: 1.0.0
+    effect_class: read
+    action: read
+    resource: { type: board, scope: list }
+    input_schema: schemas/x.json

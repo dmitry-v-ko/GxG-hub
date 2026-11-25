@@ -1,0 +1,4 @@
+*
+!gateway/contextforge/gxg_identity
+!deploy/railway/entrypoint.sh
+**/__pycache__

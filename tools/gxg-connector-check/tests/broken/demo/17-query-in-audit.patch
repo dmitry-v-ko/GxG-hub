@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index d05d143..f92d32c 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -161,7 +161,7 @@ class Connector:
+             "partial_reasons": partial,
+             "source_refs": sorted({i["source_ref"] for i in items}),
+         }
+-        return content, {"grant_id": sorted(grant_ids), "method": method}
++        return content, {"grant_id": sorted(grant_ids), "method": method, "q": query}  # BROKEN: text in the log
+ 
+     async def note_get(self, access: Access, args: dict[str, Any]) -> Result:
+         note: Note = access.target  # found by resolve(), allowed by the kit's check() of its board

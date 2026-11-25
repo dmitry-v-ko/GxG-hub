@@ -1,0 +1,13 @@
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index d05d143..bb96dc9 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -156,7 +156,7 @@ class Connector:
+         partial = ["source_timeout"] if timed_out else []
+         content = {
+             "items": items,
+-            "next_cursor": self._cursor.make(binding, offset + limit) if more else None,
++            "next_cursor": None,  # BROKEN: a cut page has no cursor
+             "complete": not partial,
+             "partial_reasons": partial,
+             "source_refs": sorted({i["source_ref"] for i in items}),

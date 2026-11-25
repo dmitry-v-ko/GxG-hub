@@ -1,0 +1,42 @@
+{
+  "widening": [
+    {
+      "tenant": "t-alpha",
+      "kind": "approval_rule",
+      "rule": "msg",
+      "change": "decision_relaxed",
+      "base": "require_approval",
+      "head": "auto_approve"
+    },
+    {
+      "tenant": null,
+      "kind": "webhook",
+      "id": "audit-sink",
+      "change": "added"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "role",
+      "change": "added",
+      "principal": "oidc:https://idp.example.invalid:1",
+      "role": "approver"
+    },
+    {
+      "tenant": null,
+      "kind": "service",
+      "id": "demo",
+      "change": "tenant_added",
+      "service_tenant": "t-beta"
+    }
+  ],
+  "narrowing": [
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "collect",
+      "resource": "kb:kb-main/collection/public",
+      "change": "removed"
+    }
+  ]
+}

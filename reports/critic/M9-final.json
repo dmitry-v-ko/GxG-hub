@@ -1,0 +1,361 @@
+{
+ "milestone": "M9",
+ "role": "final confirming critic (plan «Ускорение процесса», item 1)",
+ "branch": "claude/m9-ui-bot",
+ "commit": "40bc8a5ad6db631071944d907f536be9c19ab8db",
+ "commit_note": "Task named 244000b; the branch then got 40bc8a5, which changes code (2 tests in approval/tests_db/test_propose.py killing mutmut.sh survivors in intents.py), so 40bc8a5 is the reviewed commit.",
+ "base": "3c2f0b0",
+ "reviewed_at": "2026-11-22",
+ "report_status": "final",
+ "threshold": 9,
+ "score": 9.0,
+ "caps_applied": [],
+ "score_condition": "Met: scripts/ci/mutmut.sh inside the critic's check-all on 40bc8a5 passed (no survivors, untested or timed-out mutants), check-all EXIT=0, so the DoD cap does not apply.",
+ "dimensions": {
+  "spec": 3.0,
+  "tests": 2.0,
+  "security": 1.75,
+  "code": 1.5,
+  "ops": 0.75,
+  "evidence": 0.0
+ },
+ "dimensions_note": "security -0.25: OIDC code in the ui access log (F-1) and plaintext preview label in outbox (F-2); ops -0.25: no notifier health signal (backlog F12), doubled log prefix; evidence 0: reports/conformance/M9.json describes aaa770c with ci_local 'still running', while 40bc8a5 exists because that run found survivors (F-4). Sum 9.0.",
+ "ci_local": {
+  "commit": "40bc8a5",
+  "command": "DOCKER_BUILD_FLAGS='--network host --secret id=ca-bundle,src=/root/.ccr/ca-bundle.crt --build-arg HTTPS_PROXY=... --build-arg HTTP_PROXY=...' scripts/ci/check-all.sh (after git fetch --unshallow)",
+  "result": "check-all: OK, EXIT=0 (real 129m38s). root 931 passed; approval/tests_db 310 passed; approval/ui + approval/notifier tests_db 109 passed (incl. Playwright E2E); deploy 6; kit 368; demo 64; gitleaks x4 no leaks; tests/secrets 21; stand 29 passed x3 (fresh, after-restart, after-recreate); scripts/ci/mutmut.sh passed (no survivors)."
+ },
+ "acceptance": [
+  {
+   "id": "AC-M9-01",
+   "status": "passed",
+   "evidence": "critic check-all on 40bc8a5: uv run pytest approval/ui/tests_db approval/notifier/tests_db -> 109 passed (includes test_e2e.py: Playwright Chromium, real gxg-approval-ui process, oidc-provider-mock, approved then succeeded via the owner-accepted executor driver)"
+  },
+  {
+   "id": "AC-M9-02",
+   "status": "passed",
+   "evidence": "same run: test_decisions.py::test_csrf_missing_or_foreign, ::test_stale_version_or_changed_hash; test_edges.py::test_version_out_of_range; gxg_decide re-checks version/args_hash (0001_core.py)"
+  },
+  {
+   "id": "AC-M9-03",
+   "status": "passed",
+   "evidence": "same run: machine credentials, requester, other-tenant approver tests; DB: requester <> approver, oidc: prefix, frozen allowed_approvers (NULL = nobody)"
+  },
+  {
+   "id": "AC-M9-04",
+   "status": "passed",
+   "evidence": "same run: high_risk without step-up 403, 300/301 s, other intent, quorum 2 by one human -> 409 and pending_approval, step-up replay with zero counter -> 409"
+  },
+  {
+   "id": "AC-M9-05",
+   "status": "passed",
+   "evidence": "E2E DOM check in the same run + approval/ui/tests/test_render.py; templates: autoescape, no |safe (grep), render.visible marks Cc/Cf/Zl/Zp"
+  },
+  {
+   "id": "AC-M9-06",
+   "status": "passed",
+   "evidence": "test_edges.py::test_headers_exact, test_screens.py::test_security_headers_and_cookie, E2E cookie jar"
+  },
+  {
+   "id": "AC-M9-07",
+   "status": "passed",
+   "evidence": "test_bot.py::test_message_has_no_payload_and_links_the_card in the run; plus critic's own check on the BUILT image (scratchpad tokcheck/test_image_token.py): 8 intents with random fields/changes/amount, outbox payloads and every sent Telegram message: 0 occurrences; links /intents/<id> present"
+  },
+  {
+   "id": "AC-M9-08",
+   "status": "passed",
+   "evidence": "test_no_callback_buttons_and_commands_do_not_decide; critic image check: 'approve <id>' text and a callback_query -> 0 decisions, intents unchanged"
+  },
+  {
+   "id": "AC-M9-09",
+   "status": "passed",
+   "evidence": "test_digest_after_five, test_window_boundary, test_windows_are_per_chat; critic image check: 8 intents -> 5 singles + 1 digest to the linked chat"
+  },
+  {
+   "id": "AC-M9-10",
+   "status": "passed",
+   "evidence": "test_link_code_once_and_ten_minutes, test_code_valid_just_before_ten_minutes, test_guessing_codes_is_limited, test_link_for_two_tenants; critic image check: /link with a live code linked, wrong code refused"
+  },
+  {
+   "id": "AC-M9-11",
+   "status": "passed",
+   "evidence": "test_screens.py::test_manual_reconcile in the run; gxg_resolve_manual: reason >= 10, oidc: actor, audit with author"
+  },
+  {
+   "id": "AC-M9-12",
+   "status": "passed",
+   "evidence": "critic check-all: uv run pytest approval/deploy/tests -> 6 passed (images built from 40bc8a5 with own lockfiles; allowed connections open, OUTSIDE targets refused from each container)"
+  }
+ ],
+ "dod": {
+  "DoD-1": "critic's local check-all on 40bc8a5: see ci_local. Executor's ci_local is for aaa770c and unfinished (F-4).",
+  "DoD-2": "met",
+  "DoD-3": "partly: report exists but for aaa770c (F-4)",
+  "DoD-4": "see ci_local (mutmut.sh is the last stage of check-all)",
+  "DoD-5": "met: no skip/xfail in the diff (grep)",
+  "DoD-6": "met: plans committed; existing_solutions below"
+ },
+ "token_check": {
+  "result": "no leak",
+  "evidence": "Built image gxg-approval-notifier:m9-test (created 2026-11-22T01:34Z from this tree) run with --network host, real PostgreSQL over a Unix socket, critic's fake Bot API over HTTP that returned 502 HTML (with the token path in the body), 409 ok:false, dropped connections, sendMessage 403 for a blocked chat, then went away (ConnectError), then gxg_notifier lost SELECT on outbox. 20 log lines (getUpdates: 409/ConnectError/JSONDecodeError/RemoteProtocolError, notify failed 403, outbox InsufficientPrivilege): token and its secret part 0 occurrences. Only notifier holds the token (AS-28; compose fake-telegram in the test profile only). ui logs carry no bot token but do carry the OIDC authorization code (F-1)."
+ },
+ "findings": [
+  {
+   "id": "F-1",
+   "severity": "minor",
+   "origin": "missed_earlier",
+   "ref": "SEC-17",
+   "where": "approval/ui/src/gxg_approval_ui/cli.py:57",
+   "problem": "uvicorn.run keeps the default access log: every login writes 'GET /auth/callback?code=<authorization code>&state=...' and the same for /auth/complete at INFO (reproduced with the same call shape). Not redeemable alone (PKCE verifier in the user's cookie + client secret), so defence in depth.",
+   "required_improvement": "access_log=False (or a filter that drops the query) + assertion in test_cli.py"
+  },
+  {
+   "id": "F-2",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "RET-01, RET-03, AS-19",
+   "where": "approval/src/gxg_approval/intents.py:315-322",
+   "problem": "notify outbox rows keep title, target_label, requester in plaintext forever (notifier only sets delivered_at; nothing purges outbox). After RET-01 purge or RET-03 key destruction the recipient label is still readable.",
+   "required_improvement": "M10 purge (AC-M10-03) also nulls/deletes delivered notify rows; backlog entry"
+  },
+  {
+   "id": "F-3",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "AP-04, T2",
+   "where": "approval/ui/src/gxg_approval_ui/app.py:92,380",
+   "problem": "Pending list and can_decide use the bundle role only; an approver outside the frozen allowed_approvers sees the intent and the buttons and gets 403 from gxg_decide. Safe, wrong UX; notifier uses the frozen set.",
+   "required_improvement": "filter by %s = ANY(allowed_approvers) in the pending query and can_decide; one test"
+  },
+  {
+   "id": "F-4",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "DoD-1, DoD-3",
+   "where": "reports/conformance/M9.json (commit, ci_local)",
+   "problem": "Report describes aaa770c, ci_local says mutmut.sh still running; 40bc8a5 was added because that run found survivors in intents.py, so DoD-4 was not met at 244000b and the cycle-2 critic's condition failed there. The report does not say so.",
+   "required_improvement": "reports-only commit: commit/ci_local for 40bc8a5 with the check-all result"
+  },
+  {
+   "id": "F-5",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "-",
+   "where": "approval/notifier/src/gxg_approval_notifier/cli.py:40",
+   "problem": "Log line 'getUpdates: getUpdates: ...' (prefix doubled).",
+   "required_improvement": "drop the prefix"
+  },
+  {
+   "id": "F-6",
+   "severity": "minor",
+   "origin": "new_regression",
+   "ref": "-",
+   "where": "docs/implementation-plan-v1.md:476",
+   "problem": "AC-M10-08 row was added after the M10 table and the '---', under the «Этап D» heading.",
+   "required_improvement": "move the row into the M10 table"
+  },
+  {
+   "id": "F-7",
+   "severity": "minor",
+   "origin": "missed_earlier",
+   "ref": "DoD-1 tooling",
+   "where": "scripts/ci/gitleaks.sh range",
+   "problem": "On a shallow clone (fresh session) gitleaks reports the parentless boundary commits (5 findings at 190786d, 204d97d, ba2fa1b, 2d46c1b, 90dde17 = .git/shallow), check-all fails; clean after git fetch --unshallow. Not M9 code.",
+   "required_improvement": "fail early with 'unshallow first' when git rev-parse --is-shallow-repository is true"
+  }
+ ],
+ "required_improvements": [],
+ "backlog": [
+  "F-1",
+  "F-2 (for AC-M10-03)",
+  "F-3",
+  "F-5",
+  "F-6",
+  "F-7",
+  "F-4 must be fixed before the PR (reports-only)"
+ ],
+ "ponytail_review": "reports/critic/M9-final.review.md",
+ "threat_model": [
+  {
+   "path": "CSRF on decision, T18, logout, passkey, telegram code",
+   "status": "closed",
+   "evidence": "per-session token compared with hmac.compare_digest on every POST (header for /passkeys); SameSite=Strict __Host- cookie; test_csrf_missing_or_foreign; GET handlers change only the session"
+  },
+  {
+   "path": "XSS in preview (HTML, markdown, javascript: links, attributes)",
+   "status": "closed",
+   "evidence": "Jinja2 autoescape, no |safe/Markup in ui (grep), values as text nodes; CSP default-src 'self' without unsafe-inline; E2E DOM check (AC-M9-05); redirect.html target is always '/auth/complete?'+query, escaped (no open redirect)"
+  },
+  {
+   "path": "Invisible/bidi characters in preview (UI)",
+   "status": "closed",
+   "evidence": "render.visible marks Cc/Cf/Zl/Zp, warning shown; E2E"
+  },
+  {
+   "path": "Invisible/bidi characters in Telegram text",
+   "status": "open",
+   "evidence": "backlog M9-F10; hint only, decision in the UI"
+  },
+  {
+   "path": "Substitution of args_hash or version",
+   "status": "closed",
+   "evidence": "gxg_decide checks version, canonical_args_hash, deadline in the DB; ui recomputes hash of canonical args in the envelope and refuses approve on mismatch; version bounded 0<v<2^31; tests"
+  },
+  {
+   "path": "Self-approval (requester == approver)",
+   "status": "closed",
+   "evidence": "gxg_decide: p_approver = requester_principal -> GX403; test_requester_cannot_approve_own_intent, E2E"
+  },
+  {
+   "path": "Machine credentials on the decision endpoint",
+   "status": "closed",
+   "evidence": "only an OIDC session yields a human; DB requires oidc: prefix; test_machine_credentials_cannot_decide"
+  },
+  {
+   "path": "Another tenant (read or decide)",
+   "status": "closed",
+   "evidence": "ui: roles by current bundle per tenant, foreign intent -> 404; DB: frozen allowed_approvers of the intent's tenant (NULL = nobody); test_approver_of_another_tenant; notifier: approver_links by (tenant, frozen set), test_only_linked_approvers_of_the_intent"
+  },
+  {
+   "path": "Step-up replay / stale / other intent",
+   "status": "closed",
+   "evidence": "challenge = intent_id|args_hash|nonce, 300 s, popped; replay from an old cookie cannot add a vote (UNIQUE (intent_id, decided_by)); test_step_up_replay_with_a_zero_counter; server-side single use with decider (AS-30, M10)"
+  },
+  {
+   "path": "Step-up obtained via passkey registered with a stolen session",
+   "status": "open",
+   "evidence": "backlog M9-F8; registration needs only a session; AS-30 (M10) moves registration to decider with confirmation outside ui"
+  },
+  {
+   "path": "Quorum 2 by one human",
+   "status": "closed",
+   "evidence": "one vote per human (UNIQUE), count of distinct approvers; test_quorum_of_two_needs_two_people (second 409, pending_approval)"
+  },
+  {
+   "path": "Quorum by one person with two OIDC identities",
+   "status": "out_of_scope",
+   "evidence": "IdP/bundle administration"
+  },
+  {
+   "path": "Commands to the bot (approve <id>, callback, inline buttons)",
+   "status": "closed",
+   "evidence": "allowed_updates=['message'], only /start and /link in a private chat, URL buttons only; notifier role has no decision function; test + critic image check (0 decisions)"
+  },
+  {
+   "path": "Preview fields/changes/amounts in Telegram",
+   "status": "closed",
+   "evidence": "notify payload holds only AS-19 fields; critic image check 0 occurrences in outbox and in sent messages"
+  },
+  {
+   "path": "Bot token in logs (any process, built image)",
+   "status": "closed",
+   "evidence": "httpx/httpcore at WARNING in bot.py, BotError carries no URL; built-image check with 6 failure kinds: 0 occurrences; only notifier holds the token"
+  },
+  {
+   "path": "Other secrets in logs",
+   "status": "open",
+   "evidence": "ui access log holds OIDC authorization codes (F-1, minor: not redeemable without PKCE verifier and client secret); psycopg errors logged by type only"
+  },
+  {
+   "path": "Telegram link brute force / reuse / expiry",
+   "status": "closed",
+   "evidence": "6 digits, 10 min, once, 5 refused claims per Telegram user per 10 min; tests. Many Telegram accounts raise the rate linearly (accepted for the expected load)"
+  },
+  {
+   "path": "Login CSRF, state/PKCE/nonce/iss, session fixation",
+   "status": "closed",
+   "evidence": "authlib code flow with PKCE and nonce, session cleared on /login and after the IdP; test_oidc.py"
+  },
+  {
+   "path": "Session theft (copied cookie), no server-side revocation",
+   "status": "open",
+   "evidence": "marked shortcut (SessionMiddleware, /logout); idle 30 min / absolute 8 h"
+  },
+  {
+   "path": "Compromise of ui",
+   "status": "open",
+   "evidence": "documented in reports/M9-ESCALATION.md: ui can decide as any real approver of the frozen set and fake p_step_up, resolve T18 for any tenant; cannot execute, cannot decide outside the frozen set, after the deadline, on other args/version; closed by AS-30 decider in M10. M9 keeps gxg_decide's signature and grants EXECUTE through one GRANT line, so moving it to gxg_decider is one REVOKE/GRANT; ui writes webauthn_credentials only via plain INSERT that M10 can revoke"
+  },
+  {
+   "path": "Compromise of notifier",
+   "status": "out_of_scope",
+   "evidence": "role can read notify outbox and approver_links, claim codes; no decision rights"
+  },
+  {
+   "path": "Network egress outside policy; inbound to notifier",
+   "status": "closed",
+   "evidence": "AC-M9-12 test on real containers, 6 passed"
+  },
+  {
+   "path": "Tailnet-only inbound to ui",
+   "status": "out_of_scope",
+   "evidence": "M14 (ADR-0003, AC-M14-08/09)"
+  },
+  {
+   "path": "Mass approval",
+   "status": "closed",
+   "evidence": "groups only displayed; each decision is its own POST with its own version/hash"
+  }
+ ],
+ "existing_solutions": [
+  {
+   "component": "OIDC login",
+   "choice": "authlib Starlette client (PKCE, nonce, discovery)",
+   "verdict": "ready solution used"
+  },
+  {
+   "component": "WebAuthn",
+   "choice": "py_webauthn",
+   "verdict": "ready solution used"
+  },
+  {
+   "component": "Sessions",
+   "choice": "Starlette SessionMiddleware + ~6 lines idle/absolute",
+   "verdict": "ready solution used; server-side revocation is a marked shortcut"
+  },
+  {
+   "component": "Escaping",
+   "choice": "Jinja2 autoescape + stdlib unicodedata markers",
+   "verdict": "ready"
+  },
+  {
+   "component": "Telegram client",
+   "choice": "httpx, two methods (~20 lines)",
+   "verdict": "justified over python-telegram-bot/aiogram (large deps for getUpdates+sendMessage)"
+  },
+  {
+   "component": "Throttle/digest",
+   "choice": "own ~15 lines",
+   "verdict": "no library needed"
+  },
+  {
+   "component": "Egress policy",
+   "choice": "Docker internal networks + socat relays",
+   "verdict": "simplest; an SNI-allowlist proxy (squid/envoy) would be needed for multi-host IdPs (backlog F11)"
+  },
+  {
+   "component": "Test IdP / Bot API",
+   "choice": "oidc-provider-mock; own stdlib fake Bot API (128 lines)",
+   "verdict": "no maintained Bot API fake found that fits; acceptable"
+  },
+  {
+   "component": "E2E",
+   "choice": "preinstalled Playwright + Chromium",
+   "verdict": "ready"
+  },
+  {
+   "component": "Mutation testing",
+   "choice": "mutmut + scripts/ci/mutate_m7_sql.py for SQL (pre-existing, critic-confirmed earlier)",
+   "verdict": "ok"
+  }
+ ],
+ "reproduction": [
+  "git fetch --unshallow origin claude/m9-ui-bot; git merge --ff-only origin/claude/m9-ui-bot (-> 40bc8a5)",
+  "DOCKER_BUILD_FLAGS=... scripts/ci/check-all.sh > check-all-2.log: root pytest 931 passed; approval/tests_db 310 passed; ui+notifier tests_db (incl. E2E) 109 passed; deploy 6 passed; kit coverage 368 passed; demo 64 passed; gitleaks tree+range x2 configs: no leaks; tests/secrets 21 passed; stand 29 passed ...",
+  "first check-all on the shallow clone at 244000b: everything through the demo stage green, gitleaks range failed on the 5 shallow-boundary commits only (F-7)",
+  "uv run pytest scratchpad/tokcheck/test_image_token.py (built notifier image, real PG, HTTP fake Bot API with failures) -> 1 passed",
+  "uv run python scratchpad/uvlog.py -> access log line with ?code=...&state=... (F-1)"
+ ],
+ "lean_lines": 0,
+ "not_checked": "real Telegram and IdP through the egress profile (needs internet); tailnet inbound (M14)"
+}

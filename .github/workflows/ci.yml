@@ -1,0 +1,361 @@
+# GxG Hub CI. Required status check for `main`: "ci-ok" (see docs/setup/branch-protection.md).
+# `ci-ok` includes `grants-widening` (AC-M2-04, docs/setup/widening-approval.md), so label
+# changes re-run the workflow. The schedule re-signs the bundle on main (GR-13a).
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]  # edited: base branch changed
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+  schedule:
+    # GR-13a: re-sign the bundle at least every 12 h; every 6 h leaves room for delayed or dropped runs.
+    - cron: "41 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Pull request runs get their own group: none is cancelled or replaced while pending, so every
+  # head commit gets a run that reaches the grants-widening gate (F2). Superseded push runs on
+  # feature branches are cancelled; runs on main always finish.
+  group: ci-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'pull_request' && github.ref != 'refs/heads/main' }}
+
+env:
+  UV_PYTHON: "3.12"
+  UV_LOCKED: "1"  # fail if uv.lock is out of date with pyproject.toml
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - name: mypy --strict (gxg-connector-kit, approval, CI scripts)
+        run: >-
+          uv run mypy --strict
+          packages/gxg-connector-kit/src packages/gxg-connector-kit/tests
+          approval/src approval/tests
+          scripts tests/secrets
+      - name: mypy --strict (root conftest.py and tests/ci, which imports it; separate run, the kit has its own conftest.py)
+        run: uv run mypy --strict conftest.py tests/ci
+      - name: mypy --strict (approval DB tests; separate run, own conftest.py)
+        run: uv run mypy --strict approval/tests_db
+      - name: mypy --strict (M9 ui and notifier; their DB tests have their own conftest.py each)
+        run: |
+          uv run mypy --strict approval/ui/src approval/ui/tests approval/notifier/src approval/notifier/testing approval/deploy/tests
+          uv run mypy --strict approval/ui/tests_db
+          uv run mypy --strict approval/notifier/tests_db
+      - name: mypy (other packages and contract tests)
+        run: >-
+          uv run mypy
+          tools/gxg-policy/src tools/gxg-policy/tests
+          connectors/demo/src connectors/demo/tests
+          connectors/telegram/src connectors/telegram/tests
+          tests/contract
+      - name: mypy (dev stand and the ContextForge plugin; their own import roots)
+        run: MYPYPATH=stand/tests:stand:gateway/contextforge:connectors/telegram/archive uv run mypy --exclude mutants stand gateway/contextforge
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: PostgreSQL 16 with pgvector (connectors/telegram tests, M11)
+        run: sudo apt-get update -q && sudo apt-get install -y -q postgresql-16 postgresql-16-pgvector
+      - name: Lockfiles are up to date
+        run: |
+          uv lock --check
+          (cd connectors/demo && uv lock --check)
+          (cd connectors/telegram && uv lock --check)
+      - name: AC-M0-01 — uv sync && uv run pytest
+        run: uv sync && uv run pytest
+      - name: Schema lock is current
+        run: uv run python scripts/ci/schema_lock.py
+      - name: AC-M1-09 — branch coverage of gxg-connector-kit security modules ≥ 90 %
+        run: |
+          uv run pytest packages/gxg-connector-kit/tests -q --cov=gxg_connector_kit --cov-branch \
+            --cov-report=term-missing --cov-report=json:coverage-kit.json
+          uv run python scripts/ci/check_coverage.py coverage-kit.json
+      - name: connectors/demo tests from its own lockfile
+        working-directory: connectors/demo
+        run: uv sync && uv run pytest
+      - name: connectors/telegram tests from its own lockfile
+        working-directory: connectors/telegram
+        run: uv sync && uv run pytest
+
+  telegram-upstream:
+    # ADR-0004: notification when gxg_agents_v2 changes the telegram_archive schema after the pinned commit
+    # (connectors/telegram/archive/SOURCE.md). Runs on schedule too, so drift fails a run without a Hub push.
+    # Needs GXG_AGENTS_V2_TOKEN: read-only (contents) token for dmitry-v-ko/gxg_agents_v2; without it the job fails.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: dmitry-v-ko/gxg_agents_v2
+          token: ${{ secrets.GXG_AGENTS_V2_TOKEN }}
+          path: upstream/gxg_agents_v2
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Vendored migrations = pinned commit; no newer archive migrations on the default branch
+        run: |
+          connectors/telegram/archive/check_upstream.sh upstream/gxg_agents_v2
+          connectors/telegram/archive/check_upstream.sh --drift upstream/gxg_agents_v2 "origin/$(git -C upstream/gxg_agents_v2 rev-parse --abbrev-ref HEAD)"
+
+  approval-db:
+    # M7: Approval Service on a real PostgreSQL 16 in Docker, reached only over a Unix socket (the container
+    # has no network), so the no-TCP rule of AC-M0-01 holds. Not in `tests`: it needs Docker and the image.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: docker pull postgres:16.6-alpine
+      - name: AC-M7-02, 04, 06…13 — approval/tests_db
+        run: uv run pytest approval/tests_db
+      - name: AC-M9-01…11 — ui (incl. Playwright E2E with Chromium) and notifier on PostgreSQL
+        run: |
+          npm install -g playwright@1.63.0 && npx playwright install --with-deps chromium
+          NODE_PATH="$(npm root -g)" uv run pytest approval/ui/tests_db approval/notifier/tests_db
+
+  approval-images:
+    # AC-M9-12 (AS-29): ui and notifier images from their own lockfiles; compose networks; connection attempts
+    # from inside each container (allowed ones open, the rest refused; positive control from the edge network).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: (cd approval/ui && uv lock --check) && (cd approval/notifier && uv lock --check)
+      - run: uv run pytest approval/deploy/tests
+
+  schema-guard:
+    # AC-M0-02: proves that every schema mutation turns the contract tests red.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: uv run python scripts/ci/prove_schema_guard.py
+
+  secrets:
+    # AC-M0-04, AC-M0.1-01: gitleaks (pinned, scripts/ci/gitleaks.sh) on the tree and on every pushed commit.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Scan tree
+        run: scripts/ci/gitleaks.sh tree HEAD
+      - name: Scan every commit of the PR / push
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          ZERO=0000000000000000000000000000000000000000
+          if [ "$EVENT" = "pull_request" ]; then
+            scripts/ci/gitleaks.sh range "$PR_BASE..$PR_HEAD"
+          elif [ "$EVENT" = "push" ]; then
+            BEFORE="${PUSH_BEFORE:-$ZERO}"
+            if [ "$BEFORE" != "$ZERO" ] && ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              # Force-push: the old tip is not in the clone. Scan everything not yet in main.
+              echo "::notice::push.before $BEFORE is not reachable (force-push?); scanning origin/main..$PUSH_AFTER instead"
+              if git rev-parse --verify -q origin/main >/dev/null; then
+                BEFORE=origin/main
+              else
+                BEFORE=$ZERO
+              fi
+            fi
+            scripts/ci/gitleaks.sh range "$BEFORE..$PUSH_AFTER"
+          else
+            scripts/ci/gitleaks.sh range "$ZERO..HEAD"
+          fi
+      - name: AC-M0.1-01 — every M0 secret case is caught (fixtures generated at test time)
+        run: uv sync && uv run pytest tests/secrets
+
+  mutmut:
+    # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed; M1, M2, M3, M5 and M7 modules too.
+    # M7 adds approval (~1700 mutants, DB tests on PostgreSQL in Docker) and its SQL mutation check
+    # (scripts/ci/mutate_m7_sql.py, ~80 runs of approval/tests_db): about two hours on a 4-core runner.
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: PostgreSQL 16 with pgvector (connectors/telegram tests, M11)
+        run: sudo apt-get update -q && sudo apt-get install -y -q postgresql-16 postgresql-16-pgvector
+      - run: uv sync
+      - run: scripts/ci/mutmut.sh
+
+  policy:
+    # AC-M2-01, AC-M2-05, AC-M2-06 on the repository policies.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: uv run gxg-policy validate policies/
+      - run: uv run gxg-policy lint policies/
+      - run: uv run gxg-policy validate policies/pilot
+      - run: uv run gxg-policy lint policies/pilot
+      - name: Build twice with a throw-away key, compare, verify
+        run: bash scripts/ci/bundle_smoke.sh
+
+  demo-image:
+    # AC-M3-01, AC-M3-11: build the production image of connectors/demo from the repository root and
+    # run it: /readyz 200 with a valid bundle, 503 without; test switches stop the start.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: connectors/demo/docker_smoke.sh
+
+  m5-stand:
+    # AC-M5-01, AC-M5-04: the dev stand (compose.yaml) end to end: ContextForge (pinned digest) + PostgreSQL +
+    # demo, SC-01…SC-10 and MC-01…MC-04 through ContextForge, then again after restarting and after recreating
+    # every container with no setup in between. The report goes to the job's artifacts.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - run: stand/run.sh
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: m5-conformance
+          path: reports/conformance/M5.json
+
+  grants-widening:
+    # AC-M2-04 / GR-10: red while the policy diff has widening and no code owner added the
+    # `widening-approved` label after the head commit. Posts the diff report to the PR.
+    # Always diffed against main (merge-base), not against the PR base. Outside a PR (push / dispatch
+    # to a branch other than main) any widening is red. Connector manifests and gate files count too.
+    # docs/setup/widening-approval.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read         # workflow runs of the head SHA: when it arrived on the PR
+      issues: write         # labels and the report comment
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      # No `uv sync` of the checkout: no code of the PR runs in this job. The gate, gxg-policy and the
+      # lockfile come from main; changes to them in the PR need the label (scripts/ci/grants_widening.sh).
+      - name: Policy diff and approval gate (code from main)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/gate" refs/remotes/origin/main
+          gate="$RUNNER_TEMP/gate/scripts/ci/grants_widening.sh"
+          if [ ! -f "$gate" ]; then
+            # Bootstrap only: main has no gate yet. This PR then adds gate files, so it needs the label anyway.
+            echo "::warning::main has no grants_widening.sh yet: running the PR copy (bootstrap)"
+            gate=scripts/ci/grants_widening.sh
+          fi
+          bash "$gate"
+
+  ci-ok:
+    # Single required check for branch protection: green only if every job is green.
+    if: always()
+    needs: [lint, types, tests, approval-db, approval-images, schema-guard, secrets, mutmut, policy, demo-image, m5-stand, grants-widening]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = "success" ] || exit 1; done
+
+  bundle:
+    # GR-11: signed grants-bundle.json after a merge into main. Key from secrets, never in the repo.
+    # Not part of ci-ok. Setup: docs/setup/bundle-signing.md
+    # GR-13a: also on schedule (default branch = main): same commit, same content, new built_at.
+    if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
+    needs: [ci-ok]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync
+      - name: Build, sign, verify against the published public key
+        env:
+          GXG_BUNDLE_SIGNING_KEY: ${{ secrets.GXG_BUNDLE_SIGNING_KEY }}
+          GXG_BUNDLE_KID: ${{ vars.GXG_BUNDLE_KID }}
+          GXG_BUNDLE_PUBLIC_KEY: ${{ vars.GXG_BUNDLE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$GXG_BUNDLE_SIGNING_KEY" ] || [ -z "$GXG_BUNDLE_KID" ] || [ -z "$GXG_BUNDLE_PUBLIC_KEY" ]; then
+            echo "::error::secret GXG_BUNDLE_SIGNING_KEY and variables GXG_BUNDLE_KID, GXG_BUNDLE_PUBLIC_KEY are required"
+            exit 1
+          fi
+          uv run gxg-policy build policies/ --out dist --bundle-version "$GITHUB_SHA"
+          uv run gxg-policy verify dist --kid "$GXG_BUNDLE_KID" --public-key "$GXG_BUNDLE_PUBLIC_KEY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: grants-bundle
+          path: dist/
+          if-no-files-found: error

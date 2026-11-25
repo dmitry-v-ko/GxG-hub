@@ -1,0 +1,6 @@
+{
+  "description": "auto_approve для tool класса high_risk",
+  "code": "auto-approve-high-risk",
+  "file": "approval/t-alpha.yaml",
+  "path": "rules[0].match.tools[0]"
+}

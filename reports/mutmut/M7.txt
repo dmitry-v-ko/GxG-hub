@@ -1,0 +1,129 @@
+M7 cycle 2 — DoD-4 evidence. mutmut on code commit c6bb52f (approval/src unchanged up to a843c11); SQL check on a843c11 (after the cycle-2 critic: tests and 4 more mutations only).
+scripts/ci/mutmut.sh is green from 33d0499 on: c6bb52f itself lacks the equivalent entry api.x__responses__mutmut_8.
+Originally: final code commit c6bb52f (approval/src, approval/tests, approval/tests_db
+identical in c47b541 and in the report commit; only scripts/ci/mutmut-equivalent.txt and reports/ change after it).
+PostgreSQL 16.15 (Ubuntu, initdb, Unix socket only, GXG_TEST_PG_SOCKET_DIR), 4 cores.
+
+== 1. mutmut 3.8.1, approval [tool.mutmut]: policy.py, transitions.py, quotas.py, intents.py, api.py, mcp.py
+Command: cd approval && GXG_TEST_PG_SOCKET_DIR=... uv run mutmut run   (one clean run from an empty mutants/;
+the container restarted at 1166/1635 and `mutmut run` resumed the same mutants/ on the same code).
+  total 1635: killed 1624, survived 11, timeout 0, no_tests 0, suspicious 0
+  every survivor is listed in scripts/ci/mutmut-equivalent.txt with its reason:
+    gxg_approval.mcp.x_create_server__mutmut_14  # "Authorization" -> "authorization": HTTP header names are case-insensitive (RFC 9110), httpx sends the same header
+    gxg_approval.mcp.x_create_server__mutmut_15  # "Authorization" -> "AUTHORIZATION": HTTP header names are case-insensitive (RFC 9110)
+    gxg_approval.mcp.x_create_server__mutmut_46  # "GET" -> "get": httpx upper-cases the method (Request.method = method.upper())
+    gxg_approval.mcp.x_create_server__mutmut_62  # "POST" -> "post": httpx upper-cases the method
+    gxg_approval.mcp.x_create_server__mutmut_87  # error=False -> error=None: _result only tests truthiness
+    gxg_approval.api.x__error__mutmut_5  # "Retry-After" -> "retry-after": header names are case-insensitive; Starlette lower-cases them on the wire
+    gxg_approval.api.x__error__mutmut_6  # "Retry-After" -> "RETRY-AFTER": header names are case-insensitive
+    gxg_approval.api.x_create_app__mutmut_19  # partition -> rpartition: equal for "Bearer <jwt>" (a JWT has no space); with more spaces both forms fail verification -> the same 401
+    gxg_approval.api.x_create_app__mutmut_25  # headers.get("authorization") -> "AUTHORIZATION": Starlette Headers.get is case-insensitive
+    gxg_approval.api.x_create_app__mutmut_26  # missing header default "" -> "XXXX": no space, so scheme "XXXX" != bearer -> the same 401 "token rejected"
+    gxg_approval.api.x__responses__mutmut_8  # (200, 201) -> (200, 202) in the `ok` branch: only dispatch passes an `ok` schema, and its only 2xx code is 200
+  => 0 non-equivalent survivors. Cycle 1 had 1393 mutants (api.py, mcp.py not mutated); this cycle adds them.
+  Kit (M1), tools/gxg-policy (M2), root (M0.1, M2): code unchanged in cycle 2 -> results of reports/mutmut/M7.txt
+  cycle 1 / scripts/ci/mutmut.sh on 932645a stand (kit 978/988 with the 10 M1 equivalents).
+
+== 2. SQL mutation check, scripts/ci/mutate_m7_sql.py on a843c11 (one textual mutation at a time, pytest -x approval/tests_db)
+Why own code: mutmut mutates Python only and leaves SQL string constants and PL/pgSQL alone; no maintained
+mutation tool for application SQL exists (DoD-4 allows an own check; cycle-1 critic confirmed). Runs inside
+scripts/ci/mutmut.sh (CI job `mutmut`). Locking clauses are not in the list (races; see the module docstring).
+  killed      0001_core.py: tool kill switch ignored at T7/T9
+  killed      0001_core.py: a cleared switch still blocks T7/T9
+  killed      0001_core.py: move from any status
+  killed      0001_core.py: execution state ignored
+  killed      0001_core.py: any target status
+  equivalent  0001_core.py: equivalent: every caller passes a row it locked FOR UPDATE (_gxg_intent/_gxg_execution or gxg_cancel), so the version cannot differ; callers with a client version compare it before the move
+  killed      0001_core.py: non-terminal status gets terminal_at
+  killed      0001_core.py: intent born in any status
+  killed      0001_core.py: born with version > 1
+  killed      0001_core.py: born with attempts used
+  killed      0001_core.py: born terminal
+  killed      0001_core.py: born without encrypted preview
+  killed      0001_core.py: status and approval mode disagree
+  killed      0001_core.py: human intent without approvals
+  killed      0001_core.py: approved without execution deadline
+  killed      0001_core.py: policy decision for a non-auto intent
+  equivalent  0001_core.py: equivalent: version 1 means no move yet, and the insert guard makes every auto intent approved at T1
+  equivalent  0001_core.py: equivalent: T1 writes the policy decision in the transaction that inserts the auto intent, so a moved auto intent always has one and the EXISTS check refuses it
+  killed      0001_core.py: second policy decision
+  killed      0001_core.py: policy decision counted as a human approval
+  killed      0001_core.py: rejections counted as approvals
+  killed      0001_core.py: cancel another tenant's intent (same principal ID)
+  killed      0001_core.py: cancel another requester's intent
+  killed      0001_core.py: cancel with a stale version
+  killed      0001_core.py: unknown decision accepted
+  killed      0001_core.py: stale screen decides
+  killed      0001_core.py: decision on changed args
+  killed      0001_core.py: decision after the approval deadline
+  killed      0001_core.py: requester approves own intent
+  killed      0001_core.py: a machine principal approves
+  killed      0001_core.py: approver outside allowed_approvers
+  killed      0001_core.py: approve without required step-up
+  killed      0001_core.py: second vote of one human
+  killed      0001_core.py: quorum needs one vote more
+  killed      0001_core.py: quorum of one
+  killed      0001_core.py: no execution window after approval
+  killed      0001_core.py: approved intent never queued for execution
+  killed      0001_core.py: manual outcome without a reason
+  killed      0001_core.py: manual outcome, stale version
+  killed      0001_core.py: reserve after the execution window
+  killed      0001_core.py: reserve after the last attempt
+  killed      0001_core.py: kill switch ignored at T7
+  killed      0001_core.py: token sub of another intent dispatches
+  killed      0001_core.py: another connector dispatches
+  killed      0001_core.py: dispatch after the reservation lease
+  killed      0001_core.py: kill switch ignored at T9
+  killed      0001_core.py: dispatch does not count
+  killed      0001_core.py: T12a does not count
+  killed      0001_core.py: retry after the last attempt
+  killed      0001_core.py: retry after the execution window
+  killed      0001_core.py: unknown outcome never reconciled again
+  killed      0001_core.py: approval expired early
+  killed      0001_core.py: execution window expired early
+  killed      0001_core.py: reservation released early
+  killed      0001_core.py: dispatch declared unknown early
+  killed      0001_core.py: auto usage count without its index
+  equivalent  0001_core.py: equivalent: an execution in outcome_unknown belongs to an intent in outcome_unknown, and T7 (the only insert into executions) is allowed only from approved: the index is a second guard
+  killed      0001_core.py: two votes of one human
+  killed      0001_core.py: ui reads args
+  killed      0001_core.py: executor reads preview
+  killed      0001_core.py: ui writes executions
+  killed      0001_core.py: audit rows can be changed
+  killed      0001_core.py: ui runs T9 and T6
+  killed      0001_core.py: every role runs every transition
+  killed      intents.py: read another tenant's intent (same principal ID)
+  killed      intents.py: read another requester's
+  killed      intents.py: idempotency key shared across tenants
+  killed      intents.py: a cleared switch blocks T1
+  killed      intents.py: T1 without the tenant lock
+  killed      intents.py: hourly quota counts another tenant's intents
+  killed      intents.py: hourly quota counts other requesters
+  killed      intents.py: hourly quota counts all history
+  killed      intents.py: pending caps count every status
+  killed      intents.py: pending caps count another tenant's intents
+  killed      intents.py: requester pending cap counts the whole tenant
+  killed      intents.py: auto limit counts another tenant's intents
+  killed      intents.py: auto day limit window too long
+  killed      intents.py: auto day limit window too short (fail open)
+  killed      intents.py: auto hour window too short (fail open)
+  killed      intents.py: retry_after_s from the newest intent
+  killed      intents.py: auto hour limit counts the day
+  killed      intents.py: auto limit counts human intents of the rule
+  killed      intents.py: auto limit counts other rules
+  83 mutations listed: 0 not as expected (survivor, stale text, killed 'equivalent')
+  sql_exit=0
+  Equivalents explained (listed in the script, prefix "equivalent:"; the script fails if one is killed):
+    - _gxg_move version CAS: every caller passes a row it locked FOR UPDATE; callers with a client version compare
+      it before the move.
+    - gxg_record_auto_decision status check: version 1 = no move yet; the insert guard makes every auto intent
+      approved at T1.
+    - gxg_record_auto_decision version check: T1 writes the policy decision in the inserting transaction, so a
+      moved auto intent always has one and the EXISTS check refuses it.
+    - one_active_execution covering outcome_unknown: an execution in outcome_unknown belongs to an intent in
+      outcome_unknown; T7 (the only insert into executions) is allowed only from approved.
+  Removed instead of listed: the live-execution check of gxg_cancel (unreachable: T6 only from
+  pending_approval/approved, which never have a live execution).
+  Added after the cycle-2 critic (all killed): index (tenant_id, created_at) dropped, auto hour window 30 min,
+  auto day window 12 h (both fail open), retry_after_s from max(created_at).
+  First run (on 7ba8c40^ code, before the new tests): 10 not as expected -> 8 killed by new tests, 2 equivalent.

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/intent-event.schema.json",
+  "title": "GxG Intent Event v1",
+  "description": "Webhook body for intent status changes (EFF-28); never contains args or preview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "type",
+    "intent_id",
+    "tenant_id",
+    "status",
+    "version",
+    "occurred_at"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "const": "intent.status_changed"
+    },
+    "intent_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "business_task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "status": {
+      "enum": [
+        "pending_approval",
+        "approved",
+        "executing",
+        "succeeded",
+        "failed",
+        "outcome_unknown",
+        "reconciled_succeeded",
+        "reconciled_failed",
+        "rejected",
+        "expired",
+        "cancelled"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

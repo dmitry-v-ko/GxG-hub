@@ -1,0 +1,16 @@
+{
+ "tools_call_requests_seen_by_echo": 17,
+ "with_signature": 16,
+ "signatures_valid": "16/16",
+ "distinct_signatures_per_user": {
+  "hermes@t-alpha.spike.example.com": 1,
+  "analyst@t-alpha.spike.example.com": 1,
+  "hermes@t-beta.spike.example.com": 1,
+  "analyst@t-beta.spike.example.com": 1,
+  "admin@spike.example.com": 1
+ },
+ "signature_still_valid_after_changing_teams_and_admin": true,
+ "signature_valid_after_changing_user_id": false,
+ "signature_matches_JWT_SECRET_KEY_when_IDENTITY_CLAIMS_SECRET_is_set": false,
+ "signed_fields": "user_id:email only (no teams, admin, time, nonce, audience, method, path, body)"
+}

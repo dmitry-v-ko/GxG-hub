@@ -1,0 +1,19 @@
+# Pilot approval policy: every Telegram proposal needs a human, nothing is auto-approved. Format: docs/specs/approval-policy-v1.md
+tenant: t-pilot
+schema_version: 1
+
+defaults:
+  approval_ttl: 24h
+  execution_window: 1h
+
+quotas:
+  propose_per_requester_per_hour: 10
+  pending_per_requester_max: 5
+  pending_per_tenant_max: 20
+
+rules:
+  - id: tg-propose-human
+    description: "Every Telegram message proposal is approved by a person"
+    match:
+      tools: [telegram.message.propose]
+    decision: require_approval

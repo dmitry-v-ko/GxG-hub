@@ -1,0 +1,31 @@
+# Code owners (AC-M0-02, AC-M0-03). By the owner's decision review is not required,
+# and GitHub never requests review from the PR author, so for the owner's own PRs
+# this file only marks the files as owned. See docs/setup/branch-protection.md.
+
+# Normative schemas and their guards: weakening a schema needs a security review.
+/schemas/                @dmitry-v-ko
+/tests/contract/         @dmitry-v-ko
+
+# CI, secret scanning, schema lock tooling and the pytest policy.
+/scripts/ci/             @dmitry-v-ko
+/tests/ci/               @dmitry-v-ko
+/.github/                @dmitry-v-ko
+/conftest.py             @dmitry-v-ko
+/.gitleaks.toml          @dmitry-v-ko
+/.gitleaks-strict.toml   @dmitry-v-ko
+/.gitleaksignore         @dmitry-v-ko
+/tests/secrets/          @dmitry-v-ko
+/pyproject.toml          @dmitry-v-ko
+
+# Policies and the tooling that gates them (AC-M2-04: owners here may add `widening-approved`).
+/policies/               @dmitry-v-ko
+/tools/gxg-policy/       @dmitry-v-ko
+# The bundle takes effect_class/action/executes_via of every tool from these (GR-11a, AS-26).
+/connectors/*/gxg-manifest.yaml @dmitry-v-ko
+# The grants-widening job installs and runs what these say.
+/pyproject.toml          @dmitry-v-ko
+/uv.lock                 @dmitry-v-ko
+
+# Specs and the plan (acceptance criteria).
+/docs/specs/             @dmitry-v-ko
+/docs/implementation-plan-v1.md @dmitry-v-ko

@@ -1,0 +1,44 @@
+# Example tenant grants file (synthetic). Format: docs/specs/resource-grants-v1.md
+# No secrets here: credential_ref points to the secret store.
+tenant: t-alpha
+schema_version: 1
+
+connections:
+  - id: tg-main
+    domain: telegram
+    credential_ref: secret://t-alpha/telegram/main
+  - id: kb-main
+    domain: kb
+    credential_ref: secret://t-alpha/kb/service
+
+principals:
+  agents:
+    - id: agent:t-alpha:hermes
+    - id: agent:t-alpha:analyst
+    - id: agent:t-alpha:signals-actions
+  humans:
+    - id: oidc:https://accounts.example.invalid:1001
+      roles: [approver]
+
+groups:
+  researchers: [agent:t-alpha:hermes, agent:t-alpha:analyst]
+
+grants:
+  - id: kb-research
+    subjects: [group:researchers]
+    actions: [read]
+    resources:
+      - kb:kb-main/collection/public
+      - kb:kb-main/collection/sales
+  - id: tg-hermes-chats
+    subjects: [agent:t-alpha:hermes]
+    actions: [read]
+    resources:
+      - telegram:tg-main/chat/-1001234567890
+    expires_at: "2027-03-01T00:00:00Z"
+    reason: "Pilot: partner chat monitoring"
+  - id: tg-signals-propose
+    subjects: [agent:t-alpha:signals-actions]
+    actions: [propose]
+    resources:
+      - telegram:tg-main/chat/-1009876543210

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/search-result.schema.json",
+  "title": "GxG MCP Search Result v1",
+  "description": "Domain structuredContent envelope, not MCP protocol wire format",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "next_cursor",
+    "complete",
+    "partial_reasons",
+    "source_refs"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "excerpt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "source_ref": {
+            "type": "string",
+            "maxLength": 512
+          }
+        }
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1024
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "partial_reasons": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "source_timeout",
+          "rate_limited",
+          "truncated",
+          "partial_provider_failure",
+          "other"
+        ]
+      }
+    },
+    "source_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "maxLength": 512
+      }
+    }
+  }
+}

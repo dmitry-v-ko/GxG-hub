@@ -1,0 +1,60 @@
+{
+  "milestone": "M0.1",
+  "branch": "claude/m0.1-standard-tools",
+  "commit": "9dd74c1469ed970d2a4f64637bc635b31ef34165",
+  "code_commit": "91e6e091c243831b513a589939fc1d76eb05e4c1",
+  "cycle": 3,
+  "reviewed_at": "2026-11-21",
+  "score": 8.0,
+  "caps_applied": ["major"],
+  "dimensions": {"spec": 3, "tests": 1.5, "security": 1.5, "code": 1.5, "ops": 1, "evidence": 0},
+  "acceptance": [
+    {"id": "AC-M0.1-01", "status": "passed", "evidence": "Clean clone 91e6e09, empty uv cache, Python 3.12.3: uv run pytest tests/secrets -> 21 passed, 150 subtests (45 s); CI run 44887393111 job secrets success. Critic cases via scripts/ci/gitleaks.sh (tree/range exit): empty .env, server.pem, .envrc, .env-local, .ENV_PROD, KEY.PEM, .ENV, a/b/id_rsa, x.p12, .ENV.EXAMPLE 1/1; .env.example 0/0; inline key, key after KEY=, UTF-16 key, key only in a merge commit, empty .env only in a merge commit, empty .env in an octopus merge, symlink .env, .env in a dir with a space, empty .pem with a newline in its name 1/1; key added+deleted in PR, empty .env added+deleted, renamed away, merged from side branch then deleted 0/1. Plan-quote cases are in the suite. No key material in output."},
+    {"id": "AC-M0.1-02", "status": "passed", "evidence": "check_secrets.py and its tests stay deleted; the only code outside gitleaks is the owner-approved name check (NAMES + names(), gitleaks.sh:40-47, called at :67 and :84), reads names only. Cycle 3 change is one line (fail closed on grep exit 2)."},
+    {"id": "AC-M0.1-03", "status": "passed", "evidence": "scripts/ci/mutmut.sh in clean clone -> 'mutmut: all mutants killed', 635/635, 47 s; result list identical to reports/mutmut/M0.1.txt (incl. 4 pytest_runtest_call mutants killed). CI job mutmut success."},
+    {"id": "AC-M0.1-04", "status": "passed", "evidence": "prove_schema_guard.py unchanged; clean clone -> '59/59 schema mutations make the contract tests fail'; CI job schema-guard success."},
+    {"id": "AC-M0-01", "status": "passed", "evidence": "uv sync --locked && uv run pytest -> 106 passed, 136 subtests, 0 skipped; under unshare -rn with uv run --offline -> 106 passed. But see finding 1: removing --disable-socket from addopts leaves the suite green (106 passed), and --force-enable-socket no longer makes the network tests fail (32 passed)."},
+    {"id": "AC-M0-02", "status": "passed", "evidence": "Drop top-level required in effect-intent.schema.json -> tests/contract 16 failed, schema_lock.py exit 1; after schema_lock.py --write -> 15 failed. CI job schema-guard success."},
+    {"id": "AC-M0-04", "status": "passed", "evidence": "*.pem, .env, header anywhere red, including empty files and files added only by a merge commit. See AC-M0.1-01."}
+  ],
+  "ci": {"run_id": 44887393111, "commit": "91e6e091c243831b513a589939fc1d76eb05e4c1", "ci_ok": "success", "jobs": "lint, types, tests, schema-guard, secrets, mutmut, ci-ok: success", "note": "run 44887603556 on 9dd74c1 (report only) also success"},
+  "cycle2_items": [
+    {"item": "major: -m untested", "status": "fixed", "check": "-m removed at gitleaks.sh:84 -> tests/secrets 1 failed (test_empty_env_added_only_by_a_merge_commit_fails)"},
+    {"item": "minor: grep error swallowed", "status": "fixed", "check": "back to || true -> 1 failed; -eq 2 -> 5 failed; || return 2 dropped -> 1 failed; fake grep exit 2 on repo with empty .env -> tree exit 1"},
+    {"item": "minor: per-test network opt-out", "status": "partly fixed", "check": "body blocked with marker/fixture/allow_hosts; fixture setup/teardown and module fixtures still open (finding 2)"}
+  ],
+  "findings": [
+    {"severity": "major", "ref": "review #1; AC-M0-01; DoD-4", "where": "conftest.py:27-28 (pytest_runtest_call) x pyproject.toml:49 (--disable-socket)",
+     "problem": "Risky config without a test, caused by this change: the hook re-blocks sockets in every test body regardless of config, so the five network tests in tests/ci/test_pytest_policy.py no longer depend on --disable-socket. Deleting '--disable-socket' from addopts -> uv run pytest 106 passed (green); in that state a fixture sending UDP to 192.0.2.1 passes (with the flag: error). Before cycle 3 the same deletion turned the five tests red.",
+     "required_improvement": "Delete the pytest_runtest_call hook; in conftest.py record (via _record, DoD-5 style) every item with the enable_socket or allow_hosts marker or the socket_enabled fixture, so such a run is red. Change test_no_per_test_network_opt_out to expect a red run. Confirm: removing --disable-socket from addopts turns tests/ci red, and --force-enable-socket makes the five network tests fail."},
+    {"severity": "minor", "ref": "review #2; AC-M0-01; cycle-2 finding 3", "where": "conftest.py:4-6,27-28; tests/ci/test_pytest_policy.py:59-73",
+     "problem": "Opt-out still works in fixtures: @pytest.mark.enable_socket + a fixture sending UDP to 192.0.2.1 in setup, teardown or module scope -> passes; socket_enabled listed before such a fixture -> passes. The docstring says no marker or fixture lifts the block; the test only checks the body. Named in M0.1.json known_limitations.",
+     "required_improvement": "Closed by the fix of the major finding (opt-outs recorded at collection)."},
+    {"severity": "minor", "ref": "review #3; DoD-3", "where": "reports/conformance/M0.1.json AC-M0-01 actual",
+     "problem": "Says 'with --force-enable-socket all 5 fail'; at 91e6e09 pytest --force-enable-socket tests/ci/test_pytest_policy.py -> 32 passed.",
+     "required_improvement": "Rerun after the fix and record the real result."}
+  ],
+  "existing_solutions": [
+    {"component": "secret content scanning", "alternative": "gitleaks 8.30.1", "verdict": "use_existing"},
+    {"component": "file-name check for empty files (gitleaks.sh NAMES + names(), now fail closed on grep exit 2)", "alternative": "gitleaks/trufflehog/detect-secrets skip empty files or scan content only; pre-commit files: hook dropped after owner decision 2026-11-21", "verdict": "justified_custom"},
+    {"component": ".env* name rule", "alternative": "gitleaks path rule in .gitleaks-strict.toml", "verdict": "use_existing"},
+    {"component": "network block in tests", "alternative": "pytest-socket 0.8.1 (--disable-socket --allow-unix-socket)", "verdict": "use_existing"},
+    {"component": "no per-test network opt-out (conftest.py pytest_runtest_call re-applying disable_socket)", "alternative": "pytest-socket 0.8.1 has only --disable-socket, --force-enable-socket, --allow-hosts, --allow-unix-socket (checked in the installed package): no switch forbids opt-outs. Repository already has _record (DoD-5) for forbidden markers; reusing it is the smaller and complete fix (finding 1)", "verdict": "justified_custom"},
+    {"component": "fake grep for the fail-closed test", "alternative": "no BSD/busybox grep in CI; PATH stub is the standard way", "verdict": "justified_custom"},
+    {"component": "scripts/ci/gitleaks.sh (download + SHA-256 + tree/range glue)", "alternative": "gitleaks-action (cannot be driven by the fixture tests); unchanged", "verdict": "justified_custom"},
+    {"component": ".gitleaks-strict.toml second config, UTF-16 rules", "alternative": "gitleaks has no UTF-16 decoding; unchanged", "verdict": "justified_custom"},
+    {"component": "mutation testing of Python", "alternative": "mutmut 3.8.1", "verdict": "use_existing"},
+    {"component": "scripts/ci/mutmut.sh", "alternative": "mutmut run alone does not fail on survivors; ~10 lines glue; unchanged", "verdict": "justified_custom"},
+    {"component": "scripts/ci/prove_schema_guard.py", "alternative": "no tool mutates JSON Schemas against a test suite; unchanged", "verdict": "justified_custom"},
+    {"component": "scripts/ci/schema_lock.py", "alternative": "none for normative hash + required map; unchanged", "verdict": "justified_custom"},
+    {"component": "conftest.py skip/xfail policy (DoD-5)", "alternative": "xfail_strict / pytest-error-for-skips miss collection-time skips and XPASS; unchanged", "verdict": "justified_custom"}
+  ],
+  "required_improvements": [
+    "Delete pytest_runtest_call from conftest.py; instead record (via _record) every test item with the enable_socket or allow_hosts marker or the socket_enabled fixture, so the run is red. Update the docstring.",
+    "Change tests/ci/test_pytest_policy.py::test_no_per_test_network_opt_out to expect a red run for the marker, the fixture and allow_hosts, and add a case where only a fixture (setup) uses the network with the marker.",
+    "Verify by hand: removing '--disable-socket' from addopts turns tests/ci red; pytest --force-enable-socket makes the five network tests fail; mutmut still 0 survivors.",
+    "Rerun tests and CI; update reports/conformance/M0.1.json (AC-M0-01 evidence) and reports/mutmut/M0.1.txt."
+  ],
+  "ponytail_review": "reports/critic/M0.1-cycle-3.review.md",
+  "lean_lines": 0
+}

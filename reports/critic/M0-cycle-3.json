@@ -1,0 +1,44 @@
+{
+  "milestone": "M0",
+  "branch": "claude/m0-foundation",
+  "commit": "2ab1faf94d228187cf1234eae93f8c633f251f1a",
+  "cycle": 3,
+  "reviewed_at": "2026-11-20",
+  "score": 9.5,
+  "caps_applied": [],
+  "dimensions": {"spec": 3, "tests": 2, "security": 1.5, "code": 1.5, "ops": 1, "evidence": 0.5},
+  "acceptance": [
+    {
+      "id": "AC-M0-01",
+      "status": "passed",
+      "evidence": "Clean clone, checkout 2ab1faf, empty UV_CACHE_DIR, UV_PYTHON=3.12 (3.12.3): `uv sync --locked && uv run pytest` -> 100 passed, 136 subtests passed, 0 skipped; `bash scripts/ci/check-all.sh` -> `check-all: OK`. CI run 44788073458 on 2ab1faf: lint, types, tests, schema-guard, secrets, ci-ok all success."
+    },
+    {
+      "id": "AC-M0-02",
+      "status": "passed",
+      "evidence": "prove_schema_guard.py: 59/59 caught. By hand: dropping `idempotency_key` from effect-intent `required` + `schema_lock.py --write` -> 3 failed (test_security_required_fields); removing `required` entirely -> 17 failed. 'Cannot be merged' depends on AC-M0-03."
+    },
+    {
+      "id": "AC-M0-03",
+      "status": "manual_pending",
+      "evidence": "Not configured (needs the owner; private personal repo needs Pro/public/org, stated in the doc). Plan text equals the owner-approved wording (no diff to claude/admiring-planck-vzys0x). docs/setup/branch-protection.md matches every clause: ruleset with empty bypass, PR required with 0 approvals, Code Owners review off, required `ci-ok` strict, force-push/deletion blocked; probe covers direct push and force-push (GH013/GH006 texts), red and pending ci-ok incl. `--admin`, no CODEOWNERS error banner, shield 'Owned by you' on files in schemas/, tests/contract/, scripts/ci/, and a green PR merging without approval. CODEOWNERS covers all three paths."
+    },
+    {
+      "id": "AC-M0-04",
+      "status": "passed",
+      "evidence": "check_secrets.py exit 1 (commit + --range/--tree) for probe.pem, x/.env, KEY.PEM, inline key after `K=\"`, header in a .py. Plan file: quote plus key before the AC row -> 1; RSA-header quote -> 1; bare header -> 1; the same quote in README.md / docs/implementation-plan-v1.md.bak / Docs/implementation-plan-v1.md -> 1. Mutations: remove all quotes -> 2 red, whole-file exemption -> 6 red, quote exempt in every file -> 4 red."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "ref": "AC-M0-04 (beyond the letter)",
+      "where": "scripts/ci/check_secrets.py:113-114",
+      "problem": "The single exempt quote is removed wherever it is in the plan. A PR that moves or deletes the AC-M0-04 quote and adds the quoted header + base64 key body + END line passes (--tree and --range exit 0). The rest is not a parseable PEM (openssl pkey refuses it) and a header-less body passes in any file anyway, so no new leak class.",
+      "required_improvement": "Remove the quote only on the line starting with `| AC-M0-04 |`, or also report a private key END line anywhere; one test. Backlog, not blocking."
+    }
+  ],
+  "required_improvements": [],
+  "ponytail_review": "reports/critic/M0-cycle-3.review.md",
+  "lean_lines": 0
+}

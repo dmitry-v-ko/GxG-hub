@@ -1,0 +1,41 @@
+[project]
+name = "gxg-connector-kit"
+version = "0.0.0"
+description = "GxG Hub shared connector library: canonical hash, errors, service JWT, execution token, grants bundle, identity, redaction."
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography>=46,<51",
+    "jsonschema>=4.23,<5",  # bundle and execution-token claims are validated by schemas/
+    "pyjwt[crypto]>=2.10,<3",
+]
+
+[project.optional-dependencies]
+# gxg_connector_kit.mcp and .effects: the FastMCP plumbing shared by every connector (M1.1, mcp-toolkit-v1)
+mcp = [
+    "fastmcp==4.1.8",  # pulls the official MCP SDK (mcp), Starlette, uvicorn and httpx2
+    "pyyaml>=6,<7",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "gxg_connector_kit"
+
+# DoD-4: `uv run mutmut run` from this directory, then `uv run mutmut results`.
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = [
+    "src/gxg_connector_kit/exec_token.py",
+    "src/gxg_connector_kit/svc_jwt.py",
+    "src/gxg_connector_kit/_jwt.py",
+    "src/gxg_connector_kit/grants.py",
+    "src/gxg_connector_kit/canonical.py",
+    "src/gxg_connector_kit/cf_identity.py",  # M5: ContextForge identity (SEC-03)
+    "src/gxg_connector_kit/mcp.py",  # M1.1: call pipeline (MCC-02…05, MCC-09)
+    "src/gxg_connector_kit/effects.py",  # M1.1: propose, execute, reconcile (EFF-18, AS-12)
+    "src/gxg_connector_kit/webhooks.py",  # M10: webhook signature (AS-22, EX-20)
+]
+pytest_add_cli_args_test_selection = ["tests"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-q"]

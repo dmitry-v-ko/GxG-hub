@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "demo.boards.list input",
+  "description": "Boards the caller may read. No arguments; extra fields are ignored and never carry identity (SC-03).",
+  "type": "object",
+  "properties": {}
+}

@@ -1,0 +1,6 @@
+{
+  "description": "RID не того домена",
+  "code": "rid-domain",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].resources[0]"
+}
