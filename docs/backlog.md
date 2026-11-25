@@ -87,3 +87,19 @@
 | M10 | reports/critic/M10-cycle-3.json | N10: в `docs/runbooks/approval-ops.md` нет разделов для `GxgExecuteDeferred`, `GxgExpiredAfterRateLimit` и ещё пяти алертов — дежурному не по чему действовать | Раздел runbook на каждый алерт из `approval/deploy/prometheus/rules.yaml`: что значит, что проверить, что делать |
 | M10 | reports/critic/M10-cycle-3.json | N11: окно в 1 час у `gxg_intents_expired_after_rate_limit`: при простое Prometheus или `api` дольше часа истечение не алертится; в тексте алерта нет «за последний час» | Счётчик по журналу аудита, устойчивый к purge, или окно больше; «за последний час» в summary |
 | M10 | reports/M10-READY.md | `test_keys_cli_rotate_remove_and_release` (`approval/tests_db/test_executor.py`) один раз упал в полном прогоне, отдельно проходит | Найти зависимость от порядка или времени |
+
+## M12 (критик цикла 1, 2026-11-23; ветка gxg_agents_v2 codex/m12-signals-gxg-hub @ 1487186)
+
+- Счётчик старого пути перенести в legacy-handler'ы (`run-action-workflow.ts:353`), чтобы AC-M12-05 мерил исполнение, а не конфигурацию.
+- AC-M12-01: фикстура соответствия `peer_id:message_id` ↔ `chat_ref:message_id`, legacy-сторона через настоящий `HubCollectionDriver`, медиа без текста и edited.
+- AC-M12-06: отдельный harness без webhook'ов со сравнением множеств; случай «чат в конфигурации без grant» через webhook.
+- AC-M12-02: assert, что множество `business_task_id` равно множеству id кандидатов.
+- Верхняя граница или alert для бесконечно отложенных gxg-кандидатов (`hub_transport_failed`).
+- Секундный cron Signals: wakeup по `next_poll_at` или не создавать run при пустой выборке.
+- Webhook для tenant'а не того workspace: 2xx-ignore или 403 вместо 503.
+- mastra typecheck зависит от `frontend/node_modules`: `npm ci` в обоих каталогах в CI.
+- M12 ц2 (критик 8.5): при deferral записывать safe-код последней ошибки и время начала ожидания; метрика/эскалация для intent, ждущего дольше `expires_at` + запас.
+- M12 ц2: reconciliation для кандидата, терминализированного по `permission_denied`/`not_found`, если Hub позже вернёт терминальный статус intent'а.
+- M12 ц2: один источник поддерживаемых `action@version` для фильтра выборки и для claim.
+- M12 ц2: индекс/сгенерированная колонка под фильтр `action_key@version` при росте очереди.
+- M12 ц2: явно ограничить клиентские повторы `telegram.message.propose` по `internal_error`.
