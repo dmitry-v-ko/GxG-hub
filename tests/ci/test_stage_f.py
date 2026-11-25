@@ -24,7 +24,8 @@ IDS = F.matrix_ids(F.MATRIX.read_text("utf-8"))
 def test_the_matrix_has_the_expected_prefixes() -> None:
     prefixes = ("SC", "EX", "MC", "SI", "OPS")
     assert {i.split("-")[0] for i in IDS} == set(prefixes)
-    assert [sum(i.startswith(p + "-") for i in IDS) for p in prefixes] == [10, 25, 5, 3, 7]
+    # MC: 5 + MC-06…MC-10 of MCC-11 (3ddb9f1)
+    assert [sum(i.startswith(p + "-") for i in IDS) for p in prefixes] == [10, 25, 10, 3, 7]
 
 
 def test_every_matrix_id_is_mapped_and_every_mapped_test_exists() -> None:

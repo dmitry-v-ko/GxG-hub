@@ -172,6 +172,31 @@ OPS: dict[str, list[str]] = {
 # Ids that stay open on purpose: no test in this repository proves them, or they need a live / human step. `status`
 # is never `passed`; `related` are the tests that cover a part (listed in the report, they decide nothing).
 OPEN: dict[str, dict[str, Any]] = {
+    "MC-06": {
+        "status": "not_run",
+        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
+        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+    },
+    "MC-07": {
+        "status": "not_run",
+        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
+        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+    },
+    "MC-08": {
+        "status": "not_run",
+        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
+        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+    },
+    "MC-09": {
+        "status": "not_run",
+        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
+        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+    },
+    "MC-10": {
+        "status": "not_run",
+        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
+        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+    },
     "OPS-02": {
         "status": "not_run",
         "reason": "immediate effect is tested (policy: next propose; revocation: stand MC-04; key rotation: EX-24) "
