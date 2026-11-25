@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -43,13 +44,40 @@ def test_log_parsing_takes_ids_and_the_sealed_token() -> None:
     assert pilot_agent.parse_log(["only noise"]) == (None, None)
 
 
-def test_the_allowed_tools_are_exactly_the_five_of_the_pilot() -> None:
+APIFY_SIX = {  # the tools Apify serves without a token (docs.apify.com/platform/integrations/mcp)
+    "search-actors", "fetch-actor-details", "search-apify-docs", "fetch-apify-docs",
+    "apify-api-search", "apify-api-details",
+}  # fmt: skip
+
+
+def test_the_allowed_tools_are_the_pilot_tools_kb_reads_and_apify_discovery() -> None:
     job = load_job()
     assert job.ALLOWED == {  # type: ignore[attr-defined]
         "telegram.messages.search", "telegram.thread.read", "telegram.message.propose",
         "effects.status", "effects.cancel",
+        "kb.documents.search", "kb.documents.get", "kb.context.get",
+        *APIFY_SIX,
     }  # fmt: skip
     assert not [t for t in job.ALLOWED if "execute" in t or "reconcile" in t]  # type: ignore[attr-defined]
+    assert not [t for t in job.ALLOWED if t.startswith(("call-", "add-")) or t.endswith(("-write", "-create"))]  # type: ignore[attr-defined]
+
+
+def test_kb_and_apify_gateways() -> None:
+    job = load_job()
+    gw = job.GATEWAYS  # type: ignore[attr-defined]
+    assert gw["kb-t-pilot"] == "http://kb.railway.internal:8080/mcp"
+    url = gw["apify-t-pilot"]
+    assert url.startswith("https://mcp.apify.com?tools=")
+    assert set(url.split("tools=", 1)[1].split(",")) == APIFY_SIX  # no actor runs, nothing that needs a token
+    assert job.urlsplit(url).hostname == "mcp.apify.com"  # type: ignore[attr-defined]
+
+
+def test_pdp_rules_allow_exactly_the_allowed_tools_of_the_pilot_agent() -> None:
+    rules = json.loads((JOB.parent / "contextforge/unified_pdp.rules.json").read_text("utf-8"))
+    actions = {a.removeprefix("tools.invoke.") for a in next(r for r in rules if r["id"] == "t-pilot.pilot")["actions"]}
+    assert {"kb-t-pilot-kb-documents-search", "kb-t-pilot-kb-documents-get", "kb-t-pilot-kb-context-get"} <= actions
+    assert {f"apify-t-pilot-{t}" for t in APIFY_SIX} <= actions
+    assert len(actions) == 5 + 3 + 6
 
 
 def test_sql_splitter_keeps_dollar_bodies_quotes_and_comments_whole() -> None:
