@@ -98,19 +98,9 @@ class Api:
         return r.json() if r.content else None
 
 
-def setup():
-    wait_healthy()
-    login = httpx.post(
-        CF + "/v1/auth/login",
-        json={"email": os.environ["PLATFORM_ADMIN_EMAIL"], "password": os.environ["PLATFORM_ADMIN_PASSWORD"]},
-        timeout=30,
-    )
-    login.raise_for_status()
-    api = Api(login.json()["access_token"])
-    teams = {t["slug"]: t for t in items(api("GET", "/v1/teams/?limit=100"), "teams")}
-    team = teams.get(TENANT) or api("POST", "/v1/teams/", {"name": TENANT, "slug": TENANT, "visibility": "private"})
-    users = {u["email"] for u in items(api("GET", "/v1/auth/email/admin/users?limit=100"), "users")}
-    # ContextForge refuses some random passwords ("too many sequential characters"): draw again
+def ensure_agent_user(api, users):
+    """Create the agent user or reset its password. ContextForge refuses some random passwords ("too many sequential
+    characters"): draw another one."""
     for attempt in range(1, 9):
         password = secrets.token_urlsafe(32)  # used once, not kept: nobody can log in as the agent (SEC-02)
         try:
@@ -127,11 +117,26 @@ def setup():
                 )
             else:
                 api("PATCH", f"/v1/auth/email/admin/users/{EMAIL}", {"password": password})
-            break
+            return
         except SystemExit as exc:
             if "Password" not in str(exc) or attempt == 8:
                 raise
             print(f"password refused (attempt {attempt}), drawing another", flush=True)
+
+
+def setup():
+    wait_healthy()
+    login = httpx.post(
+        CF + "/v1/auth/login",
+        json={"email": os.environ["PLATFORM_ADMIN_EMAIL"], "password": os.environ["PLATFORM_ADMIN_PASSWORD"]},
+        timeout=30,
+    )
+    login.raise_for_status()
+    api = Api(login.json()["access_token"])
+    teams = {t["slug"]: t for t in items(api("GET", "/v1/teams/?limit=100"), "teams")}
+    team = teams.get(TENANT) or api("POST", "/v1/teams/", {"name": TENANT, "slug": TENANT, "visibility": "private"})
+    users = {u["email"] for u in items(api("GET", "/v1/auth/email/admin/users?limit=100"), "users")}
+    ensure_agent_user(api, users)
     members = {
         m.get("user_email") or m.get("email") for m in items(api("GET", f"/v1/teams/{team['id']}/members"), "members")
     }
