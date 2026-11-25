@@ -261,3 +261,12 @@ fi
 | d8cdc61a… (B) | succeeded | 1 × attempt=1 succeeded | tg:tg-pilot:11 |
 
 Каждая заявка исполнена ровно один раз, без повторов и ошибок. Сверка журнала чата с БД (AC-M13-04…06) — через ~24 ч после последней отправки.
+
+## MCP через ContextForge: Apify (2026-11-25, решение владельца, без KB)
+
+- Влито `claude/m13-mcp-routing` (b0aaf4c); `tests/deploy` 56 passed. Добавлен `GXG_SKIP_GATEWAYS` (setup не регистрирует ещё не развёрнутый `kb-t-pilot`); KB не деплоился.
+- `unified_pdp.rules.json` — seed (пишется один раз), поэтому деплой его не обновил: переменная `GXG_CONFIG__UNIFIED_PDP_RULES` обновлена вручную из файла, ContextForge перезапущен (SUCCESS).
+- `pilot_agent.py setup`: gateway `apify-t-pilot` (id b16429d3…) и `vs-apify-t-pilot` созданы; слаги tools совпадают с PDP: `apify-t-pilot-<tool>` для всех 6. Старые токены агента отозваны (оставлен новейший).
+- probe от агента: `tools/list` = ровно 6 apify-tools (запускающих Actor'ы нет).
+- **Вызов tools не работает:** `search-apify-docs` и `search-actors` → `GXG_IDENTITY_DENIED - identity_unavailable (gateway is not a registered connector)` (плагин GxgIdentity, fail-closed, pre-invoke; до Apify запрос не доходит).
+- Не обходил: чтобы плагин пропустил вызов, gateway надо внести в `connectors` плагина, т.е. в реестр коннекторов; тогда плагин будет подписывать и отправлять identity-заголовок на внешний `mcp.apify.com`. Это решение за владельцем/оркестратором (нужен вариант «без identity-заголовка» для одного внешнего gateway либо отдельное исключение в плагине).
