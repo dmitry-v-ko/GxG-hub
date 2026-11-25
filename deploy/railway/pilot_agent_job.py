@@ -1,3 +1,4 @@
+# ruff: noqa: E501, PLC0415
 """One-off jobs of the pilot agent (M13). Runs inside the Approval image as a transient Railway service; the script
 arrives in the variable GXG_JOB_PY and `scripts/deploy/pilot_agent.py` reads the log. Never prints a secret value:
 the agent token leaves sealed (RSA-OAEP wrapped Fernet key, the public key is GXG_JOB_SEAL_PUBKEY), ids and tool
@@ -190,6 +191,100 @@ def revoke():
     print(f"kept {found[-1]['name'] if found else 'none'}", flush=True)
 
 
+def agent_status(url, token):
+    """HTTP status of a tools/call `propose` with no arguments as the agent: 200 = the token is accepted (the call
+    itself fails on validation and creates nothing), 401/403 = refused."""
+    body = {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {"name": "telegram-t-pilot-telegram-message-propose", "arguments": {}},
+    }
+    r = httpx.post(
+        url,
+        json=body,
+        headers={"Authorization": "Bearer " + token, "Accept": "application/json, text/event-stream"},
+        timeout=20,
+    )
+    return r.status_code
+
+
+def ac03():
+    """AC-M13-03 / OPS-02: the agent's tokens are revoked in ContextForge and the next propose is refused within a minute.
+    Prints the status before, then polls every 3 s and prints how many seconds the old token still worked."""
+    wait_healthy()
+    token = os.environ["PILOT_AGENT_TOKEN"]
+    url = f"{CF}/servers/{os.environ['GXG_PROBE_SERVER']}/mcp"
+    print(f"ac03 before revocation: http={agent_status(url, token)}", flush=True)
+    login = httpx.post(
+        CF + "/v1/auth/login",
+        json={"email": os.environ["PLATFORM_ADMIN_EMAIL"], "password": os.environ["PLATFORM_ADMIN_PASSWORD"]},
+        timeout=30,
+    )
+    login.raise_for_status()
+    api = Api(login.json()["access_token"])
+    prefix = f"agent-{TENANT}-{AGENT}-"
+    tokens = [
+        t
+        for t in items(api.http.get("/v1/tokens/admin/all?limit=500").json(), "tokens")
+        if str(t.get("name", "")).startswith(prefix)
+    ]
+    for t in tokens:
+        r = api.http.delete(f"/v1/tokens/admin/{t['id']}")
+        print(f"ac03 revoke {t['name']} -> {r.status_code}", flush=True)
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < 180:
+        code = agent_status(url, token)
+        elapsed = time.monotonic() - t0
+        if code in (401, 403):
+            print(f"ac03 refused http={code} after {elapsed:.0f}s", flush=True)
+            return
+        time.sleep(3)
+    print("ac03 STILL ACCEPTED after 180s", flush=True)
+
+
+def ex03():
+    """EX-03 on the live connector (the cases that need no executor key): execute without a token, with garbage, and with a
+    JWS of an unknown key and kid → refused before the provider. Prints HTTP statuses only."""
+    import ssl
+
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    ctx = ssl.create_default_context(cadata=os.environ["GXG_CA"])
+    base = (
+        os.environ.get("GXG_EXEC_URL", "https://telegram.railway.internal:8081")
+        + "/internal/v1/execute/"
+        + os.environ["GXG_EXEC_TOOL"]
+    )
+    now = int(time.time())
+    forged = jwt.encode(
+        {
+            "iss": "gxg-executor",
+            "aud": "telegram",
+            "sub": "00000000-0000-4000-8000-000000000000",
+            "jti": "00000000-0000-4000-8000-000000000001",
+            "iat": now,
+            "exp": now + 60,
+        },
+        Ed25519PrivateKey.generate(),
+        algorithm="EdDSA",
+        headers={"kid": "unknown-kid", "typ": "gxg-exec+jwt"},
+    )
+    cases = {
+        "no token": {},
+        "garbage token": {"Authorization": "Bearer not-a-jws"},
+        "unknown kid": {"Authorization": "Bearer " + forged},
+        "wrong scheme": {"Authorization": "Basic Zm9vOmJhcg=="},
+    }
+    with httpx.Client(verify=ctx, timeout=20) as client:
+        for name, headers in cases.items():
+            r = client.post(base, json={}, headers=headers)
+            print(f"ex03 {name}: http={r.status_code}", flush=True)
+        r = client.post(base.replace("/execute/", "/execute-nonexistent/"), json={}, headers={})
+        print(f"ex03 unknown route: http={r.status_code}", flush=True)
+
+
 def rpc(client, url, method, params=None, rid=1):
     body = {
         "jsonrpc": "2.0",
@@ -260,5 +355,5 @@ def probe():
 
 
 if __name__ == "__main__":
-    {"setup": setup, "probe": probe, "revoke": revoke}[os.environ.get("GXG_JOB", "")]()
+    {"setup": setup, "probe": probe, "revoke": revoke, "ac03": ac03, "ex03": ex03}[os.environ.get("GXG_JOB", "")]()
     sys.exit(0)

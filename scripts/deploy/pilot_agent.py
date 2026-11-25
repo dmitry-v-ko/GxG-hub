@@ -219,6 +219,37 @@ class Jobs:
         """`effects.status` of one intent as the agent (read-only), through ContextForge."""
         return self.probe(only="approval", call=("effects-status", json.dumps({"intent_id": intent_id})))
 
+    def ac03(self) -> int:
+        """AC-M13-03: revoke the agent's tokens and measure how long the old token still works; run `setup` afterwards."""
+        ids = json.loads(self.variables(VAULT)["PILOT_AGENT_IDS"])
+        lines = self.run(
+            "pilot-agent-ac03",
+            {
+                "GXG_JOB": "ac03", "GXG_PROBE_SERVER": ids["servers"]["vs-telegram-t-pilot"],
+                "PILOT_AGENT_TOKEN": f"${{{{{VAULT}.PILOT_AGENT_TOKEN}}}}",
+                "PLATFORM_ADMIN_EMAIL": "${{contextforge.PLATFORM_ADMIN_EMAIL}}",
+                "PLATFORM_ADMIN_PASSWORD": "${{contextforge.PLATFORM_ADMIN_PASSWORD}}",
+            },
+        )  # fmt: skip
+        for line in lines:
+            if line.startswith("ac03 ") or re.search(r"Traceback|Error|Failed|not found", line):
+                self.out.say("  " + line[:300])
+        return 0
+
+    def ex03(self) -> int:
+        """EX-03 on the live connector: execute with no or a forged token is refused (statuses only)."""
+        lines = self.run(
+            "pilot-agent-ex03",
+            {
+                "GXG_JOB": "ex03", "GXG_CA": "${{executor.GXG_CONFIG__SSL_CERT}}",
+                "GXG_EXEC_TOOL": os.environ.get("GXG_EXEC_TOOL", "telegram.message.execute"),
+            },
+        )  # fmt: skip
+        for line in lines:
+            if line.startswith("ex03 ") or re.search(r"Traceback|Error|Failed|not found", line):
+                self.out.say("  " + line[:300])
+        return 0
+
     def scope(self) -> int:
         lines = self.run(
             "pilot-agent-scope",
@@ -276,7 +307,9 @@ class Jobs:
 
 def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None, out: rd.Out | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope", "propose", "peek", "status"])
+    ap.add_argument(
+        "action", choices=["setup", "probe", "revoke", "scope", "propose", "peek", "status", "ac03", "ex03"]
+    )
     args = ap.parse_args(argv)
     out = out or rd.Out()
     try:
@@ -296,6 +329,8 @@ def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None
             "propose": jobs.propose,
             "peek": lambda: jobs.peek(os.environ["GXG_PEEK"]),
             "status": lambda: jobs.status(os.environ["GXG_INTENT"]),
+            "ac03": jobs.ac03,
+            "ex03": jobs.ex03,
         }
         return actions[args.action]()
     except rd.DeployError as exc:
