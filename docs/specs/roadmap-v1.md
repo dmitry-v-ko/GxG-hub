@@ -13,7 +13,7 @@
 | **A. Спеки и схемы** | Согласованные спеки, JSON Schema, smoke-тесты в CI | Schema smoke | Нет |
 | **B. Read-only PoC** | ContextForge (pinned digest, PostgreSQL) с двумя tenant'ами и двумя агентами в каждом; reference FastMCP-коннектор; KB через ContextForge после gap-аудита | SC-01…10, MC-01…04 | Только синтетические |
 | **C. Effect sandbox** | Approval Service + Executor + Web UI + notify-бот; `gxg-connector-kit`; тестовый `demo.message.propose` на fake provider | EX-01…24, MC-05 | Синтетические |
-| **D. Реальные чтения и Signals** | Telegram read-only (разрешённые чаты); Signals собирает через Hub и вызывает `propose` на fake provider | SI-01, SI-02 и повтор B на реальных коннекторах | Реальные, в пределах выданных прав |
+| **D. Реальные чтения и Signals** | Telegram read-only (разрешённые чаты), затем расширения `ext.*` только `read` ([MCC-11](mcp-connector-contract-v1.md#расширения)); Signals собирает через Hub и вызывает `propose` на fake provider | SI-01, SI-02, MC-06…MC-10 и повтор B на реальных коннекторах | Реальные, в пределах выданных прав |
 | **E. Первый реальный эффект** | `telegram.message.propose` включён для одного tenant'а и узкого allowlist'а чатов, только с решением человека | OPS-01, OPS-02, повтор EX на реальном коннекторе | Реальные |
 | **F. Production-кандидат** | Мониторинг, backup/restore, incident response, ротация секретов, политика хранения аудита, процедура изменений; клиенты-tenant'ы | OPS-03…05, полный прогон | Реальные |
 
@@ -40,6 +40,11 @@
 - [ ] Аудит связывает вызов с principal, tenant, tool и результатом без содержимого сообщений.
 - [ ] После рестарта политики и connections восстанавливаются.
 - [ ] Существующие KB, Signals и Voice работают без изменений.
+
+## Позже, не сейчас
+
+- Общий `hub.search_tools` и code mode на уровне Hub: возвращаемся, когда у одного агента становится ~30–50 tools. До порога хватает ядра и расширений на уровне коннектора.
+- Эффекты через расширения: не раньше этапа E, отдельными `propose`-tools; `ext.call` остаётся только `read`.
 
 ## GO / NO-GO
 
