@@ -53,7 +53,7 @@ def report(conn: psycopg.Connection) -> None:
             "SELECT intent_id, status, step_up_required FROM intents ORDER BY created_at DESC LIMIT 10"
         ):
             print(f"intent {intent_id}: status={status} step_up_required={step_up}")
-        for intent_id, attempt, state, error_code, op_id, completed in conn.execute(
+        for intent_id, attempt, state, error_code, op_id, _completed in conn.execute(
             "SELECT intent_id, attempt, state, error_code, provider_operation_id, completed_at FROM executions "
             "ORDER BY completed_at NULLS LAST, attempt LIMIT 20"
         ):
