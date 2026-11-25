@@ -48,6 +48,7 @@ GATEWAYS = {  # name -> upstream MCP url (Streamable HTTP)
     # (docs.apify.com/platform/integrations/mcp: no token only when `tools` has only these six tools).
     f"apify-{TENANT}": os.environ.get("GXG_APIFY_MCP", "https://mcp.apify.com?tools=" + ",".join(APIFY_TOOLS)),
 }
+SKIP = {g for g in os.environ.get("GXG_SKIP_GATEWAYS", "").split(",") if g}  # not deployed yet (e.g. kb-t-pilot)
 ALLOWED = {  # the tools the pilot agent may see and call (originalName); everything else stays unlisted and denied
     "telegram.messages.search",
     "telegram.thread.read",
@@ -138,7 +139,7 @@ def setup():
             "expires_in_days": 30,
         },
     )
-    for url in GATEWAYS.values():  # which addresses the private names resolve to (SSRF allow-list of ContextForge)
+    for url in [u for n, u in GATEWAYS.items() if n not in SKIP]:  # which addresses the private names resolve to (SSRF allow-list of ContextForge)
         host = urlsplit(url).hostname or url
         try:
             found = sorted({a[4][0] for a in socket.getaddrinfo(host, None)})
@@ -147,7 +148,7 @@ def setup():
         print(f"resolve {host} -> {found}", flush=True)
     gateways = {g["name"]: g for g in items(api("GET", "/v1/gateways?include_inactive=true&limit=0"), "gateways")}
     for name, url in GATEWAYS.items():
-        if name not in gateways:
+        if name not in gateways and name not in SKIP:
             gateways[name] = api(
                 "POST",
                 "/v1/gateways",

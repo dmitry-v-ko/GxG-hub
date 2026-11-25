@@ -172,6 +172,7 @@ class Jobs:
             "pilot-agent-setup",
             {
                 "GXG_JOB": "setup", "GXG_JOB_SEAL_PUBKEY": pem.decode(),
+                "GXG_SKIP_GATEWAYS": os.environ.get("GXG_SKIP_GATEWAYS", ""),
                 "PLATFORM_ADMIN_EMAIL": "${{contextforge.PLATFORM_ADMIN_EMAIL}}",
                 "PLATFORM_ADMIN_PASSWORD": "${{contextforge.PLATFORM_ADMIN_PASSWORD}}",
             },
