@@ -41,6 +41,19 @@
 
 Действие tool'а задаётся в manifest. `propose` не даёт права исполнить: исполнение всегда идёт через согласование ([Эффекты](effects-and-approval-v1.md)).
 
+## Группы расширений
+
+Tools расширения (`<domain>.ext.*`, [MCC-11](mcp-connector-contract-v1.md#расширения)) разрешаются группой записей реестра. Право на ресурс (`check`/`allowed`, GR-01…GR-17) при этом **сохраняется**: группа лишь сужает, какие записи доступны. В v1 ресурс записи реестра — чат (`scope: single`); записи не про чат в реестр не включаются.
+
+- **GR-19.** Группа — значение в `actions` grant'а: `ext:<класс>[:<подгруппа>]`, например `ext:read`, `ext:read:members`. Класс — `effect_class` записи реестра, подгруппа — необязательное поле `group` записи. Действие `ext:read` покрывает подгруппы класса; `ext:read:members` — только себя. Домен берётся из RID ресурса grant'а.
+- **GR-20.** Действие `ext` без класса (`ext`, `ext:*`, неизвестный класс) недопустимо: его отклоняют схема, `gxg-policy validate` и загрузка bundle.
+- **GR-21.** `ext:read` разрешает только записи класса `read`. Записи других классов `ext.call` не исполняет при любой группе ([MCC-11](mcp-connector-contract-v1.md#расширения) п.3).
+- **GR-22.** Включение записи для tenant'а — блок `extensions.enabled: [<domain>:<имя записи>]` в файле tenant'а; по умолчанию запись выключена, привязки к группам агентов нет. Запись доступна, если она в списке или в реестре у неё `enabled_default: true` (только `read`). Выданная группа сама ничего не включает; выключенная запись возвращает `effect_disabled`.
+- **GR-23.** Для `ext.call` нужны оба права: `read` на чат (`check`) и действие `ext:…`, покрывающее группу записи, в grant'е на этот же чат. Порядок отказов: неизвестная запись — `not_found`; нет права на ресурс — `not_found`/`resource_forbidden` по GR-17; запись не-`read` — `permission_denied` с указанием `propose`-tool'а; запись выключена — `effect_disabled`. `ext.search` отдаёт только включённые записи класса `read`, входящие в право вызывающего.
+- **GR-24.** Новое действие `ext:…` и новая запись в `extensions.enabled` — расширение прав (`widening` в `gxg-policy diff`, GR-10). Аудит `ext.call` содержит имя записи, её версию и группу (`ext:<класс>[:<подгруппа>]`).
+
+Интерфейс: `ExtGrantResolver.ext_check(tenant, principal, group, rid)` и `ext_enabled(tenant, domain, capability)`.
+
 ## Формат файла tenant'а
 
 Схема: [resource-grants.schema.json](../../schemas/resource-grants.schema.json). Пример: [policies/tenants/example.yaml](../../policies/tenants/example.yaml).
