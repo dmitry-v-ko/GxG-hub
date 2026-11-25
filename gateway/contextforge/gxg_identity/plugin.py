@@ -20,7 +20,7 @@ from cpex.framework import (
 )
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
-from .core import Config, Denied, claims_for, sign, with_identity
+from .core import Config, Denied, claims_for, sign, with_identity, without_identity
 
 
 class GxgIdentityPlugin(Plugin):
@@ -54,6 +54,12 @@ class GxgIdentityPlugin(Plugin):
                 violation=PluginViolation(
                     reason="identity_unavailable", description=str(exc), code="GXG_IDENTITY_DENIED", details={}
                 ),
+            )
+        if claims is None:  # external gateway: the caller was checked, no identity leaves ContextForge
+            headers = without_identity(payload.headers.model_dump() if payload.headers else {})
+            return ToolPreInvokeResult(
+                modified_payload=payload.model_copy(update={"headers": HttpHeaderPayload(root=headers)}),
+                metadata={"gxg_identity": "external"},
             )
         token = sign(claims, self._key, self._cfg.kid)
         # shortcut: payload.headers is deprecated in cpex 0.1.4, v1.1.1 applies only it upstream (ADR-0001)

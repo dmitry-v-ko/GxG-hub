@@ -133,3 +133,29 @@ def test_adapter_and_kit_verifier_agree() -> None:
     assert (ident.tenant_id, ident.principal, ident.request_id) == ("t-alpha", "agent:t-alpha:reader", "req-1")
     with pytest.raises(TokenError, match="token rejected"):
         verifier.verify(headers, tool="demo.notes.search", arguments=ARGS)  # the same assertion again: replay
+
+
+def test_external_gateway_gets_no_claims_but_the_caller_is_still_checked() -> None:
+    cfg = core.Config.parse(
+        {
+            "kid": "k",
+            "tenants": {TEAM_A: {"tenant": "t-alpha", "agent_domain": "t-alpha.agents.example.com"}},
+            "connectors": {GW: "demo"},
+            "external": ["gw-apify"],
+        }
+    )
+    assert core.claims_for(cfg, **ok_inputs(gateway_id="gw-apify")) is None
+    with pytest.raises(core.Denied):  # same caller checks as for a connector
+        core.claims_for(cfg, **ok_inputs(gateway_id="gw-apify", email="x@evil.example.com"))
+    with pytest.raises(core.Denied):  # a gateway that is neither connector nor external stays denied
+        core.claims_for(cfg, **ok_inputs(gateway_id="gw-other"))
+    assert core.claims_for(cfg, **ok_inputs()) is not None
+
+
+def test_external_never_overrides_a_connector_and_drops_incoming_identity() -> None:
+    cfg = core.Config.parse(
+        {"kid": "k", "tenants": {}, "connectors": {GW: "demo"}, "external": [GW]},
+    )
+    assert cfg.external == {GW} and GW in cfg.connectors
+    out = core.without_identity({"x-gxg-identity": "forged", "Accept": "a"})
+    assert out == {"Accept": "a"}
