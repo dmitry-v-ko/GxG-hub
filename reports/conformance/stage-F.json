@@ -1,11 +1,11 @@
 {
   "stage": "F",
-  "commit": "d76708a",
-  "run_at": "2026-11-24T23:53:13Z",
+  "commit": "83ce8e9",
+  "run_at": "2026-11-25T21:01:30Z",
   "command": "uv run python scripts/ci/stage_f.py --stand stand/secrets/junit/fresh.xml --stand stand/secrets/junit/after-restart.xml --stand stand/secrets/junit/after-recreate.xml",
   "pytest_exit": 1,
   "counts": {
-    "passed": 48,
+    "passed": 49,
     "not_run": 1,
     "manual": 1
   },
@@ -435,6 +435,47 @@
         },
         {
           "test": "connectors/demo/tests/test_effects.py::test_execute_quota_answers_429_before_dispatch",
+          "cases": 1,
+          "passed": 1
+        }
+      ]
+    },
+    {
+      "id": "EX-26",
+      "status": "passed",
+      "tests": [
+        {
+          "test": "approval/tests_db/test_session_decision.py::test_an_intent_without_step_up_is_decided_in_the_session",
+          "cases": 1,
+          "passed": 1
+        },
+        {
+          "test": "approval/tests_db/test_session_decision.py::test_reject_in_the_session",
+          "cases": 1,
+          "passed": 1
+        },
+        {
+          "test": "approval/tests_db/test_session_decision.py::test_an_intent_with_step_up_is_refused_and_unchanged",
+          "cases": 1,
+          "passed": 1
+        },
+        {
+          "test": "approval/tests_db/test_session_decision.py::test_another_approver_is_refused",
+          "cases": 1,
+          "passed": 1
+        },
+        {
+          "test": "approval/tests_db/test_session_decision.py::test_stale_version_or_args_hash_is_refused",
+          "cases": 1,
+          "passed": 1
+        },
+        {
+          "test": "approval/tests_db/test_session_decision.py::test_the_ui_role_cannot_call_the_deciders_function_or_write_decisions",
+          "cases": 1,
+          "passed": 1
+        },
+        {
+          "test": "approval/ui/tests_db/test_session_decision.py::test_csrf_foreign_approver_and_stale_card_are_refused",
           "cases": 1,
           "passed": 1
         }
