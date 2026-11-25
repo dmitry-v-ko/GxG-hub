@@ -47,8 +47,7 @@ SCOPE_PY = (
     "[print('SCOPE',i,r,repr(t.get(r,{}).get('title')),t.get(r,{}).get('kind'),flush=True) for i,r in enumerate(refs)]\n"
 )
 Q_DEPLOY = "mutation Deploy($s: String!, $e: String!) { serviceInstanceDeployV2(serviceId: $s, environmentId: $e) }"
-Q_DEPLOYMENTS = """query Deployments($input: DeploymentListInput!) { deployments(first: 1, input: $input) {
-  edges { node { id status } } } }"""
+Q_DEPLOYMENT = "query Deployment($d: String!) { deployment(id: $d) { status } }"
 Q_LOGS = "query Logs($d: String!, $l: Int) { deploymentLogs(deploymentId: $d, limit: $l) { message } }"
 Q_BUILD_LOGS = "query BuildLogs($d: String!, $l: Int) { buildLogs(deploymentId: $d, limit: $l) { message } }"
 Q_UPSERT_ONE = "mutation Upsert($input: VariableUpsertInput!) { variableUpsert(input: $input) }"
@@ -137,20 +136,18 @@ class Jobs:
                     ),
                    "restartPolicyType": "NEVER"},
         )  # fmt: skip
-        self.api.call(Q_DEPLOY, s=dep.service_ids[name], e=dep.env_id)
+        started = str(self.api.call(Q_DEPLOY, s=dep.service_ids[name], e=dep.env_id)["serviceInstanceDeployV2"])
         self.out.say(f"job {name} started")
-        end, status, deployment = time.monotonic() + timeout_s, "", ""
+        # Follow the deployment this call started, not "the latest one": serviceConnect starts a deployment of its own
+        # (from the branch the service was created on), and when that one is the latest, the job reports a build failure
+        # of the wrong source («not found at deploy/railway/approval.Dockerfile»).
+        end, status, deployment = time.monotonic() + timeout_s, "", started
         try:
             while time.monotonic() < end:
                 time.sleep(10)
-                edges = self.api.call(
-                    Q_DEPLOYMENTS, input={"projectId": dep.project_id, "environmentId": dep.env_id,
-                                          "serviceId": dep.service_ids[name]},
-                )["deployments"]["edges"]  # fmt: skip
-                if edges:
-                    deployment, status = edges[0]["node"]["id"], edges[0]["node"]["status"]
-                    if status in FINAL:
-                        break
+                status = str(self.api.call(Q_DEPLOYMENT, d=started)["deployment"]["status"])
+                if status in FINAL:
+                    break
             lines: list[str] = []
             for _ in range(6):  # the log pipeline lags behind the status
                 time.sleep(10)
