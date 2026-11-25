@@ -66,10 +66,10 @@ def test_a_run_of_the_job_reissues_a_fresh_bundle_for_every_consumer(capsys: pyt
     assert seed not in seen.out + seen.err  # the key is used in memory only
     assert sorted(mock.deploys) == sorted(mock.sid(n) for n in pb.CONSUMERS)  # every reader is redeployed
     public = pb.public_key(seed)
-    for name in pb.CONSUMERS:
+    for name, (keys_var, _) in pb.CONSUMERS.items():
         variables = mock.by_name(name)["vars"]
-        assert pb.KID in variables["TELEGRAM_BUNDLE_KEYS" if name == "telegram" else "GXG_BUNDLE_KEYS"]
-        assert public in variables["TELEGRAM_BUNDLE_KEYS" if name == "telegram" else "GXG_BUNDLE_KEYS"]
+        assert pb.KID in variables[keys_var]
+        assert public in variables[keys_var]
         with tarfile.open(fileobj=io.BytesIO(base64.b64decode(variables["GXG_BUNDLE_B64"])), mode="r:gz") as tar:
             bundle = tar.extractfile("grants-bundle.json")
             sig = tar.extractfile("grants-bundle.json.sig")

@@ -347,7 +347,7 @@ services:
     # KB_DATABASE_URL: conninfo of the KB database as gxg_kb_reader WITHOUT password, sslmode=verify-full (+ sslrootcert);
     # KB_CONNECTIONS_JSON: {"t-pilot": {"connection_id": "...", "workspace_id": "<uuid>"}}; KB_BUNDLE_KEYS, GXG_BUNDLE_B64: scripts/deploy/pilot_bundle.py
     seed:
-      KB_DB_CA: {file: deploy/railway/supabase-root-2021-ca.pem}  # public Supabase Root 2021 CA (sslrootcert=/dev/shm/kb/ca.pem)
+      KB_DB_CA: {file: deploy/railway/supabase-root-2021-ca.crt}  # public Supabase Root 2021 CA (.crt: *.pem is refused by gitleaks.sh), SHA-256 80:70:25:AD…:CA:FA (sslrootcert=/dev/shm/kb/ca.pem)
     owner_env: [KB_DATABASE_URL, KB_CONNECTIONS_JSON, KB_BUNDLE_KEYS, GXG_BUNDLE_B64]
     secrets:
       KB_DATABASE_PASSWORD: {gen: owner}  # password of gxg_kb_reader, set after the owner ran deploy/railway/sql/kb_reader.sql

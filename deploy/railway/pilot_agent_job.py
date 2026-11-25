@@ -139,7 +139,9 @@ def setup():
             "expires_in_days": 30,
         },
     )
-    for url in [u for n, u in GATEWAYS.items() if n not in SKIP]:  # which addresses the private names resolve to (SSRF allow-list of ContextForge)
+    for url in [
+        u for n, u in GATEWAYS.items() if n not in SKIP
+    ]:  # which addresses the private names resolve to (SSRF allow-list of ContextForge)
         host = urlsplit(url).hostname or url
         try:
             found = sorted({a[4][0] for a in socket.getaddrinfo(host, None)})

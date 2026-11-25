@@ -93,9 +93,13 @@ class SourceEventContractTests(unittest.TestCase):
         v = validator('source-event.schema.json')
         ref = 'tgc1_' + 'A' * 32
         valid = {
-            'schema_version': 1, 'event_id': '11111111-1111-5111-8111-111111111111',
-            'type': 'telegram.message.created', 'tenant_id': 't-alpha',
-            'source_ref': f'telegram:c-1/chat/{ref}', 'chat_ref': ref, 'message_id': 11,
+            'schema_version': 1,
+            'event_id': '11111111-1111-5111-8111-111111111111',
+            'type': 'telegram.message.created',
+            'tenant_id': 't-alpha',
+            'source_ref': f'telegram:c-1/chat/{ref}',
+            'chat_ref': ref,
+            'message_id': 11,
             'sent_at': '2026-03-05T00:00:11Z',
         }
         v.validate(valid)
