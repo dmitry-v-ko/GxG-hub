@@ -287,3 +287,20 @@ fi
 - Шлюз `kb-t-pilot` (c7152672…) — коннектор (identity-заголовок), `connectors` плагина: `…: kb`; в registry.yaml kb не добавлен (нет ключа сервиса, KB только читает, intents не создаёт). PDP-слаги `kb-t-pilot-kb-documents-search/-get`, `kb-t-pilot-kb-context-get` совпали. Токены агента: оставлен новейший.
 - probe от агента: `tools/list` = 3 kb-tools; `kb.documents.search` ("tool") → документы KB с `source_ref` `kb:kb-pilot/collection/…`.
 - Заметка: `pilot_agent setup` падает случайно при пароле агента с «too many sequential characters» (ContextForge) — повторить запуск.
+
+## Итоговая сверка M13 (AC-M13-04…06), 2026-11-25 21:16Z
+
+Запрос: job только на чтение (`default_transaction_read_only=on`) к approval-db (intents, decisions, executions, audit_events) и к зеркалу сообщений в telegram-db (`telegram_archive.messages` чата, куда шли отправки; тексты не читались, только id, время, длина). Скрипт: `scripts/deploy/reconcile_job.py`. Временные job'ы удалены (`--finalize`). Ничего не отправлялось и не менялось.
+
+| intent | state | decision (step_up, decided_by) | provider_operation_id | в чате |
+|---|---|---|---|---|
+| 12c724e6… | succeeded (1 execution, attempt 1) | approve (step_up=false, oidc:https://accounts.google.com:1150…2610) | tg:tg-pilot:9 | да (07:34:11Z) |
+| 55258291… | succeeded (1 execution, attempt 1) | approve (step_up=false, oidc:…2610) | tg:tg-pilot:10 | да (17:42:41Z) |
+| d8cdc61a… | succeeded (1 execution, attempt 1) | approve (step_up=false, oidc:…2610) | tg:tg-pilot:11 | да (17:42:48Z) |
+
+- Intents по состояниям: succeeded 3, прочих 0 (нет pending, outcome_unknown, failed). Не терминальных нет.
+- AC-M13-04: 3 сообщения (9, 10, 11) ↔ 3 intents ↔ 3 executions; расхождений в обе стороны 0; в зеркале чата с 07:24Z других сообщений нет; повторных отправок 0; provider_operation_id, встречающихся у более чем одной execution: 0.
+- AC-M13-05: отправок без decisions.decision='approve' от человека: 0. Все три одобрены владельцем (oidc:…), step_up=false (AS-30a, intent без step-up, решение одной кнопкой по политике `approval/t-pilot.yaml`).
+- AC-M13-06: intents/executions в outcome_unknown старше 24 ч: 0.
+- Executions на intent: максимум 1 (attempt 1). audit_events: propose 3, approve 3, reserve 3, dispatch 3, complete_succeeded 3, passkey_enrolled 1, admin_passkey_invite 1.
+- Оговорка: «сторона чата» — зеркало telegram-db (архив scope-чата) и provider operation id коннектора; живой список сообщений Telegram API не запрашивался. Контрольная сверка — завтра.
