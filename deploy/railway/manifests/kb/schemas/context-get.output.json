@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kb.context.get output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["context", "documents", "complete", "partial_reasons", "source_refs"],
+  "properties": {
+    "context": {"type": "string", "maxLength": 8000},
+    "documents": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "source_ref"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "maxLength": 64},
+          "title": {"type": "string", "maxLength": 300},
+          "source_ref": {"type": "string", "maxLength": 512}
+        }
+      }
+    },
+    "complete": {"type": "boolean"},
+    "partial_reasons": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["truncated", "other"]}
+    },
+    "source_refs": {"type": "array", "maxItems": 10, "items": {"type": "string", "maxLength": 512}}
+  }
+}

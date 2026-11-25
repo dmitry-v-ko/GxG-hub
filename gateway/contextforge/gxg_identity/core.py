@@ -38,6 +38,8 @@ class Config:
     kid: str
     tenants: Mapping[str, Tenant]  # ContextForge team_id -> tenant
     connectors: Mapping[str, str]  # ContextForge gateway_id -> aud (connector id)
+    # PILOT EXCEPTION to MCC-01 (owner decision 2026-11-25): third-party MCP gateways that get NO identity header at all
+    external: frozenset[str] = frozenset()
 
     @classmethod
     def parse(cls, raw: Mapping[str, Any]) -> Config:
@@ -45,6 +47,7 @@ class Config:
             kid=str(raw["kid"]),
             tenants={str(k): Tenant(str(v["tenant"]), str(v["agent_domain"])) for k, v in raw["tenants"].items()},
             connectors={str(k): str(v) for k, v in raw["connectors"].items()},
+            external=frozenset(str(g) for g in raw.get("external", [])),
         )
 
 
@@ -67,8 +70,9 @@ def claims_for(
     arguments: Mapping[str, Any] | None,
     request_id: str,
     now: Callable[[], float] = time.time,
-) -> dict[str, Any]:
-    """Claims for the caller of this tool, or `Denied`. Inputs are what ContextForge resolved, never the request."""
+) -> dict[str, Any] | None:
+    """Claims for the caller of this tool, or `Denied`; None for an `external` gateway (all the caller checks below
+    still apply, but nothing is signed or sent). Inputs are what ContextForge resolved, never the request."""
     if not email:
         raise Denied("no authenticated user")
     if not tool_name:
@@ -83,6 +87,8 @@ def claims_for(
     local, at, domain = email.partition("@")
     if not at or not local or domain != tenant.agent_domain:
         raise Denied("caller is not an agent of this tenant")
+    if gateway_id and gateway_id in cfg.external and gateway_id not in cfg.connectors:
+        return None
     aud = cfg.connectors.get(gateway_id) if gateway_id else None
     if aud is None:
         raise Denied("gateway is not a registered connector")
@@ -104,6 +110,11 @@ def claims_for(
 
 def sign(claims: Mapping[str, Any], key: Any, kid: str) -> str:
     return jwt.encode(dict(claims), key, algorithm="EdDSA", headers={"typ": TYP, "kid": kid})
+
+
+def without_identity(headers: Mapping[str, str]) -> dict[str, str]:
+    """Outgoing headers for an external gateway: any incoming X-GxG-Identity dropped, nothing of ours added."""
+    return {k: v for k, v in headers.items() if k.lower() != HEADER.lower()}
 
 
 def with_identity(headers: Mapping[str, str], token: str) -> dict[str, str]:

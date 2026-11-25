@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kb.collections.list output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["collections", "complete", "partial_reasons"],
+  "properties": {
+    "collections": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "source_ref"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 256},
+          "source_ref": {"type": "string", "maxLength": 512}
+        }
+      }
+    },
+    "complete": {"type": "boolean"},
+    "partial_reasons": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["truncated", "other"]}
+    }
+  }
+}

@@ -329,3 +329,32 @@ def test_as28_refuses_the_ui_service_key_elsewhere() -> None:
     assert "telegram: secret GXG_SECRET__GXG_UI_SVC_KEY (ui_svc_key) is not allowed" in " | ".join(
         rd.validate_spec(bad)
     )
+
+
+def test_kb_service_is_private_read_only_and_gets_the_adapter_keys(deployed: MockRailway) -> None:
+    """M6 KB service on Railway: from its own repository, identity keys by reference, password a secret."""
+    spec = rd.load_spec()["services"]["kb"]
+    assert spec["source"]["repo"] == "dmitry-v-ko/gxg-kb-service" and spec["port"] == 8080
+    assert not (spec.get("domain") or spec.get("domains") or spec.get("tcp_proxy"))
+    kb = deployed.by_name("kb")
+    assert kb["trigger"]["repository"] == "dmitry-v-ko/gxg-kb-service"
+    assert kb["vars"]["KB_IDENTITY_KEYS"] == "${{contextforge.GXG_IDENTITY_KEYS}}"
+    assert set(rd.secrets_of(spec)) == {"KB_DATABASE_PASSWORD"}  # never inside KB_DATABASE_URL
+    for name in ("KB_DATABASE_URL", "KB_CONNECTIONS_JSON", "KB_BUNDLE_KEYS", "GXG_BUNDLE_B64"):
+        assert name in spec["owner_env"]
+
+
+def test_kb_reader_sql_is_read_only_and_has_no_password() -> None:
+    sql = (ROOT / "deploy/railway/sql/kb_reader.sql").read_text("utf-8")
+    code = "\n".join(ln for ln in sql.splitlines() if not ln.lstrip().startswith("--")).upper()
+    assert "PASSWORD" not in code and "GRANT USAGE ON SCHEMA KB TO GXG_KB_READER" in code
+    for word in ("DROP ", "DELETE", "TRUNCATE", "INSERT", "UPDATE ON", "SERVICE_ROLE", "BYPASSRLS;"):
+        assert word not in code
+    assert "BYPASSRLS" not in code and code.count("GRANT SELECT") == 2  # Supabase: not nameable, off by default
+
+
+def test_the_bundle_reaches_kb_with_kit_keys() -> None:
+    from scripts.deploy import pilot_bundle
+
+    assert pilot_bundle.CONSUMERS["kb"] == ("KB_BUNDLE_KEYS", pilot_bundle.B64_VAR)
+    assert (ROOT / "deploy/railway/manifests/kb/gxg-manifest.yaml").is_file()  # its tools are in the bundle's registry

@@ -234,3 +234,56 @@ fi
 ## Решение одной кнопкой (AS-30a, EX-26)
 
 Решение владельца 2026-11-24, спека `approval-service-v1.md` AS-30/AS-30a, EX-26 (ветка спеки `claude/admiring-planck-vzys0x`, `895c858`). Миграция `0007_session_decision.py`: `gxg_decide_session(principal, intent, version, args_hash, decision, comment)`, `SECURITY DEFINER`, `EXECUTE` только у `gxg_ui`; проверки как у решения через `decider` (статус, версия, хеш, срок, замороженные `allowed_approvers`, не requester), отказ при `step_up_required`, запись `decisions` с `step_up = false` и `decided_by = oidc:…`. `ui`: карточка intent'а без step-up с кнопками «Одобрить» / «Отклонить» без WebAuthn (CSRF, повторная проверка текущего bundle, хеш аргументов), со step-up прежний путь через `decider`; мобильная вёрстка (одна колонка, кнопки на всю ширину). Деплой: `migrate` и `ui` на `73fd4ed`, SUCCESS. Живая проверка (read-only задача): `gxg_decide_session` существует, `EXECUTE` только у `gxg_ui`; `gxg_decide` только у `gxg_decider`; заявка `12c724e6-25c1-4d81-a8ed-31ee6565fb72`: `status=pending_approval`, **`step_up_required=False`**, то есть владелец одобрит её кнопкой. **Не запускалось (нет Docker и PostgreSQL):** тесты `approval/tests_db/test_session_decision.py`, `approval/ui/tests_db/test_session_decision.py` (EX-26) и правки `test_roles.py`/`test_decisions.py`; SQL миграции проверен парсером, а работу функции подтверждает только живая проверка выше. Офлайн: 249 passed, ruff и `mypy --strict` чисто.
+
+## Первая отправка выполнена
+
+Заявка `12c724e6-25c1-4d81-a8ed-31ee6565fb72` одобрена владельцем кнопкой в UI (AS-30a, без step-up) и исполнена: `effects.status` через ContextForge от имени агента — `succeeded` (версия 5, `received_approvals` 1 из 1, правило `tg-propose-human`, `business_task_id` `m13-first-send`). По базе (read-only задача, удалена): `intents.status = succeeded`, **одна** запись в `executions` (`attempt = 1`, `state = succeeded`, `error_code` пуст, `provider_operation_id = tg:tg-pilot:9`, завершено 2026-11-25 07:34:12 UTC), других исполнений нет, то есть отправка ровно одна. Чат «GxG Agents», текст «GxG Hub: тестовая отправка пилота». Сверку со стороны Telegram (сообщение с id 9 в чате, один раз) может сделать владелец глазами.
+
+Пилот M13 стартует с этой отправки (AC-M13-01…06 из `docs/implementation-plan-v1.md`). Из эксплуатации на 14 дней: перевыпуск bundle не реже раза в 12 ч (`pilot_bundle.py --deploy`, срок действия 24 ч), токен агента в `pilot-agent` живёт 30 дней (выпущен 2026-11-24), grants агента до 2026-12-24.
+
+Сбои сборки одноразовых задач («not found at deploy/railway/approval.Dockerfile») объяснены и исправлены (`e7b3722`): `serviceConnect` запускает собственный деплой ветки по умолчанию, а скрипт брал «последний деплой» сервиса; теперь он следит за деплоем, который сам запустил.
+
+## Сжатая приёмка M13 (решение владельца 2026-11-25), ход
+
+- **AC-M13-02 (OPS-01), часть до одобрения:** созданы две заявки в «GxG Agents» (текст «GxG Hub: приёмка AC-M13-02, заявка A / B»): `55258291-1b31-4a9b-8dcf-7cd970c1b5f8` (A), `d8cdc61a-2c1b-4606-8647-1ba757fafc28` (B), обе `pending_approval`, `step_up_required=false`. В 17:33 UTC перезапущены все прикладные сервисы (`api`, `mcp`, `executor`, `sweeper`, `decider`, `ui`, `admin`, `notifier`, `telegram`, `contextforge`; Postgres и `migrate` не трогались), все вернулись в SUCCESS. По базе после рестарта: A и B по-прежнему `pending_approval`, у первой отправки `12c724e6…` всё ещё одна запись в `executions` (`attempt=1`, `succeeded`, `tg:tg-pilot:9`): рестарт ничего не отправил повторно. Осталось: владелец одобряет A и B, затем проверяю, что у каждой ровно одно исполнение. Состояния `executing` и `outcome_unknown` на живой системе без инъекции сбоя не воспроизвести; они покрыты офлайн-стендом (stage-C).
+- **AC-M13-03 (OPS-02):** в 17:37 UTC токены агента отозваны в ContextForge (admin API); тот же вызов `propose` (с пустыми аргументами, ничего не создаёт) до отзыва давал HTTP 200, сразу после отзыва — HTTP 401 (задержка 0 с при пороге 60 с; `AUTH_CACHE_REVOCATION_TTL=5`). Агенту выпущен новый токен (`pilot-agent`). Ослабление политики: `gxg-policy diff` на проверочной паре (из bundle убран grant `propose`) показывает `widening: 1`; CI-гейт `scripts/ci/grants_widening.sh` на push красный при любом расширении (на PR — по метке владельца), то есть alert = красный гейт.
+- **AC-M13-01 (EX-03…05, EX-11 на живом коннекторе):** EX-03 частично: `execute` на `https://telegram.railway.internal:8081` без токена, с мусорным токеном, с неверной схемой авторизации и с JWS неизвестного ключа и `kid` → HTTP 401, до провайдера (в чате нет сообщений от этих вызовов). Не проверено вживую: EX-03 с валидной подписью и чужим `aud`/истёкшим `exp`, EX-04 (повтор `jti` и `dispatch`), EX-05 (подмена args в токене), EX-11 (провайдер исполнил, ответ потерян): им нужен ключ подписи executor'а или инъекция сбоя, которых в боевых сервисах нет (AS-28). Они остаются на офлайн-стенде (stage-C, EX-01…EX-25) и не должны считаться пройденными на «живом Telegram».
+- **AC-M13-04…06:** через 24 ч после последней отправки: сверка журнала чата с БД (каждое сообщение = ровно один intent `succeeded`/`reconciled_succeeded` с `decision=approve` человека; 0 сообщений без такого решения; 0 `outcome_unknown` старше 24 ч). Read-only задача `db-init` для таких отчётов уже есть (intents, executions); журнал чата со стороны Telegram сверяет владелец.
+
+## AC-M13-02: исполнение двух одобренных заявок (2026-11-25)
+
+Проверка по БД approval (read-only отчёт db-init), затем `--finalize` (временные job удалены):
+
+| intent | status | execution | op |
+|---|---|---|---|
+| 12c724e6… (первая отправка) | succeeded | 1 × attempt=1 succeeded | tg:tg-pilot:9 |
+| 55258291… (A) | succeeded | 1 × attempt=1 succeeded | tg:tg-pilot:10 |
+| d8cdc61a… (B) | succeeded | 1 × attempt=1 succeeded | tg:tg-pilot:11 |
+
+Каждая заявка исполнена ровно один раз, без повторов и ошибок. Сверка журнала чата с БД (AC-M13-04…06) — через ~24 ч после последней отправки.
+
+## MCP через ContextForge: Apify (2026-11-25, решение владельца, без KB)
+
+- Влито `claude/m13-mcp-routing` (b0aaf4c); `tests/deploy` 56 passed. Добавлен `GXG_SKIP_GATEWAYS` (setup не регистрирует ещё не развёрнутый `kb-t-pilot`); KB не деплоился.
+- `unified_pdp.rules.json` — seed (пишется один раз), поэтому деплой его не обновил: переменная `GXG_CONFIG__UNIFIED_PDP_RULES` обновлена вручную из файла, ContextForge перезапущен (SUCCESS).
+- `pilot_agent.py setup`: gateway `apify-t-pilot` (id b16429d3…) и `vs-apify-t-pilot` созданы; слаги tools совпадают с PDP: `apify-t-pilot-<tool>` для всех 6. Старые токены агента отозваны (оставлен новейший).
+- probe от агента: `tools/list` = ровно 6 apify-tools (запускающих Actor'ы нет).
+- **Вызов tools не работает:** `search-apify-docs` и `search-actors` → `GXG_IDENTITY_DENIED - identity_unavailable (gateway is not a registered connector)` (плагин GxgIdentity, fail-closed, pre-invoke; до Apify запрос не доходит).
+- Не обходил: чтобы плагин пропустил вызов, gateway надо внести в `connectors` плагина, т.е. в реестр коннекторов; тогда плагин будет подписывать и отправлять identity-заголовок на внешний `mcp.apify.com`. Это решение за владельцем/оркестратором (нужен вариант «без identity-заголовка» для одного внешнего gateway либо отдельное исключение в плагине).
+
+### Apify: вызовы заработали (2026-11-25)
+- Плагин `gxg_identity`: новая опция `external: [gateway_id]` — для внешнего шлюза все проверки вызывающего (агент своего tenant, команда, токен) остаются, но identity-заголовок не подписывается и не отправляется, входящий `X-GxG-Identity` отбрасывается. Тесты плагина: 27 passed. `plugins.yaml`: `external: [b16429d3…]` (apify-t-pilot); seed обновлён вручную, ContextForge пересобран.
+- probe от агента: `search-apify-docs` («webhooks») и `search-actors` («instagram scraper», 3 актора) возвращают результаты через ContextForge.
+
+### KB (подготовка, сервис не стартует)
+- Влито 9a7d73c (kb_reader.sql под Supabase); тест kb_reader.sql поправлен (BYPASSRLS не называется в SQL).
+- `policies/pilot/tenants/t-pilot.yaml`: connection `kb-pilot` (domain kb), grant `kb-pilot-read` (read; collections tool, blueprint, insight, growth_hack). Бандл перевыпущен (f4c10e38…, built 18:24Z) и выложен в api/executor/ui/notifier/telegram/kb.
+- Сервис `kb` создан. Переменные: KB_DB_CA (публичный Supabase Root 2021 CA, seed из `deploy/railway/supabase-root-2021-ca.pem`), KB_IDENTITY_KEYS, KB_BUNDLE_KEYS, GXG_BUNDLE_B64, KB_CONNECTIONS_JSON (`t-pilot` → `kb-pilot`, workspace 0000…0000), KB_DATABASE_URL = `postgresql://gxg_kb_reader.yojcyedwlgbperliefkd@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/dev/shm/kb/ca.pem` (без пароля; хост пулера aws-1 выбран по региону eu-west-1, не проверен; verify-full по имени хоста пулера не проверен). KB_DATABASE_PASSWORD не задан (за оркестратором).
+- **Блокер сборки:** `gxg-kb-service@claude/m6-kb-service` Dockerfile не принимается Railway: строка 14 `RUN --mount=type=secret,id=ca-bundle,required=false` (Railway допускает только `type=cache`) и строка 28 `VOLUME` (не поддерживается). Деплой `542bc08d…` FAILED на разборе Dockerfile. Мне нет доступа к репозиторию сервиса: нужно убрать mount=secret и VOLUME (или дать отдельный Dockerfile для Railway).
+
+### KB через ContextForge: работает (2026-11-25)
+- `Dockerfile.railway` (gxg-kb-service e2ca1f1) собирается, сервис `kb` SUCCESS. Пароль роли записан оркестратором; start-скрипт пишет его в `/dev/shm/kb/db.password` и делает `unset`.
+- Хост БД: `aws-0-eu-west-1.pooler.supabase.com:5432` (user `gxg_kb_reader.yojcyedwlgbperliefkd`, `sslmode=verify-full`, Supabase Root 2021 CA). На `aws-1` TLS и имя хоста тоже проходят (проверено job'ом из Railway), но KB отвечал `temporarily_unavailable`; на `aws-0` — работает.
+- Шлюз `kb-t-pilot` (c7152672…) — коннектор (identity-заголовок), `connectors` плагина: `…: kb`; в registry.yaml kb не добавлен (нет ключа сервиса, KB только читает, intents не создаёт). PDP-слаги `kb-t-pilot-kb-documents-search/-get`, `kb-t-pilot-kb-context-get` совпали. Токены агента: оставлен новейший.
+- probe от агента: `tools/list` = 3 kb-tools; `kb.documents.search` ("tool") → документы KB с `source_ref` `kb:kb-pilot/collection/…`.
+- Заметка: `pilot_agent setup` падает случайно при пароле агента с «too many sequential characters» (ContextForge) — повторить запуск.
