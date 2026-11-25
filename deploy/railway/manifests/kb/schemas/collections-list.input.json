@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kb.collections.list input",
+  "description": "Operators only: the collections (active entity types) of the caller's KB connection. Needs a read grant on kb:<connection>/collection/*; anyone else gets permission_denied. Extra fields are ignored.",
+  "type": "object",
+  "properties": {}
+}

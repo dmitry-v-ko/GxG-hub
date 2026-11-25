@@ -5,7 +5,8 @@ names are not secrets.
 
 GXG_JOB=setup  platform admin (PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD, references to ContextForge's variables):
                team, agent user and its API token (SEC-02: random password nobody keeps), gateways for the Telegram
-               connector and the Approval MCP, one virtual server each with only the allowed tools. Prints
+               connector, the Approval MCP, the KB service and (pilot exception) the Apify MCP, one virtual server
+               each with only the allowed tools. Prints
                `IDS <json>` and `SEALED <token>`.
 GXG_JOB=probe  as the agent (PILOT_AGENT_TOKEN, reference): `tools/list` and one `message.propose` through ContextForge;
                prints tool names and the error code of the propose, nothing else.
@@ -18,6 +19,7 @@ import secrets
 import socket
 import sys
 import time
+from urllib.parse import urlsplit
 
 import httpx
 from cryptography.fernet import Fernet
@@ -28,9 +30,22 @@ CF = os.environ.get("GXG_CF_URL", "http://contextforge.railway.internal:4444")
 TENANT = os.environ.get("GXG_TENANT", "t-pilot")
 AGENT = os.environ.get("GXG_AGENT", "pilot")
 EMAIL = f"{AGENT}@{TENANT}.agents.gxg.example.com"
+APIFY_TOOLS = (  # read-only discovery and docs; never call-actor, add-actor, apify-api-write, ...
+    "search-actors",
+    "fetch-actor-details",
+    "search-apify-docs",
+    "fetch-apify-docs",
+    "apify-api-search",
+    "apify-api-details",
+)
 GATEWAYS = {  # name -> upstream MCP url (Streamable HTTP)
     f"telegram-{TENANT}": os.environ.get("GXG_TELEGRAM_MCP", "http://telegram.railway.internal:8080/mcp"),
     f"approval-{TENANT}": os.environ.get("GXG_APPROVAL_MCP", "http://mcp.railway.internal:8091/mcp"),
+    f"kb-{TENANT}": os.environ.get("GXG_KB_MCP", "http://kb.railway.internal:8080/mcp"),  # M6 KB service, read tools
+    # PILOT EXCEPTION to MCC-01/SEC-15 (owner decision 2026-11-25): the official Apify MCP server registered directly,
+    # not through a connector of ours. Only the six tools Apify serves WITHOUT a token; no actor runs, no token here
+    # (docs.apify.com/platform/integrations/mcp: no token only when `tools` has only these six tools).
+    f"apify-{TENANT}": os.environ.get("GXG_APIFY_MCP", "https://mcp.apify.com?tools=" + ",".join(APIFY_TOOLS)),
 }
 ALLOWED = {  # the tools the pilot agent may see and call (originalName); everything else stays unlisted and denied
     "telegram.messages.search",
@@ -38,6 +53,10 @@ ALLOWED = {  # the tools the pilot agent may see and call (originalName); everyt
     "telegram.message.propose",
     "effects.status",
     "effects.cancel",
+    "kb.documents.search",
+    "kb.documents.get",
+    "kb.context.get",
+    *APIFY_TOOLS,
 }
 
 
@@ -119,7 +138,7 @@ def setup():
         },
     )
     for url in GATEWAYS.values():  # which addresses the private names resolve to (SSRF allow-list of ContextForge)
-        host = url.split("//", 1)[1].split("/", 1)[0].rsplit(":", 1)[0]
+        host = urlsplit(url).hostname or url
         try:
             found = sorted({a[4][0] for a in socket.getaddrinfo(host, None)})
         except OSError as exc:
