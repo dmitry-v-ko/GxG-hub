@@ -110,20 +110,28 @@ def setup():
     teams = {t["slug"]: t for t in items(api("GET", "/v1/teams/?limit=100"), "teams")}
     team = teams.get(TENANT) or api("POST", "/v1/teams/", {"name": TENANT, "slug": TENANT, "visibility": "private"})
     users = {u["email"] for u in items(api("GET", "/v1/auth/email/admin/users?limit=100"), "users")}
-    password = secrets.token_urlsafe(32)  # used once, not kept: nobody can log in as the agent (SEC-02)
-    if EMAIL not in users:
-        api(
-            "POST",
-            "/v1/auth/email/admin/users",
-            {
-                "email": EMAIL,
-                "password": password,
-                "full_name": f"agent:{TENANT}:{AGENT}",
-                "password_change_required": False,
-            },
-        )
-    else:
-        api("PATCH", f"/v1/auth/email/admin/users/{EMAIL}", {"password": password})
+    # ContextForge refuses some random passwords ("too many sequential characters"): draw again
+    for attempt in range(1, 9):
+        password = secrets.token_urlsafe(32)  # used once, not kept: nobody can log in as the agent (SEC-02)
+        try:
+            if EMAIL not in users:
+                api(
+                    "POST",
+                    "/v1/auth/email/admin/users",
+                    {
+                        "email": EMAIL,
+                        "password": password,
+                        "full_name": f"agent:{TENANT}:{AGENT}",
+                        "password_change_required": False,
+                    },
+                )
+            else:
+                api("PATCH", f"/v1/auth/email/admin/users/{EMAIL}", {"password": password})
+            break
+        except SystemExit as exc:
+            if "Password" not in str(exc) or attempt == 8:
+                raise
+            print(f"password refused (attempt {attempt}), drawing another", flush=True)
     members = {
         m.get("user_email") or m.get("email") for m in items(api("GET", f"/v1/teams/{team['id']}/members"), "members")
     }
