@@ -331,7 +331,7 @@ services:
   # (GR-13a) is kept in tmpfs and does not survive a restart; the 24 h bundle freshness still holds. Env names: kb-service README.
   kb:
     kind: app
-    source: {repo: dmitry-v-ko/gxg-kb-service, branch: claude/m6-kb-service, dockerfile: Dockerfile}
+    source: {repo: dmitry-v-ko/gxg-kb-service, branch: claude/m6-kb-service, dockerfile: Dockerfile.railway}
     port: 8080  # MCP, /healthz, /readyz (503 until the role exists and the bundle is valid, the deployment must still be SUCCESS)
     start: >-
       sh -c 'umask 077 && mkdir -p /dev/shm/kb/bundle
