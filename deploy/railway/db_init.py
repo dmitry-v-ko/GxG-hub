@@ -57,9 +57,7 @@ def report(conn: psycopg.Connection) -> None:
             "SELECT intent_id, attempt, state, error_code, provider_operation_id, completed_at FROM executions "
             "ORDER BY completed_at NULLS LAST, attempt LIMIT 20"
         ):
-            print(
-                f"execution {intent_id}: attempt={attempt} state={state} error={error_code} provider_op={op_id} at={completed}"
-            )
+            print(f"execution {intent_id}: attempt={attempt} state={state} error={error_code} op={op_id}")
         for proc in (
             "gxg_decide_session(text, uuid, integer, text, text, text)",
             "gxg_decide(bytea, bytea, bigint, text, jsonb)",
