@@ -196,7 +196,8 @@ class Jobs:
         (a retried job) the same intent. Nothing is sent: a person approves it in the UI with a passkey."""
         args = {
             "chat_ref": os.environ["GXG_SEND_CHAT_REF"], "text": os.environ["GXG_SEND_TEXT"],
-            "idempotency_key": "m13-first-send-1", "business_task_id": "m13-first-send",
+            "idempotency_key": os.environ.get("GXG_SEND_KEY", "m13-first-send-1"),
+            "business_task_id": os.environ.get("GXG_SEND_TASK", "m13-first-send"),
         }  # fmt: skip
         return self.probe(only="telegram", args=json.dumps(args))
 
