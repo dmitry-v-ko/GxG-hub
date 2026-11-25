@@ -1,0 +1,28 @@
+# Example registry for a connector with ext.* (MCC-11). Not the real Telegram list (owner decision O-2).
+connector: telegram
+capabilities:
+  - name: chats.get_info
+    version: 1.0.0
+    description: "Информация о чате"
+    input_schema: capabilities/chats-get-info.input.json
+    effect_class: read
+    action: read
+    resource: { type: chat, scope: single, from_arg: chat_id, resolve: arg }
+    enabled_default: true
+    limits: { max_results: 1, timeout_s: 10 }
+  - name: chats.history
+    version: 1.0.0
+    description: "История сообщений чата"
+    input_schema: capabilities/chats-history.input.json
+    effect_class: read
+    action: read
+    resource: { type: chat, scope: single, from_arg: chat_id, resolve: arg }
+    limits: { max_results: 50, timeout_s: 20 }
+  - name: messages.delete
+    version: 1.0.0
+    description: "Удаление сообщения (только описание; исполняется через propose)"
+    input_schema: capabilities/messages-delete.input.json
+    effect_class: external_effect
+    action: propose
+    propose_tool: telegram.message.propose
+    resource: { type: chat, scope: single, from_arg: chat_id, resolve: arg }

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.gxg.example/hub/v1/gxg-capabilities.schema.json",
+  "title": "GxG Connector Capabilities Registry v1",
+  "description": "gxg-capabilities.yaml of a connector with ext.* meta-tools (MCC-11). Explicit allowlist; names of account-dangerous operations are rejected; a non-read entry can never be enabled by default.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["connector", "capabilities"],
+  "properties": {
+    "connector": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version", "description", "input_schema", "effect_class", "action", "resource"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+            "not": {
+              "pattern": "(^|[._])(invoke|raw|2fa|two_factor|password|passcode|sessions?|logout_all|delete_account|account_delete|export_session|session_export|terminate_sessions?)([._]|$)"
+            }
+          },
+          "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+          "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "input_schema": { "type": "string", "minLength": 1 },
+          "output_schema": { "type": "string" },
+          "effect_class": { "enum": ["read", "write_reversible", "external_effect", "high_risk"] },
+          "action": { "enum": ["read", "collect", "write", "propose"] },
+          "propose_tool": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){2}$",
+            "description": "propose-tool of the core that ext.call points to for non-read entries"
+          },
+          "resource": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "scope": { "enum": ["single", "list"] },
+              "from_arg": { "type": "string" },
+              "resolve": { "enum": ["arg", "backend"] }
+            }
+          },
+          "enabled_default": { "type": "boolean", "default": false },
+          "limits": { "type": "object" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "effect_class": { "const": "read" } }, "required": ["effect_class"] },
+            "then": { "properties": { "action": { "enum": ["read", "collect"] } } },
+            "else": {
+              "properties": { "enabled_default": { "const": false } },
+              "required": ["propose_tool"]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

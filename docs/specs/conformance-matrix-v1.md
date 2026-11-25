@@ -5,8 +5,7 @@
 ## Локальные schema smoke-тесты
 
 ```bash
-python -m pip install -r tests/contract/requirements.txt
-python -m unittest discover -s tests/contract -p 'test_*.py' -v
+uv run pytest tests/contract
 ```
 
 Они проверяют валидность всех JSON Schema, примеры политик, manifest и реестра, запрещённые значения, тестовые векторы канонизации и OpenAPI внутреннего API. Но не MCP-сервер, аутентификацию, права или runtime-безопасность.

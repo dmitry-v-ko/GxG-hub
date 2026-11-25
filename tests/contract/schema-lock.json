@@ -162,6 +162,33 @@
         ]
       }
     },
+    "gxg-capabilities.schema.json": {
+      "normative_sha256": "68e85d7a80ba49be67e72aedd12ff22288f62b85dd1df526a40819489ec76767",
+      "required": {
+        "/": [
+          "capabilities",
+          "connector"
+        ],
+        "/properties/capabilities/items": [
+          "action",
+          "description",
+          "effect_class",
+          "input_schema",
+          "name",
+          "resource",
+          "version"
+        ],
+        "/properties/capabilities/items/allOf/0/else": [
+          "propose_tool"
+        ],
+        "/properties/capabilities/items/allOf/0/if": [
+          "effect_class"
+        ],
+        "/properties/capabilities/items/properties/resource": [
+          "type"
+        ]
+      }
+    },
     "gxg-manifest.schema.json": {
       "normative_sha256": "7b4d40a3dfb8026f4a23ddc1471cbdc645dbbabaf6a3efcb04ef49db727d79e0",
       "required": {
