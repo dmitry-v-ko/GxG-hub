@@ -10,13 +10,14 @@ SET client_min_messages = warning;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gxg_kb_reader') THEN
-    CREATE ROLE gxg_kb_reader LOGIN;
+    CREATE ROLE gxg_kb_reader LOGIN NOINHERIT CONNECTION LIMIT 20;
   END IF;
 END
 $$;
 
-ALTER ROLE gxg_kb_reader WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
-  CONNECTION LIMIT 20;
+-- Supabase `postgres` is not a superuser: it may not name SUPERUSER/REPLICATION/BYPASSRLS at all; a new role has them
+-- off by default, and the check after applying confirms rolsuper/rolreplication/rolbypassrls = false.
+ALTER ROLE gxg_kb_reader WITH LOGIN NOCREATEDB NOCREATEROLE NOINHERIT CONNECTION LIMIT 20;
 ALTER ROLE gxg_kb_reader SET default_transaction_read_only = on;
 ALTER ROLE gxg_kb_reader SET statement_timeout = '5s';
 ALTER ROLE gxg_kb_reader SET lock_timeout = '1s';
