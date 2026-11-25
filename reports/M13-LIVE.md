@@ -270,3 +270,13 @@ fi
 - probe от агента: `tools/list` = ровно 6 apify-tools (запускающих Actor'ы нет).
 - **Вызов tools не работает:** `search-apify-docs` и `search-actors` → `GXG_IDENTITY_DENIED - identity_unavailable (gateway is not a registered connector)` (плагин GxgIdentity, fail-closed, pre-invoke; до Apify запрос не доходит).
 - Не обходил: чтобы плагин пропустил вызов, gateway надо внести в `connectors` плагина, т.е. в реестр коннекторов; тогда плагин будет подписывать и отправлять identity-заголовок на внешний `mcp.apify.com`. Это решение за владельцем/оркестратором (нужен вариант «без identity-заголовка» для одного внешнего gateway либо отдельное исключение в плагине).
+
+### Apify: вызовы заработали (2026-11-25)
+- Плагин `gxg_identity`: новая опция `external: [gateway_id]` — для внешнего шлюза все проверки вызывающего (агент своего tenant, команда, токен) остаются, но identity-заголовок не подписывается и не отправляется, входящий `X-GxG-Identity` отбрасывается. Тесты плагина: 27 passed. `plugins.yaml`: `external: [b16429d3…]` (apify-t-pilot); seed обновлён вручную, ContextForge пересобран.
+- probe от агента: `search-apify-docs` («webhooks») и `search-actors` («instagram scraper», 3 актора) возвращают результаты через ContextForge.
+
+### KB (подготовка, сервис не стартует)
+- Влито 9a7d73c (kb_reader.sql под Supabase); тест kb_reader.sql поправлен (BYPASSRLS не называется в SQL).
+- `policies/pilot/tenants/t-pilot.yaml`: connection `kb-pilot` (domain kb), grant `kb-pilot-read` (read; collections tool, blueprint, insight, growth_hack). Бандл перевыпущен (f4c10e38…, built 18:24Z) и выложен в api/executor/ui/notifier/telegram/kb.
+- Сервис `kb` создан. Переменные: KB_DB_CA (публичный Supabase Root 2021 CA, seed из `deploy/railway/supabase-root-2021-ca.pem`), KB_IDENTITY_KEYS, KB_BUNDLE_KEYS, GXG_BUNDLE_B64, KB_CONNECTIONS_JSON (`t-pilot` → `kb-pilot`, workspace 0000…0000), KB_DATABASE_URL = `postgresql://gxg_kb_reader.yojcyedwlgbperliefkd@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/dev/shm/kb/ca.pem` (без пароля; хост пулера aws-1 выбран по региону eu-west-1, не проверен; verify-full по имени хоста пулера не проверен). KB_DATABASE_PASSWORD не задан (за оркестратором).
+- **Блокер сборки:** `gxg-kb-service@claude/m6-kb-service` Dockerfile не принимается Railway: строка 14 `RUN --mount=type=secret,id=ca-bundle,required=false` (Railway допускает только `type=cache`) и строка 28 `VOLUME` (не поддерживается). Деплой `542bc08d…` FAILED на разборе Dockerfile. Мне нет доступа к репозиторию сервиса: нужно убрать mount=secret и VOLUME (или дать отдельный Dockerfile для Railway).

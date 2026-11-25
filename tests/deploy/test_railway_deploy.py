@@ -354,7 +354,7 @@ def test_kb_reader_sql_is_read_only_and_has_no_password() -> None:
     assert "PASSWORD" not in code and "GRANT USAGE ON SCHEMA KB TO GXG_KB_READER" in code
     for word in ("DROP ", "DELETE", "TRUNCATE", "INSERT", "UPDATE ON", "SERVICE_ROLE", "BYPASSRLS;"):
         assert word not in code
-    assert "NOBYPASSRLS" in code and code.count("GRANT SELECT") == 2
+    assert "BYPASSRLS" not in code and code.count("GRANT SELECT") == 2  # Supabase: not nameable, off by default
 
 
 def test_the_bundle_reaches_kb_with_kit_keys() -> None:

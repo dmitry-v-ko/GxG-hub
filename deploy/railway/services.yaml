@@ -337,14 +337,17 @@ services:
       sh -c 'umask 077 && mkdir -p /dev/shm/kb/bundle
       && printf %s "$KB_DATABASE_PASSWORD" > /dev/shm/kb/db.password
       && printf %s "$KB_CONNECTIONS_JSON" > /dev/shm/kb/connections.json
+      && printf %s "$KB_DB_CA" > /dev/shm/kb/ca.pem
       && printf %s "$GXG_BUNDLE_B64" | base64 -d | tar -xz -C /dev/shm/kb/bundle
       && export KB_DATABASE_PASSWORD_FILE=/dev/shm/kb/db.password KB_CONNECTIONS_FILE=/dev/shm/kb/connections.json
       KB_BUNDLE_DIR=/dev/shm/kb/bundle KB_STATE_FILE=/dev/shm/kb/bundle-state.json
-      && unset KB_DATABASE_PASSWORD KB_CONNECTIONS_JSON GXG_BUNDLE_B64 && exec python -m kb_service'
+      && unset KB_DATABASE_PASSWORD KB_CONNECTIONS_JSON KB_DB_CA GXG_BUNDLE_B64 && exec python -m kb_service'
     env:
       KB_IDENTITY_KEYS: ${{contextforge.GXG_IDENTITY_KEYS}}  # public keys of the ContextForge adapter (variant C), as TELEGRAM_IDENTITY_KEYS
     # KB_DATABASE_URL: conninfo of the KB database as gxg_kb_reader WITHOUT password, sslmode=verify-full (+ sslrootcert);
     # KB_CONNECTIONS_JSON: {"t-pilot": {"connection_id": "...", "workspace_id": "<uuid>"}}; KB_BUNDLE_KEYS, GXG_BUNDLE_B64: scripts/deploy/pilot_bundle.py
+    seed:
+      KB_DB_CA: {file: deploy/railway/supabase-root-2021-ca.pem}  # public Supabase Root 2021 CA (sslrootcert=/dev/shm/kb/ca.pem)
     owner_env: [KB_DATABASE_URL, KB_CONNECTIONS_JSON, KB_BUNDLE_KEYS, GXG_BUNDLE_B64]
     secrets:
       KB_DATABASE_PASSWORD: {gen: owner}  # password of gxg_kb_reader, set after the owner ran deploy/railway/sql/kb_reader.sql
