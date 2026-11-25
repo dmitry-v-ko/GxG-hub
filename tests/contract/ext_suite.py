@@ -77,6 +77,7 @@ def check_mc08(c: ExtConnector) -> None:
     assert e.code == "permission_denied", e.code
     assert "telegram.message.propose" in (e.message + str(e.details)), "no pointer to the propose-tool"
     assert len(c.provider_calls) == before, "non-read entry reached the provider"
+    assert "chats.history" in c.search(T1, P, "") and "chats.members" not in c.search(T1, P, "")  # enabled only
     for q in ("", "invoke", "2fa", "session", "delete account", "export", "chats"):
         for name in c.search(T1, P, q):
             assert not any(f in name for f in FORBIDDEN_FRAGMENTS), f"forbidden entry in search: {name}"
@@ -97,6 +98,7 @@ def check_mc10(c: ExtConnector) -> None:
     assert any(r.get("capability") == "chats.history" for r in c.audit), "audit lacks the registry entry name"
     rec = next(r for r in c.audit if r.get("capability") == "chats.history")
     assert rec.get("tenant") == T1 and rec.get("principal") == P and rec.get("result"), rec
+    assert rec.get("version") == "1.0.0" and rec.get("group") == "ext:read:history", rec  # Q7
     dump = repr(c.audit)
     assert SECRET_TEXT not in dump and SECRET_PEER not in dump, "text or peer id leaked into audit"
     c.set_flood_wait(7)

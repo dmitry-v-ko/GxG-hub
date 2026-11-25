@@ -1,0 +1,29 @@
+{
+  "widening": [
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "ext:read",
+      "resource": "kb:kb-main/collection/public",
+      "change": "added",
+      "expires_at": null
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:hermes",
+      "action": "ext:read",
+      "resource": "kb:kb-main/collection/sales",
+      "change": "added",
+      "expires_at": null
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "kb:notes.search"
+    }
+  ],
+  "narrowing": []
+}

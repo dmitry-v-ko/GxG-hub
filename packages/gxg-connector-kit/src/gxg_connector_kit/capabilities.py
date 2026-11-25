@@ -29,6 +29,7 @@ class Capability:
     resource: Mapping[str, Any]
     enabled_default: bool
     propose_tool: str | None
+    group: str | None
     limits: Mapping[str, Any]
 
 
@@ -65,6 +66,13 @@ def load_registry(doc: object) -> Registry:
             resource=raw["resource"],
             enabled_default=raw.get("enabled_default", False),
             propose_tool=raw.get("propose_tool"),
+            group=raw.get("group"),
             limits=raw.get("limits", {}),
         )
     return Registry(connector=doc["connector"], entries=entries)
+
+
+def capability_group(cap: Capability) -> str:
+    """The grant action an entry needs (MCC-11 п.5, GR-19): `ext:<class>[:<group>]`."""
+    base = f"ext:{cap.effect_class}"
+    return f"{base}:{cap.group}" if cap.group else base

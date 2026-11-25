@@ -15,7 +15,7 @@ import ext_suite as s
 import pytest
 import yaml
 
-from gxg_connector_kit.capabilities import Registry, load_registry
+from gxg_connector_kit.capabilities import Registry, capability_group, load_registry
 from gxg_connector_kit.errors import GxgError
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +27,7 @@ def _doc() -> dict[str, Any]:
     d["capabilities"] = [
         {**c, "enabled_default": False} if c["effect_class"] == "read" else c for c in d["capabilities"]
     ]
+    d["capabilities"][1]["group"] = "history"
     d["capabilities"].append(
         {**copy.deepcopy(d["capabilities"][1]), "name": "chats.members", "description": "Участники"}
     )
@@ -59,7 +60,12 @@ class FakeExt:
         self.flood = seconds
 
     def search(self, tenant: str, principal: str, query: str) -> list[str]:
-        return [n for n in self.registry.entries if query in n or query == ""]
+        # Q6: only entries that are enabled for the tenant (and are read) are offered
+        return [
+            n
+            for n, c in self.registry.entries.items()
+            if (query in n or query == "") and c.effect_class == "read" and n in self.enabled.get(tenant, set())
+        ]
 
     def call(self, tenant: str, principal: str, name: str, args: dict[str, Any]) -> Any:
         cap = self.registry.get(name)
@@ -79,6 +85,8 @@ class FakeExt:
         self.audit.append(
             {
                 "capability": "ext.call" if self.audit_ext_call_only else name,
+                "version": cap.version,
+                "group": capability_group(cap),
                 "tenant": tenant,
                 "principal": principal,
                 "result": "ok",

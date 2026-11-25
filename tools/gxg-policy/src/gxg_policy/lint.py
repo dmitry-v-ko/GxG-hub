@@ -127,6 +127,12 @@ class _Linter:
                 if not self.foreign(file, f"groups.{name}[{i}]", tenant, m) and m not in known:
                     self.err(file, f"groups.{name}[{i}]", "dangling-subject", f"{m!r} is not a declared principal")
         self.unique(file, ((f"grants[{i}].id", g["id"]) for i, g in enumerate(doc["grants"])), "grant")
+        domains = set(conns.values())
+        enabled = doc.get("extensions", {}).get("enabled", [])
+        self.unique(file, ((f"extensions.enabled[{i}]", c) for i, c in enumerate(enabled)), "extensions.enabled entry")
+        for i, c in enumerate(enabled):
+            if c.split(":", 1)[0] not in domains:
+                self.err(file, f"extensions.enabled[{i}]", "ext-domain", f"no connection with the domain of {c!r}")
         for i, g in enumerate(doc["grants"]):
             for j, s in enumerate(g["subjects"]):
                 path = f"grants[{i}].subjects[{j}]"

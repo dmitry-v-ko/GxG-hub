@@ -414,7 +414,9 @@ def test_shape_errors_name_the_first_path(built: tuple[Path, bytes]) -> None:
     with pytest.raises(BundleError, match=r"^not a v1 bundle \(grants-bundle.schema.json\): <root>: 'bundle_version'"):
         check_shape(doc)
     doc["bundle_version"] = SHA
-    with pytest.raises(BundleError, match=r": tenants/t-alpha/grants/grants/0/actions/0: 'fly' is not one of"):
+    with pytest.raises(
+        BundleError, match=r": tenants/t-alpha/grants/grants/0/actions/0: 'fly' is not valid under any of"
+    ):
         check_shape(doc)
 
 

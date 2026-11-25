@@ -46,6 +46,7 @@
               "resolve": { "enum": ["arg", "backend"] }
             }
           },
+          "group": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "optional subgroup for grants <domain>.ext:<class>:<group>" },
           "enabled_default": { "type": "boolean", "default": false },
           "limits": { "type": "object" }
         },

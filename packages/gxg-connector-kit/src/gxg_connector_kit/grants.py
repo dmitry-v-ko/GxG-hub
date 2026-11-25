@@ -64,6 +64,19 @@ class GrantResolver(Protocol):
     def version(self) -> str: ...
 
 
+class ExtGrantResolver(Protocol):
+    """Grants of ext.* groups (MCC-11 п.5, GR-19…GR-23); the resource check stays `GrantResolver.check`."""
+
+    def ext_check(self, tenant: str, principal: str, group: str, rid: str) -> Decision: ...
+
+    def ext_enabled(self, tenant: str, domain: str, capability: str) -> bool: ...
+
+
+def ext_group_covers(granted: str, wanted: str) -> bool:
+    """`ext:read` covers `ext:read` and `ext:read:members`; a subgroup grant `ext:read:members` only itself."""
+    return wanted == granted or wanted.startswith(granted + ":")
+
+
 class BundleError(ValueError):
     """The bundle or its signature is invalid; the bundle is not used."""
 
@@ -86,6 +99,7 @@ class TenantGrants:
     grants: tuple[_Grant, ...]
     groups: Mapping[str, frozenset[str]]  # group name → members, for approval `requesters`/`approvers`
     roles: Mapping[str, frozenset[str]]  # human → roles (`approver`, …), GR-08
+    ext_enabled: frozenset[str] = frozenset()  # GR-22: `<domain>:<capability>` from `extensions.enabled`
 
 
 @dataclass(frozen=True)
@@ -156,6 +170,7 @@ def parse_tenant(doc: Mapping[str, Any]) -> TenantGrants:
         tuple(grants),
         {name: frozenset(members) for name, members in groups.items()},
         roles,
+        frozenset(doc.get("extensions", {}).get("enabled", [])),
     )
 
 
@@ -332,6 +347,33 @@ class BundleStore:
         prefix = f"{domain}:{connection_id}/{rtype}/"
         rids = frozenset(r for g in live for r in g.exact if r.startswith(prefix))
         return AllowedSet(any((domain, connection_id, rtype) in g.masks for g in live), rids)
+
+    def ext_check(self, tenant: str, principal: str, group: str, rid: str) -> Decision:
+        """May the principal call a registry entry of `group` (`ext:<class>[:<group>]`) on `rid`?
+
+        Needs both the `read` grant on the resource (GR-01…GR-17) and a live grant whose actions cover the group
+        and whose resources include the RID (GR-19, GR-23)."""
+        if not self.check(tenant, principal, "read", rid).allowed:
+            return DENY
+        t = self.current.tenants.get(tenant)
+        m = _RID.fullmatch(rid)
+        if t is None or principal not in t.principals or m is None:
+            return DENY
+        now = datetime.fromtimestamp(self._now(), UTC)
+        for g in t.grants:
+            if principal not in g.subjects or (g.expires_at is not None and now >= g.expires_at):
+                continue
+            if (rid in g.exact or (m[1], m[2], m[3]) in g.masks) and any(
+                ext_group_covers(a, group) for a in g.actions if a.startswith("ext:")
+            ):
+                return Decision(True, g.id)
+        return DENY
+
+    def ext_enabled(self, tenant: str, domain: str, capability: str) -> bool:
+        """GR-22: is `<domain>:<capability>` listed in the tenant file? The caller enables an entry when this is true
+        or the registry entry has `enabled_default: true` (read entries only); a granted group alone enables nothing."""
+        t = self.current.tenants.get(tenant)
+        return t is not None and f"{domain}:{capability}" in t.ext_enabled
 
 
 BUNDLE_RELOAD_S = 60.0  # GR-13: a new bundle reaches the service well within 5 minutes

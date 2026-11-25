@@ -163,7 +163,7 @@
       }
     },
     "gxg-capabilities.schema.json": {
-      "normative_sha256": "68e85d7a80ba49be67e72aedd12ff22288f62b85dd1df526a40819489ec76767",
+      "normative_sha256": "3f3f3742ea833d281d4fb14d0b8cb15f57806e95742577fde4f8797986b40f6b",
       "required": {
         "/": [
           "capabilities",
@@ -347,7 +347,7 @@
       }
     },
     "resource-grants.schema.json": {
-      "normative_sha256": "ac9e38bdddb23e369f2d95346d21857947f2a29030da5db2a55d201b93ab014e",
+      "normative_sha256": "4c3f42d57195f56c56cb44e08fcb063b92c3ce3c7ddf481509fd6dd2f7ba0e64",
       "required": {
         "/": [
           "connections",

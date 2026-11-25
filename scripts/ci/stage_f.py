@@ -169,33 +169,45 @@ OPS: dict[str, list[str]] = {
     ],
 }
 
+EXT = "tests/contract/test_ext_conformance.py"
+CAP = "packages/gxg-connector-kit/tests/test_capabilities.py"
+_EXT_WHY = (
+    "MCC-11 ext.* is checked only on a minimal fake connector (tests/contract: the shared suite and its mutants); "
+    "no connector with ext.* exists yet, so the check on the Telegram service through ContextForge is M11.3 (stage D)"
+)
+
 # Ids that stay open on purpose: no test in this repository proves them, or they need a live / human step. `status`
 # is never `passed`; `related` are the tests that cover a part (listed in the report, they decide nothing).
 OPEN: dict[str, dict[str, Any]] = {
     "MC-06": {
         "status": "not_run",
-        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
-        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+        "reason": _EXT_WHY,
+        "related": [
+            f"{EXT}::test_mc06_registry_validation",
+            f"{EXT}::test_mc06_mutant_loader_accepting_anything_is_caught",
+            f"{CAP}::test_entry_without_required_field_is_rejected",
+            f"{CAP}::test_forbidden_name_is_rejected",
+        ],
     },
     "MC-07": {
         "status": "not_run",
-        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
-        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+        "reason": _EXT_WHY,
+        "related": [f"{EXT}::test_mc07_to_mc10_pass_on_conforming_connector", f"{EXT}::test_mutation_is_caught"],
     },
     "MC-08": {
         "status": "not_run",
-        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
-        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+        "reason": _EXT_WHY,
+        "related": [f"{EXT}::test_mc07_to_mc10_pass_on_conforming_connector", f"{EXT}::test_mutation_is_caught"],
     },
     "MC-09": {
         "status": "not_run",
-        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
-        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+        "reason": _EXT_WHY,
+        "related": [f"{EXT}::test_mc07_to_mc10_pass_on_conforming_connector", f"{EXT}::test_mutation_is_caught"],
     },
     "MC-10": {
         "status": "not_run",
-        "reason": "MCC-11 (core + extensions, gxg-capabilities.yaml, ext.search/describe/call) is specified "
-        "(docs/specs/mcp-connector-contract-v1.md MCC-11) but not implemented; planned after stages B and D",
+        "reason": _EXT_WHY,
+        "related": [f"{EXT}::test_mc07_to_mc10_pass_on_conforming_connector", f"{EXT}::test_mutation_is_caught"],
     },
     "OPS-02": {
         "status": "not_run",
