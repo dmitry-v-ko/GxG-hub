@@ -40,6 +40,18 @@ CASES: list[tuple[str, Any, Any]] = [
     ),
     ("not_a_jwt", {"note": "eyJ is a prefix, a.b is not"}, {"note": "eyJ is a prefix, a.b is not"}),
     ("top_level_list", [{"token": "t"}, "x"], [{}, "x"]),
+    # SEC-23 (pii): values are dropped, counts stay
+    ("pii_phone_key", {"phone": "+4915112345678", "id": "u1"}, {"id": "u1"}),
+    ("pii_photo_keys", {"photo_refs": ["r1"], "photo": "x", "photo_count": 2}, {"photo_count": 2}),
+    ("pii_file_name_and_bytes", {"file_name": "me.jpg", "FileName": "a", "bytes": "AAAA", "size": 4}, {"size": 4}),
+    ("pii_nested", {"items": [{"phone": "1", "display_name": "n"}]}, {"items": [{"display_name": "n"}]}),
+    ("phone_in_message", {"msg": "no user for +49 151 1234 5678 here"}, {"msg": "no user for [phone] here"}),
+    ("phone_dashes", {"msg": "+1-415-555-0100"}, {"msg": "[phone]"}),
+    (
+        "ids_are_not_phones",
+        {"msg": "chat 1001234567890 user_17 at 2026-11-26", "n": "tgc1_AbC"},
+        {"msg": "chat 1001234567890 user_17 at 2026-11-26", "n": "tgc1_AbC"},
+    ),
 ]
 
 
