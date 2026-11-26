@@ -17,6 +17,8 @@
 # M0.1 mutant must be killed), and on any listed mutant that is killed now (stale list).
 # MUTMUT_PACKAGES (env; MUTMUT_DIRS is the M1.1 name of the same): which package directories to run, default all.
 # PostgreSQL and the M7 SQL driver run only when `approval` is among them (approval/ui and notifier use the DB too).
+# MUTMUT_RESUME=1 (env): keep mutants/ and the SQL verdicts ($MUTATE_SQL_STATE) of an interrupted run, run only what
+# has no result yet (mutmut skips mutants with a result). Same code only: a change of the code needs a fresh run.
 # REPORT_FILE: summary (default stdout). ALL_RESULTS_FILE: every mutant with its status, sorted.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -45,7 +47,7 @@ for dir in $dirs; do
   (
     cd "$dir"
     case "$dir" in approval/ui | approval/notifier) uvr=(uv run --quiet --project "$root") ;; *) uvr=(uv run --quiet) ;; esac
-    rm -rf mutants  # no stale results from an earlier run
+    [ -n "${MUTMUT_RESUME:-}" ] || rm -rf mutants  # no stale results from an earlier run
     "${uvr[@]}" mutmut run > "$tmp/run.log" 2>&1 || { cat "$tmp/run.log"; exit 1; }
     "${uvr[@]}" mutmut export-cicd-stats > /dev/null
     echo "== $dir: $(tr -d ' \n' < mutants/mutmut-cicd-stats.json)"
