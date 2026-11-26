@@ -68,6 +68,9 @@ services:
       # with a 15 min lockout. Stand only; the limiter itself stays on.
       RATE_LIMIT_MEDIUM_RPM: "3000"
       RATE_LIMIT_MEDIUM_BURST: "300"
+      # LOW tier (health, static, …): 500/min by default is reached by the suite on a fast hosted runner (CI 2026-11-26)
+      RATE_LIMIT_LOW_RPM: "5000"
+      RATE_LIMIT_LOW_BURST: "1000"
       AUTH_CACHE_REVOCATION_TTL: "5"  # the minimum: a revoked agent token stops within seconds (MC-04, SEC-20)
       LOG_LEVEL: "INFO"
     volumes:
