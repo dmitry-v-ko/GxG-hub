@@ -7,11 +7,15 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]  # edited: base branch changed
   push:
-    branches: [main, "claude/**"]
+    # Only main: a branch is checked by its pull request (minutes of a private repository; owner decision 2026-11-26).
+    branches: [main]
   workflow_dispatch:
   schedule:
     # GR-13a: re-sign the bundle at least every 12 h; every 6 h leaves room for delayed or dropped runs.
     - cron: "41 */6 * * *"
+    # Nightly mutmut on main (owner decision 2026-11-26): 2-4 h, out of `ci-ok`; on a pull request only with the
+    # label `mutmut`, or by hand (workflow_dispatch).
+    - cron: "23 1 * * *"
 
 permissions:
   contents: read
@@ -29,6 +33,7 @@ env:
 
 jobs:
   lint:
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -41,6 +46,7 @@ jobs:
       - run: uv run ruff format --check .
 
   types:
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -75,6 +81,7 @@ jobs:
         run: MYPYPATH=stand/tests:stand:gateway/contextforge:connectors/telegram/archive uv run mypy --exclude mutants stand gateway/contextforge
 
   tests:
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -109,6 +116,7 @@ jobs:
     # ADR-0004: notification when gxg_agents_v2 changes the telegram_archive schema after the pinned commit
     # (connectors/telegram/archive/SOURCE.md). Runs on schedule too, so drift fails a run without a Hub push.
     # Needs GXG_AGENTS_V2_TOKEN: read-only (contents) token for dmitry-v-ko/gxg_agents_v2; without it the job fails.
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -130,6 +138,7 @@ jobs:
   approval-db:
     # M7: Approval Service on a real PostgreSQL 16 in Docker, reached only over a Unix socket (the container
     # has no network), so the no-TCP rule of AC-M0-01 holds. Not in `tests`: it needs Docker and the image.
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -149,6 +158,7 @@ jobs:
   approval-images:
     # AC-M9-12 (AS-29): ui and notifier images from their own lockfiles; compose networks; connection attempts
     # from inside each container (allowed ones open, the rest refused; positive control from the edge network).
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -162,6 +172,7 @@ jobs:
 
   schema-guard:
     # AC-M0-02: proves that every schema mutation turns the contract tests red.
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -174,6 +185,7 @@ jobs:
 
   secrets:
     # AC-M0-04, AC-M0.1-01: gitleaks (pinned, scripts/ci/gitleaks.sh) on the tree and on every pushed commit.
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -217,6 +229,10 @@ jobs:
     # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed; M1, M2, M3, M5 and M7 modules too.
     # M7 adds approval (~1700 mutants, DB tests on PostgreSQL in Docker) and its SQL mutation check
     # (scripts/ci/mutate_m7_sql.py, ~80 runs of approval/tests_db): about two hours on a 4-core runner.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'schedule' && github.event.schedule == '23 1 * * *')
+      || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'mutmut'))
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -231,6 +247,7 @@ jobs:
 
   policy:
     # AC-M2-01, AC-M2-05, AC-M2-06 on the repository policies.
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -249,6 +266,7 @@ jobs:
   demo-image:
     # AC-M3-01, AC-M3-11: build the production image of connectors/demo from the repository root and
     # run it: /readyz 200 with a valid bundle, 503 without; test switches stop the start.
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -263,6 +281,7 @@ jobs:
     # AC-M5-01, AC-M5-04: the dev stand (compose.yaml) end to end: ContextForge (pinned digest) + PostgreSQL +
     # demo, SC-01…SC-10 and MC-01…MC-04 through ContextForge, then again after restarting and after recreating
     # every container with no setup in between. The report goes to the job's artifacts.
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -284,6 +303,7 @@ jobs:
     # Always diffed against main (merge-base), not against the PR base. Outside a PR (push / dispatch
     # to a branch other than main) any widening is red. Connector manifests and gate files count too.
     # docs/setup/widening-approval.md
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -316,8 +336,9 @@ jobs:
 
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
-    if: always()
-    needs: [lint, types, tests, approval-db, approval-images, schema-guard, secrets, mutmut, policy, demo-image, m5-stand, grants-widening]
+    # mutmut is not here (nightly on main, owner decision 2026-11-26); a red nightly run is fixed by the next change.
+    if: always() && github.event_name != 'schedule'
+    needs: [lint, types, tests, approval-db, approval-images, schema-guard, secrets, policy, demo-image, m5-stand, grants-widening]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -332,7 +353,10 @@ jobs:
     # GR-11: signed grants-bundle.json after a merge into main. Key from secrets, never in the repo.
     # Not part of ci-ok. Setup: docs/setup/bundle-signing.md
     # GR-13a: also on schedule (default branch = main): same commit, same content, new built_at.
-    if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
+    if: >-
+      always() && github.ref == 'refs/heads/main'
+      && ((github.event_name == 'push' && needs.ci-ok.result == 'success')
+      || (github.event_name == 'schedule' && github.event.schedule == '41 */6 * * *'))
     needs: [ci-ok]
     runs-on: ubuntu-latest
     timeout-minutes: 10
