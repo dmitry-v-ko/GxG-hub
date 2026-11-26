@@ -46,18 +46,27 @@ scripts.ci.widening_gate.x_upsert_comment__mutmut_23  # a comment without a body
 scripts.ci.widening_gate.x_report_out__mutmut_7  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 scripts.ci.widening_gate.x_report_out__mutmut_10  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 scripts.ci.widening_gate.x_report_out__mutmut_14  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_run__mutmut_80  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
-scripts.ci.widening_gate.x_run__mutmut_83  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
-scripts.ci.widening_gate.x_main__mutmut_61  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_main__mutmut_63  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_main__mutmut_65  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_main__mutmut_67  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_main__mutmut_76  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_main__mutmut_78  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_run__mutmut_101  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_run__mutmut_104  # split(sep, 1)[0] == split(sep)[0] == split(sep, 2)[0]: only the first part is used
+scripts.ci.widening_gate.x_main__mutmut_85  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_87  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 scripts.ci.widening_gate.x_main__mutmut_89  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_main__mutmut_94  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_main__mutmut_125  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-scripts.ci.widening_gate.x_main__mutmut_127  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_91  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_95  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_97  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_115  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_120  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_153  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.widening_gate.x_main__mutmut_155  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.gate_diff.x_changed__mutmut_27  # "UTF-8" and "utf-8" name the same codec
+scripts.ci.gate_diff.x__tightened__mutmut_10  # unreachable difference: guarded by `a[key] != b[key]` (5 == 5.0), so < and <= (> and >=) agree
+scripts.ci.gate_diff.x__tightened__mutmut_17  # unreachable difference: guarded by `a[key] != b[key]` (5 == 5.0), so < and <= (> and >=) agree
+scripts.ci.gate_diff.x__secrets__mutmut_8  # `text or "XXXX"` vs `text or ""`: neither string holds a secrets reference, both match nothing
+scripts.ci.gate_diff.x_widening_at__mutmut_87  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.gate_diff.x_widening_at__mutmut_92  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.gate_diff.x_main__mutmut_41  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.gate_diff.x_main__mutmut_43  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+scripts.ci.gate_diff.x_main__mutmut_58  # encoding="UTF-8"/None/omitted: codec names are case-insensitive; None/omitted = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 gxg_policy.diff.xǁ_Diffǁtools__mutmut_39  # add(None, ...) vs add(False, ...): add() only tests truthiness
 demo_connector.backend.xǁBackendǁ_scan__mutmut_7  # M3: `>=` -> `>` on time.monotonic() vs a float deadline; equal only at the same nanosecond, no test can tell
 demo_connector.tools.xǁDemoToolǁrun__mutmut_133  # M3: duration_ms * 1001 instead of * 1000: 0.1 % off a log field, no observable behaviour
