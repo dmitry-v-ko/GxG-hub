@@ -1,0 +1,75 @@
+{
+ "agents": {
+  "agent:t-ext-test:collector": "vs-tg-t-ext-test-ext-people",
+  "agent:t-ext-test:reader": "vs-tg-t-ext-test-ext"
+ },
+ "pdp_rules": [
+  {
+   "actions": [
+    "tools.invoke.telegram-t-ext-test-telegram-messages-search",
+    "tools.invoke.telegram-t-ext-test-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-test-telegram-ext-search",
+    "tools.invoke.telegram-t-ext-test-telegram-ext-describe",
+    "tools.invoke.telegram-t-ext-test-telegram-ext-call"
+   ],
+   "conditions": {
+    "subject.email": "reader@t-ext-test.agents.gxg.example.com"
+   },
+   "id": "t-ext-test.reader.telegram",
+   "reason": "derived from policies/tenants/t-ext-test (GR-18); the entry is checked by the connector",
+   "resource_ids": [
+    "*"
+   ],
+   "resource_types": [
+    "tool"
+   ],
+   "roles": [
+    "*"
+   ]
+  },
+  {
+   "actions": [
+    "tools.invoke.telegram-t-ext-test-telegram-messages-search",
+    "tools.invoke.telegram-t-ext-test-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-test-telegram-messages-collect",
+    "tools.invoke.telegram-t-ext-test-telegram-participants-collect",
+    "tools.invoke.telegram-t-ext-test-telegram-ext-search",
+    "tools.invoke.telegram-t-ext-test-telegram-ext-describe",
+    "tools.invoke.telegram-t-ext-test-telegram-ext-call"
+   ],
+   "conditions": {
+    "subject.email": "collector@t-ext-test.agents.gxg.example.com"
+   },
+   "id": "t-ext-test.collector.telegram",
+   "reason": "derived from policies/tenants/t-ext-test (GR-18); the entry is checked by the connector",
+   "resource_ids": [
+    "*"
+   ],
+   "resource_types": [
+    "tool"
+   ],
+   "roles": [
+    "*"
+   ]
+  }
+ ],
+ "servers": {
+  "vs-tg-t-ext-test-ext": [
+   "telegram.ext.call",
+   "telegram.ext.describe",
+   "telegram.ext.search",
+   "telegram.messages.search",
+   "telegram.thread.read"
+  ],
+  "vs-tg-t-ext-test-ext-people": [
+   "telegram.ext.call",
+   "telegram.ext.describe",
+   "telegram.ext.search",
+   "telegram.messages.collect",
+   "telegram.messages.search",
+   "telegram.participants.collect",
+   "telegram.thread.read"
+  ]
+ },
+ "tenant": "t-ext-test"
+}

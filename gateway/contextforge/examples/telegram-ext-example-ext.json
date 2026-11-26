@@ -1,0 +1,93 @@
+{
+ "agents": {
+  "agent:t-ext-example:analyst": "vs-tg-t-ext-example-ext",
+  "agent:t-ext-example:collector": "vs-tg-t-ext-example-people",
+  "agent:t-ext-example:hermes": "vs-tg-t-ext-example-ext"
+ },
+ "pdp_rules": [
+  {
+   "actions": [
+    "tools.invoke.telegram-t-ext-example-telegram-messages-search",
+    "tools.invoke.telegram-t-ext-example-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-example-telegram-ext-search",
+    "tools.invoke.telegram-t-ext-example-telegram-ext-describe",
+    "tools.invoke.telegram-t-ext-example-telegram-ext-call"
+   ],
+   "conditions": {
+    "subject.email": "hermes@t-ext-example.agents.gxg.example.com"
+   },
+   "id": "t-ext-example.hermes.telegram",
+   "reason": "derived from policies/tenants/t-ext-example (GR-18); the entry is checked by the connector",
+   "resource_ids": [
+    "*"
+   ],
+   "resource_types": [
+    "tool"
+   ],
+   "roles": [
+    "*"
+   ]
+  },
+  {
+   "actions": [
+    "tools.invoke.telegram-t-ext-example-telegram-messages-search",
+    "tools.invoke.telegram-t-ext-example-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-example-telegram-ext-search",
+    "tools.invoke.telegram-t-ext-example-telegram-ext-describe",
+    "tools.invoke.telegram-t-ext-example-telegram-ext-call"
+   ],
+   "conditions": {
+    "subject.email": "analyst@t-ext-example.agents.gxg.example.com"
+   },
+   "id": "t-ext-example.analyst.telegram",
+   "reason": "derived from policies/tenants/t-ext-example (GR-18); the entry is checked by the connector",
+   "resource_ids": [
+    "*"
+   ],
+   "resource_types": [
+    "tool"
+   ],
+   "roles": [
+    "*"
+   ]
+  },
+  {
+   "actions": [
+    "tools.invoke.telegram-t-ext-example-telegram-messages-search",
+    "tools.invoke.telegram-t-ext-example-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-example-telegram-messages-collect",
+    "tools.invoke.telegram-t-ext-example-telegram-participants-collect"
+   ],
+   "conditions": {
+    "subject.email": "collector@t-ext-example.agents.gxg.example.com"
+   },
+   "id": "t-ext-example.collector.telegram",
+   "reason": "derived from policies/tenants/t-ext-example (GR-18); the entry is checked by the connector",
+   "resource_ids": [
+    "*"
+   ],
+   "resource_types": [
+    "tool"
+   ],
+   "roles": [
+    "*"
+   ]
+  }
+ ],
+ "servers": {
+  "vs-tg-t-ext-example-ext": [
+   "telegram.ext.call",
+   "telegram.ext.describe",
+   "telegram.ext.search",
+   "telegram.messages.search",
+   "telegram.thread.read"
+  ],
+  "vs-tg-t-ext-example-people": [
+   "telegram.messages.collect",
+   "telegram.messages.search",
+   "telegram.participants.collect",
+   "telegram.thread.read"
+  ]
+ },
+ "tenant": "t-ext-example"
+}

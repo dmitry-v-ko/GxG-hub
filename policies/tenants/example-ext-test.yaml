@@ -21,11 +21,18 @@ principals:
 grants:
   - id: tg-test-read
     subjects: [agent:t-ext-test:reader, agent:t-ext-test:collector]
-    actions: [read, collect]
+    actions: [read]
     resources:
       - telegram:tg-test/chat/tgc1_EXAMPLEtestChat0000000000000000000
     expires_at: "2027-01-31T00:00:00Z"
     reason: "Test chat of the test account"
+  - id: tg-test-collect
+    subjects: [agent:t-ext-test:collector]
+    actions: [collect]
+    resources:
+      - telegram:tg-test/chat/tgc1_EXAMPLEtestChat0000000000000000000
+    expires_at: "2027-01-31T00:00:00Z"
+    reason: "participants.collect and messages.collect on the test chat"
   - id: tg-test-ext-read
     subjects: [agent:t-ext-test:reader, agent:t-ext-test:collector]
     actions: [ext:read]
