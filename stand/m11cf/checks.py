@@ -1,6 +1,6 @@
 """Checks 1-6 of reports/M11-cf-stand.md on the running gxg-m11cf stand (stand/m11cf/run.sh, KEEP=1).
 
-  uv run python stand/m11cf/checks.py all|register|schema|limits|servers|hubexec
+  uv run python stand/m11cf/checks.py all|register|schema|limits|servers|hubexec|agent_entry
 
 Evidence (replies cut, never a token) -> stand/secrets/m11cf/evidence.json and stdout; exit 1 if a check failed.
 `limits` and `hubexec` recreate/restart ContextForge with other settings and restore the stand ones afterwards.
@@ -13,6 +13,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+
+import httpx2 as httpx
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -73,7 +75,7 @@ def register() -> None:
 def schema() -> None:
     srv = S["servers"][S["agents"][R]["server"]]["id"]
     paths = {"rpc": "/rpc", "virtual_server_mcp": vs(R), "virtual_server_sse": f"/servers/{srv}/sse"}
-    calls = {
+    calls: dict[str, dict[str, Any]] = {
         "entry with arguments": {"name": "chats.get_info", "arguments": {"chat_ref": REF}},
         "nested generic arguments": {"name": "chats.history", "arguments": {"chat_ref": REF, "x": {"y": [1, None]}}},
         "no arguments key": {"name": "chats.get_info"},
@@ -225,7 +227,7 @@ def hubexec() -> None:
     a = st.admin()
     rules_file = OUT / "unified_pdp.rules.json"
     rules0, plugins0 = rules_file.read_text(), (SECRETS / "plugins.yaml").read_text()
-    gw_id = None
+    gw_id = srv_id = None
     out: dict[str, Any] = {}
     try:
         for _ in range(30):
@@ -247,6 +249,16 @@ def hubexec() -> None:
         tool = next(x for x in a.get("/v1/tools?include_inactive=true&limit=0").json() if x.get("gatewayId") == gw_id)
         out["tool"] = {k: tool.get(k) for k in ("name", "originalName", "integrationType", "enabled")}
         out["input_schema"] = tool.get("inputSchema")
+        # the collector reaches it only through a virtual server (agents are closed out of /rpc)
+        srv = a.post(
+            "/v1/servers",
+            json={
+                "server": {"name": "vs-hubexec", "associated_tools": [tool["id"]]},
+                "team_id": S["team_id"],
+                "visibility": "team",
+            },
+        ).json()
+        srv_id = srv["id"]
         allow = {
             "id": "m11cf.hubexec",
             "roles": ["*"],
@@ -264,32 +276,69 @@ def hubexec() -> None:
             | {S["gateway_id"]: "telegram", gw_id: "hub-executor"},
         )
         (SECRETS / "plugins.yaml").write_text(plugins)
-        for label, rules in (
-            ("stand rules + allow", [*json.loads(rules0), allow]),
-            (
-                "allow, without deny:agents-never-execute",
-                [x for x in json.loads(rules0) if x["id"] != "deny:agents-never-execute"] + [allow],
-            ),
-        ):
-            rules_file.write_text(json.dumps(rules, indent=1))
-            sh("docker", "compose", "restart", "contextforge")
-            base.wait_healthy()
-            r = st.call(C, tool["name"], {"script": "print(1)"})
-            out[label] = cut(r, 500)
+        rules_file.write_text(json.dumps([*json.loads(rules0), allow], indent=1))  # deny:agents-never-execute kept
+        sh("docker", "compose", "restart", "contextforge")
+        base.wait_healthy()
+        out["stand rules (EFF-02 deny kept) + allow"] = cut(
+            st.call(C, tool["name"], {"script": "print(1)"}, path=f"/servers/{srv_id}/mcp/"), 500
+        )
     finally:
         rules_file.write_text(rules0)
         (SECRETS / "plugins.yaml").write_text(plugins0)
+        if srv_id:
+            a.delete(f"/v1/servers/{srv_id}")
         if gw_id:
             a.delete(f"/v1/gateways/{gw_id}")
         sh("docker", "rm", "-f", HUBEXEC, check=False)
         sh("docker", "compose", "restart", "contextforge")
         base.wait_healthy()
-    called = '"script_len": 8' in out.get("allow, without deny:agents-never-execute", "").replace('\\"', '"')
-    verdict("6_hub_execute", out["register_gateway"]["status"] in (200, 201) and called, **out)
+    called = '"script_len": 8' in out.get("stand rules (EFF-02 deny kept) + allow", "").replace('\\"', '"')
+    ok = out["register_gateway"]["status"] in (200, 201) and out["tool"]["originalName"] == "hub.script.run" and called
+    verdict("6_hub_script_run", ok, **out)
+
+
+AGENT_ENTRY = "http://127.0.0.1:4443"  # stand/m11cf/agent-entry.nginx.conf, the twin of Railway's agent port 443
+
+
+def agent_entry() -> None:
+    """Owner decision 2026-11-26 (close /rpc to agents): on the agent entry, /rpc tools/list and tools/call, the global
+    /mcp and /sse are not published; the agent's own virtual server works; an operator's /rpc (4444) still works."""
+    entry = Stand(_state, env_values(), http=httpx.Client(base_url=AGENT_ENTRY, timeout=60))
+    search: dict[str, Any] = {"name": T("telegram.ext.search"), "arguments": {"limit": 2}}
+    closed = {
+        f"{p} {m}": entry.rpc(p, m, search if m == "tools/call" else None, token=st.token(R))[0]
+        for p in ("/rpc", "/mcp/", "/v1/tools", "/tools")
+        for m in ("tools/list", "tools/call")
+    }
+    closed["/sse GET"] = entry.http.get("/sse", headers=entry.headers(st.token(R))).status_code  # (rpc() uses 4444)
+    status, listed = entry.rpc(vs(R), "tools/list", token=st.token(R))
+    own = {
+        "tools/list": status,
+        "tools": sorted(t["name"] for t in listed.get("result", {}).get("tools", [])),
+        "tools/call ext.search": code(entry.call(R, T("telegram.ext.search"), {"limit": 2}, path=vs(R))),
+    }
+    r = st.admin().post("/rpc", json=mcp_body("tools/list", None))
+    admin = {"status": r.status_code, "tools": len(r.json().get("result", {}).get("tools", []))}
+    ok = (
+        all(v == 404 for v in closed.values())
+        and own["tools/list"] == 200
+        and own["tools"] == sorted(T(t) for t in ROLES["servers"][ROLES["agents"][R]])
+        and own["tools/call ext.search"] == "ok"
+        and admin["status"] == 200
+        and admin["tools"] > 0
+    )
+    verdict("7_agent_entry", ok, agent_closed_paths=closed, agent_virtual_server=own, operator_rpc=admin)
 
 
 def main(which: str) -> int:
-    steps = {"register": register, "schema": schema, "servers": servers, "limits": limits, "hubexec": hubexec}
+    steps = {
+        "register": register,
+        "schema": schema,
+        "servers": servers,
+        "limits": limits,
+        "hubexec": hubexec,
+        "agent_entry": agent_entry,
+    }
     for name, fn in steps.items():
         if which in (name, "all"):
             fn()

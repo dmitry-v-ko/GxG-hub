@@ -121,9 +121,9 @@ def init() -> None:
     )
     (OUT / "bundle").mkdir(exist_ok=True)
     (OUT / "bundle").chmod(0o755)
-    for f in sorted(tmp.iterdir()):
-        f.chmod(0o644)
-        f.replace(OUT / "bundle" / f.name)
+    for p in sorted(tmp.iterdir()):
+        p.chmod(0o644)
+        p.replace(OUT / "bundle" / p.name)
     tmp.rmdir()
     db = OUT / "db"
     parts = [
