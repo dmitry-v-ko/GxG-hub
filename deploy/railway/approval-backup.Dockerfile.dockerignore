@@ -1,0 +1,17 @@
+*
+!pyproject.toml
+!uv.lock
+!packages/gxg-connector-kit
+!approval
+!tools/gxg-policy
+!tools/gxg-connector-check
+!scripts/ops/approval_backup.py
+!scripts/ops/approval_restore_drill.py
+!deploy/railway/entrypoint.sh
+approval/ui
+approval/notifier
+**/.venv
+**/__pycache__
+**/mutants
+**/.pytest_cache
+**/tests_db

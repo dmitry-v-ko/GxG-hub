@@ -68,12 +68,15 @@ AS28: dict[str, frozenset[str]] = {
         {"admin"}
     ),  # the operator's browser sign-in of the invite page: client secret (a reference), session key
     "agent_token": frozenset({"pilot-agent"}),  # vault: the pilot agent's ContextForge API token (SEC-02)
+    "backup_key": frozenset({"approval-backup"}),  # M14: AES-256-GCM key of the encrypted dumps (OPS-03), nowhere else
+    "db_password": frozenset({"approval-backup"}),  # libpq PGPASSWORD of the read-only role gxg_backup
     "railway_token": frozenset({"bundle-reissue"}),  # planned cron job (services.yaml `planned`), not deployed yet
     "bundle_signing": frozenset({"bundle-signer"}),  # vault service, never deployed: signs the grants bundle (GR-11)
 }
 ROLE_OF = {  # AS-27: one role per process
     "migrate": "gxg_owner", "admin": "gxg_admin", "api": "gxg_api", "sweeper": "gxg_sweeper", "executor": "gxg_executor",
     "ui": "gxg_ui", "notifier": "gxg_notifier", "decider": "gxg_decider",
+    "approval-backup": "gxg_backup",
 }  # fmt: skip
 TG_ROLE_VAR = {
     "gxg_telegram_service": "TELEGRAM_SERVICE_DSN",
@@ -233,7 +236,7 @@ def validate_spec(spec: dict[str, Any]) -> list[str]:
             if key is not None and key in AS28 and name not in AS28[key]:
                 problems.append(f"{name}: secret {var} ({key}) is not allowed for this process (AS-28)")
             gen = str(sec.get("gen", ""))
-            if gen.startswith("db_dsn:") and gen != f"db_dsn:{ROLE_OF.get(name)}":
+            if gen.startswith(("db_dsn:", "role_password:")) and gen.partition(":")[2] != ROLE_OF.get(name):
                 problems.append(f"{name}: {var} uses another process's database role (AS-27)")
         for url in svc.get("internal_urls") or []:
             if url not in declared_names(svc):
@@ -295,6 +298,8 @@ class Values:
                 dsn = self.get(svc_name, "GXG_SECRET__GXG_DB_DSN") if r == role else None
                 if dsn:
                     found = urlsplit(dsn).password
+                elif r == role and (pw := self.get(svc_name, "PGPASSWORD")):  # the backup job: libpq, no DSN
+                    found = pw
             if not found and role in TG_ROLE_VAR and "telegram" in self.spec["services"]:
                 dsn = self.get("telegram", TG_ROLE_VAR[role])
                 if dsn and urlsplit(dsn).username == role:  # not the archive owner's DSN an earlier version wrote there
@@ -437,6 +442,8 @@ class Values:
             host = "${{approval-db.RAILWAY_PRIVATE_DOMAIN}}"
             db = self.spec["services"]["approval-db"]["env"]["POSTGRES_DB"]
             value = f"postgresql://{arg}:{self.role_password(arg)}@{host}:5432/{db}"
+        elif kind == "role_password":
+            value = self.role_password(arg)
         elif kind == "tg_dsn":
             db = self.spec["services"]["telegram-db"]["env"]["POSTGRES_DB"]
             value = (

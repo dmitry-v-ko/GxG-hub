@@ -154,6 +154,28 @@ services:
       GXG_CONFIG__GXG_EXEC_JWKS: "keyset:exec-signing.public"
       GXG_CONFIG__GXG_PAYLOAD_PUBLIC_KEYS: "keyset:payload.public"
     internal_urls: [GXG_SECRET__GXG_DB_DSN]
+  # Daily encrypted backup of the approval-db (M14, OPS-03, RET-04; docs/runbooks/approval-backup.md; owner decision 2026-11-26):
+  # pg_dump -Fc | AES-256-GCM into the Volume of this service, copies older than 35 days are deleted, then `check`
+  # (AC-M14-02) fails the run on anything older. Its own read-only role gxg_backup (pg_read_all_data, owns nothing, no
+  # write; AS-27/28): not the migration owner. PILOT TRADE-OFF (runbook, open item): GXG_BACKUP_KEY lives on the same
+  # service as the backups, so one compromised service holds both; the key is generated in Railway and never printed, the
+  # owner gets no copy outside Railway.
+  approval-backup:
+    kind: cron
+    schedule: "17 3 * * *"  # daily 03:17 UTC
+    source: {dockerfile: deploy/railway/approval-backup.Dockerfile}
+    start: >-
+      /opt/gxg/entrypoint.sh sh -c 'python /opt/gxg/approval_backup.py backup --dir /var/backups/gxg-approval
+      && python /opt/gxg/approval_backup.py check --dir /var/backups/gxg-approval'
+    volume: /var/backups/gxg-approval
+    env:
+      PGHOST: ${{approval-db.RAILWAY_PRIVATE_DOMAIN}}
+      PGUSER: gxg_backup
+      PGDATABASE: gxg_approval
+      PGSSLMODE: prefer  # the private network; postgres-ssl serves TLS with its own certificate
+    secrets:
+      PGPASSWORD: {gen: "role_password:gxg_backup", as28: db_password}
+      GXG_BACKUP_KEY: {gen: "random:32", as28: backup_key}  # 32 bytes, base64url
   mcp:
     kind: app
     source: {dockerfile: deploy/railway/approval.Dockerfile}

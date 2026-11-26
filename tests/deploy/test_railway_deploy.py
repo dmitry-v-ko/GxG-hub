@@ -358,3 +358,33 @@ def test_the_bundle_reaches_kb_with_kit_keys() -> None:
 
     assert pilot_bundle.CONSUMERS["kb"] == ("KB_BUNDLE_KEYS", pilot_bundle.B64_VAR)
     assert (ROOT / "deploy/railway/manifests/kb/gxg-manifest.yaml").is_file()  # its tools are in the bundle's registry
+
+
+def test_approval_backup_cron_is_read_only_daily_and_keeps_its_secrets_to_itself() -> None:
+    spec = rd.load_spec()
+    svc = spec["services"]["approval-backup"]
+    assert svc["kind"] == "cron" and svc["schedule"].split()[2:] == ["*", "*", "*"]  # daily
+    assert svc["env"]["PGUSER"] == "gxg_backup" and rd.ROLE_OF["approval-backup"] == "gxg_backup"
+    assert svc["volume"] == "/var/backups/gxg-approval"
+    assert {s["as28"] for s in svc["secrets"].values()} == {"backup_key", "db_password"}
+    assert "approval-backup" in rd.AS28["backup_key"] and rd.AS28["backup_key"] == {"approval-backup"}
+    assert not [p for p in rd.validate_spec(spec) if "approval-backup" in p]
+    assert "check --dir" in svc["start"] and "backup --dir" in svc["start"]  # AC-M14-02 runs after every backup
+    roles = (ROOT / "approval/deploy/roles.sql").read_text("utf-8")
+    assert "'gxg_backup'" in roles and "GRANT pg_read_all_data TO gxg_backup" in roles
+    assert "SUPERUSER" in roles and "NOBYPASSRLS" in roles  # created without privileges, only the read-all membership
+
+
+def test_restore_drill_refuses_the_production_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("drill", ROOT / "scripts/ops/approval_restore_drill.py")
+    assert spec and spec.loader
+    drill = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(drill)
+    for k, v in {
+        "PGHOST": "db.internal", "PGUSER": "gxg_backup", "PGDATABASE": "gxg_approval", "PGPASSWORD": "x",
+        "DRILL_PGHOST": "db.internal", "DRILL_PGUSER": "postgres", "DRILL_PGPASSWORD": "y",
+    }.items():  # fmt: skip
+        monkeypatch.setenv(k, v)
+    assert drill.main() == 2
