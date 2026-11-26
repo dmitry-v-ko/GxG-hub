@@ -7,11 +7,15 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]  # edited: base branch changed
   push:
-    branches: [main, "claude/**"]
+    # Only main: a branch is checked by its pull request (minutes of a private repository; owner decision 2026-11-26).
+    branches: [main]
   workflow_dispatch:
   schedule:
     # GR-13a: re-sign the bundle at least every 12 h; every 6 h leaves room for delayed or dropped runs.
     - cron: "41 */6 * * *"
+    # Nightly mutmut on main (owner decision 2026-11-26): 2-4 h, out of `ci-ok`; on a pull request only with the
+    # label `mutmut`, or by hand (workflow_dispatch).
+    - cron: "23 1 * * *"
 
 permissions:
   contents: read
@@ -29,7 +33,8 @@ env:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,7 +46,8 @@ jobs:
       - run: uv run ruff format --check .
 
   types:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -75,12 +81,14 @@ jobs:
         run: MYPYPATH=stand/tests:stand:gateway/contextforge:connectors/telegram/archive uv run mypy --exclude mutants stand gateway/contextforge
 
   tests:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0  # tests/toolkit: copier update clones this checkout and needs the older commit
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: PostgreSQL 16 with pgvector (connectors/telegram tests, M11)
         run: sudo apt-get update -q && sudo apt-get install -y -q postgresql-16 postgresql-16-pgvector
@@ -109,7 +117,9 @@ jobs:
     # ADR-0004: notification when gxg_agents_v2 changes the telegram_archive schema after the pinned commit
     # (connectors/telegram/archive/SOURCE.md). Runs on schedule too, so drift fails a run without a Hub push.
     # Needs GXG_AGENTS_V2_TOKEN: read-only (contents) token for dmitry-v-ko/gxg_agents_v2; without it the job fails.
-    runs-on: ubuntu-latest
+    # On the nightly schedule too (drift without a Hub push), not on the 6-hourly bundle one.
+    if: github.event_name != 'schedule' || github.event.schedule == '23 1 * * *'
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -130,7 +140,8 @@ jobs:
   approval-db:
     # M7: Approval Service on a real PostgreSQL 16 in Docker, reached only over a Unix socket (the container
     # has no network), so the no-TCP rule of AC-M0-01 holds. Not in `tests`: it needs Docker and the image.
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -149,7 +160,8 @@ jobs:
   approval-images:
     # AC-M9-12 (AS-29): ui and notifier images from their own lockfiles; compose networks; connection attempts
     # from inside each container (allowed ones open, the rest refused; positive control from the edge network).
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -162,7 +174,8 @@ jobs:
 
   schema-guard:
     # AC-M0-02: proves that every schema mutation turns the contract tests red.
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -174,7 +187,8 @@ jobs:
 
   secrets:
     # AC-M0-04, AC-M0.1-01: gitleaks (pinned, scripts/ci/gitleaks.sh) on the tree and on every pushed commit.
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -217,7 +231,11 @@ jobs:
     # DoD-4, AC-M0.1-03: every mutant of the M0 key-condition modules is killed; M1, M2, M3, M5 and M7 modules too.
     # M7 adds approval (~1700 mutants, DB tests on PostgreSQL in Docker) and its SQL mutation check
     # (scripts/ci/mutate_m7_sql.py, ~80 runs of approval/tests_db): about two hours on a 4-core runner.
-    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'schedule' && github.event.schedule == '23 1 * * *')
+      || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'mutmut'))
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -231,7 +249,8 @@ jobs:
 
   policy:
     # AC-M2-01, AC-M2-05, AC-M2-06 on the repository policies.
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -249,7 +268,8 @@ jobs:
   demo-image:
     # AC-M3-01, AC-M3-11: build the production image of connectors/demo from the repository root and
     # run it: /readyz 200 with a valid bundle, 503 without; test switches stop the start.
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -263,8 +283,9 @@ jobs:
     # AC-M5-01, AC-M5-04: the dev stand (compose.yaml) end to end: ContextForge (pinned digest) + PostgreSQL +
     # demo, SC-01…SC-10 and MC-01…MC-04 through ContextForge, then again after restarting and after recreating
     # every container with no setup in between. The report goes to the job's artifacts.
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
+    timeout-minutes: 60  # build + three runs of the suite (fresh, restart, recreate): ~37 min on a hosted runner
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -284,7 +305,8 @@ jobs:
     # Always diffed against main (merge-base), not against the PR base. Outside a PR (push / dispatch
     # to a branch other than main) any widening is red. Connector manifests and gate files count too.
     # docs/setup/widening-approval.md
-    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # the schedule only re-signs the bundle and runs the nightly mutmut
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 10
     permissions:
       contents: read
@@ -316,9 +338,10 @@ jobs:
 
   ci-ok:
     # Single required check for branch protection: green only if every job is green.
-    if: always()
-    needs: [lint, types, tests, approval-db, approval-images, schema-guard, secrets, mutmut, policy, demo-image, m5-stand, grants-widening]
-    runs-on: ubuntu-latest
+    # mutmut is not here (nightly on main, owner decision 2026-11-26); a red nightly run is fixed by the next change.
+    if: always() && github.event_name != 'schedule'
+    needs: [lint, types, tests, approval-db, approval-images, schema-guard, secrets, policy, demo-image, m5-stand, grants-widening]
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 5
     steps:
       - name: All jobs succeeded
@@ -332,9 +355,12 @@ jobs:
     # GR-11: signed grants-bundle.json after a merge into main. Key from secrets, never in the repo.
     # Not part of ci-ok. Setup: docs/setup/bundle-signing.md
     # GR-13a: also on schedule (default branch = main): same commit, same content, new built_at.
-    if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
+    if: >-
+      always() && github.ref == 'refs/heads/main'
+      && ((github.event_name == 'push' && needs.ci-ok.result == 'success')
+      || (github.event_name == 'schedule' && github.event.schedule == '41 */6 * * *'))
     needs: [ci-ok]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is 26.04 without postgresql-16
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
