@@ -32,9 +32,9 @@ Exit: 0 — pass, 1 — widening not approved, 2 — usage or API error.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -300,16 +300,12 @@ def run(
 
 def carry_from(repo: Path, main_ref: str) -> Carry:
     """Widening of a past head, computed by gate_diff.py next to this file (main's copy in CI)."""
-    spec = importlib.util.spec_from_file_location("gate_diff", Path(__file__).with_name("gate_diff.py"))
-    if spec is None or spec.loader is None:
-        raise OSError("gate_diff.py not found next to widening_gate.py")
-    gate_diff = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(gate_diff)
+    widening_at = runpy.run_path(str(Path(__file__).with_name("gate_diff.py")))["widening_at"]
     tmp = Path(os.environ.get("RUNNER_TEMP") or tempfile.mkdtemp())
 
     def carry(sha: str) -> list[dict[str, Any]] | None:
         try:
-            result: list[dict[str, Any]] = gate_diff.widening_at(repo, main_ref, sha, tmp)
+            result: list[dict[str, Any]] = widening_at(repo, main_ref, sha, tmp)
         except (subprocess.CalledProcessError, OSError, ValueError, KeyError) as exc:
             print(f"::warning::widening of {sha} not computed: {exc!r}")
             return None

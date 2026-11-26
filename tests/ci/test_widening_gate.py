@@ -688,3 +688,87 @@ def test_carry_from_computes_the_widening_of_a_past_head(tmp_path: Path, monkeyp
     assert [(f["rule"], f["path"]) for f in new] == [("lint.exception", "b.py")]
     assert carry("f" * 40) is None  # a SHA the checkout does not have: unknown, fail closed
     assert (tmp_path / "runner" / f"carry-{a}" / "head" / "a.py").exists()
+
+
+# Exact outputs of the carry-over and the control-change table (DoD-4).
+def test_control_change_table_exact() -> None:
+    two = [GATE_FINDING, {**GATE_FINDING, "rule": "lint.config", "path": "a|b", "detail": "line\n`two`"}]
+    report, markdown = gate.with_gate_findings(NARROW, "m", two)
+    assert report == {"widening": two, "narrowing": NARROW["narrowing"]}
+    assert markdown == (
+        "m\n### Control changes (2, need the `widening-approved` label)\n\n"
+        "| rule | path | detail |\n| --- | --- | --- |\n"
+        "| gate.self | `scripts/ci/grants_widening.sh` | gate file changed (abc) |\n"
+        "| lint.config | `a\\|b` | line 'two' |\n"
+    )
+
+
+def test_a_finding_is_the_same_whatever_its_key_order() -> None:
+    assert gate.uncovered([{"b": 1, "a": 2}], [{"a": 2, "b": 1}]) == []
+
+
+def test_carried_reason_lists_up_to_five_new_findings() -> None:
+    new = [{"detail": f"d{i}"} for i in range(4)] + [{"path": "p"}, {"kind": "k"}, {"detail": "d6"}]
+    code, api, _ = carry_run([], new, A_RUN)
+    assert code == 1
+    assert (
+        f"and 7 widening change(s) since the label on {SHA_A[:12]}: d0; d1; d2; d3; p. Review"
+        in (api.calls[-1][2]["body"])
+    )
+    code, api, _ = carry_run([], [{"kind": "k"}], [])
+    assert "`widening-approved` was removed: the label (2026-11-20T09:00:00Z) is older than the head commit on the PR" \
+        " (2026-11-20T10:00:00+00:00), and the head commit at the time of the label is unknown. Review" in (
+        api.calls[-1][2]["body"]
+    )  # fmt: skip
+
+
+def test_carry_warns_when_the_widening_is_not_computed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
+    carry = gate.carry_from(tmp_path / "absent", "refs/remotes/origin/main")
+    assert carry("f" * 40) is None
+    out = capsys.readouterr().out
+    assert out == f"::warning::widening of {'f' * 40} not computed: FileNotFoundError(2, 'No such file or directory')\n"
+
+
+def test_head_at_without_runs_and_with_a_tie() -> None:
+    pr = {"number": 7, "head": HEAD}
+    assert gate.head_at(lambda m, p, b: {}, "o/r", pr, gate._ts(T_AFTER)) is None
+    # Two runs at the same instant: the first listed (GitHub lists the newest first) wins.
+    api = FakeApi([], [], [], branch_runs=[pr_run(T_PUSH, sha="1" * 40), pr_run(T_PUSH, sha="2" * 40)])
+    assert gate.head_at(api, "o/r", pr, gate._ts(T_AFTER)) == "1" * 40
+
+
+def test_main_passes_repo_and_main_to_the_carry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+    files = {"r.json": json.dumps(WIDE), "r.md": "m", "CODEOWNERS": "* @o\n", "event.json": "{}"}
+    for name, text in files.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    seen: list[Any] = []
+
+    def carry_from(repo: Path, main: str) -> str:
+        seen.append((repo, main))
+        return "carry"
+
+    def run(*args: Any, carry: Any, **kw: Any) -> int:
+        seen.append(carry)
+        return 0
+
+    monkeypatch.setattr(gate, "carry_from", carry_from)
+    monkeypatch.setattr(gate, "run", run)
+    monkeypatch.setattr(gate, "github_api", lambda token, base: None)
+    for var, value in (("GITHUB_EVENT_PATH", str(tmp_path / "event.json")), ("GITHUB_TOKEN", "t"),
+                       ("GITHUB_REPOSITORY", "o/r")):  # fmt: skip
+        monkeypatch.setenv(var, value)
+    args = ["--report", str(tmp_path / "r.json"), "--markdown", str(tmp_path / "r.md")]
+    args += ["--codeowners", str(tmp_path / "CODEOWNERS"), "--repo", "checkout"]
+    assert gate.main(args) == 0
+    assert seen == [(Path("checkout"), "refs/remotes/origin/main"), "carry"]
+    seen.clear()
+    gate.main([*args, "--main", "refs/x"])
+    assert seen == [(Path("checkout"), "refs/x"), "carry"]
+    with pytest.raises(SystemExit):
+        gate.main(["--help"])
+    out = " ".join(capsys.readouterr().out.split())
+    assert "--repo REPO checkout with the PR history (PR mode): lets an older label carry over" in out
+    assert "--main MAIN main ref for --repo" in out
