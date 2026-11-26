@@ -39,7 +39,8 @@ from init import KID_ADAPTER, env_values  # noqa: E402
 CF = "http://127.0.0.1:4444"
 PROTO = "2025-06-18"
 PROBE_IMAGE = "python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b"
-NET_EDGE, NET_CONNECTORS = "gxg-stand_edge", "gxg-stand_connectors"
+PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "gxg-stand")  # another project name: stand/m11cf/run.sh
+NET_EDGE, NET_CONNECTORS = f"{PROJECT}_edge", f"{PROJECT}_connectors"
 DEMO_URL = "http://demo:8080/mcp"
 ALPHA_READER, ALPHA_NOBODY = "agent:t-alpha:reader", "agent:t-alpha:nobody"
 BETA_READER, BETA_NOBODY = "agent:t-beta:reader", "agent:t-beta:nobody"
