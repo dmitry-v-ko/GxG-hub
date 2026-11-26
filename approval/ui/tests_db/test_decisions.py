@@ -154,9 +154,10 @@ def test_high_risk_needs_step_up(browser: Any, passkey: Any, propose: Any, row_o
     assert browser.decide(intent, sign=False).status_code == 403  # a passkey, but no assertion
     assert browser.decide(intent, assertion="{}").status_code == 403
     options = browser.challenge(intent).text
-    assert browser.decide(intent, assertion=key.assertion(options)).status_code == 303
+    r = browser.decide(intent, assertion=key.assertion(options), comment="checked with the owner")
+    assert r.status_code == 303 and r.headers["location"] == f"/intents/{intent['intent_id']}"
     assert row_of(intent["intent_id"])["status"] == "approved"
-    assert owner.execute("SELECT step_up FROM decisions").fetchall() == [(True,)]
+    assert owner.execute("SELECT step_up, comment FROM decisions").fetchall() == [(True, "checked with the owner")]
 
 
 def _challenge(options_json: str) -> bytes:
@@ -296,7 +297,7 @@ def test_reject_needs_a_passkey_too(browser: Any, propose: Any, row_of: Any, own
     assert browser.decide(intent, "reject", sign=False).status_code == 403
     assert browser.decide(intent, "reject").status_code == 303
     assert row_of(intent["intent_id"])["status"] == "rejected"
-    assert owner.execute("SELECT webauthn_assertion ? 'signature' FROM decisions").fetchall() == [(True,)]
+    assert owner.execute("SELECT webauthn_assertion ? 'signature', comment FROM decisions").fetchall() == [(True, None)]
 
 
 def test_no_passkey_is_shown(browser: Any, propose: Any, row_of: Any) -> None:

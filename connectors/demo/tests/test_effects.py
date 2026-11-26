@@ -12,6 +12,7 @@ import re
 import threading
 import time
 import unicodedata
+from datetime import UTC, datetime
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
 from pathlib import Path
@@ -29,8 +30,9 @@ from demo_connector import server, testctl
 from demo_connector.backend import Backend
 from demo_connector.effects import EXECUTE, PROPOSE, args_hash
 from demo_connector.provider import Dropped, Provider
+from demo_connector.tools import Connector
 from gxg_connector_kit import _schema, canonical, exec_token, svc_jwt
-from gxg_connector_kit.identity import StubIssuer
+from gxg_connector_kit.identity import StubIssuer, VerifiedIdentity
 from gxg_policy import cli as policy_cli
 
 pytestmark = pytest.mark.anyio
@@ -947,6 +949,7 @@ async def test_execute_quota_answers_429_before_dispatch(internal: Internal) -> 
     r = await internal.execute(exec_token.sign(EXEC, claims(**other)), execution_id=other["jti"])
     doc = r.json()
     assert r.status_code == 429 and doc["code"] == "rate_limited" and 55 <= doc["retry_after_s"] <= 60
+    assert doc["message"] == "send quota of the connector is used up"
     assert len(internal.provider.calls()) == calls and len(internal.dispatches()) == dispatches
 
 
@@ -974,3 +977,46 @@ def test_quota_window_and_spec() -> None:
             p.set_mode(bad)
     p.set_mode("ok")
     assert p.quota is None
+
+
+def test_quota_wait_is_at_least_one_second_and_rounds_up(tmp_path: Path) -> None:
+    """EX-25: retry_after_s is a whole number of seconds >= 1: half a second left in the window means 1."""
+    from datetime import UTC, datetime, timedelta
+
+    p = Provider(tmp_path / "j.sqlite3")
+    p.set_mode("execute_quota:1/30")
+    now = datetime.now(UTC)
+    p._db.execute(
+        "INSERT INTO sends (tenant, provider_key, execution_id, recipient, text_hash, attempt, outcome, at) "
+        "VALUES ('t', 'k', 'e', 'r', 'h', 1, 'ok', ?)",
+        ((now - timedelta(seconds=29.5)).isoformat(),),
+    )
+    assert p.quota_wait_s(now) == 1
+
+
+async def test_propose_hook_gives_propose_access_to_the_tenants_connection(agent: tuple[Agent, Any, Any]) -> None:
+    _, connector, _ = agent
+
+    class Verifier:
+        def verify(self, headers: Any, **_: Any) -> VerifiedIdentity:
+            raise AssertionError("the hook does not verify")
+
+    tool = next(t for t in connector.tools(Verifier(), lambda: None) if t.name == PROPOSE)
+    now = datetime.now(UTC)
+    ident = VerifiedIdentity("t-alpha", ACTOR, now, now, "req-1", None, "signed_assertion")
+    access = await tool.hook(ident, ARGS)
+    assert (access.ident, access.action, access.connection) == (ident, "propose", "demo-main")
+
+
+async def test_connector_without_effects_refuses_propose_and_has_no_provider() -> None:
+    connector = Connector(Backend(scan_delay_s=0), cast(Any, object()))
+    assert connector.effects is None and connector.internal is None and connector.provider is None
+    assert "demo.message.propose" not in connector.handlers()
+    with pytest.raises(RuntimeError, match=r"^effects are not enabled$"):
+        await connector.message_propose(cast(Any, None), ARGS)
+
+
+def test_effects_need_the_bundle_store() -> None:
+    connector = Connector(Backend(scan_delay_s=0), cast(Any, object()))
+    with pytest.raises(TypeError, match=r"^effects need the bundle store \(platform registry, AS-06\)$"):
+        connector.enable_effects(cast(Any, None), cast(Any, None), lambda: None, cast(Any, None))
