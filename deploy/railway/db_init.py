@@ -31,6 +31,9 @@ def main() -> None:
             raise SystemExit("db-init: no current database")
         conn.execute(sql.SQL("ALTER DATABASE {} OWNER TO gxg_owner").format(sql.Identifier(db[0])))
         conn.execute("ALTER SCHEMA public OWNER TO gxg_owner")
+        conn.execute(  # M14: the backup role reads the whole database (pg_read_all_data, roles.sql) and needs CONNECT
+            sql.SQL("GRANT CONNECT ON DATABASE {} TO gxg_backup").format(sql.Identifier(db[0]))
+        )
         print("db-init: done")
         report(conn)
 

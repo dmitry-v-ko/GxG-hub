@@ -173,6 +173,7 @@ services:
       PGUSER: gxg_backup
       PGDATABASE: gxg_approval
       PGSSLMODE: prefer  # the private network; postgres-ssl serves TLS with its own certificate
+      HOME: /tmp  # libpq looks for ~/.postgresql (client certificate); the service user has no home
     secrets:
       PGPASSWORD: {gen: "role_password:gxg_backup", as28: db_password}
       GXG_BACKUP_KEY: {gen: "random:32", as28: backup_key}  # 32 bytes, base64url
