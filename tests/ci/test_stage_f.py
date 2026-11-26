@@ -24,8 +24,13 @@ IDS = F.matrix_ids(F.MATRIX.read_text("utf-8"))
 def test_the_matrix_has_the_expected_prefixes() -> None:
     prefixes = ("SC", "EX", "MC", "SI", "OPS")
     assert {i.split("-")[0] for i in IDS} == set(prefixes)
-    # MC: 5 + MC-06…MC-10 of MCC-11 (3ddb9f1)
-    assert [sum(i.startswith(p + "-") for i in IDS) for p in prefixes] == [10, 25, 10, 3, 7]
+    # MC: 5 + MC-06…MC-10 of MCC-11 (3ddb9f1) + MC-11…MC-13 of M11.4 (participants, pii)
+    assert [sum(i.startswith(p + "-") for i in IDS) for p in prefixes] == [10, 25, 13, 3, 7]
+
+
+def test_mc11_to_mc13_stay_not_run_until_they_run_on_the_service() -> None:
+    rows = {r["id"]: r for r in F.build(F.mapping(), {})}
+    assert [rows[i]["status"] for i in ("MC-11", "MC-12", "MC-13")] == ["not_run"] * 3
 
 
 def test_every_matrix_id_is_mapped_and_every_mapped_test_exists() -> None:

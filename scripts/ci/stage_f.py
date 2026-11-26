@@ -171,6 +171,7 @@ OPS: dict[str, list[str]] = {
 
 EXT = "tests/contract/test_ext_conformance.py"
 CAP = "packages/gxg-connector-kit/tests/test_capabilities.py"
+PART = "tests/contract/test_participants_conformance.py"
 _EXT_WHY = (
     "MCC-11 ext.* is checked only on a minimal fake connector (tests/contract: the shared suite and its mutants); "
     "no connector with ext.* exists yet, so the check on the Telegram service through ContextForge is M11.3 (stage D)"
@@ -208,6 +209,28 @@ OPEN: dict[str, dict[str, Any]] = {
         "status": "not_run",
         "reason": _EXT_WHY,
         "related": [f"{EXT}::test_mc07_to_mc10_pass_on_conforming_connector", f"{EXT}::test_mutation_is_caught"],
+    },
+    "MC-11": {
+        "status": "not_run",
+        "reason": "M11.4 participants.collect (pii off/on) is checked only on a minimal fake connector "
+        "(tests/contract: the shared suite and its mutants); the run on the Telegram service is M11.4",
+        "related": [
+            f"{PART}::test_mc11_to_mc13_pass_on_conforming_connector",
+            f"{PART}::test_mutation_is_caught",
+            "packages/gxg-connector-kit/tests/test_redact.py::test_redact",
+            "tests/contract/test_ext_virtual_servers.py::test_ext_read_shows_every_enabled_entry_except_pii",
+            "tests/contract/test_ext_virtual_servers.py::test_pii_entries_are_denied_to_ext_read_even_when_enabled",
+        ],
+    },
+    "MC-12": {
+        "status": "not_run",
+        "reason": "same as MC-11: a chat without `collect` (0 transport calls) is checked on the fake connector only",
+        "related": [f"{PART}::test_mc11_to_mc13_pass_on_conforming_connector", f"{PART}::test_mutation_is_caught"],
+    },
+    "MC-13": {
+        "status": "not_run",
+        "reason": "same as MC-11: dedupe and created/updated against the cursor are checked on the fake connector only",
+        "related": [f"{PART}::test_mc11_to_mc13_pass_on_conforming_connector", f"{PART}::test_mutation_is_caught"],
     },
     "OPS-02": {
         "status": "not_run",
