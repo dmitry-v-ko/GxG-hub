@@ -7,6 +7,7 @@ connector lists in `ext.search` (enabled, read, group covered by the caller's gr
 
 from __future__ import annotations
 
+import fnmatch
 import importlib.util
 import json
 from pathlib import Path
@@ -91,6 +92,22 @@ def test_the_pilot_tenant_has_no_ext_or_participants_wiring() -> None:
     assert not set(R.EXT) & set(R.agent_tools(pilot, "agent:t-pilot:pilot"))
     stand = (ROOT / "stand/unified_pdp.rules.json").read_text("utf-8")
     assert "ext-" not in stand and "participants" not in stand
+
+
+@pytest.mark.parametrize(
+    "rules", ["stand/unified_pdp.rules.json", "deploy/railway/contextforge/unified_pdp.rules.json"]
+)
+def test_the_script_executor_facade_is_not_hit_by_a_deny_rule(rules: str) -> None:
+    """ADR-0007 facade `hub.script.run` (owner decision 2026-11-26: renamed from `hub.execute`, which EFF-02's
+    `deny:agents-never-execute` refused on the stand): no deny pattern matches it; the old name stays refused."""
+    deny = [
+        a for r in json.loads((ROOT / rules).read_text("utf-8")) if r["id"].startswith("deny") for a in r["actions"]
+    ]
+    assert "tools.invoke.*execute*" in deny  # EFF-02 unchanged
+    tool = "tools.invoke.hubexec-t-ext-test-" + "hub.script.run".replace(".", "-")
+    assert not [p for p in deny if fnmatch.fnmatchcase(tool, p)]
+    assert [p for p in deny if fnmatch.fnmatchcase("tools.invoke.hubexec-t-ext-test-hub-execute", p)]
+    assert not any(f in "hub.script.run" for f in R.EXECUTE_FRAGMENTS)
 
 
 # --- layer 2: what the connector lists, on the real kit resolver and the committed test tenant -------------------
