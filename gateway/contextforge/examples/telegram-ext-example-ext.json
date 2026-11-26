@@ -9,6 +9,7 @@
    "actions": [
     "tools.invoke.telegram-t-ext-example-telegram-messages-search",
     "tools.invoke.telegram-t-ext-example-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-example-telegram-message-get",
     "tools.invoke.telegram-t-ext-example-telegram-ext-search",
     "tools.invoke.telegram-t-ext-example-telegram-ext-describe",
     "tools.invoke.telegram-t-ext-example-telegram-ext-call"
@@ -32,6 +33,7 @@
    "actions": [
     "tools.invoke.telegram-t-ext-example-telegram-messages-search",
     "tools.invoke.telegram-t-ext-example-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-example-telegram-message-get",
     "tools.invoke.telegram-t-ext-example-telegram-ext-search",
     "tools.invoke.telegram-t-ext-example-telegram-ext-describe",
     "tools.invoke.telegram-t-ext-example-telegram-ext-call"
@@ -55,6 +57,7 @@
    "actions": [
     "tools.invoke.telegram-t-ext-example-telegram-messages-search",
     "tools.invoke.telegram-t-ext-example-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-example-telegram-message-get",
     "tools.invoke.telegram-t-ext-example-telegram-messages-collect",
     "tools.invoke.telegram-t-ext-example-telegram-participants-collect"
    ],
@@ -79,10 +82,12 @@
    "telegram.ext.call",
    "telegram.ext.describe",
    "telegram.ext.search",
+   "telegram.message.get",
    "telegram.messages.search",
    "telegram.thread.read"
   ],
   "vs-tg-t-ext-example-people": [
+   "telegram.message.get",
    "telegram.messages.collect",
    "telegram.messages.search",
    "telegram.participants.collect",

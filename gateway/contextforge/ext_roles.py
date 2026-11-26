@@ -21,7 +21,8 @@ from typing import Any
 
 import yaml
 
-CORE = ("telegram.messages.search", "telegram.thread.read", "telegram.messages.collect")
+# message.get: read, one chat, live (plan M11.1 «Объём v1», deploy/railway/manifests/telegram/gxg-manifest.yaml)
+CORE = ("telegram.messages.search", "telegram.thread.read", "telegram.message.get", "telegram.messages.collect")
 PARTICIPANTS = "telegram.participants.collect"
 EXT = ("telegram.ext.search", "telegram.ext.describe", "telegram.ext.call")
 EXECUTE_FRAGMENTS = ("execute", "reconcile", "propose")  # agents never get these through ContextForge (EFF-02)

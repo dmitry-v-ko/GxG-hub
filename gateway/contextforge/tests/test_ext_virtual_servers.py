@@ -52,10 +52,10 @@ def test_committed_server_config_matches_the_policy_file(name: str) -> None:
 
 
 def test_roles_see_core_ext_and_participants_tools_separately() -> None:
-    assert R.agent_tools(TEST, READER) == [*R.CORE[:2], *R.EXT]  # read only: no collect tools
+    assert R.agent_tools(TEST, READER) == [*R.CORE[:3], *R.EXT]  # read only: no collect tools; message.get is read
     assert R.agent_tools(TEST, COLLECTOR) == [*R.CORE, R.PARTICIPANTS, *R.EXT]
     ex = R.build(EXAMPLE)
-    assert ex["servers"]["vs-tg-t-ext-example-ext"] == sorted([*R.CORE[:2], *R.EXT])
+    assert ex["servers"]["vs-tg-t-ext-example-ext"] == sorted([*R.CORE[:3], *R.EXT])
     assert R.PARTICIPANTS in ex["servers"]["vs-tg-t-ext-example-people"]
     assert not set(R.EXT) & set(ex["servers"]["vs-tg-t-ext-example-people"])  # collector has no ext grant
 

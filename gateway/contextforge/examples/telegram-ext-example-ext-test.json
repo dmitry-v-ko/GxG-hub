@@ -8,6 +8,7 @@
    "actions": [
     "tools.invoke.telegram-t-ext-test-telegram-messages-search",
     "tools.invoke.telegram-t-ext-test-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-test-telegram-message-get",
     "tools.invoke.telegram-t-ext-test-telegram-ext-search",
     "tools.invoke.telegram-t-ext-test-telegram-ext-describe",
     "tools.invoke.telegram-t-ext-test-telegram-ext-call"
@@ -31,6 +32,7 @@
    "actions": [
     "tools.invoke.telegram-t-ext-test-telegram-messages-search",
     "tools.invoke.telegram-t-ext-test-telegram-thread-read",
+    "tools.invoke.telegram-t-ext-test-telegram-message-get",
     "tools.invoke.telegram-t-ext-test-telegram-messages-collect",
     "tools.invoke.telegram-t-ext-test-telegram-participants-collect",
     "tools.invoke.telegram-t-ext-test-telegram-ext-search",
@@ -58,6 +60,7 @@
    "telegram.ext.call",
    "telegram.ext.describe",
    "telegram.ext.search",
+   "telegram.message.get",
    "telegram.messages.search",
    "telegram.thread.read"
   ],
@@ -65,6 +68,7 @@
    "telegram.ext.call",
    "telegram.ext.describe",
    "telegram.ext.search",
+   "telegram.message.get",
    "telegram.messages.collect",
    "telegram.messages.search",
    "telegram.participants.collect",
