@@ -80,7 +80,7 @@ def test_clear_needs_a_fresh_login(admin_client: TestClient, owner: psycopg.Conn
     body = {"scope": "tenant:t-alpha", "blocked": True, "reason": "incident"}
     assert admin_client.post("/v1/switches", json=body, headers=auth(token())).status_code == 200
     clear = body | {"blocked": False, "reason": "resolved"}
-    for t in (token(), token(auth_time=int(time.time()) - 301), token(auth_time="yesterday")):
+    for t in (token(), token(auth_time=int(time.time()) - 901), token(auth_time="yesterday")):
         assert admin_client.post("/v1/switches", json=clear, headers=auth(t)).status_code == 403
     fresh = token(auth_time=int(time.time()) - 60)
     assert admin_client.post("/v1/switches", json=clear, headers=auth(fresh)).status_code == 200
@@ -137,6 +137,7 @@ def test_passkey_invite(admin_client: TestClient, owner: psycopg.Connection[Any]
     r = admin_client.post("/v1/passkey-invites", json={"human": human}, headers=auth(token()))
     assert r.status_code == 200 and r.json()["expires_in_s"] == 86400
     invite = r.json()["invite"]
+    assert len(invite) == 32  # secrets.token_urlsafe(24): 192 random bits, as the decider's invite hash expects
     rows = owner.execute("SELECT token_hash, human_principal, created_by FROM passkey_invites").fetchall()
     assert rows == [(invite_hash(invite), human, OPERATOR)]  # the token itself is never stored
     with pg.connect("gxg_decider") as decider:
@@ -219,7 +220,7 @@ def test_refusal_texts_and_db_messages(admin_client: TestClient) -> None:
         r = admin_client.post("/v1/switches", json=body, headers=headers)
         assert (r.status_code, r.json()) == (status, {"message": message})
     r = admin_client.post("/v1/switches", json=body | {"blocked": False}, headers=auth(token()))
-    assert r.json() == {"message": "a fresh login (auth_time ≤ 5 min) is required to clear a switch"}
+    assert r.json() == {"message": "a fresh login (auth_time ≤ 15 min) is required to clear a switch"}
     r = admin_client.post("/v1/switches", json=body | {"scope": "bad scope"}, headers=auth(token()))
     assert r.status_code == 400 and r.json()["message"].startswith("scope global|tenant:<id>|tool:<tenant>:<tool>")
     for path in ("/docs", "/redoc", "/openapi.json"):
@@ -239,7 +240,7 @@ def test_required_claims_and_leeway(admin_client: TestClient) -> None:
 
 
 def test_pyjwk_signing_key_and_auth_time_boundary(pg: Any, owner: psycopg.Connection[Any]) -> None:
-    """Production passes PyJWKClient's PyJWK (its `.key` is used); the step-up limit is ≤ 300 s exactly."""
+    """Production passes PyJWKClient's PyJWK (its `.key` is used); the step-up limit is ≤ 900 s exactly (AS-24)."""
     from jwt.algorithms import ECAlgorithm
 
     jwk = jwt.PyJWK(json.loads(ECAlgorithm.to_jwk(KEY.public_key())), algorithm="ES256")
@@ -255,9 +256,40 @@ def test_pyjwk_signing_key_and_auth_time_boundary(pg: Any, owner: psycopg.Connec
             pool, ISSUER, AUDIENCE, frozenset({OPERATOR}), signing_key=signing_key, clock=lambda: clock[0]
         )
         with TestClient(admin.create_app(deps)) as client:
-            t = token(auth_time=int(clock[0]) - 300)
+            t = token(auth_time=int(clock[0]) - 900)
             body = {"scope": "global", "blocked": False, "reason": "boundary"}
             assert client.post("/v1/switches", json=body, headers=auth(t)).status_code == 200
             assert seen == [t]
             clock[0] += 1
             assert client.post("/v1/switches", json=body, headers=auth(t)).status_code == 403
+
+
+def test_the_operator_page_switch_is_the_same_audited_gxg_switch(
+    pg: Any, propose: Callable[..., Any], owner: psycopg.Connection[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The kill switch page of admin_web (drill AC-M14-05 from a browser): its callables run `gxg_switch` as the API."""
+    from gxg_approval import admin_web
+
+    got: dict[str, Any] = {}
+    monkeypatch.setattr(admin_web, "register", lambda _app, **kw: got.update(kw))
+    alpha = reserved(pg, propose)
+    with ConnectionPool(pg.dsn("gxg_admin"), min_size=1, max_size=2, kwargs={"autocommit": True}) as pool:
+        deps = admin.Deps(pool, ISSUER, AUDIENCE, frozenset({OPERATOR}), signing_key=lambda _t: KEY.public_key(),
+                          web=object())  # fmt: skip
+        admin.create_app(deps)
+        assert got["set_switch"](OPERATOR, "global", True, "DRILL") == ""
+        with pg.connect("gxg_api") as api, pytest.raises(psycopg.Error) as err:
+            api.execute("SELECT gxg_dispatch(%s, %s, 'demo', 30)", (alpha[1], alpha[0]))
+        assert err.value.sqlstate == "GX423"
+        assert [(s, b, c) for s, b, _r, c, _t in got["list_switches"]()] == [("global", True, OPERATOR)]
+        assert got["set_switch"](OPERATOR, "nonsense", True, "x") != ""  # refused by the database, shown on the page
+        assert got["set_switch"](OPERATOR, "global", False, "DRILL over") == ""
+        human = "oidc:https://idp.example.invalid:2"
+        code = got["issue_invite"](OPERATOR, human)  # the invite page gets the same audited issuer as the API
+        rows = owner.execute("SELECT token_hash, human_principal FROM passkey_invites").fetchall()
+        assert rows == [(invite_hash(code), human)]
+        assert [(s, b) for s, b, *_ in got["list_switches"]()] == [("global", False)]
+    audit = owner.execute(
+        "SELECT actor, action FROM audit_events WHERE action LIKE 'admin_switch%' ORDER BY at"
+    ).fetchall()
+    assert audit == [(OPERATOR, "admin_switch_set"), (OPERATOR, "admin_switch_clear")]

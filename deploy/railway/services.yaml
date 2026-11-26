@@ -323,6 +323,35 @@ services:
       GXG_TGDB_ROLE_PASSWORDS: {gen: tg_role_passwords, as28: bootstrap}
     internal_urls: [GXG_TGDB_SUPERUSER_DSN]
 
+  # ---------------------------------------------------------------- gxg-kb-service (M6, ADR-0006)
+  # Read-only MCP over the KB schema in Supabase (the project's pooler/host, TLS verify-full), private network only:
+  # http://kb.railway.internal:8080/mcp, identity from X-GxG-Identity as for telegram. The M6 image has no Railway entrypoint
+  # (Railway has variables, the service reads files): `start` writes the three files into tmpfs, unpacks the bundle and drops
+  # the variables before exec. The image runs as its own user `kb`, so no volume (root-owned mount): the bundle's `built_at`
+  # (GR-13a) is kept in tmpfs and does not survive a restart; the 24 h bundle freshness still holds. Env names: kb-service README.
+  kb:
+    kind: app
+    source: {repo: dmitry-v-ko/gxg-kb-service, branch: claude/m6-kb-service, dockerfile: Dockerfile.railway}
+    port: 8080  # MCP, /healthz, /readyz (503 until the role exists and the bundle is valid, the deployment must still be SUCCESS)
+    start: >-
+      sh -c 'umask 077 && mkdir -p /dev/shm/kb/bundle
+      && printf %s "$KB_DATABASE_PASSWORD" > /dev/shm/kb/db.password
+      && printf %s "$KB_CONNECTIONS_JSON" > /dev/shm/kb/connections.json
+      && printf %s "$KB_DB_CA" > /dev/shm/kb/ca.pem
+      && printf %s "$GXG_BUNDLE_B64" | base64 -d | tar -xz -C /dev/shm/kb/bundle
+      && export KB_DATABASE_PASSWORD_FILE=/dev/shm/kb/db.password KB_CONNECTIONS_FILE=/dev/shm/kb/connections.json
+      KB_BUNDLE_DIR=/dev/shm/kb/bundle KB_STATE_FILE=/dev/shm/kb/bundle-state.json
+      && unset KB_DATABASE_PASSWORD KB_CONNECTIONS_JSON KB_DB_CA GXG_BUNDLE_B64 && exec python -m kb_service'
+    env:
+      KB_IDENTITY_KEYS: ${{contextforge.GXG_IDENTITY_KEYS}}  # public keys of the ContextForge adapter (variant C), as TELEGRAM_IDENTITY_KEYS
+    # KB_DATABASE_URL: conninfo of the KB database as gxg_kb_reader WITHOUT password, sslmode=verify-full (+ sslrootcert);
+    # KB_CONNECTIONS_JSON: {"t-pilot": {"connection_id": "...", "workspace_id": "<uuid>"}}; KB_BUNDLE_KEYS, GXG_BUNDLE_B64: scripts/deploy/pilot_bundle.py
+    seed:
+      KB_DB_CA: {file: deploy/railway/supabase-root-2021-ca.crt}  # public Supabase Root 2021 CA (.crt: *.pem is refused by gitleaks.sh), SHA-256 80:70:25:AD…:CA:FA (sslrootcert=/dev/shm/kb/ca.pem)
+    owner_env: [KB_DATABASE_URL, KB_CONNECTIONS_JSON, KB_BUNDLE_KEYS, GXG_BUNDLE_B64]
+    secrets:
+      KB_DATABASE_PASSWORD: {gen: owner}  # password of gxg_kb_reader, set after the owner ran deploy/railway/sql/kb_reader.sql
+
 # Described, NOT deployed (M14 prep; the owner chose the orchestrator's schedule instead, every 10 h): this block is not under `services`, so apply, --verify and --audit never touch it.
 # To switch it on, the owner moves it under `services` (kind: cron sets cronSchedule, railway_deploy.py) and sets
 # RAILWAY_TOKEN; see docs/runbooks/bundle-reissue.md. The signing key stays in `bundle-signer`: this job reads it

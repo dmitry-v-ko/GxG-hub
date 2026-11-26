@@ -58,6 +58,7 @@ uv run pytest tests/contract
 | EX-23 | C | Lease без `dispatch`, просроченный dispatch lease, исчерпание `max_attempts` | T10, T14, T12 → `failed`; попытки считаются при `dispatch` и при отказе T12a; T10 и T12b попытку не тратят | AS-03, T7…T14 |
 | EX-24 | C | Ротация ключа executor'а; удаление скомпрометированного `kid`; расхождение часов 4 с и 10 с | Плавная ротация; старые токены отклоняются; 4 с проходит, 10 с — нет | AS-09…AS-11 |
 | EX-25 | C | Коннектор отвечает 429 `rate_limited` до `dispatch`, затем `ok`; 429 всегда; 429 после `dispatch`; 429 без `retry_after_s`; поздний 429 после T10 | `attempts` не меняется, exec `released` с `error_code = rate_limited`, следующий reserve не раньше clamp(`retry_after_s`), итог `succeeded`; при постоянном 429 — `expired` в `execution_deadline`, 0 вызовов провайдера; после `dispatch` → `outcome_unknown`; без `retry_after_s` → T12a; поздний ответ игнорируется | AS-12a, T12b, EFF-23 |
+| EX-26 | C | Решение в `ui` без passkey: intent без `step_up_required`; intent со `step_up_required`; чужой approver; устаревшие `version` или `args_hash`; без CSRF | Первый → решён, `decisions.step_up = false`, `decided_by = oidc:…`; остальные → отказ, intent не меняется; роль `gxg_ui` не может вызвать `gxg_decide` | AS-30, AS-30a, AS-17 |
 
 ### Контракт
 

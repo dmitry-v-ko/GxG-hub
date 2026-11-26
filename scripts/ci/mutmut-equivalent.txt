@@ -62,8 +62,8 @@ gxg_policy.diff.xǁ_Diffǁtools__mutmut_39  # add(None, ...) vs add(False, ...):
 demo_connector.backend.xǁBackendǁ_scan__mutmut_7  # M3: `>=` -> `>` on time.monotonic() vs a float deadline; equal only at the same nanosecond, no test can tell
 demo_connector.tools.xǁDemoToolǁrun__mutmut_133  # M3: duration_ms * 1001 instead of * 1000: 0.1 % off a log field, no observable behaviour
 demo_connector.tools.x_load_schema__mutmut_4  # M3: keeping `..` in the tail still finds the same file: the parent walk reaches it as d/../../schemas/… from connectors/demo (or its mutants/ copy)
-demo_connector.tools.xǁConnectorǁtools__mutmut_15  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
-demo_connector.tools.xǁConnectorǁtools__mutmut_17  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+demo_connector.tools.xǁConnectorǁenable_effects__mutmut_9  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
+demo_connector.tools.xǁConnectorǁenable_effects__mutmut_11  # M3: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (C.UTF-8, PEP 538)
 demo_connector.server.xǁBundleFilesǁ__init____mutmut_3  # M3: _seen None vs "": both mean "nothing loaded yet"; an (mtime, mtime) tuple never equals either
 demo_connector.server.x_configs__mutmut_19  # M3: no host= on the test-controls Config: uvicorn's default host is "127.0.0.1", the same binding (test_servers_listen_where_the_spec_says)
 demo_connector.server.x_serve__mutmut_1  # M3: serve() runs uvicorn forever on real sockets, which the test run forbids (--disable-socket); covered on the real image by docker_smoke.sh (/readyz, tools/call on :8080, CI job demo-image)
@@ -96,18 +96,18 @@ gxg_approval.api.x_create_app__mutmut_26  # missing header default "" -> "XXXX":
 gxg_approval.api.x__responses__mutmut_8  # (200, 201) -> (200, 202) in the `ok` branch: only dispatch passes an `ok` schema, and its only 2xx code is 200
 demo_connector.effects.xǁApprovalǁpost__mutmut_15  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
 demo_connector.effects.xǁApprovalǁpost__mutmut_16  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
-demo_connector.effects.xǁEffectsǁ_checked__mutmut_71  # M8: partition vs rpartition on one separator that occurs once: a bearer token and a tool@version (execution-token schema pattern) have exactly one
-demo_connector.effects.xǁEffectsǁ_checked__mutmut_94  # M8: None vs "" for a failed hash: both differ from any 64-hex `ahs`
+demo_connector.effects.xǁEffectsǁ_checked__mutmut_75  # M8: partition vs rpartition on one separator that occurs once: a bearer token and a tool@version (execution-token schema pattern) have exactly one
+demo_connector.effects.xǁEffectsǁ_checked__mutmut_98  # M8: None vs "" for a failed hash: both differ from any 64-hex `ahs`
 demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_12  # M8: partition vs rpartition on one separator that occurs once: a bearer token and a tool@version (execution-token schema pattern) have exactly one
 demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_131  # M8: duration_ms * 1001 instead of * 1000: 0.1 % off a log field (as M3)
 demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_18  # M8: header name case: HTTP header names are case-insensitive (httpx sends, Starlette Headers.get)
 demo_connector.effects.xǁEffectsǁ_endpoint__mutmut_19  # M8: missing Authorization header: the default "" or "XXXX" both give no `Bearer <token>` → TokenError(missing)
-demo_connector.effects.xǁEffectsǁexecute__mutmut_96  # M8: operation_id = operation or execution_id; on success the provider always returns an operation id
-demo_connector.effects.xǁEffectsǁexecute__mutmut_40  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
-demo_connector.effects.xǁEffectsǁexecute__mutmut_44  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
-demo_connector.effects.xǁEffectsǁexecute__mutmut_47  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
-demo_connector.effects.xǁEffectsǁinternal_app__mutmut_15  # M8: Starlette upper-cases Route methods
-demo_connector.effects.xǁEffectsǁinternal_app__mutmut_24  # M8: Starlette upper-cases Route methods
+demo_connector.effects.xǁEffectsǁexecute__mutmut_108  # M8: operation_id = operation or execution_id; on success the provider always returns an operation id
+demo_connector.effects.xǁEffectsǁexecute__mutmut_52  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
+demo_connector.effects.xǁEffectsǁexecute__mutmut_56  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
+demo_connector.effects.xǁEffectsǁexecute__mutmut_59  # M8: the bound of the dispatched-jti memory: after exp + 5 s the kit refuses the token with `exp` before the replay check, so the memory is never consulted then
+demo_connector.effects.xǁEffectsǁinternal_app__mutmut_20  # M8: Starlette upper-cases Route methods
+demo_connector.effects.xǁEffectsǁinternal_app__mutmut_29  # M8: Starlette upper-cases Route methods
 demo_connector.provider.xǁProviderǁ__init____mutmut_9  # M8: check_same_thread=None is falsy like False
 demo_connector.provider.xǁProviderǁcalls__mutmut_11  # M8: SQLite keywords and identifiers are case-insensitive
 demo_connector.provider.xǁProviderǁcalls__mutmut_12  # M8: SQLite keywords and identifiers are case-insensitive
@@ -123,10 +123,12 @@ demo_connector.provider.xǁProviderǁsend__mutmut_40  # M8: SQLite keywords and 
 demo_connector.provider.xǁProviderǁsend__mutmut_41  # M8: SQLite keywords and identifiers are case-insensitive
 demo_connector.provider.xǁProviderǁsend__mutmut_43  # M8: SQLite keywords and identifiers are case-insensitive
 demo_connector.provider.xǁProviderǁsend__mutmut_44  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁquota_wait_s__mutmut_15  # M8: SQLite keywords and identifiers are case-insensitive
+demo_connector.provider.xǁProviderǁquota_wait_s__mutmut_16  # M8: SQLite keywords and identifiers are case-insensitive
 demo_connector.provider.xǁProviderǁsend__mutmut_2  # M8: None vs "": both falsy, `first` is only tested for truth
 demo_connector.server.x_configs__mutmut_23  # M8: uvicorn log level of the internal port: default/upper case change only log verbosity
 demo_connector.server.x_configs__mutmut_27  # M8: uvicorn log level of the internal port: default/upper case change only log verbosity
-demo_connector.server.x_configs__mutmut_36  # M8: no host= on the test-controls Config: uvicorn's default host is 127.0.0.1, the same binding (as M3 configs__mutmut_19)
+demo_connector.server.x_configs__mutmut_33  # M8: no host= on the test-controls Config: uvicorn's default host is 127.0.0.1, the same binding (as M3 configs__mutmut_19)
 demo_connector.server.x_effects__mutmut_36  # M8: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (as M3)
 demo_connector.server.x_effects__mutmut_38  # M8: encoding="UTF-8"/None: codec names are case-insensitive; None = locale encoding, UTF-8 on the CI runner (as M3)
 gxg_approval.executor.xǁExecutorǁtake__mutmut_6  # M8: `reserved = ""`: `reserved or True` gives True for None and "" alike
@@ -181,7 +183,13 @@ gxg_connector_kit.mcp.xǁBundleFilesǁ__init____mutmut_4  # M1.1: _seen = "" ins
 gxg_connector_kit.mcp.xǁGxgToolǁrun__mutmut_140  # M1.1: same as effects _endpoint__mutmut_136 (duration * 1001)
 gxg_approval_notifier.webhooks.x_allowed_url__mutmut_9  # rstrip("XX.XX") on a lower-cased host: no "X" to strip, only the dots as before
 gxg_approval_notifier.webhooks.x_body_of__mutmut_4  # ensure_ascii=None is falsy like False: the same bytes
-gxg_approval_ui.app.x_create_app__mutmut_306  # Starlette headers are case-insensitive: "X-CSRF-TOKEN" finds the same header
+gxg_approval_ui.app.x_create_app__mutmut_357  # Starlette headers are case-insensitive: "X-CSRF-TOKEN" finds the same header
+gxg_approval_ui.app.x_create_app__mutmut_405  # M13: wizard_view: the default key of `chats` is read only in the «authorized» branch, where Jinja2's default Undefined iterates exactly like [] (the «чатов нет» branch)
+gxg_approval_ui.app.x_create_app__mutmut_406  # M13: wizard_view: the default key of `chats` is read only in the «authorized» branch, where Jinja2's default Undefined iterates exactly like [] (the «чатов нет» branch)
+gxg_approval_ui.app.x_create_app__mutmut_407  # M13: wizard_view: the default key of `scope` is read only in the «authorized» branch, where Jinja2's default Undefined iterates exactly like [] (the «ничего» branch)
+gxg_approval_ui.app.x_create_app__mutmut_408  # M13: wizard_view: the default key of `scope` is read only in the «authorized» branch, where Jinja2's default Undefined iterates exactly like [] (the «ничего» branch)
+gxg_approval_ui.app.x_create_app__mutmut_409  # M13: wizard_view: `sync` is shown only as `{% if sync %}`, and an absent value is as falsy as None (a set value is checked by the authorized-page test)
+gxg_approval_ui.app.x_create_app__mutmut_410  # M13: wizard_view: `sync` is shown only as `{% if sync %}`, and an absent value is as falsy as None (a set value is checked by the authorized-page test)
 gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_12  # split("?")[0] == split("?", 1)[0]: only the part before the first "?" is used
 gxg_approval_ui.cli.xǁNoQueryǁfilter__mutmut_16  # split("?", 2)[0] == split("?", 1)[0]: only the part before the first "?" is used
 gxg_approval.admin.x_create_app__mutmut_12  # Starlette headers are case-insensitive: "AUTHORIZATION" finds the same header
@@ -192,6 +200,10 @@ gxg_approval.admin.x_create_app__mutmut_3  # with openapi_url=None FastAPI mount
 gxg_approval.admin.x_create_app__mutmut_49  # getattr(None, "key", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
 gxg_approval.admin.x_create_app__mutmut_55  # getattr(key, "XXkeyXX", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
 gxg_approval.admin.x_create_app__mutmut_56  # getattr(key, "KEY", key) is key: PyJWT's decode accepts the PyJWK itself, the same key
+gxg_approval.admin.x_create_app__mutmut_127  # M14: SQL keywords and unquoted identifiers are case-insensitive (the operator page's switch and invite SQL)
+gxg_approval.admin.x_create_app__mutmut_133  # M14: SQL keywords and unquoted identifiers are case-insensitive (the operator page's switch and invite SQL)
+gxg_approval.admin.x_create_app__mutmut_134  # M14: SQL keywords and unquoted identifiers are case-insensitive (the operator page's switch and invite SQL)
+gxg_approval.admin.x_create_app__mutmut_140  # M14: SQL keywords and unquoted identifiers are case-insensitive (the operator page's switch and invite SQL)
 gxg_approval.decider.x_create_app__mutmut_2  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: docs_url=None is redundant
 gxg_approval.decider.x_create_app__mutmut_3  # with openapi_url=None FastAPI mounts neither /docs nor /redoc: redoc_url=None is redundant
 gxg_approval.executor.xǁExecutorǁtake__mutmut_15  # "or" lets a stale row call gxg_reserve, which the database refuses (status ≠ approved, or no due execute task: 0006 guard); the conflict is counted and the row delivered as before

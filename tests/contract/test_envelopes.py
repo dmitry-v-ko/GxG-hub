@@ -84,3 +84,33 @@ class EnvelopeContractTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SourceEventContractTests(unittest.TestCase):
+    """SI-03: webhook hint to Signals carries identifiers only."""
+
+    def test_telegram_message_created(self):
+        v = validator('source-event.schema.json')
+        ref = 'tgc1_' + 'A' * 32
+        valid = {
+            'schema_version': 1,
+            'event_id': '11111111-1111-5111-8111-111111111111',
+            'type': 'telegram.message.created',
+            'tenant_id': 't-alpha',
+            'source_ref': f'telegram:c-1/chat/{ref}',
+            'chat_ref': ref,
+            'message_id': 11,
+            'sent_at': '2026-03-05T00:00:11Z',
+        }
+        v.validate(valid)
+        v.validate({**valid, 'sent_at': '2026-03-05T00:00:11+00:00'})
+        for bad in (
+            {**valid, 'text': 'not-allowed'},
+            {**valid, 'peer_id': '123'},
+            {k: x for k, x in valid.items() if k != 'chat_ref'},
+            {k: x for k, x in valid.items() if k != 'message_id'},
+            {**valid, 'message_id': 0},
+            {**valid, 'sent_at': '2026-03-05 00:00:11'},
+        ):
+            with self.assertRaises(ValidationError):
+                v.validate(bad)

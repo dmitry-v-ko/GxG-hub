@@ -47,8 +47,7 @@ SCOPE_PY = (
     "[print('SCOPE',i,r,repr(t.get(r,{}).get('title')),t.get(r,{}).get('kind'),flush=True) for i,r in enumerate(refs)]\n"
 )
 Q_DEPLOY = "mutation Deploy($s: String!, $e: String!) { serviceInstanceDeployV2(serviceId: $s, environmentId: $e) }"
-Q_DEPLOYMENTS = """query Deployments($input: DeploymentListInput!) { deployments(first: 1, input: $input) {
-  edges { node { id status } } } }"""
+Q_DEPLOYMENT = "query Deployment($d: String!) { deployment(id: $d) { status } }"
 Q_LOGS = "query Logs($d: String!, $l: Int) { deploymentLogs(deploymentId: $d, limit: $l) { message } }"
 Q_BUILD_LOGS = "query BuildLogs($d: String!, $l: Int) { buildLogs(deploymentId: $d, limit: $l) { message } }"
 Q_UPSERT_ONE = "mutation Upsert($input: VariableUpsertInput!) { variableUpsert(input: $input) }"
@@ -137,20 +136,18 @@ class Jobs:
                     ),
                    "restartPolicyType": "NEVER"},
         )  # fmt: skip
-        self.api.call(Q_DEPLOY, s=dep.service_ids[name], e=dep.env_id)
+        started = str(self.api.call(Q_DEPLOY, s=dep.service_ids[name], e=dep.env_id)["serviceInstanceDeployV2"])
         self.out.say(f"job {name} started")
-        end, status, deployment = time.monotonic() + timeout_s, "", ""
+        # Follow the deployment this call started, not "the latest one": serviceConnect starts a deployment of its own
+        # (from the branch the service was created on), and when that one is the latest, the job reports a build failure
+        # of the wrong source («not found at deploy/railway/approval.Dockerfile»).
+        end, status, deployment = time.monotonic() + timeout_s, "", started
         try:
             while time.monotonic() < end:
                 time.sleep(10)
-                edges = self.api.call(
-                    Q_DEPLOYMENTS, input={"projectId": dep.project_id, "environmentId": dep.env_id,
-                                          "serviceId": dep.service_ids[name]},
-                )["deployments"]["edges"]  # fmt: skip
-                if edges:
-                    deployment, status = edges[0]["node"]["id"], edges[0]["node"]["status"]
-                    if status in FINAL:
-                        break
+                status = str(self.api.call(Q_DEPLOYMENT, d=started)["deployment"]["status"])
+                if status in FINAL:
+                    break
             lines: list[str] = []
             for _ in range(6):  # the log pipeline lags behind the status
                 time.sleep(10)
@@ -175,6 +172,7 @@ class Jobs:
             "pilot-agent-setup",
             {
                 "GXG_JOB": "setup", "GXG_JOB_SEAL_PUBKEY": pem.decode(),
+                "GXG_SKIP_GATEWAYS": os.environ.get("GXG_SKIP_GATEWAYS", ""),
                 "PLATFORM_ADMIN_EMAIL": "${{contextforge.PLATFORM_ADMIN_EMAIL}}",
                 "PLATFORM_ADMIN_PASSWORD": "${{contextforge.PLATFORM_ADMIN_PASSWORD}}",
             },
@@ -199,7 +197,8 @@ class Jobs:
         (a retried job) the same intent. Nothing is sent: a person approves it in the UI with a passkey."""
         args = {
             "chat_ref": os.environ["GXG_SEND_CHAT_REF"], "text": os.environ["GXG_SEND_TEXT"],
-            "idempotency_key": "m13-first-send-1", "business_task_id": "m13-first-send",
+            "idempotency_key": os.environ.get("GXG_SEND_KEY", "m13-first-send-1"),
+            "business_task_id": os.environ.get("GXG_SEND_TASK", "m13-first-send"),
         }  # fmt: skip
         return self.probe(only="telegram", args=json.dumps(args))
 
@@ -220,6 +219,37 @@ class Jobs:
     def status(self, intent_id: str) -> int:
         """`effects.status` of one intent as the agent (read-only), through ContextForge."""
         return self.probe(only="approval", call=("effects-status", json.dumps({"intent_id": intent_id})))
+
+    def ac03(self) -> int:
+        """AC-M13-03: revoke the agent's tokens and measure how long the old token still works; run `setup` afterwards."""
+        ids = json.loads(self.variables(VAULT)["PILOT_AGENT_IDS"])
+        lines = self.run(
+            "pilot-agent-ac03",
+            {
+                "GXG_JOB": "ac03", "GXG_PROBE_SERVER": ids["servers"]["vs-telegram-t-pilot"],
+                "PILOT_AGENT_TOKEN": f"${{{{{VAULT}.PILOT_AGENT_TOKEN}}}}",
+                "PLATFORM_ADMIN_EMAIL": "${{contextforge.PLATFORM_ADMIN_EMAIL}}",
+                "PLATFORM_ADMIN_PASSWORD": "${{contextforge.PLATFORM_ADMIN_PASSWORD}}",
+            },
+        )  # fmt: skip
+        for line in lines:
+            if line.startswith("ac03 ") or re.search(r"Traceback|Error|Failed|not found", line):
+                self.out.say("  " + line[:300])
+        return 0
+
+    def ex03(self) -> int:
+        """EX-03 on the live connector: execute with no or a forged token is refused (statuses only)."""
+        lines = self.run(
+            "pilot-agent-ex03",
+            {
+                "GXG_JOB": "ex03", "GXG_CA": "${{executor.GXG_CONFIG__SSL_CERT}}",
+                "GXG_EXEC_TOOL": os.environ.get("GXG_EXEC_TOOL", "telegram.message.execute"),
+            },
+        )  # fmt: skip
+        for line in lines:
+            if line.startswith("ex03 ") or re.search(r"Traceback|Error|Failed|not found", line):
+                self.out.say("  " + line[:300])
+        return 0
 
     def scope(self) -> int:
         lines = self.run(
@@ -278,7 +308,9 @@ class Jobs:
 
 def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None, out: rd.Out | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("action", choices=["setup", "probe", "revoke", "scope", "propose", "peek", "status"])
+    ap.add_argument(
+        "action", choices=["setup", "probe", "revoke", "scope", "propose", "peek", "status", "ac03", "ex03"]
+    )
     args = ap.parse_args(argv)
     out = out or rd.Out()
     try:
@@ -298,6 +330,8 @@ def main(argv: list[str] | None = None, *, transport: rd.Transport | None = None
             "propose": jobs.propose,
             "peek": lambda: jobs.peek(os.environ["GXG_PEEK"]),
             "status": lambda: jobs.status(os.environ["GXG_INTENT"]),
+            "ac03": jobs.ac03,
+            "ex03": jobs.ex03,
         }
         return actions[args.action]()
     except rd.DeployError as exc:

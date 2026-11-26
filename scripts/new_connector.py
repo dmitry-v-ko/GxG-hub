@@ -9,6 +9,7 @@ It creates no credentials, grants nothing and deploys nothing.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -65,7 +66,9 @@ def main(argv: list[str] | None = None) -> int:
     for d in sorted(dest.rglob("*"), reverse=True):  # directories of files the variant does not have
         if d.is_dir() and not any(d.iterdir()):
             d.rmdir()
-    subprocess.run(["uv", "lock", "--quiet"], cwd=dest, check=True)
+    # a new service has no lockfile yet: create it even where UV_LOCKED=1 (CI) forbids changing an existing one
+    env = {k: v for k, v in os.environ.items() if k not in ("UV_LOCKED", "UV_FROZEN")}
+    subprocess.run(["uv", "lock", "--quiet"], cwd=dest, check=True, env=env)
     print(f"{dest}: connector {a.name} ({'with effects' if a.with_effects else 'read-only'}, kit by {source})")
     return 0
 

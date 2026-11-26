@@ -49,6 +49,7 @@ CONSUMERS = {
     "ui": (KEYS_VAR, B64_VAR),
     "notifier": (KEYS_VAR, B64_VAR),
     "telegram": ("TELEGRAM_BUNDLE_KEYS", B64_VAR),
+    "kb": ("KB_BUNDLE_KEYS", B64_VAR),
 }
 # registry id -> (service, variable) whose value is the registry key
 REGISTRY_KEYS = {
@@ -163,7 +164,7 @@ class Pilot:
                     "environmentId": self.dep.env_id,
                     "serviceId": self.dep.service_ids[name],
                     "variables": {
-                        keys_var: kit_keys if keys_var.startswith("TELEGRAM_") else approval_keys,
+                        keys_var: kit_keys if keys_var.startswith(("TELEGRAM_", "KB_")) else approval_keys,
                         b64_var: b64,
                     },
                     "skipDeploys": True,

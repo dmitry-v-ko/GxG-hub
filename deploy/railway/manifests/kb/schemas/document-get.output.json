@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kb.documents.get output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "collection", "title", "content", "truncated", "updated_at", "source_ref"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "collection": {"type": "string", "minLength": 1, "maxLength": 64},
+    "title": {"type": "string", "maxLength": 300},
+    "content": {"type": "string", "maxLength": 20000},
+    "truncated": {"type": "boolean", "description": "true if the KB document is longer than content holds"},
+    "updated_at": {"type": ["string", "null"], "format": "date-time", "description": "null if the KB row has none"},
+    "source_ref": {"type": "string", "maxLength": 512}
+  }
+}

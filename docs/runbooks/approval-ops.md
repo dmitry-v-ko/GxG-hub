@@ -16,9 +16,11 @@ gxg-approval switch set --scope tenant:t-alpha --reason "..."
 gxg-approval switch set --scope tool:t-alpha:demo.message.propose --reason "..."
 ```
 
+То же из браузера оператора: страница `/switches` администратора (`GXG_ADMIN_PUBLIC_URL` + `/switches`, вход в IdP как на странице приглашений). Её формы вызывают ту же `gxg_switch`, что и API, с тем же аудитом.
+
 **Что происходит.** Switch проверяется внутри транзакций T1, T7 и T9. Поэтому следующий `dispatch` возвращает 423 без кешей, а провайдер не вызывается. Исполнения, которые уже `dispatching`, доходят до своего исхода. Действие пишется в `audit_events` (`admin_switch_set`), алерты — `GxgSwitchChanged` и `GxgAdminAction`.
 
-**Снять блокировку.** Нужен свежий вход в IdP: `auth_time` не старше 5 минут, иначе 403.
+**Снять блокировку.** Нужен вход в IdP не старше 15 минут (`auth_time`), иначе 403; страница `/switches` в этом случае отправляет на вход и возвращает с формой для подтверждения.
 
 ```bash
 gxg-approval switch clear --scope global --reason "INC-123 resolved"

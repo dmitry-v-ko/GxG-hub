@@ -208,6 +208,9 @@ def test_copier_update_brings_template_changes_and_keeps_the_domain(tmp_path: Pa
     hub = tmp_path / "hub"
     subprocess.run(["git", "clone", "--quiet", str(REPO), str(hub)], check=True, timeout=300)
     git = ["git", "-c", "user.email=ci@example.invalid", "-c", "user.name=ci"]
+    # on a branch: in CI the checkout is a detached merge commit, and copier's own clone fetches branches only,
+    # so a commit made on a detached HEAD would be an invalid reference for `copier update`
+    subprocess.run(["git", "switch", "-q", "-C", "template-test"], cwd=hub, check=True, timeout=60)
     old = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=hub, capture_output=True, text=True, check=True
     ).stdout.strip()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AC-M10-07: reports/conformance/stage-C.json — EX-01…EX-25 and MC-05 with the tests that prove each and their
+"""AC-M10-07: reports/conformance/stage-C.json — EX-01…EX-26 and MC-05 with the tests that prove each and their
 status in this run. pytest writes the results (JUnit XML); this script only maps ids to tests and reads them.
 
     uv run python scripts/ci/stage_c.py [--stand JUNIT ...] [--mc05 REPORT_MD]
@@ -100,6 +100,16 @@ EX: dict[str, list[str]] = {
         f"{A}/test_executor.py::test_ex25_defer_cas_race_is_ignored",
         f"{A}/test_executor.py::test_ex25_reserve_needs_a_due_task",
         f"{DEMO}/test_effects.py::test_execute_quota_answers_429_before_dispatch",
+    ],
+    # AS-30a (owner decision 2026-11-24): a decision without step-up in the ui session
+    "EX-26": [
+        f"{A}/test_session_decision.py::test_an_intent_without_step_up_is_decided_in_the_session",
+        f"{A}/test_session_decision.py::test_reject_in_the_session",
+        f"{A}/test_session_decision.py::test_an_intent_with_step_up_is_refused_and_unchanged",
+        f"{A}/test_session_decision.py::test_another_approver_is_refused",
+        f"{A}/test_session_decision.py::test_stale_version_or_args_hash_is_refused",
+        f"{A}/test_session_decision.py::test_the_ui_role_cannot_call_the_deciders_function_or_write_decisions",
+        f"{UI}/test_session_decision.py::test_csrf_foreign_approver_and_stale_card_are_refused",
     ],
 }
 

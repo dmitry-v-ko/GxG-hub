@@ -391,6 +391,23 @@
           "id"
         ]
       }
+    },
+    "source-event.schema.json": {
+      "normative_sha256": "137302f6138051457eb659e41627cab318761eb8a4d8dbb47e9eec9602ca7719",
+      "required": {
+        "/": [
+          "event_id",
+          "schema_version",
+          "sent_at",
+          "source_ref",
+          "tenant_id",
+          "type"
+        ],
+        "/allOf/0/then": [
+          "chat_ref",
+          "message_id"
+        ]
+      }
     }
   }
 }

@@ -25,7 +25,8 @@ def test_the_matrix_has_the_expected_prefixes() -> None:
     prefixes = ("SC", "EX", "MC", "SI", "OPS")
     assert {i.split("-")[0] for i in IDS} == set(prefixes)
     # MC: 5 + MC-06…MC-10 of MCC-11 (3ddb9f1) + MC-11…MC-13 of M11.4 (participants, pii)
-    assert [sum(i.startswith(p + "-") for i in IDS) for p in prefixes] == [10, 25, 13, 3, 7]
+    # EX-26: AS-30a
+    assert [sum(i.startswith(p + "-") for i in IDS) for p in prefixes] == [10, 26, 13, 3, 7]
 
 
 def test_mc11_to_mc13_stay_not_run_until_they_run_on_the_service() -> None:

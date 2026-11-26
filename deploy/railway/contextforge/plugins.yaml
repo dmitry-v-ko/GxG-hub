@@ -23,4 +23,6 @@ plugins:
       private_key_file: /dev/shm/gxg-files/ADAPTER_KEY
       kid: pilot-adapter-1
       tenants: {'afecfe0f6572490a87e258d199e87347': {tenant: t-pilot, agent_domain: t-pilot.agents.gxg.example.com}}
-      connectors: {'d95c9047ea8c4c3f9dd77d7605d4baeb': telegram, '2f5ce608b3984b78aa6480889c106d5c': approval-mcp}
+      connectors: {'d95c9047ea8c4c3f9dd77d7605d4baeb': telegram, '2f5ce608b3984b78aa6480889c106d5c': approval-mcp, 'c7152672d2214fb59b28be9b5a364001': kb}
+      # PILOT EXCEPTION to MCC-01 (owner decision 2026-11-25): third-party Apify MCP gets no identity header
+      external: ['b16429d3f5a344c3979aaa5311ac59dc']

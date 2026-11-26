@@ -7,6 +7,9 @@ connections:
   - id: tg-pilot
     domain: telegram
     credential_ref: secret://t-pilot/telegram/pilot
+  - id: kb-pilot
+    domain: kb
+    credential_ref: secret://t-pilot/kb/pilot  # role gxg_kb_reader (read-only), its password lives in the kb service only
 
 principals:
   agents:
@@ -35,3 +38,14 @@ grants:
       - telegram:tg-pilot/chat/tgc1_fg2agKZmFgzytfmaAUzf3ZbkczoPSmN8
     expires_at: "2026-12-24T00:00:00Z"
     reason: "Pilot M13: test sends to GxG Agents, every one approved by the owner"
+  # KB (M6): read-only collections of the Supabase KB visible to the role gxg_kb_reader; no write, no propose.
+  - id: kb-pilot-read
+    subjects: [agent:t-pilot:pilot]
+    actions: [read]
+    resources:
+      - kb:kb-pilot/collection/tool
+      - kb:kb-pilot/collection/blueprint
+      - kb:kb-pilot/collection/insight
+      - kb:kb-pilot/collection/growth_hack
+    expires_at: "2026-12-24T00:00:00Z"
+    reason: "Pilot M13: KB read for the pilot agent (owner decision 2026-11-25)"

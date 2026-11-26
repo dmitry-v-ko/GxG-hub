@@ -241,7 +241,7 @@ Identity проверяется так же, как в любом коннект
 
 | Экран | Кто | Что |
 | --- | --- | --- |
-| Вход | Все | OIDC; сессия 30 дней без idle-таймаута (решение владельца 2026-11-24: каждое решение подписывается passkey, AS-30; UI только в tailnet). Выдача приглашений passkey в `admin` — свежий вход ≤ 5 мин, сессия `admin` ≤ 15 мин |
+| Вход | Все | OIDC; сессия 30 дней без idle-таймаута (решения владельца 2026-11-24; UI только в tailnet). Решение по intent'у без `step_up_required` — одна кнопка в сессии, решение со `step_up_required` подписывается passkey (AS-30). Выдача приглашений passkey в `admin` — свежий вход ≤ 5 мин, сессия `admin` ≤ 15 мин |
 | Ожидают решения | `approver` | Свой tenant (или несколько, если человек approver в нескольких), сортировка по сроку |
 | Карточка intent'а | `approver`, `viewer` | Preview (EFF-30…33), канонические args (раскрываемый блок), requester, `business_task_id`, правило политики, срок, история решений |
 | Решение | `approver` | Approve / Reject, комментарий; step-up при необходимости; POST с CSRF-токеном, `version` и `args_hash` в форме |
@@ -277,7 +277,7 @@ Identity проверяется так же, как в любом коннект
 | Что | Где | Кто |
 | --- | --- | --- |
 | Grants, approver'ы, политики, подписчики webhooks, реестр сервисов | Git → bundle | Оператор через PR (GR-09, GR-10) |
-| Kill switch | `gxg-approval switch set|clear --scope … --reason …` → `admin` API | `platform_admin`; для `clear` нужен step-up |
+| Kill switch | `gxg-approval switch set|clear --scope … --reason …` → `admin` API; страница `/switches` в `admin` | `platform_admin`; для `clear` — вход в IdP не старше 15 минут (сессия `admin`; решение владельца 2026-11-26, было 5 минут). Если вход старше, страница сохраняет форму и после нового входа просит подтвердить её одним кликом (сама не выполняет) |
 | Ручной разбор `outcome_unknown` | UI | `approver`, `tenant_admin` |
 | Ротация ключей | `gxg-approval keys rotate` | `platform_admin` |
 | Привязка бота | UI | Сам approver |
@@ -342,4 +342,11 @@ Identity проверяется так же, как в любом коннект
   | OIDC client secret, ключи сессий, WebAuthn RP | `ui` |
   | OIDC оператора для admin | `admin` |
 - **AS-29. Отдельные deployable для внешних процессов.** `ui` и `notifier` собираются и разворачиваются отдельными образами (своё дерево зависимостей, свой цикл обновлений и сканирования уязвимостей) и запускаются с отдельными сетевыми политиками: `ui` — входящий HTTPS только из tailnet (SEC-26), исходящие только в БД и OIDC-провайдера; `notifier` — исходящие только в БД, Telegram Bot API и allowlist webhook-получателей, входящих нет. `api`, `mcp`, `executor`, `sweeper`, `admin` — внутренняя сеть, без выхода в интернет, кроме явно нужного (`executor` → коннекторы).
-- **AS-30. Решение человека подписано, проверяет его не `ui`** (решение владельца 2026-11-21, вводится в M10). Каждое решение (approve и reject, не только `high_risk`) сопровождается WebAuthn-assertion approver'а с challenge = SHA-256(`intent_id` ‖ `args_hash` ‖ `version` ‖ `decision`). `ui` пересылает сырой assertion во внутренний процесс `decider` (своя роль `gxg_decider`, без входа из tailnet, AS-27). `decider` проверяет подпись по ключу из `webauthn_credentials` и `sign_count`, затем вызывает `gxg_decide`. `EXECUTE gxg_decide` есть только у `gxg_decider`. Assertion (authenticatorData, clientDataJSON, signature, credential_id) хранится в `decisions` и проверяем задним числом. Регистрация passkey — через `decider` с подтверждением вне `ui` (одноразовая ссылка оператора или повторный вход в IdP с `max_age`). Скомпрометированный `ui` поэтому не может решить за человека и не может подделать step-up. AS-16 (свежесть ≤ 5 мин, привязка к intent) действует для каждого решения. Passkey обязателен каждому approver'у (AS-17).
+- **AS-30. Решение со step-up подписано, проверяет его не `ui`** (решение владельца 2026-11-21, вводится в M10; сужено решением владельца 2026-11-24). Каждое решение по intent'у со `step_up_required` (approve и reject) сопровождается WebAuthn-assertion approver'а с challenge = SHA-256(`intent_id` ‖ `args_hash` ‖ `version` ‖ `decision`). `ui` пересылает сырой assertion во внутренний процесс `decider` (своя роль `gxg_decider`, без входа из tailnet, AS-27). `decider` проверяет подпись по ключу из `webauthn_credentials` и `sign_count`, затем вызывает `gxg_decide`. `EXECUTE gxg_decide` есть только у `gxg_decider`. Assertion (authenticatorData, clientDataJSON, signature, credential_id) хранится в `decisions` и проверяем задним числом. Регистрация passkey — через `decider` с подтверждением вне `ui` (одноразовая ссылка оператора или повторный вход в IdP с `max_age`). Скомпрометированный `ui` поэтому не может решить за человека и не может подделать step-up. AS-16 (свежесть ≤ 5 мин, привязка к intent) действует для каждого такого решения. Passkey нужен approver'у для решений со `step_up_required` (AS-17).
+- **AS-30a. Решение без step-up — одна кнопка в `ui`** (решение владельца 2026-11-24: подпись passkey на каждое сообщение неприменима в работе, особенно с телефона). Если у intent'а `step_up_required = false` (по умолчанию `external_effect`, AP-01), approver решает его кнопкой «Одобрить» или «Отклонить» в своей OIDC-сессии, с CSRF-токеном (EFF-15), без WebAuthn. `ui` вызывает `gxg_decide_session` (`SECURITY DEFINER`, `EXECUTE` только у `gxg_ui`). Она:
+  - принимает principal из сессии, `intent_id`, `version`, `args_hash`, decision;
+  - проверяет, что principal входит в `allowed_approvers`, `version` и `args_hash` совпадают с текущими (защита от решения по устаревшей карточке);
+  - **отказывает**, если `step_up_required = true`: такие решения идут только через `decider` (AS-30);
+  - пишет `decisions` с `step_up = false` и `decided_by = oidc:…`.
+
+  Цена решения: взломанный `ui` или украденная cookie сессии позволяют одобрить intents без step-up от имени approver'а. Ограничения: UI доступен только из tailnet (SEC-26), cookie `__Host-`/`Strict`/`HttpOnly`, квоты `propose` (AP-05), лимиты политики, kill switch (EFF-18), аудит каждого решения. Intents `high_risk` и правила со `step_up: true` этим путём не решаются.
