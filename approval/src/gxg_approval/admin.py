@@ -58,7 +58,7 @@ class _Refused(Exception):
         self.status, self.message = status, message
 
 
-def create_app(deps: Deps) -> FastAPI:
+def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.exception_handler(_Refused)
@@ -103,12 +103,10 @@ def create_app(deps: Deps) -> FastAPI:
     @app.get("/v1/switches")
     def switches(request: Request) -> Response:
         operator(request)
-        with deps.pool.connection() as conn:
-            rows = conn.execute("SELECT scope, blocked, reason, changed_by, changed_at FROM switches ORDER BY scope")
-            out = [
-                {"scope": s, "blocked": b, "reason": r, "changed_by": c, "changed_at": t.isoformat()}
-                for s, b, r, c, t in rows
-            ]
+        out = [
+            {"scope": s, "blocked": b, "reason": r, "changed_by": c, "changed_at": t}
+            for s, b, r, c, t in list_switches()
+        ]
         return JSONResponse(out)
 
     @app.post("/v1/switches")
@@ -129,6 +127,21 @@ def create_app(deps: Deps) -> FastAPI:
         token = issue_invite(who, body.human)
         return JSONResponse({"human": body.human, "invite": token, "expires_in_s": INVITE_TTL_S})
 
+    def list_switches() -> list[tuple[str, bool, str, str, str]]:
+        with deps.pool.connection() as conn:
+            rows = conn.execute("SELECT scope, blocked, reason, changed_by, changed_at FROM switches ORDER BY scope")
+            return [(sc, b, r, c, t.isoformat()) for sc, b, r, c, t in rows]
+
+    def set_switch(who: str, scope: str, blocked: bool, reason: str) -> str:
+        """The operator page's kill switch: the same audited `gxg_switch` as the API; "" or the refusal message."""
+        try:
+            call("SELECT gxg_switch(%s, %s, %s, %s)", (scope, blocked, reason, who))
+        except _Refused as exc:
+            return exc.message
+        return ""
+
     if deps.web is not None:
-        admin_web.register(app, web=deps.web, deps=deps, issue_invite=issue_invite)
+        admin_web.register(
+            app, web=deps.web, deps=deps, issue_invite=issue_invite, list_switches=list_switches, set_switch=set_switch
+        )
     return app
