@@ -651,7 +651,7 @@ flowchart TD
 | AC-M11.4-04 | Чат без grant `collect` → ни одного элемента и ни одного обращения к транспорту (как MC-03 для messages.collect) |
 | AC-M11.4-05 | Роль, недоступная в Telegram, помечена `partial` или `unavailable`; элементов, выдуманных по догадке, нет |
 | AC-M11.4-06 | Аудит и логи не содержат телефона, имён файлов и байтов фото (SEC-18, SEC-23) |
-| AC-M11.4-07 | `users.profile_photo_get` отдаёт ≤ 2 MiB и верный `sha256`; больший файл → `limit_exceeded`; без права `pii` → `permission_denied` |
+| AC-M11.4-07 | `users.profile_photo_get` отдаёт ≤ 2 MiB и верный `sha256`; больший файл → `invalid_input` с `details.reason = limit_exceeded` (отдельного кода в словаре MCC-05 нет); без права `pii` → `permission_denied` |
 | AC-M11.4-08 | Лимиты и flood-wait как у других записей (`rate_limited` с `retry_after_s`); счётчик write-вызовов транспорта = 0 |
 
 ### M12 — Signals
