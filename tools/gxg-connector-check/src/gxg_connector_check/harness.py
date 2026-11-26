@@ -20,6 +20,14 @@ from gxg_connector_kit.effects import Wiring
 from gxg_connector_kit.mcp import Settings
 
 FailureMode = str  # rate_limited | temporarily_unavailable | crash | commit_then_drop; None repairs
+READ_VERBS = {"search", "get", "list", "read", "collect"}
+EXT_VERBS = {"describe", "call"}  # MCC-01, MCC-11: only as the extension meta-tools `<domain>.ext.<verb>`
+
+
+def read_verb_ok(name: str) -> bool:
+    """MCC-01 (checked by MC-01): the verb of a `read` tool is a read verb, or `<domain>.ext.describe`/`.call`."""
+    parts = name.split(".")
+    return parts[-1] in READ_VERBS or (len(parts) == 3 and parts[1] == "ext" and parts[2] in EXT_VERBS)
 
 
 @dataclass(frozen=True)

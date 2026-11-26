@@ -27,11 +27,10 @@ from gxg_connector_kit.grants import BundleStore
 from gxg_connector_kit.identity import StubIssuer
 
 from . import bundle
-from .harness import Call, Running
+from .harness import READ_VERBS, Call, Running, read_verb_ok
 from .plugin import Client, Env
 
 pytestmark = pytest.mark.anyio
-READ_VERBS = {"search", "get", "list", "read", "collect"}
 ENVELOPE_KEYS = {"code", "message", "retryable", "retry_after_s", "request_id", "details"}
 SPOOF_HEADERS = {"x-tenant-id": "{tenant}", "x-forwarded-user-teams": "{tenant}", "x-gxg-identity": "forged"}
 
@@ -110,7 +109,9 @@ async def test_manifest_names_schemas_and_discovery(env: Env) -> None:
     for t in tools:
         verb = t["name"].rsplit(".", 1)[1]
         if t["effect_class"] == "read":
-            assert verb in READ_VERBS, f"{t['name']}: a read tool's verb is one of {sorted(READ_VERBS)}"
+            assert read_verb_ok(t["name"]), (
+                f"{t['name']}: a read tool's verb is one of {sorted(READ_VERBS)}, or <domain>.ext.describe/call"
+            )
         if t["effect_class"] in ("external_effect", "high_risk"):
             assert verb == "propose" or verb.startswith("propose_"), f"{t['name']}: effects are published as propose"
     assert {c.tool for c in env.harness.calls} >= {t["name"] for t in tools if t["effect_class"] == "read"}

@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from gxg_connector_check import bundle, cli
 from gxg_connector_check.fakes import FakeApproval
+from gxg_connector_check.harness import read_verb_ok
 from gxg_connector_kit import mcp, svc_jwt
 from gxg_connector_kit.effects import JWKS_PATH
 from gxg_connector_kit.grants import BundleStore
@@ -142,3 +143,23 @@ def test_cli_on_demo_and_usage(tmp_path: Path, capsys: pytest.CaptureFixture[str
     with pytest.raises(SystemExit) as exc:
         cli.main(["--connector", str(tmp_path)])
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("name", "allowed"),
+    [
+        ("kb.documents.search", True),
+        ("telegram.participants.collect", True),
+        ("telegram.ext.describe", True),
+        ("x.ext.call", True),
+        ("x.describe", False),
+        ("x.call", False),
+        ("x.foo.call", False),
+        ("x.foo.describe", False),
+        ("x.ext.foo", False),
+        ("x.y.ext.call", False),
+    ],
+)
+def test_read_verbs_of_mc01(name: str, allowed: bool) -> None:
+    """MCC-01: `describe` and `call` are read verbs only as the extension meta-tools `<domain>.ext.<verb>`."""
+    assert read_verb_ok(name) is allowed
