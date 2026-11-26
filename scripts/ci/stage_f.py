@@ -218,8 +218,8 @@ OPEN: dict[str, dict[str, Any]] = {
             f"{PART}::test_mc11_to_mc13_pass_on_conforming_connector",
             f"{PART}::test_mutation_is_caught",
             "packages/gxg-connector-kit/tests/test_redact.py::test_redact",
-            "tests/contract/test_ext_virtual_servers.py::test_ext_read_shows_every_enabled_entry_except_pii",
-            "tests/contract/test_ext_virtual_servers.py::test_pii_entries_are_denied_to_ext_read_even_when_enabled",
+            "gateway/contextforge/tests/test_ext_virtual_servers.py::test_ext_read_shows_every_enabled_entry_except_pii",
+            "gateway/contextforge/tests/test_ext_virtual_servers.py::test_pii_entries_are_denied_to_ext_read_even_when_enabled",
         ],
     },
     "MC-12": {

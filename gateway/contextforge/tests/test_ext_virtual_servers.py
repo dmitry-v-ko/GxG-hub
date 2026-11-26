@@ -18,7 +18,7 @@ from kit_testing import BundleKit, Clock
 
 from gxg_connector_kit.grants import BundleStore
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())  # also from a mutants/ copy
 _spec = importlib.util.spec_from_file_location("ext_roles", ROOT / "gateway/contextforge/ext_roles.py")
 assert _spec and _spec.loader
 R = importlib.util.module_from_spec(_spec)

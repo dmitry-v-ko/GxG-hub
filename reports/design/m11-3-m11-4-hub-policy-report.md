@@ -11,7 +11,7 @@
 | lint: `ext-mask-wide` (W), `ext-pii-no-expiry` (W) | `tools/gxg-policy/src/gxg_policy/lint.py` |
 | golden: `bad/24…27` (pii в неверном регистре, `ext:pii` без класса, формат имени из дизайна, повтор записи), `diff/11` (новый `ext:read:pii` = widening), `diff/12` (девять записей = 9 widening типа `extension`) | `tools/gxg-policy/tests/` |
 | Набор инструментов и правила `unified_pdp` по агентам, считаются из файла tenant'а | `gateway/contextforge/ext_roles.py`, примеры в `gateway/contextforge/examples/` |
-| Тесты видимости: роли → tools, drift-тест, `ext.search` без pii для `ext:read`, `t-pilot` без ext | `tests/contract/test_ext_virtual_servers.py` |
+| Тесты видимости: роли → tools, drift-тест, `ext.search` без pii для `ext:read`, `t-pilot` без ext | `gateway/contextforge/tests/test_ext_virtual_servers.py` |
 | redact: ключи `phone`, `photo*`, `file_name`, `bytes` и номера в строках | `packages/gxg-connector-kit/src/gxg_connector_kit/redact.py` |
 | MC-11…MC-13: строки матрицы, `check_mc11..13`, fake-коннектор, 5 мутантов, stage F (`not_run`), счётчик MC = 13 | `tests/contract/`, `scripts/ci/stage_f.py`, `tests/ci/test_stage_f.py` |
 
