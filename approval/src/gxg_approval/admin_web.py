@@ -1,4 +1,5 @@
-"""Operator sign-in and the passkey-invite page of `admin` (AS-24, AS-30): `GET /invites`.
+"""Operator sign-in, the passkey-invite page (AS-24, AS-30, `GET /invites`) and the kill switch page (EX-13, AS-05,
+`GET /switches`) of `admin`.
 
 The invite is issued by `admin` itself, after the operator signs in at the IdP **here** (OIDC code flow with PKCE,
 `prompt=login`, `max_age=300`); the Approval UI takes no part, so a compromised UI cannot enrol a passkey. `admin`
@@ -6,6 +7,8 @@ verifies the ID token on its own: signature (JWKS), `iss`, `aud` = client id, `n
 `email_verified`, and the principal `oidc:<iss>:<sub>` must be in `GXG_ADMIN_OPERATORS`. The session is a separate,
 sealed cookie of at most 15 minutes; every form carries a CSRF token. The invite code is shown once, in the response
 to the form post, and is written nowhere else (not to a log, not to the audit: the audit holds only its hash).
+The kill switch page sets and clears a switch through the same audited `gxg_switch` as `POST /v1/switches`; clearing
+needs a sign-in at the IdP not older than 5 minutes (the session keeps its time), as the API's `auth_time`.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ FLOW_COOKIE = "__Host-gxg_admin_flow"
 SESSION_MAX_S = 15 * 60
 FLOW_MAX_S = 10 * 60
 MAX_AGE_S = 300  # a fresh login at the IdP: the same bound as the step-up of the API
+PAGES = ("/invites", "/switches")  # where /login may send the operator back (no open redirect)
 PRINCIPAL = re.compile(r"^oidc:\S{1,500}$")
 HEADERS = {
     "Cache-Control": "no-store",
@@ -95,8 +99,16 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
     return HTMLResponse(doc, status_code=status, headers=HEADERS)
 
 
-def register(app: FastAPI, *, web: Web, deps: Any, issue_invite: Callable[[str, str], str]) -> None:  # noqa: PLR0915
-    """Add `/login`, `/auth/callback`, `/invites`, `/invites/logout` to the admin app."""
+def register(  # noqa: PLR0915
+    app: FastAPI,
+    *,
+    web: Web,
+    deps: Any,
+    issue_invite: Callable[[str, str], str],
+    list_switches: Callable[[], list[tuple[str, bool, str, str, str]]] | None = None,
+    set_switch: Callable[[str, str, bool, str], str] | None = None,
+) -> None:
+    """Add `/login`, `/auth/callback`, `/invites`, `/invites/logout` and (with the switch callables) `/switches`."""
     redirect_uri = web.public_url.rstrip("/") + "/auth/callback"
 
     def secure_cookie(response: Response, name: str, value: str, max_age: int, same_site: str) -> None:
@@ -119,8 +131,10 @@ def register(app: FastAPI, *, web: Web, deps: Any, issue_invite: Callable[[str, 
         return s
 
     @app.get("/login")
-    def login() -> Response:
+    def login(request: Request) -> Response:
+        nxt = request.query_params.get("next", "")
         flow = {
+            "next": nxt if nxt in PAGES else "/invites",
             "state": secrets.token_urlsafe(24),
             "nonce": secrets.token_urlsafe(24),
             "verifier": secrets.token_urlsafe(48),
@@ -186,16 +200,20 @@ def register(app: FastAPI, *, web: Web, deps: Any, issue_invite: Callable[[str, 
         # Not a 303: a redirect stays in the navigation chain that began at the IdP (cross-site), and the browser does
         # not send the SameSite=Strict session cookie on it (a loop /invites -> /login -> /auth/callback).
         # A page that moves on by itself is a new, same-site navigation.
+        nxt = flow.get("next") if flow.get("next") in PAGES else "/invites"
         response = HTMLResponse(
-            '<!doctype html><html lang="ru"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/invites">'
-            '<title>Вход выполнен</title><p>Вход выполнен. <a href="/invites">Продолжить</a></p></html>',
+            f'<!doctype html><html lang="ru"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={nxt}">'
+            f'<title>Вход выполнен</title><p>Вход выполнен. <a href="{nxt}">Продолжить</a></p></html>',
             headers=HEADERS,
         )
         response.delete_cookie(FLOW_COOKIE, path="/")
         secure_cookie(
             response,
             SESSION_COOKIE,
-            seal(web.session_key, {"who": who, "csrf": secrets.token_urlsafe(32), "exp": now + SESSION_MAX_S}),
+            seal(
+                web.session_key,
+                {"who": who, "csrf": secrets.token_urlsafe(32), "auth": auth_time, "exp": now + SESSION_MAX_S},
+            ),
             SESSION_MAX_S,
             "strict",
         )
@@ -210,7 +228,9 @@ def register(app: FastAPI, *, web: Web, deps: Any, issue_invite: Callable[[str, 
             "<p><label>Approver (принципал OIDC)<br>"
             f'<input name=human value="{html.escape(s["who"])}" maxlength=512 required></label></p>'
             "<p><button>Выдать приглашение passkey</button></p></form>"
-            f"<form method=post action=/invites/logout><input type=hidden name=csrf value=\"{html.escape(s['csrf'])}\">"
+            + ('<p><a class=b href="/switches">Kill switch</a></p>' if set_switch else "")
+            + "<form method=post action=/invites/logout>"
+            + f'<input type=hidden name=csrf value="{html.escape(s["csrf"])}">'
             "<button>Выйти</button></form>",
         )
 
@@ -258,3 +278,62 @@ def register(app: FastAPI, *, web: Web, deps: Any, issue_invite: Callable[[str, 
         response = RedirectResponse("/login", status_code=303)
         response.delete_cookie(SESSION_COOKIE, path="/")
         return response
+
+    if list_switches is None or set_switch is None:
+        return
+
+    def switch_page(s: dict[str, Any], error: str = "", done: str = "") -> Response:
+        csrf = f'<input type=hidden name=csrf value="{html.escape(s["csrf"])}">'
+        note = f'<p role="alert">{html.escape(error)}</p>' if error else ""
+        note += f'<p role="status">{html.escape(done)}</p>' if done else ""
+        rows = "".join(
+            f"<tr><td><code>{html.escape(sc)}</code></td><td>{'<b>заблокировано</b>' if b else 'открыто'}</td>"
+            f"<td>{html.escape(r)}</td><td>{html.escape(c)}</td><td>{html.escape(t)}</td></tr>"
+            for sc, b, r, c, t in list_switches()
+        )
+        table = (
+            f"<table><tr><th>scope</th><th>состояние</th><th>причина</th><th>кто</th><th>когда</th></tr>{rows}</table>"
+            if rows
+            else "<p>Переключателей нет: все эффекты открыты.</p>"
+        )
+        fields = (
+            "<p><label>Scope (global, tenant:&lt;id&gt;, tool:&lt;tenant&gt;:&lt;tool&gt;)<br>"
+            '<input name=scope value="global" maxlength=256 required></label></p>'
+            "<p><label>Причина<br><input name=reason maxlength=500 required></label></p>"
+        )
+        return page(
+            "Kill switch",
+            f"{note}{table}"
+            f"<h2>Заблокировать эффекты</h2><form method=post action=/switches>{csrf}"
+            f"<input type=hidden name=blocked value=1>{fields}<p><button>Заблокировать</button></p></form>"
+            "<h2>Снять блокировку</h2><p>Нужен вход не старше 5 минут: иначе "
+            '<a href="/login?next=/switches">войдите заново</a>.</p>'
+            f"<form method=post action=/switches>{csrf}<input type=hidden name=blocked value=0>{fields}"
+            "<p><button>Снять блокировку</button></p></form>"
+            '<p><a class=b href="/invites">Приглашения passkey</a></p>',
+        )
+
+    @app.get("/switches")
+    def switches(request: Request) -> Response:
+        s = session(request)
+        return switch_page(s) if s else RedirectResponse("/login?next=/switches", status_code=303)
+
+    @app.post("/switches")
+    async def change(request: Request) -> Response:
+        s = session(request)
+        if s is None:
+            return RedirectResponse("/login?next=/switches", status_code=303)
+        values = await read_form(request, s)
+        if values is None:
+            return page("Запрос отклонён", "<p>Неверная форма (CSRF).</p>", 403)
+        scope, reason = values.get("scope", "").strip(), values.get("reason", "").strip()
+        blocked = values.get("blocked") == "1"
+        if not scope or not reason or len(scope) > 256 or len(reason) > 500:
+            return switch_page(s, "Нужны scope и причина.")
+        auth = s.get("auth")
+        if not blocked and (not isinstance(auth, int | float) or deps.clock() - auth > MAX_AGE_S):
+            return switch_page(s, "Снять блокировку можно только после свежего входа (не старше 5 минут).")
+        refused = set_switch(s["who"], scope, blocked, reason)
+        if refused:
+            return switch_page(s, refused)
+        return switch_page(s, done=f"{scope}: {'заблокировано' if blocked else 'блокировка снята'}.")
