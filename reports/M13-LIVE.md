@@ -304,3 +304,20 @@ fi
 - AC-M13-06: intents/executions в outcome_unknown старше 24 ч: 0.
 - Executions на intent: максимум 1 (attempt 1). audit_events: propose 3, approve 3, reserve 3, dispatch 3, complete_succeeded 3, passkey_enrolled 1, admin_passkey_invite 1.
 - Оговорка: «сторона чата» — зеркало telegram-db (архив scope-чата) и provider operation id коннектора; живой список сообщений Telegram API не запрашивался. Контрольная сверка — завтра.
+
+## Контрольная сверка 2026-11-26 (04:41Z)
+
+Тот же read-only job (`scripts/deploy/reconcile_job.py`, `default_transaction_read_only=on`), approval-db + зеркало scope-чата в telegram-db (тексты не читались). Временные job'ы удалены (`--finalize`). Ничего не отправлялось и не менялось. Бандл e7a80db (перевыпущен оркестратором 04:38Z); сверка выполнена после него.
+
+| intent | state | decision (step_up, decided_by) | provider_operation_id | в чате |
+|---|---|---|---|---|
+| 12c724e6… (age 36.9 ч) | succeeded, 1 execution (attempt 1) | approve (step_up=false, oidc …2610) | tg:tg-pilot:9 | да (2026-11-25 07:34:11Z) |
+| 55258291… (age 11.15 ч) | succeeded, 1 execution (attempt 1) | approve (step_up=false, oidc …2610) | tg:tg-pilot:10 | да (17:42:41Z) |
+| d8cdc61a… (age 11.13 ч) | succeeded, 1 execution (attempt 1) | approve (step_up=false, oidc …2610) | tg:tg-pilot:11 | да (17:42:48Z) |
+
+- Intents по состояниям: succeeded 3; не терминальных нет.
+- AC-M13-04: расхождений 0 в обе стороны (3 сообщения ↔ 3 intents ↔ 3 executions); в зеркале чата, кроме этих трёх, сообщений с 07:24Z 25.11 нет; повторных отправок 0; общий provider_operation_id у разных executions: 0.
+- AC-M13-05: отправок без approve человека: 0 (все три — owner oidc:…2610, step_up=false, AS-30a).
+- AC-M13-06: outcome_unknown (intents и executions) старше 24 ч: 0.
+- Executions на intent: максимум 1. audit_events: propose 3, approve 3, reserve 3, dispatch 3, complete_succeeded 3, passkey_enrolled 1, admin_passkey_invite 1 — без изменений с сверки 25.11 21:16Z (новых событий нет).
+- Оговорка прежняя: «чат» = зеркало telegram-db и provider operation id; Telegram API напрямую не опрашивался.
