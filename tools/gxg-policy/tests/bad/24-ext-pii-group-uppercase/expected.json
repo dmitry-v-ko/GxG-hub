@@ -1,0 +1,6 @@
+{
+  "description": "подгруппа pii в неверном регистре",
+  "code": "schema",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].actions[1]"
+}

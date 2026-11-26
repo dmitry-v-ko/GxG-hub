@@ -336,3 +336,42 @@ def test_a_nested_policy_root_is_left_to_its_own_run(tmp_path: Path) -> None:
     assert [str(f) for f in load(root).findings] == [
         "tenats/t-y.yaml: <root>: [unknown-file] expected tenants/, approval/ or platform/"
     ]
+
+
+TERM = "expires_at: '2027-03-01T00:00:00Z'"
+
+
+def _tg_tenant(tmp_path: Path, grants: str) -> Path:
+    root = tmp_path / "policies"
+    (root / "tenants").mkdir(parents=True)
+    (root / "tenants/t-x.yaml").write_text(
+        "tenant: t-x\nschema_version: 1\n"
+        "connections:\n  - {id: tg, domain: telegram, credential_ref: secret://t-x/telegram/a}\n"
+        "principals:\n  agents:\n    - id: agent:t-x:a\n"
+        f"grants:\n{grants}",
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_ext_mask_and_pii_without_expiry_are_warnings_not_errors(tmp_path: Path) -> None:
+    root = _tg_tenant(
+        tmp_path,
+        f"  - {{id: g1, subjects: [agent:t-x:a], actions: [ext:read], resources: ['telegram:tg/chat/*'], {TERM}}}\n"
+        "  - {id: g2, subjects: [agent:t-x:a], actions: ['ext:read:pii'], resources: ['telegram:tg/chat/c1']}\n",
+    )
+    r = lint(root, [], NOW)
+    assert r.errors == []
+    assert [(f.path, f.code, f.level) for f in r.findings] == [
+        ("grants[0].resources[0]", "ext-mask-wide", "warning"),
+        ("grants[1]", "ext-pii-no-expiry", "warning"),
+    ]
+
+
+def test_ext_read_on_a_single_chat_with_expiry_is_clean(tmp_path: Path) -> None:
+    root = _tg_tenant(
+        tmp_path,
+        f"  - {{id: g1, subjects: [agent:t-x:a], actions: ['ext:read', 'ext:read:pii'], "
+        f"resources: ['telegram:tg/chat/c1'], {TERM}}}\n",
+    )
+    assert lint(root, [], NOW).findings == []

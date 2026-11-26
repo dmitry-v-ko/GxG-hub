@@ -1,0 +1,6 @@
+{
+  "description": "запись включена дважды (uniqueItems)",
+  "code": "schema",
+  "file": "tenants/t-alpha.yaml",
+  "path": "extensions.enabled"
+}
