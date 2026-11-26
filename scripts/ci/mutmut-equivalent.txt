@@ -85,9 +85,9 @@ gxg_connector_kit.cf_identity.x_args_hash__mutmut_5  # M5: ensure_ascii=None is 
 # M7 (approval)
 gxg_approval.mcp.x_create_server__mutmut_14  # "Authorization" -> "authorization": HTTP header names are case-insensitive (RFC 9110), httpx sends the same header
 gxg_approval.mcp.x_create_server__mutmut_15  # "Authorization" -> "AUTHORIZATION": HTTP header names are case-insensitive (RFC 9110)
-gxg_approval.mcp.x_create_server__mutmut_46  # "GET" -> "get": httpx upper-cases the method (Request.method = method.upper())
-gxg_approval.mcp.x_create_server__mutmut_62  # "POST" -> "post": httpx upper-cases the method
-gxg_approval.mcp.x_create_server__mutmut_87  # error=False -> error=None: _result only tests truthiness
+gxg_approval.mcp.x_create_server__mutmut_59  # "GET" -> "get": httpx upper-cases the method (Request.method = method.upper())
+gxg_approval.mcp.x_create_server__mutmut_75  # "POST" -> "post": httpx upper-cases the method
+gxg_approval.mcp.x_create_server__mutmut_100  # error=False -> error=None: _result only tests truthiness
 gxg_approval.api.x__error__mutmut_5  # "Retry-After" -> "retry-after": header names are case-insensitive; Starlette lower-cases them on the wire
 gxg_approval.api.x__error__mutmut_6  # "Retry-After" -> "RETRY-AFTER": header names are case-insensitive
 gxg_approval.api.x_create_app__mutmut_19  # partition -> rpartition: equal for "Bearer <jwt>" (a JWT has no space); with more spaces both forms fail verification -> the same 401

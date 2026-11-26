@@ -275,6 +275,43 @@ def test_database_functions_refuse_on_their_own(pg: Any, propose: Callable[..., 
     assert owner.execute("SELECT sign_count FROM webauthn_credentials WHERE credential_id = '\\x01'").fetchone() == (6,)
 
 
+def test_decide_checks_the_challenge_row_again(pg: Any, propose: Callable[..., Any], owner: Any) -> None:
+    """Defence in depth: a challenge row written around gxg_decision_challenge (a forged or corrupted row) with an
+    unknown decision, another args hash or a machine principal is refused by gxg_decide itself (_gxg_decide's T2-T4
+    checks), even with a passkey of that principal and the principal in the intent's allowed_approvers."""
+    i = intent(propose, owner)
+    machine = "agent:t-alpha:approver-bot"
+    owner.execute(
+        "UPDATE intents SET allowed_approvers = allowed_approvers || ARRAY[%s] WHERE intent_id = %s",
+        (machine, i["intent_id"]),
+    )
+    owner.execute(
+        "INSERT INTO webauthn_credentials VALUES ('\\x01', %s, '\\x00', 0, now(), %s), "
+        "('\\x02', %s, '\\x00', 0, now(), %s)",
+        (HUMAN1, OPERATOR, machine, OPERATOR),
+    )
+    full = '{"credential_id": "c", "authenticator_data": "a", "client_data_json": "j", "signature": "s"}'
+    with pg.connect("gxg_decider") as d:
+        for column, value, cred, refusal in (
+            ("decision", "maybe", b"\x01", ("GX400", "decision must be approve or reject")),
+            ("args_hash", "0" * 64, b"\x01", ("GX409", "stale decision: version, args hash or deadline")),
+            ("human_principal", machine, b"\x02", ("GX403", "approver is not allowed to decide this intent")),
+        ):
+            row = d.execute(
+                "SELECT gxg_decision_challenge(%s, %s, 'approve', %s, %s)",
+                (HUMAN1, i["intent_id"], i["version"], i["args_hash"]),
+            ).fetchone()
+            ch = bytes(row[0])
+            owner.execute(f"UPDATE decider_challenges SET {column} = %s WHERE challenge = %s", (value, ch))
+            with pytest.raises(psycopg.Error) as err:
+                d.execute("SELECT gxg_decide(%s, %s, 1, null, %s)", (ch, cred, full))
+            assert (err.value.sqlstate, err.value.diag.message_primary) == refusal, column
+    assert count(owner) == 0
+    assert owner.execute("SELECT status FROM intents WHERE intent_id = %s", (i["intent_id"],)).fetchone() == (
+        "pending_approval",
+    )
+
+
 def test_enroll_function_refuses_on_its_own(pg: Any, owner: Any) -> None:
     token = decider.invite_hash("t" * 24)
     with pg.connect("gxg_admin") as admin:
