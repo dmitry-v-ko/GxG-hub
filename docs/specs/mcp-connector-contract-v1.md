@@ -18,6 +18,7 @@ MCP — протокол обнаружения и вызова. Этот док
 | `propose`, `propose_<action>` | Создаёт intent эффекта ([Эффекты](effects-and-approval-v1.md)) |
 | `execute`, `reconcile` | Внутренние операции, вызываются только Executor'ом и **никогда не публикуются в ContextForge** |
 | `call` | Только в мета-tool'е расширения `<domain>.ext.call` ([MCC-11](#расширения)); вызывает записи реестра класса `read` |
+| `describe` | Только в мета-tool'е расширения `<domain>.ext.describe` ([MCC-11](#расширения)); `read`, возвращает схему и класс одной записи реестра |
 
 ### Effect class
 
