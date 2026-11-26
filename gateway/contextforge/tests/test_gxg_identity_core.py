@@ -44,8 +44,15 @@ def ok_inputs(**kw: Any) -> dict[str, Any]:
     } | kw
 
 
+def agent_claims(**kw: Any) -> dict[str, Any]:
+    """claims_for of an agent on one of our gateways: never None (None is only an external gateway's call)."""
+    c = core.claims_for(CFG, **ok_inputs(**kw))
+    assert c is not None
+    return c
+
+
 def test_claims_of_an_agent() -> None:
-    c = core.claims_for(CFG, **ok_inputs())
+    c = agent_claims()
     jti = c.pop("jti")
     assert len(jti) == 32 and int(jti, 16) >= 0
     assert c == {
@@ -60,11 +67,11 @@ def test_claims_of_an_agent() -> None:
         "request_id": "req-1",
         "ahs": core.args_hash(ARGS),
     }
-    assert core.claims_for(CFG, **ok_inputs())["jti"] != jti  # new for every call
+    assert agent_claims()["jti"] != jti  # new for every call
 
 
 def test_no_arguments_hash_as_empty_object() -> None:
-    assert core.claims_for(CFG, **ok_inputs(arguments=None))["ahs"] == core.args_hash({})
+    assert agent_claims(arguments=None)["ahs"] == core.args_hash({})
 
 
 NO_USER = "no authenticated user"
@@ -127,7 +134,7 @@ def test_adapter_and_kit_verifier_agree() -> None:
     """The contract of variant C: what the adapter signs, the connector accepts, and nothing else."""
     key = Ed25519PrivateKey.generate()
     verifier = ContextForgeVerifier("demo", {"k1": key.public_key()}, now=lambda: T0)
-    token = core.sign(core.claims_for(CFG, **ok_inputs()), key, "k1")
+    token = core.sign(agent_claims(), key, "k1")
     headers = core.with_identity({}, token)
     ident = verifier.verify(headers, tool="demo.notes.search", arguments={"limit": 3, "query": "привет"})
     assert (ident.tenant_id, ident.principal, ident.request_id) == ("t-alpha", "agent:t-alpha:reader", "req-1")

@@ -6,12 +6,30 @@ import argparse
 import logging
 import os
 import socket
+import sys
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from prometheus_client import CollectorRegistry
+
+
+VALUE_OPTIONS = ("--kid", "--scope", "--reason", "--human")
+
+
+def _values_attached(argv: list[str]) -> list[str]:
+    """`--kid -ETr6…` → `--kid=-ETr6…`: a key id is a base64url thumbprint and starts with "-" about 1 time in 64;
+    argparse would take it for an option and refuse the removal of a compromised key (AS-10)."""
+    out: list[str] = []
+    it = iter(argv)
+    for a in it:
+        if a in VALUE_OPTIONS:
+            value = next(it, None)
+            out.append(a if value is None else f"{a}={value}")
+        else:
+            out.append(a)
+    return out
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -30,7 +48,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--scope", help="switch: global | tenant:<id> | tool:<tenant>:<tool_key>")
     parser.add_argument("--reason", help="switch: why (audited)")
     parser.add_argument("--human", help="passkeys invite: oidc:<iss>:<sub> of the approver")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(_values_attached(sys.argv[1:] if argv is None else argv))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     from . import config
 
