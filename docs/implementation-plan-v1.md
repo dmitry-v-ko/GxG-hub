@@ -671,11 +671,11 @@ flowchart TD
 
 Решение владельца 2026-11-26. Сторона Signals в репозитории `gxg_agents_v2`, спека — раздел «Telegram participants» в [Signal Intelligence](https://github.com/dmitry-v-ko/gxg_agents_v2/blob/main/docs/specs/domains/signal-intelligence/README.md) (правится в ветке `claude/signals-participants-spec`). Устаревший Capability Hub v2 — только донор, его собранные данные не переносятся.
 
-**Делаем:** операция коннектора `telegram.participants.collect` в Signals, схема `telegram_participant.v1`, фото как артефакты Artifact Store, детерминированная проверка аватарки (бинарный фильтр по `photo_count`, вес 0, тег `no_avatar`; нового типа фильтра не нужно, он уже есть), «следить» = Source + Automation.
+**Делаем:** операция коннектора `telegram.participants.collect` в Signals, вид `person_candidate.v1` (поля добавляются версией схемы), фото как артефакты Artifact Store, детерминированная проверка аватарки (бинарный фильтр по `photo_count`, вес 0, тег `no_avatar`; нового типа фильтра не нужно, он уже есть), «следить» = Source + Automation.
 
 | ID | Критерий |
 | --- | --- |
-| AC-M12.1-01 | Источник с этой операцией даёт `SourceInboxItem` с `structured_data` `telegram_participant.v1`; ключ dedupe — пользователь; повторный прогон без новых участников → 0 `created` |
+| AC-M12.1-01 | Источник с этой операцией даёт `SourceInboxItem` с `structured_data` `person_candidate.v1`; ключ dedupe — пользователь; повторный прогон без новых участников → 0 `created` |
 | AC-M12.1-02 | Фото в Artifact Store с `sha256`; в строке элемента байтов нет; без права `pii` артефактов и телефона нет, атрибуты `unknown` |
 | AC-M12.1-03 | Бинарный фильтр «есть фото» помечает тегом `no_avatar` ровно тех, у кого `photo_count = 0`; `unknown` не считается «нет фото» |
 | AC-M12.1-04 | Разовый запуск и расписание используют один Source; смена расписания не создаёт новой ревизии источника |
