@@ -30,6 +30,7 @@ import subprocess
 import sys
 import tomllib
 from collections.abc import Iterable
+from itertools import batched
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +75,7 @@ SECRET_RE = re.compile(
 )
 REQ_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 LEVEL = {"none": 0, "read": 1, "write": 2}
+WRITE = LEVEL["write"]  # also the level of every scope of the repository default token (fail closed)
 PRIVILEGED_TRIGGERS = {"pull_request_target", "workflow_run"}
 
 
@@ -88,27 +90,24 @@ def finding(rule: str, path: str, detail: str) -> Finding:
 def digest(value: Any) -> str:
     """Short content hash: a coarse finding ("file changed") must differ when the content changes after a label."""
     raw = value if isinstance(value, str) else json.dumps(value, sort_keys=True, default=str)
-    return hashlib.sha256(raw.encode("utf-8", "surrogateescape")).hexdigest()[:12]
+    return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
 
 # --- git -------------------------------------------------------------------------------------------------------
 
 
 def git(repo: Path, *args: str) -> bytes:
-    return subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=repo, check=True,
-                          capture_output=True).stdout  # fmt: skip
+    return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True).stdout
 
 
 def changed(repo: Path, base: str, head: str) -> list[tuple[str, str, bool]]:
-    """(status A/M/D/T, path, binary) per changed file; renames are a delete plus an add."""
-    status = git(repo, "diff", "--no-renames", "--name-status", "-z", base, head).split(b"\0")
-    numstat = git(repo, "diff", "--no-renames", "--numstat", "-z", base, head).split(b"\0")
-    binary = {f.split(b"\t", 2)[2].decode() for f in numstat if f.startswith(b"-\t-\t")}
-    out = []
-    for st, path in zip(status[0::2], status[1::2], strict=False):
-        p = path.decode("utf-8", "surrogateescape")
-        out.append((st.decode()[:1], p, p in binary))
-    return out
+    """(status A/M/D/T, path, binary) per changed file; renames are a delete plus an add.
+
+    With -z git prints paths verbatim; a path that is not UTF-8 keeps its bytes as surrogates (not printable)."""
+    status, numstat = (git(repo, "diff", "--no-renames", opt, "-z", base, head).decode("utf-8", "surrogateescape")
+                       for opt in ("--name-status", "--numstat"))  # fmt: skip
+    binary = {f.removeprefix("-\t-\t") for f in numstat.split("\0") if f.startswith("-\t-\t")}
+    return [(st, path, path in binary) for st, path in batched(status.split("\0")[:-1], 2)]
 
 
 def blob(repo: Path, sha: str, path: str) -> str | None:
@@ -120,21 +119,11 @@ def blob(repo: Path, sha: str, path: str) -> str | None:
         raise Unparsed(f"not UTF-8: {exc}") from exc
 
 
-def line_changes(repo: Path, base: str, head: str, path: str) -> tuple[list[str], list[str]]:
-    """Added and removed lines of one file (no context)."""
-    raw = git(repo, "diff", "--no-renames", "--no-ext-diff", "--no-textconv", "-U0", base, head, "--",
-              f":(literal){path}").decode("utf-8", "surrogateescape")  # fmt: skip
-    added: list[str] = []
-    removed: list[str] = []
-    in_hunks = False
-    for line in raw.splitlines():
-        if line.startswith("@@"):
-            in_hunks = True
-        elif in_hunks and line.startswith("+"):
-            added.append(line[1:])
-        elif in_hunks and line.startswith("-"):
-            removed.append(line[1:])
-    return added, removed
+def added_lines(repo: Path, base: str, head: str, path: str) -> list[str]:
+    """Lines one file gains. Both sides of a text file are UTF-8 (blob() has read them). In a hunk every line
+    starts with "+", "-", " " or "\\", so "\n@@" starts the next hunk header; the file header comes before the first."""
+    raw = git(repo, "diff", "--no-ext-diff", "--no-textconv", base, head, "--", f":(literal){path}").decode()
+    return [line[1:] for hunk in raw.split("\n@@")[1:] for line in hunk.splitlines()[1:] if line.startswith("+")]
 
 
 # --- workflows -------------------------------------------------------------------------------------------------
@@ -182,7 +171,7 @@ def _effective(doc: dict[str, Any], job: Any, scopes: set[str]) -> dict[str, int
         return _perms(job["permissions"], scopes)
     if "permissions" in doc:
         return _perms(doc["permissions"], scopes)
-    return dict.fromkeys(scopes, 2)  # repository default token: treat as write (fail closed)
+    return dict.fromkeys(scopes, WRITE)  # the repository default token
 
 
 def _scopes(*docs: dict[str, Any]) -> set[str]:
@@ -218,9 +207,7 @@ def _triggers(doc: dict[str, Any]) -> set[str]:
         return set()
     if isinstance(on, str):
         return {on}
-    if isinstance(on, list):
-        return {str(x) for x in on}
-    if isinstance(on, dict):
+    if isinstance(on, (list, dict)):
         return {str(x) for x in on}
     raise Unparsed(f"on: {on!r}")
 
@@ -251,8 +238,9 @@ def _permission_findings(path: str, a: dict[str, Any], b: dict[str, Any], new_fi
     scopes = _scopes(a, b)
     none = dict.fromkeys(scopes, 0)
     # The old workflow-level grant; a missing one is the repository default (write), a new file had none.
-    top_old = none if new_file else _perms(a["permissions"], scopes) if "permissions" in a else dict.fromkeys(scopes, 2)
-    top_new = _perms(b["permissions"], scopes) if "permissions" in b else dict.fromkeys(scopes, 2)
+    default = dict.fromkeys(scopes, WRITE)
+    top_old = none if new_file else _perms(a["permissions"], scopes) if "permissions" in a else default
+    top_new = _perms(b["permissions"], scopes) if "permissions" in b else default
     out = [finding("permissions.widened", path, f"workflow: {s} {top_old[s]}->{top_new[s]}")
            for s in sorted(scopes) if top_new[s] > top_old[s]]  # fmt: skip
     ja, jb = _jobs(a), _jobs(b)
@@ -337,7 +325,7 @@ def _tightened(key: str, va: Any, vb: Any) -> bool | None:
     for applies, verdict in checks:
         if applies:
             return bool(verdict())
-    return None if key in NAME_MAPS | {"allOf", "anyOf", "oneOf", "prefixItems"} | SUBSCHEMA else False
+    return None  # _sub() recurses into subschemas, any other change is "changed"
 
 
 def _sub(key: str, va: Any, vb: Any, b: dict[str, Any], at: str) -> list[str]:
@@ -353,10 +341,10 @@ def _sub(key: str, va: Any, vb: Any, b: dict[str, Any], at: str) -> list[str]:
                 out += schema_weakening(va[name], vb[name], f"{at}/{name}")
         return out
     lists = isinstance(va, list) and isinstance(vb, list)
-    if key == "allOf" and lists and len(vb) >= len(va):  # a new allOf member only adds constraints
-        return [w for i, (x, y) in enumerate(zip(va, vb, strict=False)) for w in schema_weakening(x, y, f"{at}/{i}")]
-    if key in {"anyOf", "oneOf", "prefixItems"} and lists and len(va) == len(vb):
-        return [w for i, (x, y) in enumerate(zip(va, vb, strict=True)) for w in schema_weakening(x, y, f"{at}/{i}")]
+    # A new allOf member only adds constraints; anyOf/oneOf/prefixItems members are compared one to one.
+    if lists and ((key == "allOf" and len(vb) >= len(va)) or (key in {"anyOf", "oneOf", "prefixItems"}
+                                                               and len(va) == len(vb))):  # fmt: skip
+        return [w for i, x in enumerate(va) for w in schema_weakening(x, vb[i], f"{at}/{i}")]
     if key in SUBSCHEMA and isinstance(va, dict) and isinstance(vb, dict):
         return schema_weakening(va, vb, at)
     return [f"{at} changed"]
@@ -414,7 +402,7 @@ def _reqs(items: Iterable[Any]) -> dict[str, str]:
     out: dict[str, str] = {}
     for r in items:
         if isinstance(r, str) and (m := REQ_NAME.match(r)):
-            out[_norm(m.group(1))] = r.split(";", 1)[0].strip()
+            out[_norm(m.group(1))] = r.strip()  # with the marker: a URL may contain ";"
     return out
 
 
@@ -430,7 +418,7 @@ def _deps(doc: dict[str, Any]) -> dict[str, str]:
     return _reqs(items)
 
 
-def _toml(path: str, text: str | None) -> dict[str, Any]:
+def _toml(text: str | None) -> dict[str, Any]:
     if text is None:
         return {}
     try:
@@ -440,7 +428,7 @@ def _toml(path: str, text: str | None) -> dict[str, Any]:
 
 
 def pyproject_findings(path: str, old: str | None, new: str | None) -> list[Finding]:
-    a, b = _toml(path, old), _toml(path, new)
+    a, b = _toml(old), _toml(new)
     da, db = _deps(a), _deps(b)
     out = [finding("deps.new", path, n) for n in sorted(set(db) - set(da))]
     out += [finding("deps.source", path, db[n]) for n in sorted(set(db) & set(da)) if "@" in db[n] and db[n] != da[n]]
@@ -465,7 +453,7 @@ def _locked(doc: dict[str, Any]) -> dict[str, set[str]]:
 
 
 def lock_findings(path: str, old: str | None, new: str | None) -> list[Finding]:
-    a, b = _locked(_toml(path, old)), _locked(_toml(path, new))
+    a, b = _locked(_toml(old)), _locked(_toml(new))
     out = [finding("deps.new", path, n) for n in sorted(set(b) - set(a))]
     out += [finding("deps.source", path, f"{n}: {s}") for n in sorted(set(a) & set(b)) for s in sorted(b[n] - a[n])]
     return out
@@ -501,16 +489,12 @@ def _controls(path: str) -> bool:
     return path.startswith(CONTROL_DIRS) or Path(path).suffix.lower() in TEXT_SUFFIXES or _is_exception_list(path)
 
 
-def line_findings(path: str, added: list[str], removed: list[str], new: str | None = None) -> list[Finding]:
+def line_findings(path: str, added: list[str], old: str | None, new: str | None) -> list[Finding]:
+    if _is_exception_list(path):
+        return [finding("exceptions.added", path, t) for t in (x.strip() for x in added) if t and not t.startswith("#")]
     out: list[Finding] = []
-    for line in added:
+    for line in [] if _is_doc(path) else added:
         text = line.strip()
-        if _is_exception_list(path):
-            if text and not text.startswith("#"):
-                out.append(finding("exceptions.added", path, text))
-            continue
-        if _is_doc(path):
-            continue
         if SKIP_RE.search(line):
             out.append(finding("tests.skipped", path, text))
         if LINT_RE.search(line):
@@ -519,7 +503,7 @@ def line_findings(path: str, added: list[str], removed: list[str], new: str | No
             out.append(finding("control.disabled", path, text))
     name = Path(path).name
     if (name.startswith(".gitleaks") and name.endswith(".toml")) or name in LINT_CONFIG_FILES:
-        if added or removed:
+        if old != new:
             out.append(finding("lint.config", path, f"config changed ({digest(new or '')})"))
     return out
 
@@ -527,25 +511,25 @@ def line_findings(path: str, added: list[str], removed: list[str], new: str | No
 # --- the whole diff --------------------------------------------------------------------------------------------
 
 
-def file_findings(repo: Path, base: str, head: str, status: str, path: str) -> list[Finding]:
-    old = None if status == "A" else blob(repo, base, path)
-    new = None if status == "D" else blob(repo, head, path)
+def file_findings(repo: Path, base: str, head: str, path: str) -> list[Finding]:
+    old, new = blob(repo, base, path), blob(repo, head, path)  # None: no such file on that side
     out: list[Finding] = []
     if path in GATE_SELF:
         out.append(finding("gate.self", path, f"gate file changed ({digest(new or '')})"))
     if path.startswith("tools/gxg-policy/") and not path.startswith("tools/gxg-policy/tests/"):
         out.append(finding("policy.tool", path, f"gxg-policy changed ({digest(new or '')})"))
-    if path.startswith("schemas/"):
-        out += schema_findings(path, old, new)
-    if path.startswith(".github/workflows/") or (path.startswith(".github/actions/") and _is_workflow(path)):
-        out += workflow_findings(path, old, new)
-    if Path(path).name == "pyproject.toml":
-        out += pyproject_findings(path, old, new)
-    if Path(path).name == "uv.lock":
-        out += lock_findings(path, old, new)
-    added, removed = line_changes(repo, base, head, path)
-    out += line_findings(path, added, removed, new)
-    return out
+    name = Path(path).name
+    judges = [
+        (path.startswith("schemas/"), schema_findings),
+        (path.startswith(".github/workflows/") or (path.startswith(".github/actions/") and _is_workflow(path)),
+         workflow_findings),
+        (name == "pyproject.toml", pyproject_findings),
+        (name == "uv.lock", lock_findings),
+    ]  # fmt: skip
+    for applies, judge in judges:
+        if applies:
+            out += judge(path, old, new)
+    return out + line_findings(path, added_lines(repo, base, head, path), old, new)
 
 
 def collect(repo: Path, base: str, head: str) -> list[Finding]:
@@ -558,7 +542,7 @@ def collect(repo: Path, base: str, head: str) -> list[Finding]:
         if binary:
             continue  # an image or archive outside the control paths holds no rule of this gate
         try:
-            out += file_findings(repo, base, head, status, path)
+            out += file_findings(repo, base, head, path)
         except Unparsed as exc:
             out.append(finding("unparsed", path, f"{exc} ({oid})"))
     return out

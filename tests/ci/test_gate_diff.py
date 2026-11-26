@@ -6,16 +6,22 @@ rules of gate_diff.collect(merge-base..head). Bypass cases must give a finding; 
 
 from __future__ import annotations
 
+import datetime
+import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -60,7 +66,15 @@ def rules(tmp_path: Path, base: Mapping[str, str | bytes | None], head: Mapping[
     b = commit(repo, {"README.md": "r\n", **base}, "base")
     git(repo, "checkout", "-qb", "claude/x")
     h = commit(repo, head, "head")
+    git(repo, "checkout", "-q", "main")  # the findings come from the two commits, never from the work tree
     return sorted(f"{f['rule']} {f['path']} {f['detail']}" for f in gd.collect(repo, b, h))
+
+
+def oid(text: str | bytes) -> str:
+    """The blob id an `unparsed` finding names (12 hex digits)."""
+    data = text.encode() if isinstance(text, str) else text
+    out = subprocess.run(["git", "hash-object", "--stdin"], input=data, capture_output=True, check=True).stdout
+    return out.decode().strip()[:12]
 
 
 def heads(found: list[str]) -> list[str]:
@@ -447,3 +461,504 @@ def test_cli_writes_json(tmp_path: Path) -> None:
     cmd = [sys.executable, str(ROOT / "scripts/ci/gate_diff.py"), "--repo", str(repo), "--base", b, "--head", h]
     subprocess.run([*cmd, "--json", str(out)], check=True)
     assert [f["rule"] for f in json.loads(out.read_text())] == ["lint.exception"]
+
+
+# --- exact findings (DoD-4: mutmut kills every rule branch, message and detail) -------------------------------
+
+SCOPES = ["actions", "attestations", "checks", "contents", "deployments", "discussions", "id-token", "issues",
+          "models", "packages", "pages", "pull-requests", "repository-projects", "security-events",
+          "statuses"]  # fmt: skip
+WHO = ["job ci-ok", "job grants-widening", "job tests", "workflow"]
+READ, RUNNER = "permissions:\n  contents: read", "ubuntu-24.04"
+ON = "on: {pull_request: {}, push: {branches: [main]}}"
+STEPS = "    steps:\n      - uses: actions"
+
+
+def widened(path: str, who: list[str], scopes: list[str], change: str) -> list[str]:
+    return sorted(f"permissions.widened {path} {w}: {s} {change}" for w in who for s in scopes)
+
+
+@pytest.mark.parametrize(
+    ("base", "head", "expected"),
+    [
+        (BASE_WF, wf("${{ secrets.OLD }}", "${{ secrets.NEW }}"), [f"secrets.new {WF} NEW"]),
+        (BASE_WF, wf("${{ secrets.OLD }}", "${{ secrets['OLD'] }}"), [f"secrets.new {WF} secrets["]),
+        (BASE_WF, wf("${{ secrets.OLD }}", "${{ toJSON(secrets) }}"), [f"secrets.new {WF} toJSON(secrets)"]),
+        (BASE_WF, wf("permissions:\n  contents: read", "permissions:\n  contents: write"),
+         widened(WF, WHO, ["contents"], "1->2")),
+        # read-all: every scope the mapping left at none is now read
+        (BASE_WF, wf("permissions:\n  contents: read", "permissions: read-all"),
+         widened(WF, WHO, [s for s in SCOPES if s != "contents"], "0->1")),
+        (BASE_WF, wf("permissions:\n  contents: read", "permissions: write-all"),
+         sorted(widened(WF, WHO, [s for s in SCOPES if s != "contents"], "0->2")
+                + widened(WF, WHO, ["contents"], "1->2"))),
+        # write-all is the repository default token: dropping it or adding it to a workflow without one is nothing
+        (wf(READ, "permissions: write-all"), wf(READ + "\n", ""), []),
+        (wf(READ + "\n", ""), wf(READ, "permissions: write-all"), []),
+        (BASE_WF, wf(STEPS, "    permissions: {contents: read, id-token: write}\n" + STEPS),
+         [f"permissions.widened {WF} job tests: id-token 0->2"]),
+        # a scope this file names is judged too, not only the known ones
+        (BASE_WF, wf(STEPS, "    permissions: {foo: write}\n" + STEPS),
+         [f"permissions.widened {WF} job tests: foo 0->2"]),
+        # a scope only the old file named: the job now gets the default token, foo included
+        (wf(STEPS, "    permissions: {foo: read}\n" + STEPS).replace("permissions:\n  contents: read\n", ""),
+         wf("permissions:\n  contents: read\n", ""),
+         sorted(widened(WF, ["job tests"], ["foo"], "1->2") + widened(WF, ["job tests"], SCOPES, "0->2"))),
+        # a job keeps its own block: the workflow block does not decide it
+        (wf(STEPS, "    permissions: {contents: write, id-token: write}\n" + STEPS),
+         wf(STEPS, "    permissions: {contents: write, id-token: write}\n" + STEPS).replace("pytest -q", "pytest"), []),
+        (BASE_WF, wf(ON, "on: {pull_request_target: {}}"), [f"trigger.privileged {WF} pull_request_target"]),
+        (BASE_WF, wf(ON, '"on": [pull_request, workflow_run]'), [f"trigger.privileged {WF} workflow_run"]),
+        (BASE_WF, wf(ON, "on: [push, workflow_run, pull_request_target]"),
+         [f"trigger.privileged {WF} pull_request_target", f"trigger.privileged {WF} workflow_run"]),
+        (BASE_WF, wf(f"actions/checkout@{PIN}", "actions/checkout@v7"), [f"action.new {WF} actions/checkout@v7"]),
+        (BASE_WF, wf(f"actions/checkout@{PIN}", "./.github/actions/x"), [f"action.local {WF} ./.github/actions/x"]),
+        (BASE_WF, wf("needs: [tests, lint]", "needs: [tests]"),
+         [f"ci-ok.changed {WF} job ci-ok (or its needs) changed "
+          f"({gd.digest({'if': 'always()', 'needs': ['tests'], 'runs-on': RUNNER, 'steps': [{'run': 'echo ok'}]})})"]),
+        (BASE_WF, wf("bash scripts/ci/grants_widening.sh", "'true'"),
+         [f"gate.self {WF} job grants-widening changed "
+          f"({gd.digest({'runs-on': RUNNER, 'steps': [{'run': 'true'}]})})"]),
+        # a job that is not a mapping is skipped, the jobs after it are still read
+        (BASE_WF, BASE_WF.replace("jobs:\n", "jobs:\n  odd: null\n") + "  call:\n    uses: o/r/x.yml@v1\n",
+         [f"action.new {WF} o/r/x.yml@v1"]),
+    ],
+)  # fmt: skip
+def test_workflow_findings_exact(tmp_path: Path, base: str, head: str, expected: list[str]) -> None:
+    assert rules(tmp_path, {WF: base}, {WF: head}) == expected
+
+
+def test_new_workflow_file_findings_exact(tmp_path: Path) -> None:
+    new = ".github/workflows/new.yml"
+    doc = yaml.safe_load(BASE_WF)
+    assert rules(tmp_path, {}, {new: BASE_WF}) == [
+        f"action.new {new} actions/checkout@{PIN}",
+        f"ci-ok.changed {new} job ci-ok (or its needs) changed ({gd.digest(doc['jobs']['ci-ok'])})",
+        f"gate.self {new} job grants-widening changed ({gd.digest(doc['jobs']['grants-widening'])})",
+        *widened(new, WHO, ["contents"], "0->1"),  # a new file had no token at all
+        f"secrets.new {new} OLD",
+    ]
+
+
+def test_workflow_removed_exact(tmp_path: Path) -> None:
+    assert rules(tmp_path, {WF: BASE_WF}, {WF: None}) == [f"workflow.removed {WF} workflow file removed"]
+
+
+@pytest.mark.parametrize(
+    ("head", "detail"),
+    [
+        (wf(ON, "on: 5"), "on: 5"),
+        (wf("permissions:\n  contents: read", "permissions: maybe"), "permissions: 'maybe'"),
+        (wf("permissions:\n  contents: read", "permissions: {contents: admin}"), "permissions.contents: 'admin'"),
+        (wf("permissions:\n  contents: read", "permissions: 5"), "permissions: 5"),
+        ("jobs: [a]\n", "jobs is not a mapping"),
+        ("- a\n", "not a YAML mapping"),
+    ],
+)
+def test_unparsable_workflow_details(tmp_path: Path, head: str, detail: str) -> None:
+    assert rules(tmp_path, {WF: BASE_WF}, {WF: head}) == [f"unparsed {WF} {detail} ({oid(head)})"]
+
+
+def test_bad_yaml_detail_names_the_parser_error(tmp_path: Path) -> None:
+    (found,) = rules(tmp_path, {WF: BASE_WF}, {WF: "jobs: [unclosed\n"})
+    assert found.startswith(f"unparsed {WF} YAML: while parsing a flow sequence\n")
+    assert found.endswith(f" ({oid('jobs: [unclosed\n')})")
+
+
+ACTION = ".github/actions/setup/action.yml"
+COMPOSITE = "runs:\n  using: composite\n  steps:\n    - run: echo\n      shell: bash\n"
+
+
+def test_composite_action_is_judged_like_a_workflow(tmp_path: Path) -> None:
+    head = COMPOSITE + "    - odd\n    - uses: evil/setup@v1\n"
+    assert rules(tmp_path, {ACTION: COMPOSITE}, {ACTION: head}) == [f"action.new {ACTION} evil/setup@v1"]
+
+
+@pytest.mark.parametrize(
+    ("path", "text", "expected"),
+    [
+        (".github/actions/setup/action.yaml", COMPOSITE + "    - uses: evil/setup@v1\n", ["action.new"]),
+        (
+            ".github/workflows/ci.yaml",
+            "permissions: {}\njobs:\n  a:\n    steps:\n      - run: make || true\n",
+            ["control.disabled"],
+        ),
+        # line rules for scripts, not workflow rules: a shell script of an action, a .github config file
+        (".github/actions/setup/run.sh", "make || true\n", ["control.disabled"]),
+        (".github/dependabot.yml", "x: make || true\n", ["control.disabled"]),
+        # neither: a YAML file elsewhere
+        ("stand/compose.yml", "command: sh -c 'make || true'\n", []),
+        # scripts: anything under scripts/, *.sh anywhere, Makefile*
+        ("scripts/x.py", "run('make || true')\n", ["control.disabled"]),
+        ("deploy/run.sh", "make || true\n", ["control.disabled"]),
+        ("Makefile", "test:\n\t-make || true\n", ["control.disabled"]),
+        ("deploy/Makefile.ci", "test:\n\tmake || true\n", ["control.disabled"]),
+        ("app/x.py", "run('make || true')\n", []),
+    ],
+)
+def test_which_files_are_workflows_and_scripts(tmp_path: Path, path: str, text: str, expected: list[str]) -> None:
+    found = rules(tmp_path, {path: "# base\n"}, {path: text})
+    assert [f.split()[0] for f in found] == expected, found
+
+
+def test_a_new_github_config_file_is_not_a_workflow(tmp_path: Path) -> None:
+    # As a workflow, a new file without `permissions:` would get the default token (write) everywhere.
+    assert rules(tmp_path, {}, {".github/dependabot.yml": "version: 2\n"}) == []
+
+
+# Line rules: the detail is the stripped line.
+@pytest.mark.parametrize(
+    ("path", "line", "expected"),
+    [
+        ("tests/test_a.py", "    pytest.skip('no db')  ", "tests.skipped tests/test_a.py pytest.skip('no db')"),
+        ("app/a.py", "  x = 1  # noqa: E501", "lint.exception app/a.py x = 1  # noqa: E501"),
+        ("scripts/a.sh", "  make || true", "control.disabled scripts/a.sh make || true"),
+    ],
+)
+def test_line_findings_carry_the_stripped_line(tmp_path: Path, path: str, line: str, expected: str) -> None:
+    assert rules(tmp_path, {path: "a\n"}, {path: f"a\n{line}\n"}) == [expected]
+
+
+def test_every_added_line_of_every_hunk_counts(tmp_path: Path) -> None:
+    base = "".join(f"x{i} = {i}\n" for i in range(40))
+    head = "# noqa: first\n" + base.replace("x20 = 20\n", "x20 = 20  # noqa: one\nx21 = 0  # noqa: two\n")
+    assert rules(tmp_path, {"a.py": base}, {"a.py": head}) == [
+        "lint.exception a.py # noqa: first", "lint.exception a.py x20 = 20  # noqa: one",
+        "lint.exception a.py x21 = 0  # noqa: two",
+    ]  # fmt: skip
+
+
+def test_a_diff_driver_cannot_hide_lines(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # .gitattributes is in the PR; an external diff or textconv that prints nothing must not blind the gate.
+    monkeypatch.setenv("GIT_EXTERNAL_DIFF", "true")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "diff.hide.textconv")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    found = rules(tmp_path, {".gitattributes": "*.py diff=hide\n", "a.py": "x = 0\n"}, {"a.py": "x = 1  # noqa\n"})
+    assert found == ["lint.exception a.py x = 1  # noqa"]
+
+
+def test_exception_list_lines_are_each_a_finding(tmp_path: Path) -> None:
+    head = "# list\na.x__mutmut_1  # why\n  b.y__mutmut_2  # why  \n\n# c\nc.z__mutmut_3  # why\n"
+    assert rules(tmp_path, {EQ: "# list\n"}, {EQ: head}) == [
+        f"exceptions.added {EQ} a.x__mutmut_1  # why", f"exceptions.added {EQ} b.y__mutmut_2  # why",
+        f"exceptions.added {EQ} c.z__mutmut_3  # why",
+    ]  # fmt: skip
+
+
+def test_docs_may_mention_any_rule(tmp_path: Path) -> None:
+    assert rules(tmp_path, {}, {"docs/a.md": "`# noqa`\n`|| true`\n`@pytest.mark.skip`\n"}) == []
+
+
+@pytest.mark.parametrize(
+    ("base", "head"),
+    [("[mypy]\nstrict = True\n", "[mypy]\nstrict = False\n"),
+     ("[mypy]\nstrict = True\nx = 1\n", "[mypy]\nstrict = True\n"),
+     ("[mypy]\n", None), (None, "[mypy]\n")],
+)  # fmt: skip
+def test_lint_config_detail_is_the_new_content_hash(tmp_path: Path, base: str | None, head: str | None) -> None:
+    files = {} if base is None else {"mypy.ini": base}
+    assert rules(tmp_path, files, {"mypy.ini": head}) == [
+        f"lint.config mypy.ini config changed ({gd.digest(head or '')})"
+    ]
+
+
+def test_gate_and_policy_tool_details_are_the_new_content_hash(tmp_path: Path) -> None:
+    tool = "tools/gxg-policy/src/gxg_policy/x.py"
+    assert rules(tmp_path, {GATE[0]: "a\n", tool: "b\n"}, {GATE[0]: "c\n", tool: None}) == [
+        f"gate.self {GATE[0]} gate file changed ({gd.digest('c\n')})",
+        f"policy.tool {tool} gxg-policy changed ({gd.digest('')})",
+    ]
+
+
+GATE = ["scripts/ci/gate_diff.py"]
+
+
+# --- collect: what cannot be parsed --------------------------------------------------------------------------
+
+
+def test_unparsed_details_name_the_blob(tmp_path: Path) -> None:
+    files = {"scripts/a.bin": b"\0\1", "scripts/b.bin": b"\0\2", "scripts/gone.bin": b"\0\3"}
+    found = rules(tmp_path, {"scripts/gone.bin": b"\0\3"}, {**files, "scripts/gone.bin": None})
+    assert found == [
+        f"unparsed scripts/a.bin binary or unusual path ({oid(b'\0\1')})",
+        f"unparsed scripts/b.bin binary or unusual path ({oid(b'\0\2')})",
+        "unparsed scripts/gone.bin binary or unusual path (deleted)",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("path", "control"),
+    [("app/x.py", True), ("app/LICENSE", True), ("app/x.PY", True), (".semgrepignore", True), ("app/x.png", False),
+     (" lead.py", True)],
+)  # fmt: skip
+def test_binary_files_that_could_hold_a_control(tmp_path: Path, path: str, control: bool) -> None:
+    found = rules(tmp_path, {}, {path: b"\0\1"})
+    assert found == ([f"unparsed {path} binary or unusual path ({oid(b'\0\1')})"] if control else [])
+
+
+@pytest.mark.parametrize("path", ["app/a\tb.py", "app/new\nline.py", '"quoted.py', os.fsdecode(b"app/bad\xff.py")])
+def test_unusual_paths_need_the_label(tmp_path: Path, path: str) -> None:
+    assert rules(tmp_path, {}, {path: "x = 1\n"}) == [f"unparsed {path} binary or unusual path ({oid('x = 1\n')})"]
+
+
+def test_text_that_is_not_utf8_is_unparsed(tmp_path: Path) -> None:
+    detail = "not UTF-8: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+    assert rules(tmp_path, {}, {"app/a.py": b"\xff x\n"}) == [f"unparsed app/a.py {detail} ({oid(b'\xff x\n')})"]
+
+
+def test_a_rename_is_a_delete_and_an_add(tmp_path: Path) -> None:
+    text = "".join(f"x{i} = {i}\n" for i in range(20)) + "y = 1  # noqa\n"
+    found = rules(tmp_path, {"app/old.py": text, "scripts/old.bin": b"\0\1"},
+                  {"app/old.py": None, "app/new.py": text, "scripts/old.bin": None,
+                   "scripts/new.bin": b"\0\1"})  # fmt: skip
+    assert found == [
+        "lint.exception app/new.py y = 1  # noqa",
+        f"unparsed scripts/new.bin binary or unusual path ({oid(b'\0\1')})",
+        "unparsed scripts/old.bin binary or unusual path (deleted)",
+    ]
+
+
+# --- schemas -------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "expected"),
+    [
+        ({"type": "string"}, [], ["/ changed"]),
+        ({"maxLength": 5}, {}, ["/maxLength removed"]),
+        ({}, {"not": {}}, ["/not added"]),
+        ({1: {}, "a": 1}, {1: {}, "a": 2}, ["/a changed"]),  # YAML keys need not be strings
+        # added keywords that only tighten, and those that do not
+        ({}, {"additionalProperties": False, "unevaluatedProperties": False, "uniqueItems": True, "minLength": 1}, []),
+        ({}, {"additionalProperties": True}, ["/additionalProperties added"]),
+        ({}, {"unevaluatedProperties": {}}, ["/unevaluatedProperties added"]),
+        ({}, {"uniqueItems": False}, ["/uniqueItems added"]),
+        # values
+        ({"maxLength": 5}, {"maxLength": 10}, ["/maxLength changed"]),
+        ({"maxLength": 5}, {"maxLength": 3}, []),
+        ({"maximum": "10"}, {"maximum": 5}, ["/maximum changed"]),  # not numbers: not judged by value
+        ({"minLength": 2}, {"minLength": 1}, ["/minLength changed"]),
+        ({"const": 1}, {"const": 2}, ["/const changed"]),
+        ({"const": 1}, {"const": False}, ["/const changed"]),
+        ({"const": ["a", "b"]}, {"const": ["a"]}, ["/const changed"]),
+        ({"const": {"a": 1}}, {"const": {"a": 2}}, ["/const changed"]),
+        ({"required": ["a", "b"]}, {"required": ["b", "a"]}, []),
+        ({"required": ["a", "b"]}, {"required": ["a"]}, ["/required changed"]),
+        ({"enum": ["a", "b"]}, {"enum": "ab"}, ["/enum changed"]),
+        ({"type": "string"}, {"type": ["string"]}, []),
+        ({"type": ["string", "null"]}, {"type": "string"}, []),
+        ({"type": "string"}, {"type": ["string", "null"]}, ["/type changed"]),
+        ({"uniqueItems": False}, {"uniqueItems": True}, []),
+        ({"uniqueItems": True}, {"uniqueItems": False}, ["/uniqueItems changed"]),
+        ({"additionalProperties": {}}, {"additionalProperties": False}, []),
+        ({"unevaluatedProperties": {"type": "string"}}, {"unevaluatedProperties": False}, []),
+        ({"additionalProperties": False}, {"additionalProperties": {}}, ["/additionalProperties changed"]),
+        # named subschemas
+        ({"properties": {"x": {}, "y": {}}}, {"properties": {"y": {}}}, ["/properties/x removed"]),
+        ({"properties": {}}, {"properties": {"x": {}}}, []),
+        ({"properties": {}, "additionalProperties": False}, {"properties": {"x": {}}, "additionalProperties": False},
+         ["/properties/x added to a closed object"]),
+        ({"properties": {}, "unevaluatedProperties": False}, {"properties": {"x": {}}, "unevaluatedProperties": False},
+         ["/properties/x added to a closed object"]),
+        ({"patternProperties": {}, "additionalProperties": False},
+         {"patternProperties": {"^x": {}}, "additionalProperties": False},
+         ["/patternProperties/^x added to a closed object"]),
+        ({"$defs": {}, "additionalProperties": False}, {"$defs": {"x": {}}, "additionalProperties": False}, []),
+        ({"properties": {"x": {"maxLength": 1}}}, {"properties": {"x": {"maxLength": 2}}},
+         ["/properties/x/maxLength changed"]),
+        ({"properties": {1: {}, "a": {}}}, {"properties": {1: {}, "a": {"not": {}}}}, ["/properties/a/not added"]),
+        ({"properties": []}, {"properties": {}}, ["/properties changed"]),
+        ({"items": {"type": "string"}}, {"items": {"type": "string", "not": {}}}, ["/items/not added"]),
+        ({"items": {}}, {"items": [{}]}, ["/items changed"]),
+        # combinators
+        ({"allOf": [{"type": "string"}]}, {"allOf": [{"type": "string"}, {"maxLength": 3}]}, []),
+        ({"allOf": [{"maxLength": 5}, {}]}, {"allOf": [{"maxLength": 10}, {}]}, ["/allOf/0/maxLength changed"]),
+        ({"allOf": [{}, {"maxLength": 5}]}, {"allOf": [{}, {"maxLength": 10}, {}]}, ["/allOf/1/maxLength changed"]),
+        ({"allOf": [{}, {"maxLength": 5}]}, {"allOf": [{}]}, ["/allOf changed"]),
+        ({"allOf": [{"type": "string"}]}, {"allOf": {"a": 1, "b": 2}}, ["/allOf changed"]),
+        ({"anyOf": [{}, {"maxLength": 5}]}, {"anyOf": [{}, {"maxLength": 10}]}, ["/anyOf/1/maxLength changed"]),
+        ({"oneOf": [{"maxLength": 5}]}, {"oneOf": [{"maxLength": 10}]}, ["/oneOf/0/maxLength changed"]),
+        ({"prefixItems": [{"maxLength": 5}]}, {"prefixItems": [{"maxLength": 10}]},
+         ["/prefixItems/0/maxLength changed"]),
+        ({"anyOf": [{}]}, {"anyOf": [{}, {"type": "string"}]}, ["/anyOf changed"]),
+    ],
+)  # fmt: skip
+def test_schema_weakening_exact(a: Any, b: Any, expected: list[str]) -> None:
+    assert gd.schema_weakening(a, b) == expected
+
+
+SX = "schemas/x.schema.json"
+
+
+@pytest.mark.parametrize(
+    ("path", "base", "head", "expected"),
+    [
+        (SX, schema(), schema(properties__id__maxLength=128), ["/properties/id/maxLength changed"]),
+        ("schemas/x.yaml", "maxLength: 5\n", "maxLength: 9\n", ["/maxLength changed"]),
+        ("schemas/x.yml", "maxLength: 5\n", "maxLength: 9\n", ["/maxLength changed"]),
+        ("schemas/README.txt", "a\n", "b\n", ["changed (not a JSON/YAML schema)"]),
+        # a .json schema is read as JSON only: YAML would read this as a string
+        (SX, schema(), "not json", "unparsed"),
+    ],
+)  # fmt: skip
+def test_schema_findings_exact(tmp_path: Path, path: str, base: str, head: str, expected: Any) -> None:
+    if expected == "unparsed":
+        expected_found = [f"unparsed {path} Expecting value: line 1 column 1 (char 0) ({oid(head)})"]
+    else:
+        expected_found = [f"schema.weakened {path} {w} ({gd.digest(head)})" for w in expected]
+    assert rules(tmp_path, {path: base}, {path: head}) == expected_found
+
+
+def test_removed_schema_exact(tmp_path: Path) -> None:
+    assert rules(tmp_path, {SX: schema()}, {SX: None}) == [f"schema.weakened {SX} schema file removed"]
+
+
+def test_digest() -> None:
+    assert gd.digest("abc") == hashlib.sha256(b"abc").hexdigest()[:12] == "ba7816bf8f01"
+    assert gd.digest({"b": 1, "a": [2]}) == hashlib.sha256(b'{"a": [2], "b": 1}').hexdigest()[:12]
+    assert gd.digest({"d": datetime.date(2026, 1, 2)}) == hashlib.sha256(b'{"d": "2026-01-02"}').hexdigest()[:12]
+    assert gd.digest(None) == hashlib.sha256(b"null").hexdigest()[:12]
+
+
+# --- packages ------------------------------------------------------------------------------------------------
+
+OPT = PY + '[project.optional-dependencies]\npg = ["psycopg>=3"]\n[tool.uv]\ndev-dependencies = ["ruff"]\n'
+
+
+@pytest.mark.parametrize(
+    ("base", "head", "expected"),
+    [
+        (OPT, OPT.replace('"psycopg>=3"', '"psycopg>=3", "evil"'), ["deps.new pyproject.toml evil"]),
+        (OPT, OPT.replace('"ruff"', '"ruff", "evil"'), ["deps.new pyproject.toml evil"]),
+        (OPT, OPT.replace('"PyYAML>=6"', '"PyYAML>=6", "evil"'), ["deps.new pyproject.toml evil"]),
+        ('[tool.uv]\ndev-dependencies = ["ruff"]\n', '[tool.uv]\ndev-dependencies = ["ruff", "evil"]\n',
+         ["deps.new pyproject.toml evil"]),
+        (PY.replace('"PyYAML>=6"', '"zope.interface"'), PY.replace('"PyYAML>=6"', '"Zope_Interface>=6"'), []),
+        (PY, PY.replace(', "PyYAML>=6"', ""), []),  # a removed package
+        # the source of a URL package is all of it: a URL may hold ";"
+        (PY.replace('"PyYAML>=6"', '"x @ https://h.invalid/x;v=1"'),
+         PY.replace('"PyYAML>=6"', '"x @ https://h.invalid/x;v=2"'), ["deps.source pyproject.toml x @ https://h.invalid/x;v=2"]),
+        # unchanged uv sources and lint sections are nothing, a changed one names its section and content hash
+        (PY + '[tool.uv.sources]\nhttpx = { git = "https://h.invalid/x" }\n[tool.ruff]\nline-length = 1\n',
+         PY.replace(">=0.27", ">=0.28") + '[tool.uv.sources]\nhttpx = { git = "https://h.invalid/x" }\n'
+         '[tool.ruff]\nline-length = 1\n', []),
+        (PY + '[tool.uv.sources]\nhttpx = { git = "https://h.invalid/x" }\n',
+         PY + '[tool.uv.sources]\nhttpx = { git = "https://h.invalid/y" }\n',
+         [f"deps.source pyproject.toml tool.uv.sources ({gd.digest({'httpx': {'git': 'https://h.invalid/y'}})})"]),
+        (PY + "[tool.ruff]\nline-length = 1\n", PY + "[tool.ruff]\nline-length = 2\n",
+         [f"lint.config pyproject.toml tool.ruff ({gd.digest({'line-length': 2})})"]),
+    ],
+)  # fmt: skip
+def test_pyproject_exact(tmp_path: Path, base: str, head: str, expected: list[str]) -> None:
+    assert rules(tmp_path, {"pyproject.toml": base}, {"pyproject.toml": head}) == expected
+
+
+def test_policy_tool_pyproject_is_both_policy_tool_and_packages(tmp_path: Path) -> None:
+    path = "tools/gxg-policy/pyproject.toml"
+    head = PY.replace('"PyYAML>=6"', '"PyYAML>=6", "evil"')
+    assert rules(tmp_path, {path: PY}, {path: head}) == [
+        f"deps.new {path} evil",
+        f"policy.tool {path} gxg-policy changed ({gd.digest(head)})",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("base", "head", "expected"),
+    [
+        (lock(("httpx", "0.27.0", PYPI)), lock(("httpx", "0.27.0", PYPI), ("evil", "1.0", PYPI)),
+         ["deps.new uv.lock evil"]),
+        (lock(("httpx", "0.27.0", PYPI)), lock(("httpx", "0.27.0", 'git = "https://h.invalid/x"')),
+         ['deps.source uv.lock httpx: {"git": "https://h.invalid/x"}']),
+        ("version = 1\n", lock(("httpx", "0.27.0", PYPI)), ["deps.new uv.lock httpx"]),  # no package before
+        (lock(("httpx", "0.27.0", PYPI)), lock(("httpx", "0.27.0", PYPI)) + "\n[[package]]\nversion = '1'\n",
+         ["deps.new uv.lock "]),  # a package without a name
+        # the same source with its keys in another order
+        (lock(("x", "1", 'registry = "r", extra = 1')), lock(("x", "2", 'extra = 1, registry = "r"')), []),
+    ],
+)  # fmt: skip
+def test_uv_lock_exact(tmp_path: Path, base: str, head: str, expected: list[str]) -> None:
+    assert rules(tmp_path, {"uv.lock": base}, {"uv.lock": head}) == expected
+
+
+@pytest.mark.parametrize(("path", "text"), [("pyproject.toml", "[project\n"), ("uv.lock", "= x\n")])
+def test_toml_detail_names_the_parser_error(tmp_path: Path, path: str, text: str) -> None:
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        error = str(exc)
+    assert rules(tmp_path, {path: "a = 1\n"}, {path: text}) == [f"unparsed {path} TOML: {error} ({oid(text)})"]
+
+
+# --- the CLI and the carry-over entry point, on this module (mutmut sees calls through `scripts.ci.gate_diff`) --
+
+
+def test_main_writes_every_finding_as_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    b = commit(repo, {"a.py": "x = 1\n"}, "b")
+    h = commit(repo, {"a.py": "x = 1  # noqa\n"}, "h")
+    out = tmp_path / "f.json"
+    assert gd.main(["--repo", str(repo), "--base", b, "--head", h, "--json", str(out)]) == 0
+    expected = [{"tenant": None, "kind": "gate", "rule": "lint.exception", "path": "a.py", "detail": "x = 1  # noqa"}]
+    assert out.read_text(encoding="utf-8") == json.dumps(expected, indent=1) + "\n"
+    seen: list[Any] = []
+
+    def collect(*args: Any) -> list[Any]:
+        seen.append(args)
+        return []
+
+    monkeypatch.setattr(gd, "collect", collect)
+    gd.main(["--repo", "r", "--base", "B", "--head", "H", "--json", str(out)])
+    assert seen == [(Path("r"), "B", "H")] and out.read_text(encoding="utf-8") == "[]\n"
+
+
+def test_main_usage(capsys: Any) -> None:
+    with pytest.raises(SystemExit):
+        gd.main(["--help"])
+    out = capsys.readouterr().out
+    # the module docstring is the description, kept verbatim (RawDescriptionHelpFormatter)
+    assert "1. grants CI more: a new `secrets.*` reference, wider `permissions:`, a `pull_request_target` or\n" in out
+    args = ["--repo", "r", "--base", "b", "--head", "h", "--json", "j"]
+    for i in range(0, len(args), 2):
+        with pytest.raises(SystemExit) as exc:
+            gd.main(args[:i] + args[i + 2 :])
+        assert exc.value.code == 2
+        assert f"the following arguments are required: {args[i]}" in capsys.readouterr().err
+
+
+POLICY_CASE = ROOT / "tools/gxg-policy/tests/diff/01-grant-resource-added"
+
+
+def test_widening_at_is_the_policy_diff_and_the_gate_findings_against_the_merge_base(
+    tmp_path: Path, capfd: Any
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    shutil.copytree(POLICY_CASE / "base", repo / "policies")
+    commit(repo, {"lib.py": "y = 1  # noqa: E741\n"}, "base")
+    git(repo, "checkout", "-qb", "claude/x")
+    shutil.rmtree(repo / "policies")
+    shutil.copytree(POLICY_CASE / "head", repo / "policies")
+    head = commit(repo, {"a.py": "x = 1  # noqa: E501\n"}, "widen")
+    git(repo, "checkout", "-q", "main")
+    commit(repo, {"lib.py": None}, "main moves on")  # against main's tip lib.py would come back: a finding
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    capfd.readouterr()
+    found = gd.widening_at(repo, "refs/remotes/origin/main", head, tmp_path / "t")
+    policy = json.loads((POLICY_CASE / "expected.json").read_text(encoding="utf-8"))["widening"]
+    gate = {"tenant": None, "kind": "gate", "rule": "lint.exception", "path": "a.py", "detail": "x = 1  # noqa: E501"}
+    assert found == [*policy, gate]
+    work = tmp_path / "t" / f"carry-{head}"
+    assert (work / "base/lib.py").exists() and (work / "head/a.py").exists()
+    assert (work / "diff.md").read_text(encoding="utf-8").startswith("<!-- gxg-policy-diff -->")
+    assert capfd.readouterr() == ("", "")  # the policy diff prints nothing into the job log
+    with pytest.raises(subprocess.CalledProcessError):
+        gd.widening_at(repo, "refs/remotes/origin/main", "f" * 40, tmp_path / "t")
+    (repo / "policies/tenants/broken.yaml").parent.mkdir(parents=True, exist_ok=True)
+    (repo / "policies/tenants/broken.yaml").write_text("{unclosed\n")
+    bad = commit(repo, {}, "broken policy")
+    with pytest.raises(subprocess.CalledProcessError):  # gxg-policy diff failed: no report is read
+        gd.widening_at(repo, "refs/remotes/origin/main", bad, tmp_path / "t")
