@@ -277,7 +277,7 @@ Identity проверяется так же, как в любом коннект
 | Что | Где | Кто |
 | --- | --- | --- |
 | Grants, approver'ы, политики, подписчики webhooks, реестр сервисов | Git → bundle | Оператор через PR (GR-09, GR-10) |
-| Kill switch | `gxg-approval switch set|clear --scope … --reason …` → `admin` API | `platform_admin`; для `clear` нужен step-up |
+| Kill switch | `gxg-approval switch set|clear --scope … --reason …` → `admin` API; страница `/switches` в `admin` | `platform_admin`; для `clear` — вход в IdP не старше 15 минут (сессия `admin`; решение владельца 2026-11-26, было 5 минут). Если вход старше, страница сохраняет форму и после нового входа просит подтвердить её одним кликом (сама не выполняет) |
 | Ручной разбор `outcome_unknown` | UI | `approver`, `tenant_admin` |
 | Ротация ключей | `gxg-approval keys rotate` | `platform_admin` |
 | Привязка бота | UI | Сам approver |

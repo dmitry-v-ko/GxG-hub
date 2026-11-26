@@ -347,24 +347,50 @@ def test_a_foreign_form_or_empty_fields_change_nothing(monkeypatch: pytest.Monke
     bad = client.post("/switches", content="csrf=forged&scope=global&blocked=1&reason=x", headers=FORM)
     assert bad.status_code == 403
     empty = client.post("/switches", content=f"csrf={csrf}&scope=global&blocked=1&reason=", headers=FORM)
+    assert "Подтвердить" not in empty.text
     assert "Нужны scope и причина" in empty.text
     assert f.switched == []
 
 
-def test_clearing_needs_a_sign_in_not_older_than_5_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_clearing_works_for_the_15_minutes_of_the_sign_in(monkeypatch: pytest.MonkeyPatch) -> None:
     f = build(monkeypatch)
     client = f.sign_in("/switches")
     csrf = csrf_of(client.get("/switches").text)
-    clear = f"csrf={csrf}&scope=global&blocked=0&reason=over"
-    f.clock.now += 301  # the session (15 min) is alive, the sign-in is not fresh any more
-    stale = client.post("/switches", content=clear, headers=FORM)
-    assert "свежего входа" in stale.text and f.switched == []
-    block = client.post("/switches", content=f"csrf={csrf}&scope=global&blocked=1&reason=x", headers=FORM)
-    assert "заблокировано" in block.text  # blocking needs no fresh sign-in, as in the API
-    f.clock.now -= 2
-    fresh = client.post("/switches", content=clear, headers=FORM)
+    f.clock.now += 899  # AS-24 (owner decision 2026-11-26): the whole session, not 5 minutes
+    fresh = client.post("/switches", content=f"csrf={csrf}&scope=global&blocked=0&reason=over", headers=FORM)
     assert "global: блокировка снята" in fresh.text
-    assert f.switched[-1] == (OPERATOR, "global", False, "over")
+    assert f.switched == [(OPERATOR, "global", False, "over")]
+
+
+def test_an_old_sign_in_keeps_the_clear_form_for_one_click_after_a_new_sign_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)
+    client = f.sign_in("/switches")
+    csrf = csrf_of(client.get("/switches").text)
+    f.clock.now += 901  # the sign-in is too old: nothing is cleared, the form is kept
+    stale = client.post("/switches", content=f"csrf={csrf}&scope=global&blocked=0&reason=over", headers=FORM)
+    assert stale.status_code == 303 and stale.headers["location"] == "/login?next=/switches"
+    assert "__Host-gxg_admin_prefill" in stale.headers["set-cookie"] and f.switched == []
+    f.clock.now -= 901  # PyJWT checks `iat` against the real clock: the new sign-in happens "now"
+    client = f.sign_in("/switches")
+    page = client.get("/switches")
+    assert "Подтвердить: снять блокировку" in page.text and "<code>global</code>" in page.text
+    assert f.switched == []  # never executed by itself: a click confirms it
+    done = client.post("/switches", content=f"csrf={csrf_of(page.text)}&scope=global&blocked=0&reason=over",
+                       headers=FORM)  # fmt: skip
+    assert "global: блокировка снята" in done.text and f.switched == [(OPERATOR, "global", False, "over")]
+    assert "Подтвердить" not in client.get("/switches").text  # shown once
+
+
+def test_a_post_without_a_session_is_only_shown_again_never_executed(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)  # a foreign page posting into the operator's browser carries no Strict session cookie
+    r = f.client.post("/switches", content="scope=global&blocked=0&reason=evil", headers=FORM)
+    assert r.headers["location"] == "/login?next=/switches"
+    client = f.sign_in("/switches")
+    page = client.get("/switches")
+    assert "Подтвердить: снять блокировку" in page.text and "evil" in page.text and f.switched == []
+    # forged pre-fill without the session's CSRF is refused when clicked from elsewhere
+    forged = client.post("/switches", content="csrf=forged&scope=global&blocked=0&reason=evil", headers=FORM)
+    assert forged.status_code == 403 and f.switched == []
 
 
 def test_a_refusal_of_the_database_is_shown(monkeypatch: pytest.MonkeyPatch) -> None:
