@@ -32,7 +32,9 @@ def decisions(owner: psycopg.Connection[Any]) -> list[tuple[Any, ...]]:
 def test_one_button_approve_and_reject(browser: Any, propose: Any, row_of: Any, owner: Any) -> None:
     a, b = pending(propose, row_of), pending(propose, row_of)
     browser.login(HUMAN1)
-    assert press(browser, a).status_code == 303 and row_of(a["intent_id"])["status"] == "approved"
+    r = press(browser, a)
+    assert r.status_code == 303 and r.headers["location"] == f"/intents/{a['intent_id']}"
+    assert row_of(a["intent_id"])["status"] == "approved"
     assert press(browser, b, "reject").status_code == 303 and row_of(b["intent_id"])["status"] == "rejected"
     assert decisions(owner) == [(HUMAN1, "approve", False), (HUMAN1, "reject", False)]
 
@@ -65,3 +67,42 @@ def test_csrf_foreign_approver_and_stale_card_are_refused(
     assert press(browser, intent, version=intent["version"] + 1).status_code == 409
     assert press(browser, intent, args_hash="0" * 64).status_code == 409
     assert decisions(owner) == [] and row_of(intent["intent_id"])["status"] == "pending_approval"
+
+
+def test_approve_on_args_not_matching_the_hash_is_refused_in_the_session_path(
+    browser: Any, propose: Any, row_of: Any, world: Any, owner: Any
+) -> None:
+    """EFF-33 on the one-button path itself (no challenge before it): 409 and nothing written; reject still works."""
+    from gxg_connector_kit import canonical
+
+    intent = pending(propose, row_of)
+    forged = {"preview": world.body()["preview"], "canonical_args": {"text": "something else", "n": 1}}
+    owner.execute(
+        "UPDATE intents SET preview_ciphertext = %s WHERE intent_id = %s",
+        (world.encryptor.seal("t-alpha", "preview", canonical.dumps(forged)), intent["intent_id"]),
+    )
+    browser.login(HUMAN1)
+    assert press(browser, intent).status_code == 409
+    assert decisions(owner) == [] and row_of(intent["intent_id"])["status"] == "pending_approval"
+    assert press(browser, intent, "reject").status_code == 303
+    assert decisions(owner) == [(HUMAN1, "reject", False)]
+
+
+def test_approve_after_purge_is_refused_in_the_session_path(
+    browser: Any, propose: Any, row_of: Any, owner: Any
+) -> None:
+    """RET-01: no payload, nothing to approve: 409 (not a crash), nothing written."""
+    intent = pending(propose, row_of)
+    owner.execute("ALTER TABLE intents DISABLE TRIGGER USER")
+    owner.execute("UPDATE intents SET preview_ciphertext = NULL WHERE intent_id = %s", (intent["intent_id"],))
+    owner.execute("ALTER TABLE intents ENABLE TRIGGER USER")
+    assert press(browser.login(HUMAN1), intent).status_code == 409
+    assert decisions(owner) == [] and row_of(intent["intent_id"])["status"] == "pending_approval"
+
+
+def test_the_comment_is_recorded_by_the_one_button(browser: Any, propose: Any, row_of: Any, owner: Any) -> None:
+    a, b = pending(propose, row_of), pending(propose, row_of)
+    browser.login(HUMAN1)
+    assert press(browser, a, "reject", comment="wrong chat").status_code == 303
+    assert press(browser, b, "reject", comment="").status_code == 303  # an empty comment is no comment
+    assert owner.execute("SELECT comment FROM decisions ORDER BY decided_at").fetchall() == [("wrong chat",), (None,)]

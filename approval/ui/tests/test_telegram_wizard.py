@@ -50,6 +50,9 @@ class FakeTelegram:
         self.scope: list[str] = []
         self.calls: list[tuple[str, str, str, Any]] = []  # method, path, operator, body
         self.fail: dict[str, tuple[int, Any]] = {}
+        self.chats: list[dict[str, Any]] = CHATS
+        self.raw_scope: Any = None  # the answer of GET scope as it is, when set (a bare list is allowed too)
+        self.verbs: list[tuple[str, str]] = []  # the method exactly as the ui spelled it, path
         self.down = False
         app = FastAPI()
         app.add_api_route("/internal/v1/admin/tg-pilot/{rest:path}", self.handle, methods=["GET", "POST", "PUT"])
@@ -85,12 +88,12 @@ class FakeTelegram:
             st["login"] = "idle"
             return JSONResponse({})
         if rest == "chats":
-            return JSONResponse(CHATS)
+            return JSONResponse(self.chats)
         if rest == "scope" and request.method == "PUT":
             self.scope = list(body["chat_refs"])
             return JSONResponse({"chat_refs": self.scope})
         if rest == "scope":
-            return JSONResponse({"chat_refs": self.scope})
+            return JSONResponse({"chat_refs": self.scope} if self.raw_scope is None else self.raw_scope)
         return JSONResponse({"message": "нет такого"}, status_code=404)
 
 
@@ -113,6 +116,7 @@ class Transport:
     def request(self, method: str, url: str, *, headers: dict[str, str], json: Any, timeout: float) -> Any:
         if self.fake.down:
             raise ConnectionError("refused")
+        self.fake.verbs.append((method, url.removeprefix("/internal/v1/admin/tg-pilot/")))
         return self.client.request(method, url, headers=headers, json=json)
 
 
@@ -261,6 +265,7 @@ def test_an_api_refusal_is_explained_and_the_typed_code_is_not_echoed(ui: Ui, ca
     r = ui.post("code", code="99999")  # the fake says "код 99999 неверный"
     assert r.status_code == 400 and 'id="error"' in r.text and "неверный" in r.text
     assert "99999" not in r.text and "99999" not in caplog.text
+    assert "код … неверный" in r.text  # the typed value is replaced, the rest of the text stays
     assert 'name="code"' in r.text  # the person stays on the step and can retry
 
 
@@ -286,10 +291,14 @@ def test_a_server_error_text_and_a_textless_error(ui: Ui) -> None:
 
 
 def test_invalid_input_is_refused_before_the_api(ui: Ui) -> None:
-    assert ui_app.BAD_PHONE in ui.post("phone", phone="hello").text
-    assert ui_app.BAD_CODE in ui.post("code", code="12ab").text
-    assert ui_app.NEED_2FA in ui.post("password", password="").text
-    assert ui_app.NEED_2FA in ui.post("password", password="x" * 300).text
+    for r, text in (
+        (ui.post("phone", phone="hello"), ui_app.BAD_PHONE),
+        (ui.post("code", code="12ab"), ui_app.BAD_CODE),
+        (ui.post("password", password=""), ui_app.NEED_2FA),
+        (ui.post("password", password="x" * 257), ui_app.NEED_2FA),
+        (ui.post("password", password="x" * 300), ui_app.NEED_2FA),
+    ):
+        assert r.status_code == 400 and text in r.text
     assert [c for c in ui.fake.calls if c[0] != "GET"] == []
 
 
@@ -366,3 +375,55 @@ def test_session_lives_thirty_days_without_an_idle_timeout(ui: Ui) -> None:
         ui.login(iat=NOW - 29 * day, seen=1.0).client.get("/operator/telegram").status_code == 200
     )  # `seen` is long gone
     assert ui.login(iat=NOW - 31 * day).client.get("/operator/telegram").status_code == 403
+
+
+def test_the_api_is_called_with_exact_methods(ui: Ui) -> None:
+    """The service reads the method as it is sent (`POST`, not `post`): every call of the wizard, spelled out."""
+    ui.step("phone", phone=PHONE)
+    ui.step("cancel")
+    ui.step("phone", phone=PHONE)
+    ui.step("code", code=CODE)
+    ui.step("password", password=PASSWORD)
+    ui.step("scope", chat=["c:beta"])
+    assert set(ui.fake.verbs) == {
+        ("POST", "login/start"), ("POST", "login/code"), ("POST", "login/password"), ("POST", "login/cancel"),
+        ("PUT", "scope"), ("GET", "status"), ("GET", "scope"), ("GET", "chats"),
+    }  # fmt: skip
+
+
+@pytest.mark.parametrize(("api", "shown"), [(400, 400), (499, 400), (500, 502), (501, 502), (503, 502)])
+def test_an_api_error_is_a_client_error_unless_it_is_the_services_fault(ui: Ui, api: int, shown: int) -> None:
+    ui.fake.fail["status"] = (api, {"message": "text of the service"})
+    r = ui.client.get("/operator/telegram")
+    assert r.status_code == shown and "text of the service" in r.text
+
+
+def test_the_authorized_page_shows_sync_titles_and_kinds(ui: Ui) -> None:
+    ui.fake.state.update(authorized=True, sync="syncing")
+    page = ui.client.get("/operator/telegram").text
+    assert "Синхронизация: syncing." in page
+    assert "Команда <small>(group)</small>" in page and "Новости <small>(channel)</small>" in page
+    ui.fake.chats = [{"chat_ref": "c:bare"}]  # no title, no kind: empty, not «None»
+    assert 'value="c:bare">  <small>()</small>' in ui.client.get("/operator/telegram").text
+
+
+@pytest.mark.parametrize(("raw", "chosen"), [(["c:beta"], "<code>c:beta</code>"), ({}, "ничего")])
+def test_the_saved_scope_may_be_a_bare_list_or_empty(ui: Ui, raw: Any, chosen: str) -> None:
+    ui.fake.state.update(authorized=True)
+    ui.fake.raw_scope = raw
+    r = ui.client.get("/operator/telegram")
+    assert r.status_code == 200 and f'<span id="chosen">{chosen}</span>' in r.text
+
+
+def test_an_unknown_login_state_is_the_first_step(ui: Ui) -> None:
+    ui.fake.state["login"] = "something-new"
+    assert 'name="phone"' in ui.client.get("/operator/telegram").text
+
+
+def test_the_limits_are_inclusive(ui: Ui) -> None:
+    ui.step("password", password="x" * 256)  # PASSWORD_MAX characters are fine
+    assert ("POST", "login/password") in ui.fake.verbs
+    ui.fake.state.update(authorized=True)
+    ui.fake.chats = CHATS[:3]
+    ui.step("scope", chat=["c:alpha", "c:beta", "c:gamma"])  # TG_SCOPE_MAX chats, all the account has
+    assert ui.fake.scope == ["c:alpha", "c:beta", "c:gamma"]

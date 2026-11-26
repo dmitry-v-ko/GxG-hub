@@ -347,7 +347,10 @@ M10_MUTATIONS: list[tuple[str, str, str, str]] = [
 
 def run_tests(tests: list[str] = TESTS) -> bool:
     cmd = [sys.executable, "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider", *tests]
-    return subprocess.run(cmd, cwd=ROOT, capture_output=True, check=False).returncode == 0
+    try:  # a mutant that hangs the tests (a lock never released) counts as killed, as in mutmut
+        return subprocess.run(cmd, cwd=ROOT, capture_output=True, check=False, timeout=900).returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
 
 
 def main() -> int:
