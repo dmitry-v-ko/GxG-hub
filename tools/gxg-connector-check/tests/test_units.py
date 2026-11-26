@@ -54,6 +54,40 @@ def test_bundle_is_byte_identical_to_gxg_policy_build(tmp_path: Path, monkeypatc
     assert store.check("t-alpha", "agent:t-alpha:reader", "read", "demo:demo-main/board/a-public").allowed
 
 
+def test_bundle_carries_ext_grants_and_enabled_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """M11.3/M11.4: fixture grants with `ext:read`, `ext:read:pii` and `extensions.enabled` (the shape of
+    policies/tenants/example-ext-test.yaml) build the same bytes as `gxg-policy build` and resolve in the kit."""
+    key = Ed25519PrivateKey.generate()
+    manifest = yaml.safe_load((DEMO / "gxg-manifest.yaml").read_text(encoding="utf-8"))
+    doc = yaml.safe_load((REPO / "policies" / "tenants" / "example-ext-test.yaml").read_text(encoding="utf-8"))
+    for g in doc["grants"]:
+        g.pop("expires_at")  # the example's terms run out; this test must not
+    keys = [Ed25519PrivateKey.generate().public_key() for _ in range(3)]
+    platform = bundle.registry(manifest, [doc["tenant"]], executor=keys[0], svc=keys[1], approval=keys[2])
+    bundle.write(tmp_path / "ours", [doc], platform, key, built_at=BUILT_AT)
+    pol = tmp_path / "policies"
+    (pol / "tenants").mkdir(parents=True)
+    (pol / "platform").mkdir()
+    (pol / "tenants" / f"{doc['tenant']}.yaml").write_text(yaml.safe_dump(doc), encoding="utf-8")
+    registry = {**platform, "services": [{k: v for k, v in s.items() if k != "tools"} for s in platform["services"]]}
+    (pol / "platform" / "registry.yaml").write_text(yaml.safe_dump(registry), encoding="utf-8")
+    monkeypatch.setenv(policy_cli.KEY_ENV, base64.urlsafe_b64encode(key.private_bytes_raw()).rstrip(b"=").decode())
+    args = ["build", str(pol), "--out", str(tmp_path / "theirs"), "--bundle-version", "0" * 40, "--kid", bundle.KID,
+            "--manifest", str(DEMO / "gxg-manifest.yaml"), "--built-at", BUILT_AT_Z]  # fmt: skip
+    assert policy_cli.main(args) == 0
+    for f in (mcp.BUNDLE_FILE, mcp.SIG_FILE):
+        assert (tmp_path / "ours" / f).read_bytes() == (tmp_path / "theirs" / f).read_bytes(), f
+    store = BundleStore(mcp.parse_keys(bundle.keys_setting(key), "k"), state_file=tmp_path / "s.json")
+    store.load(*((tmp_path / "ours" / f).read_bytes() for f in (mcp.BUNDLE_FILE, mcp.SIG_FILE)))
+    t, chat = doc["tenant"], doc["grants"][0]["resources"][0]
+    reader, collector = (f"agent:{t}:{r}" for r in ("reader", "collector"))
+    assert store.ext_check(t, reader, "ext:read:members", chat).allowed
+    assert not store.ext_check(t, reader, "ext:read:pii", chat).allowed  # GR-25: never covered by ext:read
+    assert store.ext_check(t, collector, "ext:read:pii", chat).allowed
+    assert store.check(t, collector, "collect", chat).allowed and not store.check(t, reader, "collect", chat).allowed
+    assert store.ext_enabled(t, "telegram", "chats.history") and not store.ext_enabled(t, "telegram", "chats.nope")
+
+
 def test_bundle_refuses_what_it_cannot_build(tmp_path: Path) -> None:
     (tmp_path / "fixtures" / "grants").mkdir(parents=True)
     with pytest.raises(ValueError, match="no grants in"):
