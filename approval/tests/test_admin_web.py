@@ -38,6 +38,8 @@ class Fixture:
     def __init__(self) -> None:
         self.clock = Clock()
         self.issued: list[tuple[str, str]] = []
+        self.switched: list[tuple[str, str, bool, str]] = []
+        self.switch_refusal = ""
         self.claims: dict[str, Any] = {}
         self.sign_with: Any = KEY
         self.token_status = 200
@@ -75,15 +77,15 @@ class Fixture:
         app = admin.create_app(deps)
         self.client = TestClient(app, base_url=PUBLIC, follow_redirects=False)
 
-    def sign_in(self) -> TestClient:
-        login = self.client.get("/login")
+    def sign_in(self, nxt: str = "") -> TestClient:
+        login = self.client.get("/login" + (f"?next={nxt}" if nxt else ""))
         assert login.status_code == 303
         query = parse_qs(urlsplit(login.headers["location"]).query)
         self.nonce, state = query["nonce"][0], query["state"][0]
         return self.finish(state)
 
     def finish(self, state: str, code: str = "idp-code") -> TestClient:
-        self.client.get(f"/auth/callback?code={code}&state={state}")
+        self.landing = self.client.get(f"/auth/callback?code={code}&state={state}")
         return self.client
 
 
@@ -91,12 +93,21 @@ def build(monkeypatch: pytest.MonkeyPatch) -> Fixture:
     holder: dict[str, Fixture] = {}
     original = admin_web.register
 
-    def register(app: Any, *, web: Any, deps: Any, issue_invite: Callable[[str, str], str]) -> None:
+    def register(app: Any, *, web: Any, deps: Any, issue_invite: Callable[[str, str], str], **_: Any) -> None:
         def issue(who: str, human: str) -> str:
             holder["f"].issued.append((who, human))
             return CODE
 
-        original(app, web=web, deps=deps, issue_invite=issue)
+        def listed() -> list[tuple[str, bool, str, str, str]]:
+            return [(sc, b, r, who, "2026-11-26T00:00:00+00:00") for who, sc, b, r in holder["f"].switched[-1:]]
+
+        def switch(who: str, scope: str, blocked: bool, reason: str) -> str:
+            if holder["f"].switch_refusal:
+                return holder["f"].switch_refusal
+            holder["f"].switched.append((who, scope, blocked, reason))
+            return ""
+
+        original(app, web=web, deps=deps, issue_invite=issue, list_switches=listed, set_switch=switch)
 
     monkeypatch.setattr(admin_web, "register", register)
     holder["f"] = f = Fixture()
@@ -293,3 +304,73 @@ def test_tailscale_headers_are_not_an_operator(monkeypatch: pytest.MonkeyPatch) 
     posted = f.client.post("/invites", content="csrf=x&human=oidc:a:b",
                            headers={**FORGED, "content-type": "application/x-www-form-urlencoded"})  # fmt: skip
     assert posted.status_code == 303 and f.issued == []
+
+
+FORM = {"content-type": "application/x-www-form-urlencoded"}
+
+
+def test_switch_page_needs_a_session_and_returns_to_it_after_sign_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)
+    assert f.client.get("/switches").headers["location"] == "/login?next=/switches"
+    assert (
+        f.client.post("/switches", content="csrf=x&scope=global&blocked=1&reason=r", headers=FORM).headers["location"]
+        == "/login?next=/switches"
+    )
+    assert f.switched == []
+    client = f.sign_in("/switches")
+    assert "url=/switches" in f.landing.text
+    page = client.get("/switches")
+    assert page.status_code == 200 and "все эффекты открыты" in page.text
+    assert page.headers["cache-control"] == "no-store"
+
+
+def test_login_next_is_not_an_open_redirect(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)
+    f.sign_in("https://evil.example/x")
+    assert "url=/invites" in f.landing.text and "evil" not in f.landing.text
+
+
+def test_operator_blocks_all_effects_from_the_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)
+    client = f.sign_in("/switches")
+    csrf = csrf_of(client.get("/switches").text)
+    done = client.post("/switches", content=f"csrf={csrf}&scope=global&blocked=1&reason=DRILL", headers=FORM)
+    assert done.status_code == 200 and "global: заблокировано" in done.text
+    assert f.switched == [(OPERATOR, "global", True, "DRILL")]
+    assert "<b>заблокировано</b>" in client.get("/switches").text
+
+
+def test_a_foreign_form_or_empty_fields_change_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)
+    client = f.sign_in("/switches")
+    csrf = csrf_of(client.get("/switches").text)
+    bad = client.post("/switches", content="csrf=forged&scope=global&blocked=1&reason=x", headers=FORM)
+    assert bad.status_code == 403
+    empty = client.post("/switches", content=f"csrf={csrf}&scope=global&blocked=1&reason=", headers=FORM)
+    assert "Нужны scope и причина" in empty.text
+    assert f.switched == []
+
+
+def test_clearing_needs_a_sign_in_not_older_than_5_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)
+    client = f.sign_in("/switches")
+    csrf = csrf_of(client.get("/switches").text)
+    clear = f"csrf={csrf}&scope=global&blocked=0&reason=over"
+    f.clock.now += 301  # the session (15 min) is alive, the sign-in is not fresh any more
+    stale = client.post("/switches", content=clear, headers=FORM)
+    assert "свежего входа" in stale.text and f.switched == []
+    block = client.post("/switches", content=f"csrf={csrf}&scope=global&blocked=1&reason=x", headers=FORM)
+    assert "заблокировано" in block.text  # blocking needs no fresh sign-in, as in the API
+    f.clock.now -= 2
+    fresh = client.post("/switches", content=clear, headers=FORM)
+    assert "global: блокировка снята" in fresh.text
+    assert f.switched[-1] == (OPERATOR, "global", False, "over")
+
+
+def test_a_refusal_of_the_database_is_shown(monkeypatch: pytest.MonkeyPatch) -> None:
+    f = build(monkeypatch)
+    client = f.sign_in("/switches")
+    csrf = csrf_of(client.get("/switches").text)
+    f.switch_refusal = "unknown scope"
+    page = client.post("/switches", content=f"csrf={csrf}&scope=bogus&blocked=1&reason=x", headers=FORM)
+    assert page.status_code == 200 and "unknown scope" in page.text
