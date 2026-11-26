@@ -22,7 +22,7 @@ CASE = ROOT / "tools" / "gxg-policy" / "tests" / "diff" / "01-grant-resource-add
 MANIFESTS = ROOT / "tools" / "gxg-policy" / "tests" / "diff" / "10-manifest-tools"
 WORKFLOW = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
 STEP = next(s for s in WORKFLOW["jobs"]["grants-widening"]["steps"] if "grants_widening.sh" in s.get("run", ""))
-GATE_FILES = ("scripts/ci/grants_widening.sh", "scripts/ci/widening_gate.py")
+GATE_FILES = ("scripts/ci/grants_widening.sh", "scripts/ci/widening_gate.py", "scripts/ci/gate_diff.py")
 # `uv run [--locked] [--project DIR] X` → the current interpreter, so the test needs neither uv nor a project.
 UV_SHIM = f"""#!/bin/sh
 echo "$@" >> "$RUNNER_TEMP/uv-calls"
@@ -165,6 +165,9 @@ def test_code_owners_come_from_main_not_from_the_pr(repo: Path, tmp_path: Path) 
     runner = tmp_path / "runner-pr"
     job(repo, "pull_request", "refs/pull/7/merge", pr_head=git(repo, "rev-parse", "HEAD"), runner=runner)
     assert (runner / "CODEOWNERS").read_text() == "* @owner\n"
+    # PR mode: the gate may carry an older label over a merge of main (it reads this checkout's history).
+    last = (runner / "uv-calls").read_text().splitlines()[-1]
+    assert last.endswith(f"--codeowners {runner}/CODEOWNERS --repo . --main refs/remotes/origin/main"), last
 
 
 def commit_files(repo: Path, files: dict[str, str], msg: str) -> None:
@@ -198,22 +201,38 @@ def test_pr_that_disables_its_gate_and_widens_is_red(gated: Path, tmp_path: Path
     r = step(gated, runner)
     assert r.returncode == 1, r.stdout + r.stderr
     assert "2 widening change(s) outside a pull request" in r.stdout
-    assert (runner / "gate-paths.txt").read_text() == "scripts/ci/grants_widening.sh\n"
-    # gxg-policy and widening_gate.py run from main's worktree with main's lockfile.
+    found = json.loads((runner / "gate-findings.json").read_text())
+    assert [(f["rule"], f["path"]) for f in found] == [("gate.self", "scripts/ci/grants_widening.sh")]
+    # gxg-policy, gate_diff.py and widening_gate.py run from main's worktree with main's lockfile.
     calls = (runner / "uv-calls").read_text().splitlines()
-    assert len(calls) == 2 and all(c.startswith(f"run --locked --project {runner}/gate ") for c in calls), calls
-    assert calls[1].split()[5] == f"{runner}/gate/scripts/ci/widening_gate.py"
+    assert len(calls) == 3 and all(c.startswith(f"run --locked --project {runner}/gate ") for c in calls), calls
+    assert calls[1].split()[5] == f"{runner}/gate/scripts/ci/gate_diff.py"
+    assert calls[2].split()[5] == f"{runner}/gate/scripts/ci/widening_gate.py"
 
 
 @pytest.mark.parametrize(
-    "path", ["scripts/ci/widening_gate.py", "tools/gxg-policy/src/gxg_policy/diff.py", "uv.lock", "pyproject.toml",
-             ".github/workflows/ci.yml", "schemas/x.json"]
+    "path", ["scripts/ci/widening_gate.py", "scripts/ci/gate_diff.py", "tools/gxg-policy/src/gxg_policy/diff.py",
+             ".github/CODEOWNERS"]
 )  # fmt: skip
 def test_gate_edit_alone_needs_the_label(gated: Path, tmp_path: Path, path: str) -> None:
     commit_files(gated, {path: "# changed\n"}, "edit the gate")
     r = step(gated, tmp_path / "runner-step")
     assert r.returncode == 1, r.stdout + r.stderr
     assert "1 widening change(s)" in r.stdout
+
+
+def test_merge_of_main_keeps_the_findings_of_the_pr(gated: Path, tmp_path: Path) -> None:
+    # The PR adds a noqa; main then moves on with its own noqa and the PR merges main: one finding, the PR's.
+    commit_files(gated, {"app.py": "x = 1  # noqa: E501\n"}, "pr")
+    git(gated, "checkout", "-q", "main")
+    commit_files(gated, {"lib.py": "y = 2  # noqa: E741\n"}, "main moves on")
+    git(gated, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(gated, "checkout", "-q", "claude/x")
+    git(gated, "merge", "-q", "--no-edit", "main")
+    runner = tmp_path / "runner-step"
+    assert step(gated, runner).returncode == 1
+    found = json.loads((runner / "gate-findings.json").read_text())
+    assert [(f["rule"], f["path"]) for f in found] == [("lint.exception", "app.py")]
 
 
 def test_unrelated_edit_is_green_with_the_gate_from_main(gated: Path, tmp_path: Path) -> None:
@@ -228,7 +247,7 @@ def test_without_a_gate_on_main_the_pr_copy_runs(repo: Path, tmp_path: Path) -> 
     commit_files(repo, {f: (ROOT / f).read_text() for f in GATE_FILES}, "add the gate")
     r = step(repo, tmp_path / "runner-step")
     assert r.returncode == 1, r.stdout + r.stderr
-    assert "bootstrap" in r.stdout and "2 widening change(s)" in r.stdout
+    assert "bootstrap" in r.stdout and "widening change(s) outside a pull request" in r.stdout
 
 
 def test_manifest_weakening_is_widening(repo: Path, tmp_path: Path) -> None:

@@ -6,10 +6,12 @@ label added by a user listed in CODEOWNERS (read from the PR *base* commit, so a
 its author there). The label must be added by hand: an event performed via a GitHub App
 (an agent acting with the owner's credentials) does not count.
 
-The approval binds to the head commit on every event: a label older than the moment the head
-SHA arrived on the PR (server time: the first `pull_request` workflow run for that SHA on this PR
-after the latest force-push, from the PR's own head repository) is stale. It is removed and the
-check is red.
+The approval binds to the widening it saw. A label newer than the moment the head SHA arrived on
+the PR (server time: the first `pull_request` workflow run for that SHA on this PR after the latest
+force-push, from the PR's own head repository) covers the head. An older label still covers it when
+every widening finding of the head was already a finding of the commit that was the head when the
+label was added (`--repo`/`--main`: both sides computed the same way, against their merge-base with
+main, so a merge of main changes nothing). Otherwise the label is stale: it is removed, the check is red.
 
 Outside a pull request (`--no-pr`: push or workflow_dispatch to a branch other than main) there
 is no label to look at, so any widening is red: fail closed.
@@ -17,10 +19,10 @@ is no label to look at, so any widening is red: fail closed.
 Also posts the Markdown diff report as one PR comment, updated in place. The comment is found by
 the first line of the Markdown file (the marker written by `gxg-policy diff`).
 
-Every path listed in `--gate-paths` (files of the gate itself changed vs main) is added to the
-report as a widening entry: changing the gate needs the same label as widening.
+Every finding in `--gate-findings` (gate_diff.py: control changes in CI, tests, lint, exception lists,
+schemas, packages and the gate itself) is added to the report as a widening entry: it needs the same label.
 
-Usage (both modes also take --gate-paths FILE):
+Usage (both modes also take --gate-findings FILE; PR mode also --repo DIR --main REF):
   widening_gate.py --report diff.json --markdown diff.md --codeowners base-CODEOWNERS   (pull_request)
   widening_gate.py --report diff.json --markdown diff.md --no-pr                        (other events)
 Env (PR mode): GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_EVENT_PATH, GITHUB_API_URL; GITHUB_STEP_SUMMARY.
@@ -30,9 +32,12 @@ Exit: 0 — pass, 1 — widening not approved, 2 — usage or API error.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -45,6 +50,7 @@ LABEL = "widening-approved"
 BOT = "github-actions[bot]"
 
 Api = Callable[[str, str, Any], Any]
+Carry = Callable[[str], "list[dict[str, Any]] | None"]
 
 
 def codeowners(text: str) -> set[str]:
@@ -150,6 +156,61 @@ def head_arrival(api: Api, repo: str, pr: dict[str, Any], events: list[dict[str,
     return min((t for t in times if forced is None or t > forced), default=None)
 
 
+def head_at(api: Api, repo: str, pr: dict[str, Any], at: datetime) -> str | None:
+    """The head SHA of this PR at `at`: the SHA of its latest `pull_request` run created no later than `at`."""
+    ref = pr["head"]["ref"]
+    repo_id = (pr["head"].get("repo") or {}).get("id")
+    q = urllib.parse.urlencode({"event": "pull_request", "branch": ref, "per_page": 100})
+    runs = api("GET", f"/repos/{repo}/actions/runs?{q}", None)
+    best: tuple[datetime, str] | None = None
+    for r in runs.get("workflow_runs", []):
+        t = _ts(r["created_at"])
+        if (
+            t <= at
+            and r.get("head_branch") == ref
+            and repo_id is not None
+            and (r.get("head_repository") or {}).get("id") == repo_id
+            and (not r.get("pull_requests") or pr["number"] in {x.get("number") for x in r["pull_requests"]})
+            and (best is None or t > best[0])
+        ):
+            best = (t, r["head_sha"])
+    return None if best is None else best[1]
+
+
+def _key(entry: dict[str, Any]) -> str:
+    return json.dumps(entry, sort_keys=True)
+
+
+def uncovered(head: list[dict[str, Any]], approved: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Findings of the head that the approved commit did not have (as a multiset: two equal lines need two)."""
+    left = [_key(e) for e in approved]
+    out = []
+    for e in head:
+        k = _key(e)
+        if k in left:
+            left.remove(k)
+        else:
+            out.append(e)
+    return out
+
+
+def carried(
+    api: Api, repo: str, pr: dict[str, Any], label: dict[str, Any], *, report: dict[str, Any], carry: Carry
+) -> tuple[bool, str]:
+    """Whether a label older than the head still covers it, and why (see the module docstring)."""
+    sha = head_at(api, repo, pr, _ts(label["created_at"]))
+    if sha is None:
+        return False, "the head commit at the time of the label is unknown"
+    approved = carry(sha)
+    if approved is None:
+        return False, f"the widening of {sha[:12]} (the head at the time of the label) could not be computed"
+    new = uncovered(report["widening"], approved)
+    if new:
+        shown = "; ".join(str(e.get("detail") or e.get("path") or e.get("kind")) for e in new[:5])
+        return False, f"{len(new)} widening change(s) since the label on {sha[:12]}: {shown}"
+    return True, f"`{LABEL}` from {sha[:12]} still covers the head: no new widening since the label"
+
+
 def stale(label: dict[str, Any] | None, arrival: datetime | None) -> str | None:
     """Why the approval does not cover the head commit, or None if it does."""
     if label is None:
@@ -170,14 +231,22 @@ def report_out(body: str, ok: bool, msg: str) -> int:
     return 0 if ok else 1
 
 
-def with_gate_paths(report: dict[str, Any], markdown: str, paths: list[str]) -> tuple[dict[str, Any], str]:
-    """Changed gate files (CI, gxg-policy, schemas, lockfiles) count as widening: the label must cover them."""
-    if not paths:
+def _cell(text: str) -> str:
+    return text.replace("|", "\\|").replace("`", "'").replace("\n", " ")
+
+
+def with_gate_findings(
+    report: dict[str, Any], markdown: str, findings: list[dict[str, Any]]
+) -> tuple[dict[str, Any], str]:
+    """Control changes found by gate_diff.py count as widening: the label must cover them."""
+    if not findings:
         return report, markdown
-    entries = [{"tenant": None, "kind": "gate_path", "change": "changed", "path": p} for p in paths]
-    rows = "".join(f"| `{p}` |\n" for p in paths)
-    note = f"\n### Gate files changed ({len(paths)}, need the `{LABEL}` label)\n\n| path |\n| --- |\n{rows}"
-    return {**report, "widening": report["widening"] + entries}, markdown + note
+    rows = "".join(f"| {_cell(f['rule'])} | `{_cell(f['path'])}` | {_cell(f['detail'])} |\n" for f in findings)
+    note = (
+        f"\n### Control changes ({len(findings)}, need the `{LABEL}` label)\n\n"
+        f"| rule | path | detail |\n| --- | --- | --- |\n{rows}"
+    )
+    return {**report, "widening": report["widening"] + findings}, markdown + note
 
 
 def run_no_pr(report: dict[str, Any], *, markdown: str) -> int:
@@ -192,7 +261,16 @@ def run_no_pr(report: dict[str, Any], *, markdown: str) -> int:
     return report_out(f"{markdown}\n**grants-widening: {'pass' if ok else 'FAIL'}** — {msg}\n", ok, msg)
 
 
-def run(api: Api, repo: str, event: dict[str, Any], report: dict[str, Any], *, markdown: str, owners: set[str]) -> int:
+def run(
+    api: Api,
+    repo: str,
+    event: dict[str, Any],
+    report: dict[str, Any],
+    *,
+    markdown: str,
+    owners: set[str],
+    carry: Carry | None = None,
+) -> int:
     pr = event["pull_request"]
     issue = f"/repos/{repo}/issues/{pr['number']}"
     labels = {lab["name"] for lab in api("GET", f"{issue}/labels", None)}
@@ -201,6 +279,12 @@ def run(api: Api, repo: str, event: dict[str, Any], report: dict[str, Any], *, m
     note = ""
     if report["widening"] and LABEL in labels:
         why = stale(label, head_arrival(api, repo, pr, events))
+        if why and carry is not None and label is not None:
+            ok, reason = carried(api, repo, pr, label, report=report, carry=carry)
+            if ok:
+                why, note = None, reason + ".\n\n"
+            else:
+                why = f"{why}, and {reason}"
         if why:
             api("DELETE", f"{issue}/labels/{urllib.parse.quote(LABEL)}", None)
             labels.discard(LABEL)
@@ -214,21 +298,42 @@ def run(api: Api, repo: str, event: dict[str, Any], report: dict[str, Any], *, m
     return report_out(body, ok, note + msg)
 
 
+def carry_from(repo: Path, main_ref: str) -> Carry:
+    """Widening of a past head, computed by gate_diff.py next to this file (main's copy in CI)."""
+    spec = importlib.util.spec_from_file_location("gate_diff", Path(__file__).with_name("gate_diff.py"))
+    if spec is None or spec.loader is None:
+        raise OSError("gate_diff.py not found next to widening_gate.py")
+    gate_diff = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate_diff)
+    tmp = Path(os.environ.get("RUNNER_TEMP") or tempfile.mkdtemp())
+
+    def carry(sha: str) -> list[dict[str, Any]] | None:
+        try:
+            result: list[dict[str, Any]] = gate_diff.widening_at(repo, main_ref, sha, tmp)
+        except (subprocess.CalledProcessError, OSError, ValueError, KeyError) as exc:
+            print(f"::warning::widening of {sha} not computed: {exc!r}")
+            return None
+        return result
+
+    return carry
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--report", type=Path, required=True)
     p.add_argument("--markdown", type=Path, required=True)
     p.add_argument("--codeowners", type=Path, help="CODEOWNERS of the PR base commit (PR mode)")
     p.add_argument("--no-pr", action="store_true", help="not a pull_request event: any widening fails")
-    p.add_argument("--gate-paths", type=Path, help="changed gate files, one per line: each counts as widening")
+    p.add_argument("--gate-findings", type=Path, help="gate_diff.py JSON: each finding counts as widening")
+    p.add_argument("--repo", type=Path, help="checkout with the PR history (PR mode): lets an older label carry over")
+    p.add_argument("--main", default="refs/remotes/origin/main", help="main ref for --repo")
     a = p.parse_args(argv)
     try:
         report = json.loads(a.report.read_text(encoding="utf-8"))
         markdown = a.markdown.read_text(encoding="utf-8")
-        if a.gate_paths is not None:
-            report, markdown = with_gate_paths(
-                report, markdown, [x for x in a.gate_paths.read_text(encoding="utf-8").splitlines() if x]
-            )
+        if a.gate_findings is not None:
+            findings = json.loads(a.gate_findings.read_text(encoding="utf-8"))
+            report, markdown = with_gate_findings(report, markdown, findings)
         if a.no_pr:
             return run_no_pr(report, markdown=markdown)
         if a.codeowners is None:
@@ -242,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
             report,
             markdown=markdown,
             owners=codeowners(a.codeowners.read_text(encoding="utf-8")),
+            carry=None if a.repo is None else carry_from(a.repo, a.main),
         )
     except (KeyError, OSError, urllib.error.URLError, ValueError) as exc:
         print(f"::error::grants-widening could not decide: {exc!r}")
