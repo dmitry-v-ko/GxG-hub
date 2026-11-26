@@ -18,6 +18,7 @@ from fastmcp import Client
 from gxg_approval import cli, mcp
 from gxg_connector_kit import _jwt
 from gxg_connector_kit.cf_identity import ISSUER, TYP, args_hash
+from gxg_connector_kit.mcp import ConfigError
 
 INTENT = str(uuid.uuid4())
 KID = "pilot-adapter-1"
@@ -116,3 +117,54 @@ def test_mcp_refuses_to_start_without_identity_keys(world: World, monkeypatch: p
     monkeypatch.delenv("GXG_IDENTITY_KEYS")
     with pytest.raises(SystemExit, match="GXG_IDENTITY_KEYS"):
         mcp.from_env()
+
+
+def _claims(req: httpx.Request, world: World) -> dict[str, Any]:
+    token = req.headers["authorization"].split()[1]
+    return dict(jwt.decode(token, world.svc.public_key(), algorithms=["EdDSA"], audience="approval-api"))
+
+
+def test_service_id_defaults_to_approval_mcp(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GXG_SERVICE_ID")
+    res = world.call("effects.status", world.token("effects.status", {"intent_id": INTENT}))
+    assert not res.is_error  # assertions for `approval-mcp` are accepted
+    assert _claims(world.requests[0], world)["iss"] == "approval-mcp"
+
+
+def test_service_id_comes_from_gxg_service_id(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GXG_SERVICE_ID", "approval-mcp-b")
+    assert world.call("effects.status", world.token("effects.status", {"intent_id": INTENT})).is_error  # other aud
+    assert world.requests == []
+
+    def token_for_b(tool: str, args: dict[str, Any]) -> dict[str, str]:
+        claims = jwt.decode(
+            world.token(tool, args)["X-GxG-Identity"], options={"verify_signature": False}, algorithms=["EdDSA"]
+        )
+        claims["aud"] = "approval-mcp-b"
+        signed = jwt.encode(claims, world.adapter, algorithm="EdDSA", headers={"typ": TYP, "kid": KID})
+        return {"X-GxG-Identity": signed}
+
+    res = world.call("effects.status", token_for_b("effects.status", {"intent_id": INTENT}))
+    assert not res.is_error
+    assert _claims(world.requests[0], world)["iss"] == "approval-mcp-b"
+
+
+def test_malformed_identity_keys_name_the_variable(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GXG_IDENTITY_KEYS", "no-equals-sign")
+    with pytest.raises(ConfigError, match=r"^GXG_IDENTITY_KEYS: "):
+        mcp.from_env()
+
+
+def test_default_headers_are_the_http_request_headers(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without `headers`, the assertion is read from the HTTP request of the call (`get_http_headers`)."""
+    headers = world.token("effects.status", {"intent_id": INTENT})
+    monkeypatch.setattr(mcp, "get_http_headers", lambda include_all: headers)
+    server = mcp.from_env(transport=httpx.MockTransport(world.handler))
+
+    async def run() -> Any:
+        async with Client(server) as c:
+            return await c.call_tool("effects.status", {"intent_id": INTENT}, raise_on_error=False)
+
+    res = asyncio.run(run())
+    assert not res.is_error and res.structured_content["version"] == 3
+    assert _claims(world.requests[0], world)["iss"] == "approval-mcp"

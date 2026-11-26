@@ -12,6 +12,8 @@ Run from the repository root: `uv run python scripts/ci/mutate_m7_sql.py [SUBSTR
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -359,6 +361,12 @@ def main() -> int:
         print("baseline: tests are red, nothing to measure")
         return 2
     bad = 0
+    state = os.environ.get("MUTATE_SQL_STATE")  # resume: verdicts of an interrupted run (MUTMUT_RESUME of mutmut.sh)
+    done: dict[str, bool] = {}
+    if state and Path(state).exists():
+        for line in Path(state).read_text(encoding="utf-8").splitlines():
+            r = json.loads(line)
+            done[r["key"]] = r["green"]
     listed = (
         [(m, TESTS) for m in MUTATIONS]
         + [(m, M8_TESTS) for m in M8_MUTATIONS]
@@ -373,11 +381,18 @@ def main() -> int:
             print(f"STALE     {file}: {what} (text found {text.count(old)} times)")
             bad += 1
             continue
-        try:
-            path.write_text(text.replace(old, new), encoding="utf-8")
-            green = run_tests(tests)
-        finally:
-            path.write_text(text, encoding="utf-8")
+        key = f"{file}\0{old}\0{new}"
+        if key in done:
+            green = done[key]
+        else:
+            try:
+                path.write_text(text.replace(old, new), encoding="utf-8")
+                green = run_tests(tests)
+            finally:
+                path.write_text(text, encoding="utf-8")
+            if state:
+                with Path(state).open("a", encoding="utf-8") as f:
+                    f.write(json.dumps({"key": key, "green": green}) + "\n")
         equivalent = what.startswith(EQUIVALENT)
         verdict = ("equivalent" if green else "KILLED, listed as equivalent") if equivalent else (
             "SURVIVED" if green else "killed")  # fmt: skip
