@@ -12,9 +12,9 @@ import re
 import threading
 import time
 import unicodedata
-from datetime import UTC, datetime
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
