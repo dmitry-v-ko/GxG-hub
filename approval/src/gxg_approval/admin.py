@@ -3,7 +3,7 @@
 Admin network only (`tag:approval-admin`, SEC-26). Every request carries the operator's OIDC ID token
 (`Authorization: Bearer`), verified here against the IdP's JWKS: signature, `iss`, `aud`, `exp`. The operator is
 `oidc:<iss>:<sub>`; `platform_admin` is the list `GXG_ADMIN_OPERATORS` (the bundle has no operator role:
-pending_owner_decision). `switch clear` lifts a block, so it also needs a fresh login: `auth_time` at most 5 minutes
+pending_owner_decision). `switch clear` lifts a block, so it also needs a fresh login: `auth_time` at most 15 minutes
 old (step-up of «Администрирование»). Every action is audited in the same transaction as the change
 (gxg_switch, gxg_passkey_invite) and counted in `gxg_admin_actions_total` for the operator's alert.
 """
@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from . import admin_web
 from .decider import invite_hash
 
-STEP_UP_MAX_AGE_S = 300
+STEP_UP_MAX_AGE_S = 900  # AS-24 (owner decision 2026-11-26): a sign-in of the last 15 minutes, the admin session
 INVITE_TTL_S = 24 * 3600
 ALGORITHMS = ["RS256", "ES256", "EdDSA"]
 HTTP = {"GX400": 400, "GX403": 403, "GX404": 404, "GX409": 409}
@@ -83,7 +83,7 @@ def create_app(deps: Deps) -> FastAPI:  # noqa: PLR0915
             raise _Refused(403, "platform_admin required")
         auth_time = claims.get("auth_time")
         if fresh and (not isinstance(auth_time, int | float) or deps.clock() - auth_time > STEP_UP_MAX_AGE_S):
-            raise _Refused(403, "a fresh login (auth_time ≤ 5 min) is required to clear a switch")
+            raise _Refused(403, "a fresh login (auth_time ≤ 15 min) is required to clear a switch")
         return who
 
     def call(sql: str, params: tuple[Any, ...]) -> None:

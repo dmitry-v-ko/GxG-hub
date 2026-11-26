@@ -80,7 +80,7 @@ def test_clear_needs_a_fresh_login(admin_client: TestClient, owner: psycopg.Conn
     body = {"scope": "tenant:t-alpha", "blocked": True, "reason": "incident"}
     assert admin_client.post("/v1/switches", json=body, headers=auth(token())).status_code == 200
     clear = body | {"blocked": False, "reason": "resolved"}
-    for t in (token(), token(auth_time=int(time.time()) - 301), token(auth_time="yesterday")):
+    for t in (token(), token(auth_time=int(time.time()) - 901), token(auth_time="yesterday")):
         assert admin_client.post("/v1/switches", json=clear, headers=auth(t)).status_code == 403
     fresh = token(auth_time=int(time.time()) - 60)
     assert admin_client.post("/v1/switches", json=clear, headers=auth(fresh)).status_code == 200
@@ -220,7 +220,7 @@ def test_refusal_texts_and_db_messages(admin_client: TestClient) -> None:
         r = admin_client.post("/v1/switches", json=body, headers=headers)
         assert (r.status_code, r.json()) == (status, {"message": message})
     r = admin_client.post("/v1/switches", json=body | {"blocked": False}, headers=auth(token()))
-    assert r.json() == {"message": "a fresh login (auth_time ≤ 5 min) is required to clear a switch"}
+    assert r.json() == {"message": "a fresh login (auth_time ≤ 15 min) is required to clear a switch"}
     r = admin_client.post("/v1/switches", json=body | {"scope": "bad scope"}, headers=auth(token()))
     assert r.status_code == 400 and r.json()["message"].startswith("scope global|tenant:<id>|tool:<tenant>:<tool>")
     for path in ("/docs", "/redoc", "/openapi.json"):
@@ -240,7 +240,7 @@ def test_required_claims_and_leeway(admin_client: TestClient) -> None:
 
 
 def test_pyjwk_signing_key_and_auth_time_boundary(pg: Any, owner: psycopg.Connection[Any]) -> None:
-    """Production passes PyJWKClient's PyJWK (its `.key` is used); the step-up limit is ≤ 300 s exactly."""
+    """Production passes PyJWKClient's PyJWK (its `.key` is used); the step-up limit is ≤ 900 s exactly (AS-24)."""
     from jwt.algorithms import ECAlgorithm
 
     jwk = jwt.PyJWK(json.loads(ECAlgorithm.to_jwk(KEY.public_key())), algorithm="ES256")
@@ -256,7 +256,7 @@ def test_pyjwk_signing_key_and_auth_time_boundary(pg: Any, owner: psycopg.Connec
             pool, ISSUER, AUDIENCE, frozenset({OPERATOR}), signing_key=signing_key, clock=lambda: clock[0]
         )
         with TestClient(admin.create_app(deps)) as client:
-            t = token(auth_time=int(clock[0]) - 300)
+            t = token(auth_time=int(clock[0]) - 900)
             body = {"scope": "global", "blocked": False, "reason": "boundary"}
             assert client.post("/v1/switches", json=body, headers=auth(t)).status_code == 200
             assert seen == [t]

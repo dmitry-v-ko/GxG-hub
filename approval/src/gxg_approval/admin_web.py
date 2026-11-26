@@ -8,7 +8,10 @@ verifies the ID token on its own: signature (JWKS), `iss`, `aud` = client id, `n
 sealed cookie of at most 15 minutes; every form carries a CSRF token. The invite code is shown once, in the response
 to the form post, and is written nowhere else (not to a log, not to the audit: the audit holds only its hash).
 The kill switch page sets and clears a switch through the same audited `gxg_switch` as `POST /v1/switches`; clearing
-needs a sign-in at the IdP not older than 5 minutes (the session keeps its time), as the API's `auth_time`.
+needs a sign-in at the IdP not older than 15 minutes (the session keeps its time), as the API's `auth_time`. When the
+sign-in is older or the session is gone, the form is kept (a sealed cookie, never executed by itself), the operator
+signs in again and confirms it with one click: an automatic clear after the sign-in would let a foreign page clear
+a switch.
 """
 
 from __future__ import annotations
@@ -32,9 +35,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 SESSION_COOKIE = "__Host-gxg_admin_session"
 FLOW_COOKIE = "__Host-gxg_admin_flow"
+PREFILL_COOKIE = (
+    "__Host-gxg_admin_prefill"  # a switch form to show again after a new sign-in (never executed by itself)
+)
 SESSION_MAX_S = 15 * 60
 FLOW_MAX_S = 10 * 60
-MAX_AGE_S = 300  # a fresh login at the IdP: the same bound as the step-up of the API
+MAX_AGE_S = 300  # the sign-in at the IdP itself must be fresh (prompt=login, max_age): invite and session start
+CLEAR_MAX_AGE_S = 15 * 60  # AS-24 (owner decision 2026-11-26): clearing a switch within the 15 minutes of the session
 PAGES = ("/invites", "/switches")  # where /login may send the operator back (no open redirect)
 PRINCIPAL = re.compile(r"^oidc:\S{1,500}$")
 HEADERS = {
@@ -282,10 +289,23 @@ def register(  # noqa: PLR0915
     if list_switches is None or set_switch is None:
         return
 
-    def switch_page(s: dict[str, Any], error: str = "", done: str = "") -> Response:
+    def switch_page(
+        s: dict[str, Any], error: str = "", done: str = "", prefill: dict[str, Any] | None = None
+    ) -> Response:
         csrf = f'<input type=hidden name=csrf value="{html.escape(s["csrf"])}">'
         note = f'<p role="alert">{html.escape(error)}</p>' if error else ""
         note += f'<p role="status">{html.escape(done)}</p>' if done else ""
+        if prefill:
+            action = "Заблокировать" if prefill["blocked"] else "Снять блокировку"
+            note += (
+                f"<h2>Подтвердите: {html.escape(action.lower())}</h2>"
+                f"<form method=post action=/switches>{csrf}"
+                f'<input type=hidden name=blocked value={"1" if prefill["blocked"] else "0"}>'
+                f'<input type=hidden name=scope value="{html.escape(prefill["scope"])}">'
+                f'<input type=hidden name=reason value="{html.escape(prefill["reason"])}">'
+                f"<p>scope <code>{html.escape(prefill['scope'])}</code>, причина «{html.escape(prefill['reason'])}»</p>"
+                f"<p><button>Подтвердить: {html.escape(action.lower())}</button></p></form>"
+            )
         rows = "".join(
             f"<tr><td><code>{html.escape(sc)}</code></td><td>{'<b>заблокировано</b>' if b else 'открыто'}</td>"
             f"<td>{html.escape(r)}</td><td>{html.escape(c)}</td><td>{html.escape(t)}</td></tr>"
@@ -306,23 +326,41 @@ def register(  # noqa: PLR0915
             f"{note}{table}"
             f"<h2>Заблокировать эффекты</h2><form method=post action=/switches>{csrf}"
             f"<input type=hidden name=blocked value=1>{fields}<p><button>Заблокировать</button></p></form>"
-            "<h2>Снять блокировку</h2><p>Нужен вход не старше 5 минут: иначе "
-            '<a href="/login?next=/switches">войдите заново</a>.</p>'
+            "<h2>Снять блокировку</h2><p>Если вход устарел, страница попросит войти в Google "
+            "и вернёт сюда с этой формой.</p>"  # noqa: RUF001
             f"<form method=post action=/switches>{csrf}<input type=hidden name=blocked value=0>{fields}"
             "<p><button>Снять блокировку</button></p></form>"
             '<p><a class=b href="/invites">Приглашения passkey</a></p>',
         )
 
+    def keep_for_sign_in(values: dict[str, str]) -> Response:
+        """Back to the IdP; the form comes back pre-filled on /switches and waits for a click (not executed)."""
+        scope, reason = values.get("scope", "").strip()[:256], values.get("reason", "").strip()[:500]
+        response = RedirectResponse("/login?next=/switches", status_code=303)
+        if scope and reason:
+            kept = {"scope": scope, "reason": reason, "blocked": values.get("blocked") == "1"}
+            secure_cookie(response, PREFILL_COOKIE, seal(web.session_key, kept | {"exp": deps.clock() + FLOW_MAX_S}),
+                          FLOW_MAX_S, "lax")  # fmt: skip
+        response.headers.update(HEADERS)
+        return response
+
     @app.get("/switches")
     def switches(request: Request) -> Response:
         s = session(request)
-        return switch_page(s) if s else RedirectResponse("/login?next=/switches", status_code=303)
+        if s is None:
+            return RedirectResponse("/login?next=/switches", status_code=303)
+        kept = unseal(web.session_key, request.cookies.get(PREFILL_COOKIE), deps.clock())
+        response = switch_page(s, prefill=kept)
+        response.delete_cookie(PREFILL_COOKIE, path="/")
+        return response
 
     @app.post("/switches")
     async def change(request: Request) -> Response:
         s = session(request)
         if s is None:
-            return RedirectResponse("/login?next=/switches", status_code=303)
+            body = await request.body()
+            raw = {k: v[0] for k, v in parse_qs(body[:4096].decode(errors="replace")).items()}
+            return keep_for_sign_in(raw)  # no session, so no CSRF check: the values are only shown again
         values = await read_form(request, s)
         if values is None:
             return page("Запрос отклонён", "<p>Неверная форма (CSRF).</p>", 403)
@@ -331,8 +369,8 @@ def register(  # noqa: PLR0915
         if not scope or not reason or len(scope) > 256 or len(reason) > 500:
             return switch_page(s, "Нужны scope и причина.")
         auth = s.get("auth")
-        if not blocked and (not isinstance(auth, int | float) or deps.clock() - auth > MAX_AGE_S):
-            return switch_page(s, "Снять блокировку можно только после свежего входа (не старше 5 минут).")
+        if not blocked and (not isinstance(auth, int | float) or deps.clock() - auth > CLEAR_MAX_AGE_S):
+            return keep_for_sign_in(values)
         refused = set_switch(s["who"], scope, blocked, reason)
         if refused:
             return switch_page(s, refused)
