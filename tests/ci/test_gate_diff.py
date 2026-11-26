@@ -638,6 +638,12 @@ def test_a_diff_driver_cannot_hide_lines(tmp_path: Path, monkeypatch: pytest.Mon
     assert found == ["lint.exception a.py x = 1  # noqa"]
 
 
+def test_a_path_that_also_reads_as_a_revision_is_still_a_path(tmp_path: Path) -> None:
+    # Without "--", git reads ":(literal)a.py" as the index entry "(literal)a.py" and gives up.
+    found = rules(tmp_path, {"(literal)a.py": "z\n", "a.py": "x = 0\n"}, {"a.py": "x = 1  # noqa\n"})
+    assert found == ["lint.exception a.py x = 1  # noqa"]
+
+
 def test_exception_list_lines_are_each_a_finding(tmp_path: Path) -> None:
     head = "# list\na.x__mutmut_1  # why\n  b.y__mutmut_2  # why  \n\n# c\nc.z__mutmut_3  # why\n"
     assert rules(tmp_path, {EQ: "# list\n"}, {EQ: head}) == [
@@ -665,8 +671,10 @@ def test_lint_config_detail_is_the_new_content_hash(tmp_path: Path, base: str | 
 
 def test_gate_and_policy_tool_details_are_the_new_content_hash(tmp_path: Path) -> None:
     tool = "tools/gxg-policy/src/gxg_policy/x.py"
-    assert rules(tmp_path, {GATE[0]: "a\n", tool: "b\n"}, {GATE[0]: "c\n", tool: None}) == [
+    gone = "scripts/ci/widening_gate.py"
+    assert rules(tmp_path, {GATE[0]: "a\n", gone: "g\n", tool: "b\n"}, {GATE[0]: "c\n", gone: None, tool: None}) == [
         f"gate.self {GATE[0]} gate file changed ({gd.digest('c\n')})",
+        f"gate.self {gone} gate file changed ({gd.digest('')})",
         f"policy.tool {tool} gxg-policy changed ({gd.digest('')})",
     ]
 
@@ -727,6 +735,8 @@ def test_a_rename_is_a_delete_and_an_add(tmp_path: Path) -> None:
     [
         ({"type": "string"}, [], ["/ changed"]),
         ({"maxLength": 5}, {}, ["/maxLength removed"]),
+        ({"maxLength": 5, "properties": {"x": {}}}, {"maxLength": 9, "properties": {"x": {"not": {}}}},
+         ["/maxLength changed", "/properties/x/not added"]),
         ({}, {"not": {}}, ["/not added"]),
         ({1: {}, "a": 1}, {1: {}, "a": 2}, ["/a changed"]),  # YAML keys need not be strings
         # added keywords that only tighten, and those that do not
@@ -928,7 +938,7 @@ def test_main_usage(capsys: Any) -> None:
         assert f"the following arguments are required: {args[i]}" in capsys.readouterr().err
 
 
-POLICY_CASE = ROOT / "tools/gxg-policy/tests/diff/01-grant-resource-added"
+POLICY_CASE = ROOT / "tools/gxg-policy/tests/diff/10-manifest-tools"  # policies and connector manifests
 
 
 def test_widening_at_is_the_policy_diff_and_the_gate_findings_against_the_merge_base(
@@ -938,10 +948,13 @@ def test_widening_at_is_the_policy_diff_and_the_gate_findings_against_the_merge_
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     shutil.copytree(POLICY_CASE / "base", repo / "policies")
+    shutil.copytree(POLICY_CASE / "base-connectors", repo / "connectors")
     commit(repo, {"lib.py": "y = 1  # noqa: E741\n"}, "base")
     git(repo, "checkout", "-qb", "claude/x")
     shutil.rmtree(repo / "policies")
+    shutil.rmtree(repo / "connectors")
     shutil.copytree(POLICY_CASE / "head", repo / "policies")
+    shutil.copytree(POLICY_CASE / "head-connectors", repo / "connectors")
     head = commit(repo, {"a.py": "x = 1  # noqa: E501\n"}, "widen")
     git(repo, "checkout", "-q", "main")
     commit(repo, {"lib.py": None}, "main moves on")  # against main's tip lib.py would come back: a finding
@@ -955,6 +968,8 @@ def test_widening_at_is_the_policy_diff_and_the_gate_findings_against_the_merge_
     assert (work / "base/lib.py").exists() and (work / "head/a.py").exists()
     assert (work / "diff.md").read_text(encoding="utf-8").startswith("<!-- gxg-policy-diff -->")
     assert capfd.readouterr() == ("", "")  # the policy diff prints nothing into the job log
+    # A branch name works too, even the branch checked out in `repo`: the worktrees are detached.
+    assert gd.widening_at(repo, "refs/remotes/origin/main", "main", tmp_path / "t") == []
     with pytest.raises(subprocess.CalledProcessError):
         gd.widening_at(repo, "refs/remotes/origin/main", "f" * 40, tmp_path / "t")
     (repo / "policies/tenants/broken.yaml").parent.mkdir(parents=True, exist_ok=True)
@@ -962,3 +977,4 @@ def test_widening_at_is_the_policy_diff_and_the_gate_findings_against_the_merge_
     bad = commit(repo, {}, "broken policy")
     with pytest.raises(subprocess.CalledProcessError):  # gxg-policy diff failed: no report is read
         gd.widening_at(repo, "refs/remotes/origin/main", bad, tmp_path / "t")
+    assert capfd.readouterr() == ("", "")  # its error is in the exception, not in the log

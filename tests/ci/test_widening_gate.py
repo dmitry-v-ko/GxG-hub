@@ -708,11 +708,11 @@ def test_a_finding_is_the_same_whatever_its_key_order() -> None:
 
 
 def test_carried_reason_lists_up_to_five_new_findings() -> None:
-    new = [{"detail": f"d{i}"} for i in range(4)] + [{"path": "p"}, {"kind": "k"}, {"detail": "d6"}]
+    new = [{"detail": f"d{i}"} for i in range(3)] + [{"path": "p"}, {"kind": "k"}, {"detail": "d5"}]
     code, api, _ = carry_run([], new, A_RUN)
     assert code == 1
     assert (
-        f"and 7 widening change(s) since the label on {SHA_A[:12]}: d0; d1; d2; d3; p. Review"
+        f"and 6 widening change(s) since the label on {SHA_A[:12]}: d0; d1; d2; p; k. Review"
         in (api.calls[-1][2]["body"])
     )
     code, api, _ = carry_run([], [{"kind": "k"}], [])
