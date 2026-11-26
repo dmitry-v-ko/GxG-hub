@@ -31,6 +31,9 @@ class CapabilitiesSchema(unittest.TestCase):
     def test_example_passes(self):
         validator('gxg-capabilities.schema.json').validate(load_yaml(EXAMPLE))
 
+    def test_timeouts_below_tool_timeout_pass(self):
+        validator('gxg-capabilities.schema.json').validate(_with(limits={'timeout_s': 24.5}))
+
     def test_negative_examples_rejected(self):
         dup = load_yaml(EXAMPLE)
         dup['capabilities'].append(copy.deepcopy(dup['capabilities'][1]))
@@ -48,6 +51,10 @@ class CapabilitiesSchema(unittest.TestCase):
             'non-read without propose_tool': _with(effect_class='external_effect', action='propose'),
             'read with action propose': _with(action='propose'),
             'duplicate': dup,
+            # owner decision 2026-11-26: tool calls < 25 s (ContextForge's single TOOL_TIMEOUT)
+            'timeout 25 s': _with(limits={'max_results': 50, 'timeout_s': 25}),
+            'timeout 120 s': _with(limits={'timeout_s': 120}),
+            'timeout 0': _with(limits={'timeout_s': 0}),
         }
         for name in (
             'invoke',

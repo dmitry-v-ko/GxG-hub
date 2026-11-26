@@ -110,7 +110,15 @@
             "type": "string"
           },
           "limits": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "timeout_s": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 25,
+                "description": "owner decision 2026-11-26: every tool call ends before ContextForge's single TOOL_TIMEOUT (25 s); long work is cut into bounded calls with a cursor"
+              }
+            }
           },
           "preview": {
             "type": "object",

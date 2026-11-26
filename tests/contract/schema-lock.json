@@ -163,7 +163,7 @@
       }
     },
     "gxg-capabilities.schema.json": {
-      "normative_sha256": "3f3f3742ea833d281d4fb14d0b8cb15f57806e95742577fde4f8797986b40f6b",
+      "normative_sha256": "4ae14391665e2af1f243f3ae3a887f820d3bb62c8d0bc49a9897e863d9344809",
       "required": {
         "/": [
           "capabilities",
@@ -190,7 +190,7 @@
       }
     },
     "gxg-manifest.schema.json": {
-      "normative_sha256": "7b4d40a3dfb8026f4a23ddc1471cbdc645dbbabaf6a3efcb04ef49db727d79e0",
+      "normative_sha256": "cdbb6caf3de7599427f25a116b74e5baa7bbd914560f3af87938be6b7f74f3e2",
       "required": {
         "/": [
           "connector",

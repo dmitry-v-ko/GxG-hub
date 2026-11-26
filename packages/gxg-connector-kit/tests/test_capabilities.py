@@ -33,6 +33,15 @@ def test_entry_without_required_field_is_rejected(missing: str) -> None:
         load_registry(doc)
 
 
+@pytest.mark.parametrize("timeout_s", [25, 30, 120])
+def test_entry_timeout_at_or_over_the_gateway_timeout_is_rejected(timeout_s: int) -> None:
+    """Owner decision 2026-11-26: tool calls < 25 s, ContextForge's single TOOL_TIMEOUT (MCC-08)."""
+    doc = _doc()
+    doc["capabilities"][1]["limits"] = {"timeout_s": timeout_s}
+    with pytest.raises(RegistryError, match="timeout_s"):
+        load_registry(doc)
+
+
 def test_resource_without_type_is_rejected() -> None:
     doc = _doc()
     doc["capabilities"][1]["resource"] = {"scope": "single"}
