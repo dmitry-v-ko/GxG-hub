@@ -7,6 +7,7 @@ raises AssertionError when the connector violates the requirement.
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
 from typing import Any, Protocol
 
@@ -185,7 +186,7 @@ def check_mc11(c: ParticipantsConnector) -> None:
 def check_mc12(c: ParticipantsConnector) -> None:
     before = len(c.provider_calls)
     for chats in ([CHAT_READ_ONLY], [CHAT_NOT_GRANTED], [CHAT_OTHER_TENANT], [CHAT_OK, CHAT_READ_ONLY]):
-        e = _err(lambda chats=chats: c.collect_participants(T1, P, chats))
+        e = _err(functools.partial(c.collect_participants, T1, P, chats))
         assert e.code in ("resource_forbidden", "not_found"), (chats, e.code)
         assert len(c.provider_calls) == before, f"transport reached for {chats}"
     other = _err(lambda: c.collect_participants(T1, P, [CHAT_OTHER_TENANT]))
