@@ -73,8 +73,13 @@ class ExtGrantResolver(Protocol):
 
 
 def ext_group_covers(granted: str, wanted: str) -> bool:
-    """`ext:read` covers `ext:read` and `ext:read:members`; a subgroup grant `ext:read:members` only itself."""
-    return wanted == granted or wanted.startswith(granted + ":")
+    """`ext:read` covers `ext:read` and `ext:read:members`; a subgroup grant `ext:read:members` only itself.
+    GR-25: the `pii` subgroup is never covered by a parent grant, it must be granted explicitly."""
+    if wanted == granted:
+        return True
+    if not wanted.startswith(granted + ":"):
+        return False
+    return wanted.rsplit(":", 1)[-1] != "pii"
 
 
 class BundleError(ValueError):

@@ -119,3 +119,11 @@ def test_coverage_rule() -> None:
     assert ext_group_covers(READ, MEMBERS)
     assert not ext_group_covers(MEMBERS, READ)
     assert not ext_group_covers("ext:read", "ext:readx")
+
+
+def test_pii_is_not_covered_by_parent_class_grant() -> None:
+    """GR-25: `ext:read` does not reach `ext:read:pii`; only an explicit `pii` grant does."""
+    assert not ext_group_covers(READ, "ext:read:pii")
+    assert ext_group_covers("ext:read:pii", "ext:read:pii")
+    assert not ext_group_covers("ext:read:pii", READ)
+    assert not ext_group_covers(MEMBERS, "ext:read:pii")
