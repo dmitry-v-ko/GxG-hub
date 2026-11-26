@@ -137,6 +137,7 @@ def test_passkey_invite(admin_client: TestClient, owner: psycopg.Connection[Any]
     r = admin_client.post("/v1/passkey-invites", json={"human": human}, headers=auth(token()))
     assert r.status_code == 200 and r.json()["expires_in_s"] == 86400
     invite = r.json()["invite"]
+    assert len(invite) == 32  # secrets.token_urlsafe(24): 192 random bits, as the decider's invite hash expects
     rows = owner.execute("SELECT token_hash, human_principal, created_by FROM passkey_invites").fetchall()
     assert rows == [(invite_hash(invite), human, OPERATOR)]  # the token itself is never stored
     with pg.connect("gxg_decider") as decider:
@@ -283,6 +284,10 @@ def test_the_operator_page_switch_is_the_same_audited_gxg_switch(
         assert [(s, b, c) for s, b, _r, c, _t in got["list_switches"]()] == [("global", True, OPERATOR)]
         assert got["set_switch"](OPERATOR, "nonsense", True, "x") != ""  # refused by the database, shown on the page
         assert got["set_switch"](OPERATOR, "global", False, "DRILL over") == ""
+        human = "oidc:https://idp.example.invalid:2"
+        code = got["issue_invite"](OPERATOR, human)  # the invite page gets the same audited issuer as the API
+        rows = owner.execute("SELECT token_hash, human_principal FROM passkey_invites").fetchall()
+        assert rows == [(invite_hash(code), human)]
         assert [(s, b) for s, b, *_ in got["list_switches"]()] == [("global", False)]
     audit = owner.execute(
         "SELECT actor, action FROM audit_events WHERE action LIKE 'admin_switch%' ORDER BY at"
