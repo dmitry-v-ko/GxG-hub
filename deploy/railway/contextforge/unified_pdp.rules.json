@@ -27,6 +27,7 @@
     "actions": [
       "tools.invoke.telegram-t-pilot-telegram-messages-search",
       "tools.invoke.telegram-t-pilot-telegram-thread-read",
+      "tools.invoke.telegram-t-pilot-telegram-participants-collect",
       "tools.invoke.telegram-t-pilot-telegram-message-propose",
       "tools.invoke.approval-t-pilot-effects-status",
       "tools.invoke.approval-t-pilot-effects-cancel",
@@ -46,6 +47,6 @@
     "resource_ids": [
       "*"
     ],
-    "reason": "the pilot agent: Telegram search, thread read and message proposal, effect status and cancel, KB read tools, Apify discovery/docs tools (pilot exception, owner decision 2026-11-25); nothing else (the deny rule above wins for execute and reconcile)"
+    "reason": "the pilot agent: Telegram search, thread read, participants collect (M11 live check, owner 2026-11-27) and message proposal, effect status and cancel, KB read tools, Apify discovery/docs tools (pilot exception, owner decision 2026-11-25); nothing else (the deny rule above wins for execute and reconcile)"
   }
 ]
