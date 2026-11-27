@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import subprocess
 import urllib.error
 import urllib.request
 from email.message import Message
@@ -19,6 +20,10 @@ SCRIPT = ROOT / "scripts" / "ci" / "widening_gate.py"
 WIDE: dict[str, Any] = {"widening": [{"kind": "grant", "change": "added"}], "narrowing": []}
 NARROW: dict[str, Any] = {"widening": [], "narrowing": [{"kind": "grant", "change": "removed"}]}
 OWNERS = {"dmitry-v-ko"}
+GATE_FINDING: dict[str, Any] = {
+    "tenant": None, "kind": "gate", "rule": "gate.self", "path": "scripts/ci/grants_widening.sh",
+    "detail": "gate file changed (abc)",
+}  # fmt: skip
 
 
 def load_gate() -> ModuleType:
@@ -98,9 +103,11 @@ class FakeApi:
         events: list[dict[str, Any]],
         comments: list[dict[str, Any]],
         runs: list[dict[str, Any]] | None = None,
+        branch_runs: list[dict[str, Any]] | None = None,
     ) -> None:
         self.labels, self.events, self.comments = labels, events, comments
         self.runs = [pr_run()] if runs is None else runs
+        self.branch_runs = branch_runs or []
         self.calls: list[tuple[str, str, Any]] = []
 
     def __call__(self, method: str, path: str, body: Any) -> Any:
@@ -113,6 +120,9 @@ class FakeApi:
             return self.events
         if method == "GET" and base.endswith("/comments"):
             return self.comments
+        if method == "GET" and base.endswith("/actions/runs") and "branch=" in path:
+            assert path.endswith(f"?event=pull_request&branch={REF.replace('/', '%2F')}&per_page=100"), path
+            return {"workflow_runs": self.branch_runs}
         if method == "GET" and base.endswith("/actions/runs"):
             assert "event=pull_request" in path and f"head_sha={HEAD['sha']}" in path
             return {"workflow_runs": self.runs}
@@ -432,9 +442,10 @@ def test_main_pr_mode_wires_environment_files_and_api(
         seen["api"] = (token, base)
         return the_api
 
-    def fake_run(api: Any, repo: str, ev: Any, report: Any, *, markdown: str, owners: set[str]) -> int:
+    def fake_run(api: Any, repo: str, ev: Any, report: Any, *, markdown: str, owners: set[str], carry: Any) -> int:
         assert api is the_api
         seen["run"] = (repo, ev, report, markdown, owners)
+        seen["carry"] = carry
         return 5
 
     monkeypatch.setattr(gate, "github_api", fake_api)
@@ -447,6 +458,9 @@ def test_main_pr_mode_wires_environment_files_and_api(
     assert gate.main([*args, "--codeowners", str(tmp_path / "CODEOWNERS")]) == 5
     assert seen["api"] == ("tok", "https://api.github.com")
     assert seen["run"] == ("o/r", event, WIDE, "<!-- m -->\nёж", {"owner-ü"})
+    assert seen["carry"] is None  # without --repo an older label never carries over
+    gate.main([*args, "--codeowners", str(tmp_path / "CODEOWNERS"), "--repo", str(tmp_path)])
+    assert callable(seen["carry"])
     monkeypatch.setenv("GITHUB_API_URL", "https://ghe.example.invalid/api/v3")
     gate.main([*args, "--codeowners", str(tmp_path / "CODEOWNERS")])
     assert seen["api"] == ("tok", "https://ghe.example.invalid/api/v3")
@@ -472,9 +486,9 @@ def test_help_lists_modes(capsys: Any) -> None:
     out = capsys.readouterr().out
     assert re.search(r"  CODEOWNERS of the PR base commit \(PR mode\)\n", out)
     assert re.search(r"  not a pull_request event: any widening fails\n", out)
-    assert re.search(r"  changed gate files, one per line: each counts as\s+widening\n", out)
+    assert re.search(r"  gate_diff.py JSON: each finding counts as widening\n", out)
     # The module docstring is the description, kept verbatim (RawDescriptionHelpFormatter).
-    assert "Usage (both modes also take --gate-paths FILE):\n  widening_gate.py --report diff.json" in out
+    assert "Usage (both modes also take --gate-findings FILE; PR mode also --repo DIR --main REF):\n" in out
 
 
 class FakeResponse:
@@ -515,24 +529,246 @@ def test_github_api_request(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [r.get_method() for r, _ in sent[2:]] == ["PATCH", "DELETE"]
 
 
-def test_changed_gate_paths_count_as_widening(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
-    # Cycle 3 finding 1: a PR that edits the gate needs the label even with no policy widening.
+def test_gate_findings_count_as_widening(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+    # A PR with a control change (gate_diff.py) needs the label even with no policy widening.
     summary = tmp_path / "s.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
-    r, md, paths = tmp_path / "r.json", tmp_path / "r.md", tmp_path / "p.txt"
+    r, md, found = tmp_path / "r.json", tmp_path / "r.md", tmp_path / "f.json"
     r.write_text(json.dumps(NARROW))
     md.write_text("<!-- m -->\nx\n")
-    args = ["--report", str(r), "--markdown", str(md), "--no-pr", "--gate-paths", str(paths)]
-    paths.write_text("")
+    args = ["--report", str(r), "--markdown", str(md), "--no-pr", "--gate-findings", str(found)]
+    found.write_text("[]")
     assert gate.main(args) == 0
-    paths.write_text("scripts/ci/grants_widening.sh\n\nuv.lock\n")
+    two = [GATE_FINDING, {**GATE_FINDING, "rule": "deps.new", "path": "uv.lock", "detail": "a|b`c"}]
+    found.write_text(json.dumps(two))
     assert gate.main(args) == 1
     assert "2 widening change(s) outside a pull request" in capsys.readouterr().out
     text = summary.read_text()
-    assert "### Gate files changed (2, need the `widening-approved` label)" in text
-    assert "| `scripts/ci/grants_widening.sh` |\n| `uv.lock` |\n" in text
-    report, markdown = gate.with_gate_paths(NARROW, "m", ["a b"])
-    assert report["widening"] == [{"tenant": None, "kind": "gate_path", "change": "changed", "path": "a b"}]
+    assert "### Control changes (2, need the `widening-approved` label)" in text
+    assert "| gate.self | `scripts/ci/grants_widening.sh` | gate file changed (abc) |\n" in text
+    assert "| deps.new | `uv.lock` | a\\|b'c |\n" in text
+    report, markdown = gate.with_gate_findings(NARROW, "m", [GATE_FINDING])
+    assert report["widening"] == [GATE_FINDING]
     assert report["narrowing"] == NARROW["narrowing"] and NARROW["widening"] == []
-    assert markdown.startswith("m\n### Gate files")
-    assert gate.with_gate_paths(NARROW, "m", []) == (NARROW, "m")
+    assert markdown.startswith("m\n### Control changes")
+    assert gate.with_gate_findings(NARROW, "m", []) == (NARROW, "m")
+
+
+# Owner decision 2026-11-26: a merge of main does not reset the label. An older label still covers the head
+# when the head has no widening that the head at the time of the label (A) did not have.
+SHA_A = "a" * 40
+FIND_1 = {"kind": "gate", "rule": "lint.exception", "path": "a.py", "detail": "x  # noqa"}
+FIND_2 = {"kind": "gate", "rule": "secrets.new", "path": ".github/workflows/ci.yml", "detail": "NEW"}
+
+
+def carry_run(
+    approved: list[dict[str, Any]] | None, head: list[dict[str, Any]], branch_runs: list[dict[str, Any]]
+) -> tuple[int, FakeApi, list[str]]:
+    asked: list[str] = []
+
+    def carry(sha: str) -> list[dict[str, Any]] | None:
+        asked.append(sha)
+        return approved
+
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at=T_BEFORE)], [], branch_runs=branch_runs)
+    event = {"action": "synchronize", "pull_request": {"number": 7, "head": HEAD}}
+    report = {"widening": head, "narrowing": []}
+    code = gate.run(api, "o/r", event, report, markdown="<!-- m -->\nr", owners=OWNERS, carry=carry)
+    return code, api, asked
+
+
+A_RUN = [pr_run("2026-11-20T08:00:00Z", sha=SHA_A)]
+
+
+def test_merge_of_main_keeps_the_label() -> None:
+    code, api, asked = carry_run([FIND_1, FIND_2], [FIND_2, FIND_1], A_RUN)
+    assert code == 0 and not api.deleted() and asked == [SHA_A]
+    body = api.calls[-1][2]["body"]
+    assert f"`widening-approved` from {SHA_A[:12]} still covers the head: no new widening since the label." in body
+    assert "approved by @dmitry-v-ko" in body
+
+
+def test_new_widening_after_the_label_removes_it() -> None:
+    code, api, _ = carry_run([FIND_1], [FIND_1, FIND_2], A_RUN)
+    assert code == 1 and api.deleted()
+    body = api.calls[-1][2]["body"]
+    assert f"and 1 widening change(s) since the label on {SHA_A[:12]}: NEW. Review the new commits" in body
+
+
+def test_a_second_equal_finding_is_new() -> None:
+    assert carry_run([FIND_1], [FIND_1, FIND_1], A_RUN)[0] == 1
+    assert gate.uncovered([FIND_1, FIND_1, FIND_2], [FIND_1, FIND_2]) == [FIND_1]
+
+
+def test_less_widening_than_at_the_label_is_covered() -> None:
+    assert carry_run([FIND_1, FIND_2], [FIND_1], A_RUN)[0] == 0
+
+
+def test_unknown_widening_of_the_labelled_head_fails_closed() -> None:
+    code, api, _ = carry_run(None, [FIND_1], A_RUN)
+    assert code == 1 and api.deleted()
+    assert (
+        f"the widening of {SHA_A[:12]} (the head at the time of the label) could not be computed"
+        in (api.calls[-1][2]["body"])
+    )
+
+
+def test_unknown_head_at_the_label_fails_closed() -> None:
+    # Only runs after the label, or of other branches, PRs or head repositories: no head at the label time.
+    runs = [
+        pr_run(T_PUSH, sha=SHA_A),
+        pr_run("2026-11-20T08:00:00Z", sha=SHA_A, branch="claude/other"),
+        pr_run("2026-11-20T08:00:00Z", sha=SHA_A, prs=(3,)),
+        pr_run("2026-11-20T08:00:00Z", sha=SHA_A, repo_id=2),
+    ]
+    code, api, asked = carry_run([FIND_1], [FIND_1], runs)
+    assert code == 1 and api.deleted() and asked == []
+    assert "the head commit at the time of the label is unknown" in api.calls[-1][2]["body"]
+
+
+def test_head_at_takes_the_latest_run_not_after_the_label() -> None:
+    runs = [
+        pr_run("2026-11-20T07:00:00Z", sha="1" * 40),
+        pr_run("2026-11-20T08:30:00Z", sha="2" * 40),
+        pr_run(T_BEFORE, sha="3" * 40),  # at the label instant: the label saw it
+        pr_run(T_PUSH, sha="4" * 40),
+        pr_run("2026-11-20T08:45:00Z", sha="5" * 40, prs=()),  # a run without PR links still counts
+    ]
+    api = FakeApi([], [], [], branch_runs=runs)
+    pr = {"number": 7, "head": HEAD}
+    assert gate.head_at(api, "o/r", pr, gate._ts(T_BEFORE)) == "3" * 40
+    assert gate.head_at(api, "o/r", pr, gate._ts("2026-11-20T08:40:00Z")) == "2" * 40
+    assert gate.head_at(api, "o/r", {"number": 7, "head": {**HEAD, "repo": None}}, gate._ts(T_BEFORE)) is None
+
+
+def test_without_carry_an_older_label_is_removed_as_before() -> None:
+    api = FakeApi(["widening-approved"], [labeled("dmitry-v-ko", at=T_BEFORE)], [], branch_runs=A_RUN)
+    assert run(api, "synchronize", WIDE) == 1 and api.deleted()
+
+
+def test_carry_from_computes_the_widening_of_a_past_head(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """End to end on a real repo: the labelled head A, a merge of main, then a new exception."""
+
+    def g(*args: str) -> str:
+        env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid", "GIT_COMMITTER_NAME": "t",
+               "GIT_COMMITTER_EMAIL": "t@example.invalid", "PATH": "/usr/bin:/bin"}  # fmt: skip
+        return subprocess.run(
+            ["git", *args], cwd=repo, env=env, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    def put(name: str, text: str, msg: str) -> str:
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(text)
+        g("add", "-A")
+        g("commit", "-qm", msg)
+        return g("rev-parse", "HEAD")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    g("init", "-q", "-b", "main")
+    put("policies/README", "p\n", "base")
+    g("update-ref", "refs/remotes/origin/main", "HEAD")
+    g("checkout", "-qb", "claude/x")
+    a = put("a.py", "x = 1  # noqa: E501\n", "A")
+    g("checkout", "-q", "main")
+    put("lib.py", "y = 1  # noqa: E741\n", "main moves on")
+    g("update-ref", "refs/remotes/origin/main", "HEAD")
+    g("checkout", "-q", "claude/x")
+    g("merge", "-q", "--no-edit", "main")
+    merged = g("rev-parse", "HEAD")
+    later = put("b.py", "z = 1  # type: ignore\n", "new exception")
+    (tmp_path / "runner").mkdir()
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
+    carry = gate.carry_from(repo, "refs/remotes/origin/main")
+    approved = carry(a)
+    assert approved is not None
+    assert [(f["rule"], f["path"]) for f in approved] == [("lint.exception", "a.py")]
+    assert gate.uncovered(carry(merged) or [], approved) == []
+    new = gate.uncovered(carry(later) or [], approved)
+    assert [(f["rule"], f["path"]) for f in new] == [("lint.exception", "b.py")]
+    assert carry("f" * 40) is None  # a SHA the checkout does not have: unknown, fail closed
+    assert (tmp_path / "runner" / f"carry-{a}" / "head" / "a.py").exists()
+
+
+# Exact outputs of the carry-over and the control-change table (DoD-4).
+def test_control_change_table_exact() -> None:
+    two = [GATE_FINDING, {**GATE_FINDING, "rule": "lint.config", "path": "a|b", "detail": "line\n`two`"}]
+    report, markdown = gate.with_gate_findings(NARROW, "m", two)
+    assert report == {"widening": two, "narrowing": NARROW["narrowing"]}
+    assert markdown == (
+        "m\n### Control changes (2, need the `widening-approved` label)\n\n"
+        "| rule | path | detail |\n| --- | --- | --- |\n"
+        "| gate.self | `scripts/ci/grants_widening.sh` | gate file changed (abc) |\n"
+        "| lint.config | `a\\|b` | line 'two' |\n"
+    )
+
+
+def test_a_finding_is_the_same_whatever_its_key_order() -> None:
+    assert gate.uncovered([{"b": 1, "a": 2}], [{"a": 2, "b": 1}]) == []
+
+
+def test_carried_reason_lists_up_to_five_new_findings() -> None:
+    new = [{"detail": f"d{i}"} for i in range(3)] + [{"path": "p"}, {"kind": "k"}, {"detail": "d5"}]
+    code, api, _ = carry_run([], new, A_RUN)
+    assert code == 1
+    assert (
+        f"and 6 widening change(s) since the label on {SHA_A[:12]}: d0; d1; d2; p; k. Review"
+        in (api.calls[-1][2]["body"])
+    )
+    code, api, _ = carry_run([], [{"kind": "k"}], [])
+    assert "`widening-approved` was removed: the label (2026-11-20T09:00:00Z) is older than the head commit on the PR" \
+        " (2026-11-20T10:00:00+00:00), and the head commit at the time of the label is unknown. Review" in (
+        api.calls[-1][2]["body"]
+    )  # fmt: skip
+
+
+def test_carry_warns_when_the_widening_is_not_computed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
+    carry = gate.carry_from(tmp_path / "absent", "refs/remotes/origin/main")
+    assert carry("f" * 40) is None
+    out = capsys.readouterr().out
+    assert out == f"::warning::widening of {'f' * 40} not computed: FileNotFoundError(2, 'No such file or directory')\n"
+
+
+def test_head_at_without_runs_and_with_a_tie() -> None:
+    pr = {"number": 7, "head": HEAD}
+    assert gate.head_at(lambda m, p, b: {}, "o/r", pr, gate._ts(T_AFTER)) is None
+    # Two runs at the same instant: the first listed (GitHub lists the newest first) wins.
+    api = FakeApi([], [], [], branch_runs=[pr_run(T_PUSH, sha="1" * 40), pr_run(T_PUSH, sha="2" * 40)])
+    assert gate.head_at(api, "o/r", pr, gate._ts(T_AFTER)) == "1" * 40
+
+
+def test_main_passes_repo_and_main_to_the_carry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+    files = {"r.json": json.dumps(WIDE), "r.md": "m", "CODEOWNERS": "* @o\n", "event.json": "{}"}
+    for name, text in files.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    seen: list[Any] = []
+
+    def carry_from(repo: Path, main: str) -> str:
+        seen.append((repo, main))
+        return "carry"
+
+    def run(*args: Any, carry: Any, **kw: Any) -> int:
+        seen.append(carry)
+        return 0
+
+    monkeypatch.setattr(gate, "carry_from", carry_from)
+    monkeypatch.setattr(gate, "run", run)
+    monkeypatch.setattr(gate, "github_api", lambda token, base: None)
+    for var, value in (("GITHUB_EVENT_PATH", str(tmp_path / "event.json")), ("GITHUB_TOKEN", "t"),
+                       ("GITHUB_REPOSITORY", "o/r")):  # fmt: skip
+        monkeypatch.setenv(var, value)
+    args = ["--report", str(tmp_path / "r.json"), "--markdown", str(tmp_path / "r.md")]
+    args += ["--codeowners", str(tmp_path / "CODEOWNERS"), "--repo", "checkout"]
+    assert gate.main(args) == 0
+    assert seen == [(Path("checkout"), "refs/remotes/origin/main"), "carry"]
+    seen.clear()
+    gate.main([*args, "--main", "refs/x"])
+    assert seen == [(Path("checkout"), "refs/x"), "carry"]
+    with pytest.raises(SystemExit):
+        gate.main(["--help"])
+    out = " ".join(capsys.readouterr().out.split())
+    assert "--repo REPO checkout with the PR history (PR mode): lets an older label carry over" in out
+    assert "--main MAIN main ref for --repo" in out

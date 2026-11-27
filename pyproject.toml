@@ -174,7 +174,8 @@ source_paths = ["scripts/ci/", "conftest.py"]
 # Tested end to end by tests/ci/test_stage_f.py (which also drives stage_c.py) outside mutmut.
 do_not_mutate = ["scripts/ci/check_coverage.py", "scripts/ci/mutate_m2.py", "scripts/ci/mutate_m7_sql.py", "scripts/ci/stage_c.py",
   "scripts/ci/stage_f.py"]
-also_copy = ["schemas/", "policies/", "docs/", "tests/", ".github/"]
+# tools/gxg-policy/tests/diff/: policy fixtures of the gate_diff.widening_at test.
+also_copy = ["schemas/", "policies/", "docs/", "tests/", ".github/", "tools/gxg-policy/tests/diff/"]
 # test_grants_widening_job.py runs the M2 job script in temp repos (subprocesses, like the e2e tests):
 # in neither milestone's mutmut test selection.
 pytest_add_cli_args = ["-m", "not e2e", "-p", "no:cacheprovider", "--ignore=tests/ci/test_grants_widening_job.py",
