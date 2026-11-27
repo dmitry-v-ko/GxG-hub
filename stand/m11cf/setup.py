@@ -4,9 +4,8 @@
   uv run python stand/m11cf/setup.py bootstrap   after stand/bootstrap.py
 
 init: random passwords (.env, M11CF_*), a fake api_hash and chat_ref secret, the service's db/ SQL (copied out of the
-image) + one synthetic chat of Connection svc-test, the stand tenant file
-(gateway/contextforge/examples/tenants/example-ext-test.yaml with its chat replaced by a chat_ref the service can
-resolve), a bundle of that tenant signed with the stand bundle key,
+image) + one synthetic chat of Connection svc-test, the stand tenant file (policies/tenants/example-ext-test.yaml with
+its chat replaced by a chat_ref the service can resolve), a bundle of that tenant signed with the stand bundle key,
 and the unified_pdp rules: stand/unified_pdp.rules.json + gateway/contextforge/ext_roles.py of the tenant file.
 bootstrap: team t-ext-test, agents reader and collector (one team token each, SEC-02), gateway telegram-t-ext-test ->
 http://tgsvc:8080/mcp, one virtual server per agent tool set (ext_roles.build), plugins.yaml with the team and the
@@ -38,7 +37,7 @@ from init import ENV, KID_BUNDLE, REPO, SECRETS, env_values, password, plugins_y
 OUT = SECRETS / "m11cf"
 STATE = OUT / "state.json"
 IMAGE = "gxg-telegram-service:m11-4-local"
-TENANT_FILE = REPO / "gateway" / "contextforge" / "examples" / "tenants" / "example-ext-test.yaml"
+TENANT_FILE = REPO / "policies" / "tenants" / "example-ext-test.yaml"
 TENANT, CONNECTION, SVC_CONNECTION = "t-ext-test", "tg-test", "svc-test"
 PEER = -1001000000777  # synthetic peer of the test chat (never a real one)
 GATEWAY = f"telegram-{TENANT}"

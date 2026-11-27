@@ -6,8 +6,8 @@
 
 | Что | Где |
 | --- | --- |
-| Tenant `t-ext-example`: `read`, `ext:read`, подгруппы `ext:read:members/users/reactions`, `collect`, allowlist чатов, `extensions.enabled: []` + девять записей в комментарии, `ext:read:pii` отдельным закомментированным grant'ом | `gateway/contextforge/examples/tenants/example-ext.yaml` |
-| Тестовый tenant `t-ext-test`: девять записей включены, `ext:read:pii` только у collector | `gateway/contextforge/examples/tenants/example-ext-test.yaml` |
+| Tenant `t-ext-example`: `read`, `ext:read`, подгруппы `ext:read:members/users/reactions`, `collect`, allowlist чатов, `extensions.enabled: []` + девять записей в комментарии, `ext:read:pii` отдельным закомментированным grant'ом | `policies/tenants/example-ext.yaml` |
+| Тестовый tenant `t-ext-test`: девять записей включены, `ext:read:pii` только у collector | `policies/tenants/example-ext-test.yaml` |
 | lint: `ext-mask-wide` (W), `ext-pii-no-expiry` (W) | `tools/gxg-policy/src/gxg_policy/lint.py` |
 | golden: `bad/24…27` (pii в неверном регистре, `ext:pii` без класса, формат имени из дизайна, повтор записи), `diff/11` (новый `ext:read:pii` = widening), `diff/12` (девять записей = 9 widening типа `extension`) | `tools/gxg-policy/tests/` |
 | Набор инструментов и правила `unified_pdp` по агентам, считаются из файла tenant'а | `gateway/contextforge/ext_roles.py`, примеры в `gateway/contextforge/examples/` |
