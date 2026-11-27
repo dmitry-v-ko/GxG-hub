@@ -22,7 +22,8 @@
 | 3 | MC-05 на стенде | **passed с оговорками** (часть «обновление ContextForge» не проверяется; 1 нестабильный тест) |
 | 4 | Лимит запросов и `TOOL_TIMEOUT` действуют на `ext.call` | **passed** (механизм); **нужно решение** по значениям |
 | 5 | Два virtual server на агентов, pii скрыт без гранта | **passed** (с оговоркой про `/rpc`) |
-| 6 | ADR-0007: `hub.execute` регистрируется как обычный MCP-tool и вызывается | **passed** для ContextForge; **конфликт с политикой** EFF-02 — нужно решение |
+| 6 | ADR-0007: фасад регистрируется как обычный MCP-tool и вызывается | **passed**; имя `hub.execute` конфликтовало с EFF-02, переименовано в `hub.script.run` (решение владельца 2026-11-26), перепроверено |
+| 7 | Агент не достаёт `/rpc` и другие пути мимо virtual server | **passed** на прокси (решение владельца 2026-11-26), см. ниже |
 
 ### 1. Регистрация — passed
 
@@ -125,12 +126,20 @@ pii: `ext.search` (сервис) — `reader` видит 7 записей (`chat
 - `stand/m11cf/` (новое): `compose.yaml` (оверлей: сервис, его БД, правила PDP, ручки лимита/таймаута для проверки 4), `setup.py` (`init`: секреты, bundle, SQL, правила из `ext_roles`; `bootstrap`: команда, агенты, gateway, virtual servers, `plugins.yaml`), `checks.py` (проверки 1, 2, 4, 5, 6), `hubexec_server.py`, `run.sh`.
 - Исправлений кода Hub или конфигурации шлюза не понадобилось: проверки 1, 2, 5 прошли на конфигурации ветки как есть.
 
-## Решения, которые нужны (не применялись)
+## Решения владельца 2026-11-26 и что сделано в Hub
 
-1. `TOOL_TIMEOUT` 25 с против `ext.call` 30 с / записи 40 с / `participants.collect` 120 с; пер-tool таймаута для MCP-tools в v1.1.1 нет.
-2. Лимит ContextForge — на класс пути, `/rpc` в LOW (5000/мин): MEDIUM-лимит обходится через `/rpc`; ответ — HTTP 429, а не MCC-05 `rate_limited`.
-3. Имя фасада `hub.execute` против `deny:agents-never-execute`.
-4. Видимость tools на `/rpc` — все tools команды, не только набор агента.
+1. **`TOOL_TIMEOUT` (решение: «service < 25 s»).** Общий `TOOL_TIMEOUT` ContextForge остаётся 25 с. Каждый вызов tool'а Telegram-сервиса — ≤ 20 с; `participants.collect` за вызов собирает ограниченную порцию и возвращает курсор, следующий вызов продолжает. Hub: MCC-08, «Участники и профили», AC-M11.3-07, AC-M11.4-09, MC-13, дизайн 3.4; схемы `gxg-manifest` и `gxg-capabilities` отклоняют `limits.timeout_s` ≥ 25. Сервис правит другой исполнитель.
+2. **`/rpc` (решение: «close /rpc to agents»).** Плагином сделать нельзя: в v1.1.1 путь запроса виден только хуку `http_pre_request` (он не может отказать), а `http_auth_resolve_user` вызывается и на `/servers/<id>/mcp`. Проверено на этом стенде: отказ агенту в `http_auth_resolve_user` закрывает `/rpc` (401), но ломает вызовы через virtual server (`no authenticated user` в `GxgIdentity`), а регистрация `http_pre_request` включает middleware, после которого SSE virtual server не инициализируется. Поэтому контроль — прокси перед ContextForge: в Railway порт агентов 443 публикует только `/servers` и `/health` (убран глобальный `/mcp`; `/rpc` там и не был), 8443 — только операторам по ACL. На стенде — тот же маппинг (`agent-entry`, nginx, `127.0.0.1:4443`), проверка 7 ниже.
+3. **`hub.execute` (решение: «rename»).** Фасад ADR-0007 — `hub.script.run`; `deny:agents-never-execute` не тронут. Проверка 6 перепрогнана: вызов проходит с правилами стенда как есть.
+4. **MCC-01 `describe`** (коммит `39e018c`) — подтверждено владельцем.
+
+Ещё: `ext_roles.py` теперь выдаёт `telegram.message.get` (read, один чат; объём M11.1 в плане и manifest сервиса) всем, у кого есть `read` на чат.
+
+### 7. Вход агентов — passed (2026-11-26)
+
+`stand/m11cf/checks.py agent_entry`, токен `reader` на `127.0.0.1:4443`: `/rpc` tools/list и tools/call, `/mcp/`, `/v1/tools`, `/tools`, `GET /sse` → 404; свой virtual server: tools/list 200 (ровно набор `ext_roles`), `ext.search` → ok. Оператор: `/rpc` tools/list на `127.0.0.1:4444` → 200. Повторный прогон после решений (свежий стенд, `KEEP= stand/m11cf/run.sh`): `stand/tests` 55 passed (836 с), проверки 1, 2, 4, 5, 6, 7 — passed; в проверке 5 у `reader` и `collector` теперь есть `telegram.message.get`.
+
+Ограничение: на порту оператора `/rpc` с токеном агента по-прежнему принимается (отказ по identity в v1.1.1 недоступен, см. п. 2); агенты до этого порта не достают по ACL (SEC-26).
 
 ## Не проверено
 
