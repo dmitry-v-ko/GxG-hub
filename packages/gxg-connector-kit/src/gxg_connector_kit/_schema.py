@@ -19,6 +19,7 @@ _FILES = (
     "approval-policy",
     "platform-registry",
     "gxg-manifest",
+    "gxg-capabilities",
     "execution-token",
     # Approval Service request/response bodies (M7)
     "intent-create",

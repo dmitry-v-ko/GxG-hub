@@ -5,8 +5,7 @@
 ## Локальные schema smoke-тесты
 
 ```bash
-python -m pip install -r tests/contract/requirements.txt
-python -m unittest discover -s tests/contract -p 'test_*.py' -v
+uv run pytest tests/contract
 ```
 
 Они проверяют валидность всех JSON Schema, примеры политик, manifest и реестра, запрещённые значения, тестовые векторы канонизации и OpenAPI внутреннего API. Но не MCP-сервер, аутентификацию, права или runtime-безопасность.
@@ -70,6 +69,14 @@ python -m unittest discover -s tests/contract -p 'test_*.py' -v
 | MC-03 | B | Transport failure / 429 / таймаут до и после отправки | Правильные коды и `retryable` | MCC-05 |
 | MC-04 | B | Изоляция provider credentials, ротация и отзыв | Старые credentials не работают | SEC-16 |
 | MC-05 | C | Обновление ContextForge и FastMCP, virtual servers, алиасы tools | Все тесты SC и EX проходят снова | SEC-22 |
+| MC-06 | D | Реестр расширений: у каждой записи `gxg-capabilities.yaml` есть класс эффекта, схема, `action` и тип ресурса; записи без класса отклоняются при загрузке | Коннектор не стартует или не публикует запись без класса | MCC-11 |
+| MC-07 | D | `ext.call` для чата вне прав агента и для чата другого tenant'а | `resource_forbidden` / `not_found` до обращения к провайдеру | MCC-03, MCC-11 |
+| MC-08 | D | `ext.call` записи не-`read` (отправка, удаление, вступление) и записи из списка запрещённых (2FA, завершение сессий, экспорт сессии, произвольный `invoke`) | `permission_denied` с указанием на `propose`-tool; запрещённых записей в реестре и в `ext.search` нет | MCC-07, MCC-11 |
+| MC-09 | D | Запись с `enabled_default: false` при выданном `telegram.ext:read`; неизвестное имя; грант на `ext` без указания класса | Выключенная — `effect_disabled`; неизвестная — `not_found`; грант без класса отклоняется | MCC-11 |
+| MC-10 | D | Аудит вызова `ext.call` и лимиты (flood-wait) | В аудите имя записи реестра, а не только `ext.call`; `rate_limited` с `retry_after_s`; тексты и peer ID в логах отсутствуют | MCC-08, MCC-11 |
+| MC-11 | D | `telegram.participants.collect` без права `ext:read:pii`, с `ext:read` без `pii` и с `include_pii=true` без права; затем с явным `ext:read:pii` на тот же чат | Без права поля `phone` и `photo_refs` отсутствуют (не `null`), остальные поля отданы, при `include_pii=true` без права — `field_errors` с `permission_denied` для этих полей; с правом поля есть; в аудите и логах нет телефона, ссылок на фото, имён файлов, байтов; есть имя вызова, число полей, результат | MCC-11, GR-25, SEC-18, SEC-23 |
+| MC-12 | D | `participants.collect` для чата без grant `collect` (есть `read` и `ext:read`), для чата вне прав и чата другого tenant'а, в одном вызове вместе с разрешённым чатом | Ни одного элемента, 0 обращений к транспорту Telegram; ответ не отличает чужой чат от несуществующего (GR-17) | MCC-03, GR-23 |
+| MC-13 | D | Пользователь, который состоит в чате, писал и ставил реакции; повторный прогон с курсором; новый участник; новая роль у известного | Один элемент с тремя ролями; повтор без изменений — 0 `created`, 0 `updated`; новый участник — 1 `created`; новая роль — 1 `updated`; курсор больше 16 KiB — отказ закрытым; каждый вызов ≤ 20 с, незаконченный сбор продолжается следующим вызовом по курсору | MCC-04, MCC-06 |
 
 ### Интеграции и эксплуатация
 

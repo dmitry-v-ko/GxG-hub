@@ -140,3 +140,25 @@ def test_operator_only_tool(tmp_path: Path) -> None:
     failed = {k for k, v in report.items() if v["status"] == "failed"}
     assert code == 1 and failed == {"SC-10"}, (failed, out[-3000:])
     assert any("operator-only tool" in e for e in report["SC-10"]["errors"]), report["SC-10"]
+
+
+@pytest.mark.parametrize(
+    ("name", "failed"),
+    [
+        ("demo.ext.describe", set()),  # a registry read (MCC-11): no provider call, no resource, one card for all
+        ("demo.ext.search", set()),
+        ("demo.ext.call", {"SC-03", "SC-10"}),  # runs an entry: the rules of an ordinary tool (MCC-11 п.4)
+        ("demo.entry.get", {"SC-03", "SC-10"}),  # an ordinary tool answering the same without the provider
+    ],
+)
+def test_registry_reads_are_exempt_only_by_name(name: str, failed: set[str], tmp_path: Path) -> None:
+    """`<domain>.ext.search`/`.describe` return registry entries: SC-03 and SC-10 do not ask them for a provider
+    call, resource ids or a per-tenant difference. The same tool under any other name is red on both."""
+    root = copy_of(DEMO, tmp_path)
+    subprocess.run(["git", "apply", str(BROKEN / "registry" / "base.patch")], cwd=root, check=True, timeout=60)
+    for rel in ("gxg-manifest.yaml", "src/demo_connector/tools.py", "src/demo_connector/conformance.py"):
+        path = root / rel
+        path.write_text(path.read_text(encoding="utf-8").replace("demo.ext.describe", name), encoding="utf-8")
+    code, report, out = check(root, tmp_path)
+    assert {k for k, v in report.items() if v["status"] == "failed"} == failed, out[-3000:]
+    assert code == (1 if failed else 0), out[-3000:]

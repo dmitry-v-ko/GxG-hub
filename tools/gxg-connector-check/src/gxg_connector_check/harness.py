@@ -20,6 +20,36 @@ from gxg_connector_kit.effects import Wiring
 from gxg_connector_kit.mcp import Settings
 
 FailureMode = str  # rate_limited | temporarily_unavailable | crash | commit_then_drop; None repairs
+READ_VERBS = {"search", "get", "list", "read", "collect"}
+EXT_VERBS = {"describe", "call"}  # MCC-01, MCC-11: only as the extension meta-tools `<domain>.ext.<verb>`
+REGISTRY_VERBS = {"search", "describe"}  # MCC-11: the meta-tools that read the registry, not the provider
+
+
+def read_verb_ok(name: str) -> bool:
+    """MCC-01 (checked by MC-01): the verb of a `read` tool is a read verb, or `<domain>.ext.describe`/`.call`."""
+    parts = name.split(".")
+    return parts[-1] in READ_VERBS or (len(parts) == 3 and parts[1] == "ext" and parts[2] in EXT_VERBS)
+
+
+def registry_read(name: str) -> bool:
+    """MCC-11: `<domain>.ext.search` and `<domain>.ext.describe` read the connector's registry of capabilities
+    (entries, their schema and class), not provider resources. SC-03 and SC-10 do not ask them for a provider call,
+    resource ids or a result that differs per tenant; every other rule applies. `<domain>.ext.call` is not one of
+    them: it runs an entry and passes the checks of an ordinary tool (MCC-11 п.4)."""
+    parts = name.split(".")
+    return len(parts) == 3 and parts[1] == "ext" and parts[2] in REGISTRY_VERBS
+
+
+def item_key(tool: str, items: dict[str, Any]) -> str:
+    """The identity of a list item: `id` (search-result.schema.json, MCC-04). A `collect` tool whose items have no
+    `id` names each item by its dedupe key, `key` (service-integration-v1 «Участники и профили»: elements
+    `person_candidate.v1`, «ключ dedupe — `telegram:<connection>/user/<user_ref>`»)."""
+    required = items.get("items", {}).get("required", [])
+    if "id" in required:
+        return "id"
+    if tool.rsplit(".", 1)[1] == "collect" and "key" in required:
+        return "key"
+    raise AssertionError(f"{tool}: a list item requires `id`")  # a red check, as the asserts of checks.py
 
 
 @dataclass(frozen=True)

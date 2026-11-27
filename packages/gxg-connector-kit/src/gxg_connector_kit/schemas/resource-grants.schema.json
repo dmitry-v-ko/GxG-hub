@@ -9,6 +9,16 @@
   "$defs": {
     "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"},
     "principal_id": {"type": "string", "minLength": 3, "maxLength": 256, "pattern": "^(agent|oidc):\\S+$"},
+    "ext_action": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^ext:(read|write_reversible|external_effect|high_risk)(:[a-z][a-z0-9_]*)?$"
+    },
+    "ext_capability": {
+      "type": "string",
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    },
     "rid": {
       "type": "string",
       "maxLength": 512,
@@ -63,6 +73,13 @@
         "items": {"$ref": "#/$defs/principal_id"}
       }
     },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/ext_capability"}}
+      }
+    },
     "grants": {
       "type": "array",
       "items": {
@@ -77,7 +94,7 @@
           },
           "actions": {
             "type": "array", "minItems": 1, "uniqueItems": true,
-            "items": {"enum": ["read", "collect", "write", "propose"]}
+            "items": {"anyOf": [{"enum": ["read", "collect", "write", "propose"]}, {"$ref": "#/$defs/ext_action"}]}
           },
           "resources": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/rid"}},
           "expires_at": {"type": "string", "format": "date-time"},

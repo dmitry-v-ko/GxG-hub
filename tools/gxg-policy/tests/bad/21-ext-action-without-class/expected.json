@@ -1,0 +1,6 @@
+{
+  "description": "ext без класса",
+  "code": "schema",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].actions[1]"
+}

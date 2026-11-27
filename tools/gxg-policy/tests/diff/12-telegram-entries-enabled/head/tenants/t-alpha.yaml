@@ -1,0 +1,29 @@
+# M11.3/M11.4 fixture (synthetic)
+tenant: t-alpha
+schema_version: 1
+connections:
+  - id: tg-main
+    domain: telegram
+    credential_ref: secret://t-alpha/telegram/main
+principals:
+  agents:
+    - id: agent:t-alpha:collector
+  humans:
+    - id: oidc:https://idp.example.invalid:1
+      roles: [approver]
+extensions:
+  enabled:
+    - telegram:chats.get_info
+    - telegram:chats.history
+    - telegram:chats.pinned
+    - telegram:chats.members
+    - telegram:messages.get
+    - telegram:users.get_info
+    - telegram:messages.reactions
+    - telegram:users.profile_photos
+    - telegram:users.profile_photo_get
+grants:
+  - id: tg-ext
+    subjects: [agent:t-alpha:collector]
+    actions: [read, ext:read]
+    resources: [telegram:tg-main/chat/tgc1_EXAMPLE]

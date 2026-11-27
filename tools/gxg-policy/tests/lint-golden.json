@@ -66,6 +66,39 @@
  "20-auto-approve-empty-limits": [
   "error: approval/t-alpha.yaml: rules[1].limits: [schema] {} should be non-empty"
  ],
+ "21-ext-action-without-class": [
+  "error: tenants/t-alpha.yaml: grants[0].actions[1]: [schema] 'ext' is not valid under any of the given schemas",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
+ "22-ext-action-unknown-class": [
+  "error: tenants/t-alpha.yaml: grants[0].actions[1]: [schema] 'ext:admin' is not valid under any of the given schemas",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
+ "23-ext-enabled-unknown-domain": [
+  "error: tenants/t-alpha.yaml: extensions.enabled[0]: [ext-domain] no connection with the domain of 'telegram:chats.history'"
+ ],
+ "24-ext-pii-group-uppercase": [
+  "error: tenants/t-alpha.yaml: grants[0].actions[1]: [schema] 'ext:read:PII' is not valid under any of the given schemas",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
+ "25-ext-enabled-hub-draft-format": [
+  "error: tenants/t-alpha.yaml: extensions.enabled[0]: [schema] 'telegram.chat.get_info@1' does not match '^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*(\\\\.[a-z][a-z0-9_]*)+$'",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
+ "26-ext-enabled-duplicate": [
+  "error: tenants/t-alpha.yaml: extensions.enabled: [schema] ['telegram:users.get_info', 'telegram:users.get_info'] has non-unique elements",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
+ "27-ext-pii-without-class-prefix": [
+  "error: tenants/t-alpha.yaml: grants[0].actions[1]: [schema] 'ext:pii' is not valid under any of the given schemas",
+  "warning: platform/registry.yaml: services[0].tenants[0]: [unknown-tenant] no tenants/ file for 't-alpha'",
+  "warning: platform/registry.yaml: webhooks[0].tenant: [unknown-tenant] no tenants/ file for 't-alpha'"
+ ],
  "good": [],
  "lint-all": [
   "error: tenants/t-alpha.yaml: connections[1].id: [duplicate-id] duplicate connection id 'kb-main'",

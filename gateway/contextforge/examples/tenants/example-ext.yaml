@@ -1,0 +1,86 @@
+# Example tenant: Telegram core + extensions (MCC-11, M11.3/M11.4), synthetic. Format: docs/specs/resource-grants-v1.md
+# (GR-19…GR-25). No secrets: credential_ref points to the secret store.
+#
+# Two separate decisions, neither implies the other (GR-22):
+#   1. a grant: who may call which group on which chat (`read` on the chat + `ext:read[:group]` on the SAME chat, GR-23);
+#   2. `extensions.enabled`: which registry entries the connector may run for this tenant at all.
+# Everything below is OFF: `enabled` is empty. The test tenant file example-ext-test.yaml shows how entries are turned on.
+tenant: t-ext-example
+schema_version: 1
+
+connections:
+  - id: tg-main
+    domain: telegram
+    credential_ref: secret://t-ext-example/telegram/main
+
+principals:
+  agents:
+    - id: agent:t-ext-example:hermes
+    - id: agent:t-ext-example:analyst
+    - id: agent:t-ext-example:collector
+  humans:
+    - id: oidc:https://accounts.example.invalid:2001
+      roles: [approver]
+
+groups:
+  researchers: [agent:t-ext-example:hermes, agent:t-ext-example:analyst]
+
+grants:
+  # The allowlist of chats. `read`/`collect` are the core tools; they do NOT cover ext.* (GR-19). Exact chat_refs only:
+  # a mask `chat/*` together with ext:* is a lint warning (ext-mask-wide).
+  - id: tg-core-read
+    subjects: [group:researchers]
+    actions: [read]
+    resources:
+      - telegram:tg-main/chat/tgc1_EXAMPLEsalesTeam00000000000000000000
+      - telegram:tg-main/chat/tgc1_EXAMPLEpartners000000000000000000000
+    expires_at: "2027-03-01T00:00:00Z"
+    reason: "Allowlist: chats the owner approved for reading"
+  # ext:read covers every subgroup of class read (info, history, pinned, members, message, users, reactions) but NOT pii (GR-25).
+  - id: tg-ext-read
+    subjects: [agent:t-ext-example:hermes]
+    actions: [ext:read]
+    resources:
+      - telegram:tg-main/chat/tgc1_EXAMPLEsalesTeam00000000000000000000
+    expires_at: "2027-03-01T00:00:00Z"
+    reason: "Reference reading through ext.call, one chat"
+  # A subgroup covers only itself: the analyst may list members and see who reacted, nothing else.
+  - id: tg-ext-subgroups
+    subjects: [agent:t-ext-example:analyst]
+    actions: [ext:read:members, ext:read:users, ext:read:reactions]
+    resources:
+      - telegram:tg-main/chat/tgc1_EXAMPLEsalesTeam00000000000000000000
+    expires_at: "2027-03-01T00:00:00Z"
+    reason: "Participant analysis without history"
+  # Participants collection: the core tool telegram.participants.collect needs `collect` on every chat.
+  - id: tg-collect-participants
+    subjects: [agent:t-ext-example:collector]
+    actions: [collect]
+    resources:
+      - telegram:tg-main/chat/tgc1_EXAMPLEpartners000000000000000000000
+    expires_at: "2027-03-01T00:00:00Z"
+    reason: "Participants of the partner chat, without phone and photos"
+  # pii (phone, profile photos): a separate, explicit grant on the same chat, never part of ext:read (GR-25, SEC-23).
+  # Adding it is `widening` in gxg-policy diff and needs the tenant owner's separate approval. Commented out on purpose.
+  #- id: tg-ext-pii
+  #  subjects: [agent:t-ext-example:collector]
+  #  actions: [ext:read:pii]
+  #  resources:
+  #    - telegram:tg-main/chat/tgc1_EXAMPLEpartners000000000000000000000
+  #  expires_at: "2027-01-31T00:00:00Z"
+  #  reason: "Owner approval <date>: phone and photos for the partner chat, 60 days"
+
+extensions:
+  # Entries are `<domain>:<registry name>`. All off by default; to turn one on, move it into `enabled` (GR-22, GR-24: widening).
+  enabled: []
+  # --- M11.3, five read entries of the first set ---
+  #  - telegram:chats.get_info        (group info)
+  #  - telegram:chats.history         (group history)
+  #  - telegram:chats.pinned          (group pinned)
+  #  - telegram:chats.members         (group members)
+  #  - telegram:messages.get          (group message)
+  # --- M11.4, four read entries ---
+  #  - telegram:users.get_info        (group users)
+  #  - telegram:messages.reactions    (group reactions)
+  #  - telegram:users.profile_photos  (group pii)
+  #  - telegram:users.profile_photo_get (group pii, <= 2 MiB per call)

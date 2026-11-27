@@ -1,0 +1,59 @@
+{
+  "widening": [
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:chats.get_info"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:chats.history"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:chats.members"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:chats.pinned"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:messages.get"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:messages.reactions"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:users.get_info"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:users.profile_photo_get"
+    },
+    {
+      "tenant": "t-alpha",
+      "kind": "extension",
+      "change": "added",
+      "capability": "telegram:users.profile_photos"
+    }
+  ],
+  "narrowing": []
+}

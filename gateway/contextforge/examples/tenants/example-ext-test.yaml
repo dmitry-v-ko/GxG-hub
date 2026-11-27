@@ -1,0 +1,61 @@
+# Test tenant for the Telegram service (M11.3/M11.4), synthetic: how entries of the registry are turned on.
+# Same shape as example-ext.yaml; here `extensions.enabled` lists all nine entries. pii entries are on, but only the
+# collector holds `ext:read:pii`: everyone else gets `permission_denied`/`not_found`, and `ext.search` does not list
+# them for a caller without the group (GR-23, GR-25).
+tenant: t-ext-test
+schema_version: 1
+
+connections:
+  - id: tg-test
+    domain: telegram
+    credential_ref: secret://t-ext-test/telegram/test
+
+principals:
+  agents:
+    - id: agent:t-ext-test:reader
+    - id: agent:t-ext-test:collector
+  humans:
+    - id: oidc:https://accounts.example.invalid:2002
+      roles: [approver]
+
+grants:
+  - id: tg-test-read
+    subjects: [agent:t-ext-test:reader, agent:t-ext-test:collector]
+    actions: [read]
+    resources:
+      - telegram:tg-test/chat/tgc1_EXAMPLEtestChat0000000000000000000
+    expires_at: "2027-01-31T00:00:00Z"
+    reason: "Test chat of the test account"
+  - id: tg-test-collect
+    subjects: [agent:t-ext-test:collector]
+    actions: [collect]
+    resources:
+      - telegram:tg-test/chat/tgc1_EXAMPLEtestChat0000000000000000000
+    expires_at: "2027-01-31T00:00:00Z"
+    reason: "participants.collect and messages.collect on the test chat"
+  - id: tg-test-ext-read
+    subjects: [agent:t-ext-test:reader, agent:t-ext-test:collector]
+    actions: [ext:read]
+    resources:
+      - telegram:tg-test/chat/tgc1_EXAMPLEtestChat0000000000000000000
+    expires_at: "2027-01-31T00:00:00Z"
+    reason: "ext.call on the test chat (not pii)"
+  - id: tg-test-ext-pii
+    subjects: [agent:t-ext-test:collector]
+    actions: [ext:read:pii]
+    resources:
+      - telegram:tg-test/chat/tgc1_EXAMPLEtestChat0000000000000000000
+    expires_at: "2027-01-31T00:00:00Z"
+    reason: "Owner approval for the TEST account only: phone and photos of the test chat"
+
+extensions:
+  enabled:
+    - telegram:chats.get_info
+    - telegram:chats.history
+    - telegram:chats.pinned
+    - telegram:chats.members
+    - telegram:messages.get
+    - telegram:users.get_info
+    - telegram:messages.reactions
+    - telegram:users.profile_photos
+    - telegram:users.profile_photo_get

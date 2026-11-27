@@ -42,15 +42,13 @@ def _pairs(doc: dict[str, Any] | None) -> dict[tuple[str, str, str], str | None]
     for g in doc["grants"]:
         exp = g.get("expires_at")
         for s in expand(g["subjects"], doc.get("groups", {})):
-            for a in g["actions"]:
-                for r in g["resources"]:
-                    key = (s, a, r)
-                    if key in out:
-                        old = out[key]
-                        exp_ = None if old is None or exp is None else max(old, exp, key=parse_ts)
-                        out[key] = exp_
-                    else:
-                        out[key] = exp
+            for a, r in ((a, r) for a in g["actions"] for r in g["resources"]):  # `ext:…` actions are pairs too
+                key = (s, a, r)
+                if key in out:
+                    old = out[key]
+                    out[key] = None if old is None or exp is None else max(old, exp, key=parse_ts)
+                else:
+                    out[key] = exp
     return out
 
 
@@ -105,6 +103,11 @@ class _Diff:
                     base=b[key],
                     head=h[key],
                 )
+        eb, eh = (set(((d or {}).get("extensions") or {}).get("enabled", [])) for d in (base, head))
+        for c in eh - eb:
+            self.add(True, tenant=tenant, kind="extension", change="added", capability=c)
+        for c in eb - eh:
+            self.add(False, tenant=tenant, kind="extension", change="removed", capability=c)
         rb, rh = _roles(base), _roles(head)
         for p, role in rh - rb:
             self.add(True, tenant=tenant, kind="role", change="added", principal=p, role=role)

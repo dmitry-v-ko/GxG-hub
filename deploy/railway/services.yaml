@@ -95,9 +95,11 @@ services:
       LOG_LEVEL: INFO
       TS_HOSTNAME: gxg-gateway
       TS_TAGS: tag:gateway
+      # 443 (tag:agent, SEC-26): virtual servers only. /rpc, the global /mcp and /sse are not published there: they
+      # bypass the agent's tool set and /rpc the MEDIUM rate tier (owner decision 2026-11-26: close /rpc to agents).
+      # ContextForge v1.1.1 plugins cannot see the request path, so this proxy is the control. 8443: operators only.
       GXG_TS_SERVE: |
         443 /servers http://127.0.0.1:4444/servers
-        443 /mcp http://127.0.0.1:4444/mcp
         443 /health http://127.0.0.1:4444/health
         8443 - http://127.0.0.1:4444
     owner_env: [APP_DOMAIN]  # https://gxg-gateway.<tailnet>.ts.net

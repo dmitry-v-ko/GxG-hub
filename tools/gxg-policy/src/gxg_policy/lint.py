@@ -127,6 +127,12 @@ class _Linter:
                 if not self.foreign(file, f"groups.{name}[{i}]", tenant, m) and m not in known:
                     self.err(file, f"groups.{name}[{i}]", "dangling-subject", f"{m!r} is not a declared principal")
         self.unique(file, ((f"grants[{i}].id", g["id"]) for i, g in enumerate(doc["grants"])), "grant")
+        domains = set(conns.values())
+        enabled = doc.get("extensions", {}).get("enabled", [])
+        self.unique(file, ((f"extensions.enabled[{i}]", c) for i, c in enumerate(enabled)), "extensions.enabled entry")
+        for i, c in enumerate(enabled):
+            if c.split(":", 1)[0] not in domains:
+                self.err(file, f"extensions.enabled[{i}]", "ext-domain", f"no connection with the domain of {c!r}")
         for i, g in enumerate(doc["grants"]):
             for j, s in enumerate(g["subjects"]):
                 path = f"grants[{i}].subjects[{j}]"
@@ -139,12 +145,26 @@ class _Linter:
                     self.err(file, path, "dangling-subject", f"{s!r} is not a declared principal")
             for j, r in enumerate(g["resources"]):
                 self.rid(file, f"grants[{i}].resources[{j}]", r, conns)
+            self.ext_grant(file, i, g)
             if "expires_at" in g:
                 left = parse_ts(g["expires_at"]) - self.now
                 if left <= timedelta(0):
                     self.err(file, f"grants[{i}].expires_at", "grant-expired", "grant has expired", "warning")
                 elif left <= EXPIRY_WARNING:
                     self.err(file, f"grants[{i}].expires_at", "grant-expiring", "expires within 14 days", "warning")
+
+    def ext_grant(self, file: str, i: int, g: dict[str, Any]) -> None:
+        """Warnings for `ext:*` grants (M11.3, GR-19/GR-25): a mask reads every chat; pii needs a term."""
+        acts: list[str] = g["actions"]
+        masks = [j for j, r in enumerate(g["resources"]) if r.endswith("/*")]
+        if any(a.startswith("ext:") for a in acts) and masks:
+            self.err(
+                file, f"grants[{i}].resources[{masks[0]}]", "ext-mask-wide", "ext:* on a mask `<type>/*`", "warning"
+            )
+        if "ext:read:pii" in acts and "expires_at" not in g:
+            self.err(
+                file, f"grants[{i}]", "ext-pii-no-expiry", "ext:read:pii (phone, photos) without expires_at", "warning"
+            )
 
     def approval_file(self, file: str, doc: dict[str, Any]) -> None:  # noqa: PLR0912 - flat list of independent checks
         grants = self.pol.tenants.get(doc["tenant"], (None, None))[1]

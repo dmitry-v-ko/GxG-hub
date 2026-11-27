@@ -1,0 +1,14 @@
+{
+  "widening": [
+    {
+      "tenant": "t-alpha",
+      "kind": "grant",
+      "subject": "agent:t-alpha:collector",
+      "action": "ext:read:pii",
+      "resource": "telegram:tg-main/chat/tgc1_EXAMPLE",
+      "change": "added",
+      "expires_at": null
+    }
+  ],
+  "narrowing": []
+}

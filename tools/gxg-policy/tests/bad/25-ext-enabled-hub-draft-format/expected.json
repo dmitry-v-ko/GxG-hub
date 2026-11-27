@@ -1,0 +1,6 @@
+{
+  "description": "имя записи в формате дизайна telegram.chat.get_info@1 вместо telegram:<имя>",
+  "code": "schema",
+  "file": "tenants/t-alpha.yaml",
+  "path": "extensions.enabled[0]"
+}

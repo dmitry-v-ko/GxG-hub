@@ -162,8 +162,35 @@
         ]
       }
     },
+    "gxg-capabilities.schema.json": {
+      "normative_sha256": "4ae14391665e2af1f243f3ae3a887f820d3bb62c8d0bc49a9897e863d9344809",
+      "required": {
+        "/": [
+          "capabilities",
+          "connector"
+        ],
+        "/properties/capabilities/items": [
+          "action",
+          "description",
+          "effect_class",
+          "input_schema",
+          "name",
+          "resource",
+          "version"
+        ],
+        "/properties/capabilities/items/allOf/0/else": [
+          "propose_tool"
+        ],
+        "/properties/capabilities/items/allOf/0/if": [
+          "effect_class"
+        ],
+        "/properties/capabilities/items/properties/resource": [
+          "type"
+        ]
+      }
+    },
     "gxg-manifest.schema.json": {
-      "normative_sha256": "7b4d40a3dfb8026f4a23ddc1471cbdc645dbbabaf6a3efcb04ef49db727d79e0",
+      "normative_sha256": "cdbb6caf3de7599427f25a116b74e5baa7bbd914560f3af87938be6b7f74f3e2",
       "required": {
         "/": [
           "connector",
@@ -320,7 +347,7 @@
       }
     },
     "resource-grants.schema.json": {
-      "normative_sha256": "ac9e38bdddb23e369f2d95346d21857947f2a29030da5db2a55d201b93ab014e",
+      "normative_sha256": "4c3f42d57195f56c56cb44e08fcb063b92c3ce3c7ddf481509fd6dd2f7ba0e64",
       "required": {
         "/": [
           "connections",

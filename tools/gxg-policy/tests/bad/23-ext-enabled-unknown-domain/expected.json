@@ -1,0 +1,6 @@
+{
+  "description": "23-ext-enabled-unknown-domain",
+  "code": "ext-domain",
+  "file": "tenants/t-alpha.yaml",
+  "path": "extensions.enabled[0]"
+}

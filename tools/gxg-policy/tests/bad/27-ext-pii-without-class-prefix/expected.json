@@ -1,0 +1,6 @@
+{
+  "description": "pii без класса: ext:pii",
+  "code": "schema",
+  "file": "tenants/t-alpha.yaml",
+  "path": "grants[0].actions[1]"
+}

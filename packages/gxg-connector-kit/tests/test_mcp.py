@@ -820,6 +820,9 @@ def test_manifest_needs_a_timeout_and_bounded_limit(tmp_path: Path) -> None:
     write_manifest(tmp_path, [{k: v for k, v in TOOLS[1].items() if k != "limits"}])
     with pytest.raises(ConfigError, match=r"limits\.timeout_s is required"):
         mcp.load_manifest(tmp_path / "gxg-manifest.yaml")
+    write_manifest(tmp_path, [{**TOOLS[1], "limits": {"timeout_s": 25}}])  # owner decision 2026-11-26: < 25 s
+    with pytest.raises(ConfigError, match=r"25 is greater than or equal to the maximum of 25"):
+        mcp.load_manifest(tmp_path / "gxg-manifest.yaml")
     noprops = {**SCHEMAS, "list.in.json": {"description": "d", "type": "object"}}
     write_manifest(tmp_path, [TOOLS[0]], noprops)
     with pytest.raises(ConfigError, match="maximum"):

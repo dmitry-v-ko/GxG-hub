@@ -1,0 +1,84 @@
+# M11.3/M11.4 live check on the dev stand: gxg-telegram-service (ext.* meta-tools, participants.collect) behind the
+# same pinned ContextForge v1.1.1. Overlay of the root compose.yaml, local development ONLY, synthetic data, no real
+# Telegram account: the session file is empty, the containers have no route to Telegram, live reads answer
+# `temporarily_unavailable`. Run: stand/m11cf/run.sh (project gxg-m11cf). Secrets: stand/secrets/m11cf/ (git-ignored).
+services:
+  contextforge:
+    environment:
+      # Knobs for the limit and timeout checks (check 4); the defaults are the stand's own values.
+      TOOL_TIMEOUT: ${M11CF_TOOL_TIMEOUT:-25}
+      RATE_LIMIT_MEDIUM_RPM: ${M11CF_MEDIUM_RPM:-3000}
+      RATE_LIMIT_MEDIUM_BURST: ${M11CF_MEDIUM_BURST:-300}
+      RATE_LIMIT_LOCKOUT_ENABLED: ${M11CF_LOCKOUT:-true}
+    volumes:
+      # stand/unified_pdp.rules.json + the rules derived from the tenant file (gateway/contextforge/ext_roles.py)
+      - ./stand/secrets/m11cf/unified_pdp.rules.json:/run/gxg/unified_pdp.rules.json:ro
+
+  agent-entry:
+    # The agent port in front of ContextForge (stand/m11cf/agent-entry.nginx.conf; Railway: tailscale serve, 443).
+    image: nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    restart: unless-stopped
+    depends_on: [contextforge]
+    ports: ["127.0.0.1:4443:8080"]
+    volumes:
+      - ./stand/m11cf/agent-entry.nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [edge]
+
+  tgsvc-db:
+    # The service's own database: its db/ migrations (archive schema, service schema, reader and service roles),
+    # one synthetic chat of the test Connection. Never real chats.
+    image: pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: archive
+      POSTGRES_USER: archive_owner
+      POSTGRES_PASSWORD: ${M11CF_DB_OWNER_PASSWORD:?run stand/m11cf/setup.py init}
+    volumes:
+      - ./stand/secrets/m11cf/db-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - tgsvc-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archive_owner -d archive"]
+      interval: 2s
+      retries: 30
+    networks: [tgsvc-db]
+
+  tgsvc:
+    # gxg-telegram-service claude/m11-telegram-integration@8816c08, built by the service repository.
+    image: gxg-telegram-service:m11-4-local
+    restart: unless-stopped
+    depends_on:
+      tgsvc-db: {condition: service_healthy}
+    environment:
+      TELEGRAM_ARCHIVE_DSN: postgresql://gxg_telegram_reader:${M11CF_READER_PASSWORD}@tgsvc-db:5432/archive
+      TELEGRAM_SERVICE_DSN: postgresql://gxg_telegram_service:${M11CF_SERVICE_PASSWORD}@tgsvc-db:5432/archive
+      TELEGRAM_CONNECTIONS: "t-ext-test=tg-test:svc-test"
+      # A session per Connection publishes the live tools (ext.*, participants.collect). Fake: no session file,
+      # api_id/api_hash are random, the networks have no route to Telegram -> session status `error`.
+      TELEGRAM_SESSIONS: "svc-test=m11cf_fake"
+      TELEGRAM_SESSION_WORKDIR: /var/lib/telegram/sessions
+      TELEGRAM_API_ID: "100001"
+      TELEGRAM_API_HASH_FILE: /run/m11cf/api_hash
+      TELEGRAM_CHAT_REF_SECRET_FILE: /run/m11cf/chat_ref_secret
+      TELEGRAM_IDENTITY_KEYS: ${DEMO_IDENTITY_KEYS:?run stand/init.py}
+      TELEGRAM_BUNDLE_KEYS: ${DEMO_BUNDLE_KEYS:?run stand/init.py}
+      TELEGRAM_BUNDLE_DIR: /bundle
+    volumes:
+      - ./stand/secrets/m11cf/bundle:/bundle:ro
+      - ./stand/secrets/m11cf/api_hash:/run/m11cf/api_hash:ro
+      - ./stand/secrets/m11cf/chat_ref_secret:/run/m11cf/chat_ref_secret:ro
+      - tgsvc-state:/var/lib/telegram
+    healthcheck:
+      # /healthz, not /readyz: without a Telegram session the service is (correctly) not ready
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 3s
+      retries: 30
+    networks:
+      connectors: {ipv4_address: 10.250.0.8}  # inside SSRF_ALLOWED_NETWORKS 10.250.0.8/30 (.9 telegram, .10 demo)
+      tgsvc-db: {}
+
+networks:
+  tgsvc-db: {internal: true}
+
+volumes:
+  tgsvc-db-data:
+  tgsvc-state:
