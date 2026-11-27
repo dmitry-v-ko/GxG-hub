@@ -157,6 +157,8 @@ def setup():
                 "/v1/gateways",
                 {"name": name, "url": url, "transport": "STREAMABLEHTTP", "teamId": team["id"], "visibility": "team"},
             )
+    for name in [n for n in GATEWAYS if n not in SKIP]:  # re-discover: a gateway keeps the tools it was registered with
+        api("POST", f"/v1/gateways/{gateways[name]['id']}/tools/refresh")
     tools = items(api("GET", "/v1/tools?include_inactive=true&limit=0"), "tools")
     ids = {name: g["id"] for name, g in gateways.items()}
     listed = [
@@ -174,6 +176,7 @@ def setup():
             "/v1/servers",
             {"server": {"name": name, "associated_tools": own}, "team_id": team["id"], "visibility": "team"},
         )
+        api("PUT", f"/v1/servers/{srv['id']}", {"associated_tools": own})  # an existing server follows ALLOWED too
         out_servers[name] = srv["id"]
     for t in tools:  # EFF-02: execute is never registered
         if "execute" in str(t.get("originalName")) and t.get("gatewayId") in ids.values():
