@@ -6,7 +6,7 @@ computed here from the SAME tenant file the bundle carries, so the two cannot dr
 may run or even see is decided by the connector (GR-22/GR-23/GR-25): `ext.search` lists an entry only if it is enabled
 and the caller's grant covers its group; the `pii` entries are never visible through an `ext:read` grant.
 
-    python gateway/contextforge/ext_roles.py policies/tenants/example-ext-test.yaml > servers.json
+    python gateway/contextforge/ext_roles.py gateway/contextforge/examples/tenants/example-ext-test.yaml > servers.json
 
 NOT verified on a live ContextForge (no stand without secrets): the gateway tool names below follow the stand's rule
 `<gateway>-<tool with dots as dashes>` (stand/unified_pdp.rules.json); the real names appear after registration.

@@ -1,8 +1,9 @@
 """M11.3/M11.4, Hub side: what each role sees in ContextForge and which registry entries the connector shows it.
 
-Config and fixtures only (policies/tenants/example-ext*.yaml, gateway/contextforge/ext_roles.py); not run against a
-live ContextForge (see ext_roles.py). Layer 1: virtual server and `unified_pdp` rules per agent. Layer 2: entries the
-connector lists in `ext.search` (enabled, read, group covered by the caller's grant; GR-22, GR-23, GR-25).
+Config and fixtures only (gateway/contextforge/examples/tenants/example-ext*.yaml,
+gateway/contextforge/ext_roles.py); not run against a live ContextForge (see ext_roles.py). Layer 1: virtual server
+and `unified_pdp` rules per agent. Layer 2: entries the connector lists in `ext.search` (enabled, read, group covered
+by the caller's grant; GR-22, GR-23, GR-25).
 """
 
 from __future__ import annotations
@@ -25,7 +26,8 @@ assert _spec and _spec.loader
 R = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(R)
 
-TEST_FILE, EXAMPLE_FILE = (ROOT / f"policies/tenants/{n}.yaml" for n in ("example-ext-test", "example-ext"))
+TENANTS = ROOT / "gateway/contextforge/examples/tenants"  # fixtures, not policies/: main's gate must parse policies/
+TEST_FILE, EXAMPLE_FILE = (TENANTS / f"{n}.yaml" for n in ("example-ext-test", "example-ext"))
 TEST, EXAMPLE = (yaml.safe_load(f.read_text("utf-8")) for f in (TEST_FILE, EXAMPLE_FILE))
 READER, COLLECTOR = "agent:t-ext-test:reader", "agent:t-ext-test:collector"
 CHAT = "telegram:tg-test/chat/tgc1_EXAMPLEtestChat0000000000000000000"
@@ -47,7 +49,7 @@ PII = {n for n, g in REGISTRY.items() if g == "pii"}
 
 @pytest.mark.parametrize("name", ["example-ext-test", "example-ext"])
 def test_committed_server_config_matches_the_policy_file(name: str) -> None:
-    doc = yaml.safe_load((ROOT / f"policies/tenants/{name}.yaml").read_text("utf-8"))
+    doc = yaml.safe_load((TENANTS / f"{name}.yaml").read_text("utf-8"))
     committed = json.loads((ROOT / f"gateway/contextforge/examples/telegram-ext-{name}.json").read_text("utf-8"))
     assert committed == json.loads(json.dumps(R.build(doc)))  # regenerate: python gateway/contextforge/ext_roles.py
 

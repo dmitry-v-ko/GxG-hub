@@ -8,7 +8,7 @@
 - ContextForge `ghcr.io/ibm/mcp-context-forge:v1.1.1@sha256:16c7a898…56a5` (digest из `compose.yaml`), плагины `unified_pdp` + `gxg_identity` как на стенде.
 - `gxg-telegram-service:m11-4-local` (`sha256:45695859c82d…`, ветка сервиса `claude/m11-telegram-integration@8816c08`) — `tgsvc` на `10.250.0.8`, внутри `SSRF_ALLOWED_NETWORKS 10.250.0.8/30`. Своя БД `tgsvc-db`: миграции `db/` из образа, одна синтетическая чат-запись Connection `svc-test`.
 - **Реального Telegram нет.** `TELEGRAM_SESSIONS=svc-test=m11cf_fake` без файла сессии, `api_hash` случайный, сети internal: сессия `error`, `/readyz` 503, живые чтения отвечают `temporarily_unavailable`. Сессия нужна сервису, чтобы опубликовать `ext.*` и `participants.collect` (без неё сервис их не регистрирует).
-- Tenant: `policies/tenants/example-ext-test.yaml` как есть, только placeholder-чат (`tgc1_EXAMPLEtestChat…`, 34 символа — не проходит шаблон `chat_ref`) заменён на `chat_ref`, выданный `ChatRefs` сервиса. Bundle подписан ключом стенда.
+- Tenant: `gateway/contextforge/examples/tenants/example-ext-test.yaml` как есть, только placeholder-чат (`tgc1_EXAMPLEtestChat…`, 34 символа — не проходит шаблон `chat_ref`) заменён на `chat_ref`, выданный `ChatRefs` сервиса. Bundle подписан ключом стенда.
 - Агенты `reader`, `collector` команды `t-ext-test` (токен команды, SEC-02). Gateway `telegram-t-ext-test` → `http://tgsvc:8080/mcp`. Virtual servers и правила `unified_pdp` — из `gateway/contextforge/ext_roles.py` по файлу tenant'а.
 
 Воспроизведение: `KEEP=1 stand/m11cf/run.sh` (init, build, up, bootstrap, `stand/tests`, `stand/m11cf/checks.py all`). Доказательства (без токенов) пишутся в `stand/secrets/m11cf/evidence.json`.
