@@ -18,6 +18,7 @@
 | [MCP Toolkit](mcp-toolkit-v1.md) | Как быстро и единообразно сделать новый коннектор |
 | [Reference-коннектор `demo`](demo-connector-v1.md) | Эталонный коннектор и мишень для тестов: tools, fixtures, fake provider |
 | [Интеграция сервисов](service-integration-v1.md) | Как подключаются KB, Telegram, Signals, Voice |
+| [Исполнитель скриптов](script-executor-v1.md) | Контракт исполнителя скриптов (code mode), в вехи пока не входит |
 | [Conformance Matrix](conformance-matrix-v1.md) | Какие тесты должны пройти, прежде чем что-то включать |
 | [Roadmap](roadmap-v1.md) | Этапы, PoC, критерии GO/NO-GO, порядок миграции |
 
