@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """DoD-4 for M2, non-Python part: each mutation of `grants_widening.sh` and `ci.yml` must turn a test red.
 
-Python (gxg_policy, widening_gate.py) is covered by mutmut (`scripts/ci/mutmut.sh`). mutmut mutates Python
+Python (gxg_policy, widening_gate.py, gate_diff.py) is covered by mutmut (`scripts/ci/mutmut.sh`). mutmut mutates Python
 only, and no maintained mutation tool exists for bash or for GitHub workflow YAML, so these two files keep this
 hand list (reports/plans/M2-cycle-3.md, DoD-6). Applies one mutation at a time, runs the tests, restores the file.
 Run from the repository root: `uv run python scripts/ci/mutate_m2.py [> reports/mutations/M2-cycle-N.txt]`.
@@ -34,22 +34,22 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (CI, '          bash "$gate"\n', "          bash scripts/ci/grants_widening.sh\n", "PR copy of the gate runs"),
     (CI, 'if [ ! -f "$gate" ]; then', "if true; then", "PR copy of the gate always runs"),
     (CI, f"{UV}      # No `uv sync`", f"{UV}      - run: uv sync\n      # No `uv sync`", "PR project installed"),
-    (JOB, '-- "${GATE_PATHS[@]}" >', '-- policies/ >', "gate edits are not widening"),
-    (JOB, "GATE_PATHS=(.github/workflows/ scripts/ci/ tools/gxg-policy/ schemas/ pyproject.toml uv.lock)",
-     "GATE_PATHS=(scripts/ci/)", "lockfile / tool / workflow / schema edits are not widening"),
+    (JOB, '--repo . --base "$base" --head "$head"', '--repo . --base "$head" --head "$head"',
+     "control changes diffed against the head itself"),
+    (JOB, '"$gate/scripts/ci/gate_diff.py"', "scripts/ci/gate_diff.py", "PR's gate_diff.py runs"),
+    (JOB, ' --repo . --main "$main"', "", "an older label never carries over a merge of main"),
     (JOB, ' --head-connectors "$tmp/head/connectors"', ' --head-connectors "$tmp/base/connectors"',
      "manifest edits are not compared"),
-    (JOB, '--gate-paths "$tmp/gate-paths.txt")', ")", "gate paths not passed to the gate"),
+    (JOB, '--gate-findings "$tmp/gate-findings.json")', ")", "control changes not passed to the gate"),
     (JOB, 'check=(uv run --locked --project "$gate" python', "check=(uv run --locked --project . python",
      "widening_gate.py runs in the PR's environment"),
     (JOB, 'uv run --locked --project "$gate" gxg-policy', "uv run --locked gxg-policy", "PR's gxg-policy runs"),
     (JOB, '"$gate/scripts/ci/widening_gate.py"', "scripts/ci/widening_gate.py", "PR's widening_gate.py runs"),
     (CI, "github.event_name == 'pull_request' && github.run_id || github.ref", "github.ref", "PR runs cancelled"),
     (CI, "      actions: read ", "      actions: none ", "gate cannot read workflow runs"),
-    (CI, "needs: [lint, types, tests, schema-guard, secrets, policy, grants-widening]",
-     "needs: [lint, types, tests, schema-guard, secrets, policy]", "ci-ok ignores the gate"),
-    (CI, "(github.event_name == 'push' || github.event_name == 'schedule')", "(github.event_name == 'push')",
-     "bundle not re-signed on schedule"),
+    (CI, "demo-image, m5-stand, grants-widening]", "demo-image, m5-stand]", "ci-ok ignores the gate"),
+    (CI, "      || (github.event_name == 'schedule' && github.event.schedule == '41 */6 * * *'))",
+     "      )", "bundle not re-signed on schedule"),
     (CI, f"          fetch-depth: 0\n          persist-credentials: false\n{UV}      # No",
      f"          persist-credentials: false\n{UV}      # No", "gate checkout without history"),
 ]  # fmt: skip

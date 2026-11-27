@@ -6,13 +6,22 @@
 
 Job `grants-widening` в `.github/workflows/ci.yml` входит в `ci-ok`, а `ci-ok` уже обязателен для `main` ([branch-protection.md](branch-protection.md)). Отдельно добавлять проверку в ruleset не нужно. Решение принимает `scripts/ci/grants_widening.sh` на **каждом** событии workflow. Шага, который проходит без проверки, нет.
 
-**Код проверки берётся из `main`, а не из PR.** Шаг job'а создаёт worktree `refs/remotes/origin/main` и запускает **его** `grants_widening.sh`. Скрипт запускает `gxg-policy` и `widening_gate.py` командой `uv run --locked --project <worktree main>`, то есть с `pyproject.toml`, `uv.lock` и схемами из `main`. `uv sync` по checkout'у PR в этом job'е нет: код PR здесь не выполняется, git только читает файлы PR. Если PR меняет пути самой проверки, это считается расширением, и нужна та же метка владельца (`kind: gate_path` в отчёте, раздел «Gate files changed»):
+**Код проверки берётся из `main`, а не из PR.** Шаг job'а создаёт worktree `refs/remotes/origin/main` и запускает **его** `grants_widening.sh`. Скрипт запускает `gxg-policy`, `gate_diff.py` и `widening_gate.py` командой `uv run --locked --project <worktree main>`, то есть с `pyproject.toml`, `uv.lock` и схемами из `main`. `uv sync` по checkout'у PR в этом job'е нет: код PR здесь не выполняется, git только читает файлы PR. ## Какие изменения вне политик требуют метки (решение владельца 2026-11-26)
 
-- `.github/workflows/`;
-- `scripts/ci/`;
-- `tools/gxg-policy/`;
-- `schemas/`;
-- `pyproject.toml`, `uv.lock`.
+Изменение файла в CI, `scripts/ci/`, `schemas/` или в зависимостях само по себе метки не требует. `scripts/ci/gate_diff.py` разбирает дифф `merge-base(main, head)..head` и выдаёт находку (`kind: gate`, раздел отчёта «Control changes») только на такие изменения:
+
+| # | Что | Правило в отчёте |
+| --- | --- | --- |
+| 1 | Новая ссылка `secrets.*` (а также `secrets[…]`, `toJSON(secrets)`, `secrets: inherit`); более широкие `permissions:` у workflow или job'а, включая удаление блока (токен по умолчанию считается write) и новый job без прав в workflow без прав; новый триггер `pull_request_target` или `workflow_run`; новый или перепиненный внешний action (`uses:`), а также новый локальный action | `secrets.new`, `permissions.widened`, `trigger.privileged`, `action.new`, `action.local` |
+| 2 | Отключение контроля: любое изменение job'а `ci-ok`, в том числе его `needs`; добавленные `continue-on-error`, `if: false`, `\|\| true`, `\|\| :`, `\|\| exit 0`, `set +e`; skip, xfail, deselect, `--ignore`, `-k "not …"`, `collect_ignore`, хуки коллекции pytest; исключения gitleaks, mypy, ruff и coverage в строке (`# noqa`, `# type: ignore`, `gitleaks:allow`, `pragma: no cover` и т. п.) или в конфиге (`[tool.ruff]`, `[tool.mypy]`, `[tool.pytest]`, `[tool.coverage]` в любом `pyproject.toml`, `.gitleaks*.toml`, `mypy.ini`, `setup.cfg` и др.) | `ci-ok.changed`, `control.disabled`, `tests.skipped`, `lint.exception`, `lint.config` |
+| 3 | Новые строки в списках исключений: `mutmut-equivalent.txt`, `.gitleaksignore`, другие `*ignore`-файлы (кроме `.gitignore` и `.dockerignore`). Удаление строк и комментарии метки не требуют | `exceptions.added` |
+| 4 | Расширение политик и manifest'ов (`gxg-policy diff`, как раньше); любое изменение кода `tools/gxg-policy/` вне его тестов; ослабление `schemas/`: проходят только изменения, о которых известно, что они сужают (аннотации, новые `required`, меньшие `max*`, большие `min*`, меньший `enum`, `additionalProperties: false`, новое поле в открытом объекте, новый файл схемы). Всё остальное, включая удаление схемы и смену `$ref` или `pattern`, считается ослаблением | `widening` из `gxg-policy diff`, `policy.tool`, `schema.weakened` |
+| 5 | Сам гейт: `scripts/ci/grants_widening.sh`, `widening_gate.py`, `gate_diff.py`, их тесты в `tests/ci/`, job `grants-widening` в workflow, `CODEOWNERS` | `gate.self` |
+| 6 | Новый пакет или источник: новое имя в зависимостях любого `pyproject.toml` (включая группы и `build-system.requires`), прямая ссылка `name @ url`, изменения `tool.uv.sources`, `index`, `find-links`, `override-dependencies` и т. п.; новый пакет в `uv.lock` или новый `source` у существующего. Обновление версии существующего пакета из того же источника метку не требует | `deps.new`, `deps.source` |
+
+**Fail closed.** Если файл не удаётся надёжно разобрать (битый YAML, TOML или JSON, бинарный файл в контрольных путях или с расширением кода или конфига, путь с непечатаемыми символами), это находка `unparsed`. Удалённый workflow — находка `workflow.removed`.
+
+Документация (`*.md`, `*.rst`, `*.txt`) на строки из пунктов 2 не проверяется: в ней эти слова только описываются.
 
 **Bootstrap.** Пока в `main` нет `scripts/ci/grants_widening.sh` (до мержа M2), шаг запускает копию из PR и пишет предупреждение. Такой PR добавляет файлы проверки, поэтому и ему нужна метка.
 
@@ -28,15 +37,16 @@ Job `grants-widening` в `.github/workflows/ci.yml` входит в `ci-ok`, а 
 
 На PR job делает следующее:
 
-1. Строит отчёт `gxg-policy diff <merge-base>/policies <head>/policies --base-connectors <merge-base>/connectors --head-connectors <head>/connectors`, добавляет к нему изменённые пути проверки и публикует его комментарием в PR. Комментарий один, он обновляется. Свой комментарий job находит по первой строке отчёта (маркер из `gxg-policy diff`).
+1. Строит отчёт `gxg-policy diff <merge-base>/policies <head>/policies --base-connectors <merge-base>/connectors --head-connectors <head>/connectors`, добавляет к нему находки `gate_diff.py` и публикует его комментарием в PR. Комментарий один, он обновляется. Свой комментарий job находит по первой строке отчёта (маркер из `gxg-policy diff`).
 2. Если `widening` нет, проверка зелёная.
 3. Если `widening` есть, проверка зелёная только при всех условиях:
    - на PR висит метка `widening-approved`;
    - метку поставил пользователь из `.github/CODEOWNERS`. Файл берётся из `refs/remotes/origin/main`, поэтому PR не может вписать туда своего автора;
    - метку поставили руками. Событие через GitHub App (`performed_via_github_app`), например от агента через Claude GitHub App, не засчитывается;
    - метка **новее head commit'а**. Время появления head commit'а на PR берётся с сервера GitHub: самый ранний запуск workflow `pull_request` для этого SHA на этом PR, созданный **после последнего force-push**, из того же head-репозитория, что и PR. Время коммита из git не используется, его можно подделать. Запуски до последнего force-push относятся к прошлому появлению того же SHA: B → force-push на A → метка → fast-forward обратно на B даёт новый запуск для B, он новее метки, и метка устаревает.
-4. Если метка устарела, job снимает её, и проверка красная. Так происходит на любом событии, а не только на `synchronize`. Если время появления head commit'а узнать не удалось, метка тоже считается устаревшей.
-5. Запуски для PR не отменяются (`cancel-in-progress` только для push-запусков веток), поэтому каждый head commit получает запуск, который доходит до проверки.
+4. **Слияние с `main` метку не сбрасывает.** Если метка старше head commit'а, job находит коммит A, который был head PR в момент метки: SHA последнего PR-запуска этой ветки из head-репозитория PR, созданного не позже метки. Для A считаются те же находки тем же способом, относительно `merge-base(main, A)`. Если у head нет находок, которых не было у A (как мультимножество: две одинаковые строки — две находки), метка по-прежнему действует, в комментарии «`widening-approved` from A still covers the head». Находки без номеров строк и SHA, поэтому слияние с `main` их не меняет. Грубые находки («файл гейта изменён», «изменён job `ci-ok`», «изменён `[tool.ruff]`», ослабление схемы) несут хэш содержимого: новая правка того же файла после метки — новая находка.
+5. Иначе метка устарела: job снимает её, и проверка красная. Так происходит на любом событии, а не только на `synchronize`. Если время появления head commit'а, коммит A или его находки узнать не удалось, метка тоже считается устаревшей.
+6. Запуски для PR не отменяются (`cancel-in-progress` только для push-запусков веток), поэтому каждый head commit получает запуск, который доходит до проверки.
 
 Что считается расширением, решает `gxg-policy diff`:
 
@@ -48,7 +58,7 @@ Job `grants-widening` в `.github/workflows/ci.yml` входит в `ci-ok`, а 
 - выросшие сроки и квоты;
 - новые сервисы, tenant'ы сервисов, ключи сервисов (`public_keys`) и webhooks в реестре платформы;
 - в manifest'ах коннекторов (`connectors/*/gxg-manifest.yaml`, из них bundle берёт tools, AS-26): новый tool, любое изменение `effect_class` (и понижение, и повышение: правила могут матчить по `match.effect_classes`, и повышение класса может снять `deny` или кворум), изменённые `action` или `executes_via`. Удалённый tool — сужение;
-- любое изменение путей проверки (см. выше).
+- находки `gate_diff.py` (см. таблицу выше).
 
 Любое другое изменение `match` у правила считается расширением всегда: так безопаснее.
 
@@ -57,7 +67,7 @@ Job `grants-widening` в `.github/workflows/ci.yml` входит в `ci-ok`, а 
 1. Открыть PR и прочитать комментарий «Policy diff (gxg-policy)», раздел **Widening**.
 2. Если расширение нужно, поставить метку: **Labels → `widening-approved`** в правой колонке PR, или командой `gh pr edit <номер> --add-label widening-approved`.
 3. Метку должен поставить сам владелец со своего аккаунта, а не агент через Claude GitHub App: такое событие проверка отклонит.
-4. После каждого нового push с расширением метку нужно поставить заново: job снимает её сам.
+4. Метку нужно поставить заново, только если после неё в PR появилось новое расширение: job снимает её сам и пишет, какое. Слияние с `main` и правки без находок метку не снимают.
 
 Если метки ещё нет в репозитории: **Issues → Labels → New label**, имя `widening-approved`.
 
@@ -72,12 +82,13 @@ Job `grants-widening` в `.github/workflows/ci.yml` входит в `ci-ok`, а 
 - **Остаточный риск: PR правит `.github/workflows/ci.yml` (`owner_decision`: риск принят, 2026-11-21).** Workflow `pull_request` берёт **сам `ci.yml`** из ветки PR. Код проверки уже берётся из `main`, но PR может изменить job так, что копия из `main` не запустится вовсе: убрать шаг, заменить его на `exit 0`, снять `grants-widening` из `needs` у `ci-ok`. Тогда `ci-ok` на head зелёный без метки. Изнутри репозитория это не закрыть: любой файл, который это проверяет, выполняется по указанию того же `ci.yml`. Закрыть можно только снаружи:
   1. обязательное ревью code owner'а для `.github/workflows/` (нужен второй человек, это противоречит решению по AC-M0-03);
   2. required workflow через ruleset организации (репозиторий нужно перенести в организацию);
-  3. принять риск письменно: владелец сам читает каждый PR, который меняет `.github/workflows/`, а не опирается на зелёный `ci-ok`. `.github/` закреплён за владельцем в CODEOWNERS, а в отчёте такой PR помечен `gate_path`, пока job не отключён.
+  3. принять риск письменно: владелец сам читает каждый PR, который меняет `.github/workflows/`, а не опирается на зелёный `ci-ok`. `.github/` закреплён за владельцем в CODEOWNERS, а в отчёте такой PR получает находку (`ci-ok.changed`, `gate.self`, `control.disabled`), пока job не отключён.
 
   `pull_request_target` не подходит: он берёт workflow из базы PR, а не из `main`, и даёт токен на запись рядом с кодом PR. **Решение владельца (2026-11-21): риск принят (вариант 3).** Каждый PR, который меняет `.github/workflows/`, владелец просматривает сам и не полагается на зелёный `ci-ok`; CODEOWNERS помечает эти файлы (`/.github/`). Для этого пути AC-M2-04 обеспечивается ревью владельца, а не проверкой.
 - **Два запуска на одном SHA.** У агентского PR на head SHA есть push-запуск (красный при расширении всегда) и PR-запуск (зелёный после метки). Какой из двух одноимённых `ci-ok` GitHub учитывает для мержа, проверяется в чек-листе ниже в обоих порядках (шаги 4 и 11). Если учитывается красный push-запуск, одобренный PR не смержится. Это fail closed. Тогда push в ветку PR без расширения или снятие триггера `push: claude/**` — решение владельца.
 - **Токен владельца у агента.** Если агент действует личным токеном владельца, а не через GitHub App, событие метки неотличимо от ручного. Агентам нельзя выдавать личные токены владельца. Что `performed_via_github_app` заполняется для токенов Claude GitHub App, которыми работают агенты, проверяется в чек-листе (шаг 3). До этой проверки это не доказано.
 - **Время появления коммита.** Берётся из запусков workflow (`GET /actions/runs?event=pull_request&head_sha=…`): учитываются запуски этой ветки из head-репозитория PR, созданные после последнего force-push, кроме связанных с другими PR. Если GitHub не заполнит у запуска ветку, репозиторий или номер PR, метка не засчитается: fail closed. Если сервер запишет запуск на ту же секунду, что и force-push, или раньше, запуск не засчитается: метка снимется, владелец ставит её ещё раз.
+- **Логика остальных CI-скриптов (решение владельца 2026-11-26).** Изменение кода проверок в `scripts/ci/` (например, `stage_f.py`, `schema_lock.py`, `check_coverage.py`), которое ослабляет проверку без строк из пункта 2, метки не требует. Такие правки владелец видит в обычном ревью PR.
 - **Manifest'ы коннекторов.** Сравниваются только `effect_class`, `action`, `executes_via` и сам список tools: они решают, нужен ли человек. Остальные поля (`dispatch_timeout_s`, `preview`, `version`) не сравниваются. Если tool с одним именем объявлен дважды (в двух manifest'ах или в одном), `gxg-policy lint` выдаёт ошибку `duplicate-tool`, а `diff` завершается с кодом 2.
 - **Что именно сравнивается.** Отчёт показывает изменения PR относительно точки ответвления от `main`, а не результат слияния. Изменения, которые пришли в `main` после ответвления, уже смержены и одобрены. Пока в ruleset включено *Require branches to be up to date before merging* ([branch-protection.md](branch-protection.md)), точка ответвления совпадает с вершиной `main`.
 - **PR из форков** получают токен только на чтение. Комментарий не публикуется, проверка пишет предупреждение. Снять устаревшую метку job не сможет и упадёт: fail closed.
@@ -95,7 +106,7 @@ Job `grants-widening` в `.github/workflows/ci.yml` входит в `ci-ok`, а 
 | 4 | Владелец снимает метку агента и ставит её сам в интерфейсе GitHub | Запуск `labeled`: `grants-widening` и `ci-ok` зелёные. На SHA теперь два `ci-ok`: **старый красный** (push) и **новый зелёный** (PR). Записать, доступна ли кнопка мержа. Доступна — GitHub учитывает новейший; заблокирована — учитывает красный, это fail closed |
 | 5 | Агент пушит ещё один коммит с расширением и сразу ставит другую метку (или закрывает и открывает PR) | Запуски `synchronize` и `labeled`/`reopened`: оба красные. Метка `widening-approved` снята, в комментарии «was removed: the label … is older than the head commit» |
 | 6 | Владелец ставит метку снова | Зелёный |
-| 7 | Отдельный PR, который меняет `scripts/ci/widening_gate.py` на `return 0` (без изменений политик) | Красный: решает копия из `main`, в комментарии раздел «Gate files changed» с `scripts/ci/widening_gate.py`. С меткой владельца — зелёный. Если зелёный без метки, остановиться: проверка работает не из `main` |
+| 7 | Отдельный PR, который меняет `scripts/ci/widening_gate.py` на `return 0` (без изменений политик) | Красный: решает копия из `main`, в комментарии раздел «Control changes» с `gate.self` для `scripts/ci/widening_gate.py`. С меткой владельца — зелёный. Если зелёный без метки, остановиться: проверка работает не из `main` |
 | 8 | **Смена базы.** Агент кладёт коммит W с расширением в ветку `claude/base`, поверх — безобидный коммит N в `claude/w`, и открывает PR `claude/w → claude/base`. Потом меняет базу PR на `main` (**Edit** рядом с заголовком PR или `gh pr edit --base main`) | Уже первый PR-запуск (база `claude/base`) красный: в комментарии `widening: 1` с парой из W. После смены базы приходит запуск `edited`, он тоже красный. Кнопка мержа недоступна |
 | 9 | **Возврат к старому SHA.** На PR из шага 1 head — коммит B с расширением. Агент делает force-push на родителя A, владелец ставит метку, агент пушит B снова обычным push (fast-forward) | Запуск `synchronize` для B красный, метка снята, в комментарии «is older than the head commit». Мерж недоступен |
 | 10 | **Тег `origin/main`.** Агент создаёт тег `origin/main` на head своей ветки (`git tag origin/main && git push origin origin/main`), владелец запускает `workflow_dispatch` по ветке | `grants-widening` красный («outside a pull request»), не «no widening». После проверки удалить тег: `git push origin :refs/tags/origin/main` |
