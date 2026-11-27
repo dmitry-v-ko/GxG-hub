@@ -53,7 +53,7 @@ APIFY_SIX = {  # the tools Apify serves without a token (docs.apify.com/platform
 def test_the_allowed_tools_are_the_pilot_tools_kb_reads_and_apify_discovery() -> None:
     job = load_job()
     assert job.ALLOWED == {  # type: ignore[attr-defined]
-        "telegram.messages.search", "telegram.thread.read", "telegram.message.propose",
+        "telegram.messages.search", "telegram.thread.read", "telegram.participants.collect", "telegram.message.propose",
         "effects.status", "effects.cancel",
         "kb.documents.search", "kb.documents.get", "kb.context.get",
         *APIFY_SIX,

@@ -52,6 +52,7 @@ SKIP = {g for g in os.environ.get("GXG_SKIP_GATEWAYS", "").split(",") if g}  # n
 ALLOWED = {  # the tools the pilot agent may see and call (originalName); everything else stays unlisted and denied
     "telegram.messages.search",
     "telegram.thread.read",
+    "telegram.participants.collect",  # M11.4 live check: authors/reactors/commenters of large chats (collect grant)
     "telegram.message.propose",
     "effects.status",
     "effects.cancel",

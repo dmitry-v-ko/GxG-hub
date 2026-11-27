@@ -29,6 +29,7 @@ grants:
       - telegram:tg-pilot/chat/tgc1_I9x0Dy0hLblcgy5bMjEJSo-jet-QZ8_w
       - telegram:tg-pilot/chat/tgc1__ESCaowLpuoPpwq6ti-Oo8lSdcyI75Pi
       - telegram:tg-pilot/chat/tgc1_fg2agKZmFgzytfmaAUzf3ZbkczoPSmN8
+      - telegram:tg-pilot/chat/tgc1_-xrk033uuz8qNKNE96ys5EKooJvWXVon  # «Serbia IT Jobs [RU/UA/ENG]», M11 live check (owner 2026-11-27)
     expires_at: "2026-12-24T00:00:00Z"
     reason: "Pilot M13: the chats chosen by the owner"
   - id: tg-pilot-propose
