@@ -55,13 +55,11 @@ def test_bundle_is_byte_identical_to_gxg_policy_build(tmp_path: Path, monkeypatc
 
 
 def test_bundle_carries_ext_grants_and_enabled_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """M11.3/M11.4: fixture grants with `ext:read`, `ext:read:pii` and `extensions.enabled` (the shape
-    of gateway/contextforge/examples/tenants/example-ext-test.yaml) build the same bytes as `gxg-policy build` and
-    resolve in the kit."""
+    """M11.3/M11.4: fixture grants with `ext:read`, `ext:read:pii` and `extensions.enabled` (the shape of
+    policies/tenants/example-ext-test.yaml) build the same bytes as `gxg-policy build` and resolve in the kit."""
     key = Ed25519PrivateKey.generate()
     manifest = yaml.safe_load((DEMO / "gxg-manifest.yaml").read_text(encoding="utf-8"))
-    tenant = REPO / "gateway" / "contextforge" / "examples" / "tenants" / "example-ext-test.yaml"
-    doc = yaml.safe_load(tenant.read_text(encoding="utf-8"))
+    doc = yaml.safe_load((REPO / "policies" / "tenants" / "example-ext-test.yaml").read_text(encoding="utf-8"))
     for g in doc["grants"]:
         g.pop("expires_at")  # the example's terms run out; this test must not
     keys = [Ed25519PrivateKey.generate().public_key() for _ in range(3)]
