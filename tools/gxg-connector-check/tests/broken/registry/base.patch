@@ -1,0 +1,91 @@
+diff --git a/gxg-manifest.yaml b/gxg-manifest.yaml
+index b1b5c74..c2d9cb8 100644
+--- a/gxg-manifest.yaml
++++ b/gxg-manifest.yaml
+@@ -31,6 +31,15 @@ tools:
+     input_schema: schemas/note-get.input.json
+     output_schema: schemas/note-get.output.json
+     limits: { timeout_s: 10 }
++  - name: demo.ext.describe          # MCC-11: a registry read, the same card for every caller with the entry
++    version: 1.0.0
++    title: "Описание записи реестра"
++    effect_class: read
++    action: read
++    resource: { type: board, scope: list }
++    input_schema: schemas/ext-describe.input.json
++    output_schema: schemas/ext-describe.output.json
++    limits: { timeout_s: 10 }
+   - name: demo.message.propose
+     version: 1.0.0
+     title: "Отправка демо-сообщения"
+diff --git a/schemas/ext-describe.input.json b/schemas/ext-describe.input.json
+new file mode 100644
+index 0000000..1a05f26
+--- /dev/null
++++ b/schemas/ext-describe.input.json
+@@ -0,0 +1,8 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "title": "demo.ext.describe input",
++  "description": "Schema and class of one registry entry (MCC-11).",
++  "type": "object",
++  "required": ["name"],
++  "properties": {"name": {"enum": ["boards.pinned"]}}
++}
+diff --git a/schemas/ext-describe.output.json b/schemas/ext-describe.output.json
+new file mode 100644
+index 0000000..76d0086
+--- /dev/null
++++ b/schemas/ext-describe.output.json
+@@ -0,0 +1,8 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "title": "demo.ext.describe output",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["name", "effect_class"],
++  "properties": {"name": {"type": "string"}, "effect_class": {"const": "read"}}
++}
+diff --git a/src/demo_connector/conformance.py b/src/demo_connector/conformance.py
+index c8ee482..f50833b 100644
+--- a/src/demo_connector/conformance.py
++++ b/src/demo_connector/conformance.py
+@@ -51,6 +51,8 @@ def start(settings: KitSettings, wiring: Wiring) -> Running:
+ def rids(tool: str, result: dict[str, Any]) -> set[str]:
+     if tool == "demo.boards.list":
+         return {rid("demo-main", b["id"]) for b in result["boards"]}
++    if tool == "demo.ext.describe":
++        return set()  # a registry entry, not a resource
+     if tool == "demo.notes.search":
+         return {i["source_ref"] for i in result["items"]}
+     return {rid("demo-main", result["board_id"])}
+@@ -80,6 +82,7 @@ def harness() -> Harness:
+                 missing={"note_id": MISSING_NOTE},
+                 hidden={"note_id": boards["a-secret"].notes[0].id},  # only an expired grant (GR-06)
+             ),
++            Call("demo.ext.describe", {"name": "boards.pinned"}),
+         ],
+         secret_env=SECRET_ENV,
+         rids=rids,
+diff --git a/src/demo_connector/tools.py b/src/demo_connector/tools.py
+index d05d143..e4e9d98 100644
+--- a/src/demo_connector/tools.py
++++ b/src/demo_connector/tools.py
+@@ -90,6 +90,7 @@ class Connector:
+             "demo.boards.list": self.boards_list,
+             "demo.notes.search": self.notes_search,
+             "demo.note.get": self.note_get,
++            "demo.ext.describe": self.ext_describe,
+         }
+         if self.effects is not None:
+             out["demo.message.propose"] = self.message_propose
+@@ -174,6 +175,9 @@ class Connector:
+         }
+         return content, {}
+ 
++    async def ext_describe(self, access: Access, args: dict[str, Any]) -> Result:
++        return {"name": args["name"], "effect_class": "read"}, {}  # the registry, no backend call
++
+     async def message_propose(self, access: Access, args: dict[str, Any]) -> Result:
+         """EFF-04…EFF-08 by demo's own effects.py, which also resolves the board and checks `propose` (GR-17)."""
+         if self.effects is None:

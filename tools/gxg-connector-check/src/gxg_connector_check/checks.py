@@ -27,7 +27,7 @@ from gxg_connector_kit.grants import BundleStore
 from gxg_connector_kit.identity import StubIssuer
 
 from . import bundle
-from .harness import READ_VERBS, Call, Running, read_verb_ok
+from .harness import READ_VERBS, Call, Running, item_key, read_verb_ok, registry_read
 from .plugin import Client, Env
 
 pytestmark = pytest.mark.anyio
@@ -149,16 +149,16 @@ async def test_results_are_typed_and_bounded(env: Env) -> None:
                 nothing = ok(await c.call(call.tool, call.empty))  # an empty result is a success, not an error
                 assert nothing["items"] == [] and nothing.get("complete", True) is True, nothing
                 if "next_cursor" in out_schema.get("properties", {}):
-                    await pages(env, c, call, got)
+                    await pages(env, c, call, got, item_key(call.tool, out_schema["properties"]["items"]))
 
 
-async def pages(env: Env, c: Client, call: Call, full: dict[str, Any]) -> None:
+async def pages(env: Env, c: Client, call: Call, full: dict[str, Any], key: str) -> None:
     """MCC-04: `limit=1` gives a cursor; the next page is the next item; the cursor is bound to its caller."""
     assert len(full["items"]) >= 2, f"{call.tool}: Call.args must find at least 2 items"
     first = ok(await c.call(call.tool, {**call.args, "limit": 1}))
     assert len(first["items"]) == 1 and first["next_cursor"], f"{call.tool}: a cut page has a next_cursor"
     second = ok(await c.call(call.tool, {**call.args, "limit": 1, "cursor": first["next_cursor"]}))
-    assert [i["id"] for i in first["items"] + second["items"]] == [i["id"] for i in full["items"][:2]], call.tool
+    assert [i[key] for i in first["items"] + second["items"]] == [i[key] for i in full["items"][:2]], call.tool
     theirs = await c.call(
         call.tool, {**call.args, "limit": 1, "cursor": first["next_cursor"]}, principal=env.harness.stranger
     )
@@ -249,7 +249,8 @@ async def test_no_or_bad_identity_is_unauthenticated(env: Env) -> None:
 @pytest.mark.check("SC-03")
 async def test_identity_is_not_taken_from_arguments_headers_or_meta(env: Env) -> None:
     """A caller of another tenant claims the reader's tenant in arguments, headers and `_meta`: refused
-    (`invalid_input`) or ignored — the call acts as the caller, never as the claimed tenant (MCC-02)."""
+    (`invalid_input`) or ignored — the call acts as the caller, never as the claimed tenant (MCC-02). A registry read
+    (`<domain>.ext.search`/`.describe`, MCC-11) may answer both tenants alike: the same registry."""
     h = env.harness
     tenant = h.reader.split(":")[1]
     _, client = await started(env)
@@ -268,6 +269,8 @@ async def test_identity_is_not_taken_from_arguments_headers_or_meta(env: Env) ->
                 r = await c.call(call.tool, args, principal=h.stranger, headers=headers, meta=m)
                 refused = r.get("isError") is True and r["structuredContent"].get("code") == "invalid_input"
                 assert refused or r == plain, f"{call.tool}: {why} changed whose call it is"
+            if registry_read(call.tool):  # registry entries, the same for tenants with the same registry (MCC-11)
+                continue
             assert plain != mine, f"{call.tool}: another tenant's caller gets the reader's result"
             if call in single(env):
                 assert plain == await c.call(call.tool, call.missing or {}, principal=h.stranger), call.tool
@@ -360,7 +363,8 @@ async def test_no_secret_token_or_payload_in_responses_and_logs(
 @pytest.mark.check("SC-10")
 async def test_grants_filter_and_no_provider_call_without_grants(env: Env) -> None:
     """A principal without grants gets empty results or `not_found` and the provider is not called; a reader sees
-    only granted resources (GR-02, GR-06, GR-16); another tenant sees none of this tenant's."""
+    only granted resources (GR-02, GR-06, GR-16); another tenant sees none of this tenant's. The registry reads
+    `<domain>.ext.search`/`.describe` (MCC-11) return entries, not resources: only the first part applies to them."""
     h = env.harness
     store = BundleStore(
         mcp.parse_keys(bundle.keys_setting(env.bundle_signer), "keys"), state_file=env.tmp / "sc10.json"
@@ -375,6 +379,9 @@ async def test_grants_filter_and_no_provider_call_without_grants(env: Env) -> No
             assert (code(r) in refusals) if r.get("isError") else not h.rids(call.tool, ok(r)), call.tool
         assert running.calls() == 0, "the provider was called for a principal without any grant"
         for call in readers(env):
+            if registry_read(call.tool):  # registry entries: no provider call, no resource (MCC-11)
+                ok(await c.call(call.tool, call.args))
+                continue
             before = running.calls()
             rids = h.rids(call.tool, ok(await c.call(call.tool, call.args)))
             assert running.calls() > before, f"{call.tool}: Running.calls() does not count provider calls"

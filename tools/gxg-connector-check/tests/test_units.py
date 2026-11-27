@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from gxg_connector_check import bundle, cli
 from gxg_connector_check.fakes import FakeApproval
-from gxg_connector_check.harness import read_verb_ok
+from gxg_connector_check.harness import item_key, read_verb_ok, registry_read
 from gxg_connector_kit import mcp, svc_jwt
 from gxg_connector_kit.effects import JWKS_PATH
 from gxg_connector_kit.grants import BundleStore
@@ -197,3 +197,30 @@ def test_cli_on_demo_and_usage(tmp_path: Path, capsys: pytest.CaptureFixture[str
 def test_read_verbs_of_mc01(name: str, allowed: bool) -> None:
     """MCC-01: `describe` and `call` are read verbs only as the extension meta-tools `<domain>.ext.<verb>`."""
     assert read_verb_ok(name) is allowed
+
+
+@pytest.mark.parametrize(
+    ("name", "registry"),
+    [
+        ("telegram.ext.search", True),
+        ("x.ext.describe", True),
+        ("telegram.ext.call", False),  # runs an entry: every rule of an ordinary tool (MCC-11 п.4)
+        ("kb.documents.search", False),
+        ("telegram.entries.describe", False),
+        ("x.y.ext.search", False),
+        ("ext.search", False),
+    ],
+)
+def test_registry_reads_of_mcc11(name: str, registry: bool) -> None:
+    """Only `<domain>.ext.search` and `<domain>.ext.describe` are registry reads (SC-03, SC-10 exemptions)."""
+    assert registry_read(name) is registry
+
+
+def test_item_key_of_list_items() -> None:
+    """MC-02 pages by `id` (search-result); a `collect` tool without `id` by its dedupe `key`; nothing else."""
+    assert item_key("kb.documents.search", {"items": {"required": ["id", "excerpt"]}}) == "id"
+    assert item_key("x.people.collect", {"items": {"required": ["key", "action"]}}) == "key"
+    assert item_key("x.people.collect", {"items": {"required": ["id", "key"]}}) == "id"
+    for tool, required in (("x.people.search", ["key"]), ("x.people.collect", ["name"])):
+        with pytest.raises(AssertionError, match="requires `id`"):
+            item_key(tool, {"items": {"required": required}})
