@@ -77,7 +77,8 @@ def test_pdp_rules_allow_exactly_the_allowed_tools_of_the_pilot_agent() -> None:
     actions = {a.removeprefix("tools.invoke.") for a in next(r for r in rules if r["id"] == "t-pilot.pilot")["actions"]}
     assert {"kb-t-pilot-kb-documents-search", "kb-t-pilot-kb-documents-get", "kb-t-pilot-kb-context-get"} <= actions
     assert {f"apify-t-pilot-{t}" for t in APIFY_SIX} <= actions
-    assert len(actions) == 5 + 3 + 6
+    assert "telegram-t-pilot-telegram-participants-collect" in actions
+    assert len(actions) == 6 + 3 + 6
 
 
 def test_sql_splitter_keeps_dollar_bodies_quotes_and_comments_whole() -> None:
