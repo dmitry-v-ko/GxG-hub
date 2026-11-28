@@ -276,3 +276,9 @@
 - PR #10: примеры `example-ext*.yaml` перенесены в `gateway/contextforge/examples/tenants/` — гейт из main не знал ext-синтаксис. Вернуть в `policies/tenants/` можно отдельным PR (не блокирует).
 - Пилот 12:33–12:38Z: сервис Telegram на 0ebcc50 (ветка деплоя `claude/m13-railway` = main), telegram-db-init без ошибок, `--finalize`, `--verify` 147 PASS, бандл перевыпущен с b172147, все сервисы SUCCESS.
 - Не сделано: политики пилота с ext-грантами (нужен PR и метка) и живая проверка Telegram.
+
+## 2026-11-28 — M11 закрыт с известной проблемой
+
+Живая проверка `participants.collect` на «Serbia IT Jobs» (reports/M11-LIVE.md): контракт выполняется (порции, роли,
+partial/unavailable, без pii, rate_limited), но после сбора Telegram дважды разлогинил сессию пилота. Владелец решил
+закрыть M11; исправление — gxg-telegram-service PR #2, отдельной задачей. Влиты GxG-hub #11–#14, scope пилота восстановлен.
